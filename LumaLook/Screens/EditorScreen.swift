@@ -147,11 +147,13 @@ struct EditorTimelineView: View {
                 try await app.exporter.saveToPhotos(url: url)
                 app.lastExportURL = url
                 isExporting = false
+                LumaHaptics.shared.exportSuccess()
                 app.path.append(.exportComplete)
             } catch is CancellationError {
                 isExporting = false
             } catch {
                 isExporting = false
+                LumaHaptics.shared.failure()
                 exportError = error.localizedDescription
             }
         }
@@ -209,36 +211,41 @@ private struct EditorContent: View {
                     .transition(.opacity)
             }
 
-            // Sliding panels sit between timeline and dock, img.ly-style.
-            if showTrimPanel, let clip = editor.selectedClip {
-                trimPanel(clip: clip)
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if showMusicPanel, let music = editor.music {
-                musicPanel(music: music)
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if showLooksStrip {
-                looksStrip
-                    .padding(.bottom, 10)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             dock
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showTrimPanel)
-        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showLooksStrip)
-        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showMusicPanel)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.music == nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
         // One physical thump whenever the timeline structure changes
         // (add, split, delete).
         .sensoryFeedback(.impact(weight: .medium), trigger: editor.clips.count)
         .sensoryFeedback(.selection, trigger: editor.selectedClipID)
+        // Tool panels are undimmed glass sheets: the timeline stays visible
+        // and scrubbable underneath while you trim, mix or pick a look.
+        .lumaToolSheet(isPresented: $showTrimPanel, style: .panel) {
+            if let clip = editor.selectedClip {
+                trimPanel(clip: clip)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Color.clear.onAppear { showTrimPanel = false }
+            }
+        }
+        .lumaToolSheet(isPresented: $showMusicPanel, style: .panel) {
+            if let music = editor.music {
+                musicPanel(music: music)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Color.clear.onAppear { showMusicPanel = false }
+            }
+        }
+        .lumaToolSheet(isPresented: $showLooksStrip, style: .strip) {
+            looksStrip
+                .padding(.top, 22)
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
     }
 
     // MARK: Dock
@@ -304,6 +311,7 @@ private struct EditorContent: View {
                     }
                     .padding(.horizontal, 6)
                 }
+                .lumaEdgeFade(leading: 14, trailing: 14)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -631,7 +639,9 @@ private struct EditorContent: View {
                 }
             }
             .padding(.vertical, 2)
+            .padding(.horizontal, 22)
         }
+        .lumaEdgeFade()
     }
 
     /// CapCut-style "Edit": select the clip under the playhead so the

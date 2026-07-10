@@ -23,6 +23,32 @@ enum LaneMetrics {
     static var total: CGFloat { ruler + video + music + 2 * spacing }
 }
 
+// MARK: - Reorder state
+
+/// Shared drag state for long-press clip reordering. The UIKit recognizer on
+/// the scroller writes it; the SwiftUI lanes render from it; nothing in the
+/// model mutates until the drop commits (img.ly's preview-cascade pattern).
+@MainActor
+final class TimelineReorderState: ObservableObject {
+    @Published var draggingClipID: UUID?
+    /// Finger x in timeline CONTENT coordinates.
+    @Published var dragX: CGFloat = 0
+    /// Offset from the clip's leading edge to the grab point, so the
+    /// floating cell stays glued to the finger.
+    @Published var grabOffset: CGFloat = 0
+    /// Proposed insertion slot (index in the array with the clip lifted out).
+    @Published var insertSlot: Int?
+
+    var isDragging: Bool { draggingClipID != nil }
+
+    func reset() {
+        draggingClipID = nil
+        insertSlot = nil
+        dragX = 0
+        grabOffset = 0
+    }
+}
+
 // MARK: - Timeline V2 (assembled)
 
 /// Center-fixed-playhead multitrack timeline: content scrolls under a fixed
@@ -33,6 +59,7 @@ struct TimelineV2View: View {
     let onTapMusic: () -> Void
 
     @State private var metrics = TimelineMetrics()
+    @StateObject private var reorder = TimelineReorderState()
 
     var body: some View {
         ZStack {
@@ -40,8 +67,9 @@ struct TimelineV2View: View {
                 emptyPlaceholder
             } else {
                 TimelineScroller(editor: editor, metrics: $metrics,
+                                 reorder: reorder,
                                  contentHeight: LaneMetrics.total) { m in
-                    TimelineContentView(editor: editor, metrics: m,
+                    TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic)
                 }
                 playhead
@@ -93,13 +121,14 @@ struct TimelineV2View: View {
 struct TimelineContentView: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
+    @ObservedObject var reorder: TimelineReorderState
     let onAddMusic: () -> Void
     let onTapMusic: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
             RulerLane(duration: editor.totalDuration, metrics: metrics)
-            VideoLane(editor: editor, metrics: metrics)
+            VideoLane(editor: editor, metrics: metrics, reorder: reorder)
             MusicLane(editor: editor, metrics: metrics,
                       onAddMusic: onAddMusic, onTapMusic: onTapMusic)
         }
@@ -153,33 +182,64 @@ struct RulerLane: View {
 struct VideoLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
+    @ObservedObject var reorder: TimelineReorderState
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(editor.clips) { clip in
-                TimelineClipCell(clip: clip,
-                                 width: max(metrics.x(for: clip.timelineDuration), 10),
-                                 selected: clip.id == editor.selectedClipID)
-                    .onTapGesture {
-                        editor.selectedClipID = clip.id == editor.selectedClipID ? nil : clip.id
-                    }
-                    .contextMenu {
-                        Button {
-                            editor.selectedClipID = clip.id
-                            editor.moveSelected(by: -1)
-                        } label: { Label("Move Left", systemImage: "arrow.left") }
-                        Button {
-                            editor.selectedClipID = clip.id
-                            editor.moveSelected(by: 1)
-                        } label: { Label("Move Right", systemImage: "arrow.right") }
-                        Button(role: .destructive) {
-                            editor.selectedClipID = clip.id
-                            editor.deleteSelected()
-                        } label: { Label("Delete", systemImage: "trash") }
-                    }
+        ZStack(alignment: .leading) {
+            HStack(spacing: 0) {
+                ForEach(editor.clips) { clip in
+                    TimelineClipCell(clip: clip,
+                                     width: max(metrics.x(for: clip.timelineDuration), 10),
+                                     selected: clip.id == editor.selectedClipID)
+                        // Lifted clip stays in layout (siblings don't reflow
+                        // mid-drag) but goes ghost, img.ly-style.
+                        .opacity(reorder.draggingClipID == clip.id ? 0.25 : 1)
+                        .onTapGesture {
+                            editor.selectedClipID = clip.id == editor.selectedClipID ? nil : clip.id
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                editor.selectedClipID = clip.id
+                                editor.deleteSelected()
+                            } label: { Label("Delete", systemImage: "trash") }
+                        }
+                }
+            }
+
+            if reorder.isDragging {
+                // Insertion slot indicator: accent line at the drop boundary.
+                if let slot = reorder.insertSlot {
+                    Rectangle()
+                        .fill(LumaTheme.accentBright)
+                        .frame(width: 3, height: LaneMetrics.video + 6)
+                        .shadow(color: LumaTheme.accent.opacity(0.8), radius: 4)
+                        .offset(x: slotX(slot) - 1.5)
+                        .animation(.spring(response: 0.22, dampingFraction: 0.8),
+                                   value: reorder.insertSlot)
+                }
+                // Floating condensed clip glued to the finger.
+                if let clip = editor.clips.first(where: { $0.id == reorder.draggingClipID }) {
+                    TimelineClipCell(clip: clip, width: 72, selected: true)
+                        .scaleEffect(1.06)
+                        .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
+                        .offset(x: reorder.dragX - min(reorder.grabOffset, 36))
+                        .allowsHitTesting(false)
+                }
             }
         }
         .frame(height: LaneMetrics.video, alignment: .leading)
+    }
+
+    /// Content-space x of an insertion slot: the boundary before the clip at
+    /// `slot` in the sequence with the dragged clip removed.
+    private func slotX(_ slot: Int) -> CGFloat {
+        let remaining = editor.clips.filter { $0.id != reorder.draggingClipID }
+        var x: CGFloat = 0
+        for (i, clip) in remaining.enumerated() {
+            if i == slot { return x }
+            x += max(metrics.x(for: clip.timelineDuration), 10)
+        }
+        return x
     }
 }
 
@@ -373,6 +433,7 @@ struct MusicLane: View {
 struct TimelineScroller<Content: View>: UIViewRepresentable {
     @ObservedObject var editor: EditorState
     @Binding var metrics: TimelineMetrics
+    var reorder: TimelineReorderState
     let contentHeight: CGFloat
     @ViewBuilder let content: (TimelineMetrics) -> Content
 
@@ -410,6 +471,17 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         pinch.delegate = context.coordinator
         scrollView.addGestureRecognizer(pinch)
 
+        // Long-press-then-drag reorders clips. Standard iOS reorder timing;
+        // tight allowableMovement so a real pan fails the press quickly and
+        // the scroll view keeps scrubbing (the img.ly gesture split).
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator,
+                                                     action: #selector(Coordinator.handleReorder(_:)))
+        longPress.minimumPressDuration = 0.35
+        longPress.allowableMovement = 12
+        longPress.delegate = context.coordinator
+        scrollView.addGestureRecognizer(longPress)
+
+        context.coordinator.reorder = reorder
         return scrollView
     }
 
@@ -418,6 +490,7 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         coordinator.editor = editor
         coordinator.metrics = metrics
         coordinator.metricsBinding = $metrics
+        coordinator.reorder = reorder
         coordinator.contentHeight = contentHeight
         coordinator.host.rootView = AnyView(content(metrics))
         coordinator.applyGeometry(scrollView)
@@ -431,7 +504,9 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         weak var editor: EditorState?
         var metrics = TimelineMetrics()
         var metricsBinding: Binding<TimelineMetrics>?
+        var reorder: TimelineReorderState?
         var contentHeight: CGFloat = 0
+        private var lastInsertSlot: Int?
 
         /// Write-side guard: offset assignments from code must not read back
         /// as user scrubs.
@@ -562,6 +637,84 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             true
+        }
+
+        // MARK: Long-press clip reorder
+
+        @objc func handleReorder(_ gesture: UILongPressGestureRecognizer) {
+            guard let scrollView = gesture.view as? UIScrollView,
+                  let editor, let reorder, editor.clips.count > 1 else { return }
+            // Location in content space (the hosted SwiftUI tree's frame).
+            let location = gesture.location(in: host.view)
+
+            switch gesture.state {
+            case .began:
+                // Only lift when the press lands inside the video lane.
+                let laneTop = LaneMetrics.ruler + LaneMetrics.spacing
+                guard location.y >= laneTop - 4,
+                      location.y <= laneTop + LaneMetrics.video + 4,
+                      let hit = clipHit(atContentX: location.x) else { return }
+                scrollView.isScrollEnabled = false
+                editor.selectedClipID = hit.clip.id
+                reorder.draggingClipID = hit.clip.id
+                reorder.grabOffset = location.x - hit.startX
+                reorder.dragX = location.x
+                reorder.insertSlot = hit.index > 0 ? hit.index : 0
+                lastInsertSlot = reorder.insertSlot
+                LumaHaptics.shared.reorderStart()
+            case .changed:
+                guard reorder.isDragging else { return }
+                reorder.dragX = location.x
+                let slot = insertionSlot(forContentX: location.x)
+                if slot != reorder.insertSlot {
+                    reorder.insertSlot = slot
+                    if slot != lastInsertSlot {
+                        LumaHaptics.shared.timelineSnap()
+                        lastInsertSlot = slot
+                    }
+                }
+            case .ended:
+                defer {
+                    reorder.reset()
+                    scrollView.isScrollEnabled = true
+                }
+                guard let id = reorder.draggingClipID, let slot = reorder.insertSlot else { return }
+                editor.moveClip(id: id, toSlot: slot)
+                LumaHaptics.shared.reorderDrop()
+            default:
+                reorder.reset()
+                scrollView.isScrollEnabled = true
+            }
+        }
+
+        /// Which clip sits at a content-space x, with its start offset.
+        private func clipHit(atContentX x: CGFloat)
+            -> (clip: EditorState.Clip, index: Int, startX: CGFloat)? {
+            guard let editor else { return nil }
+            var cursor: CGFloat = 0
+            for (index, clip) in editor.clips.enumerated() {
+                let width = max(metrics.x(for: clip.timelineDuration), 10)
+                if x >= cursor && x < cursor + width {
+                    return (clip, index, cursor)
+                }
+                cursor += width
+            }
+            return nil
+        }
+
+        /// Insertion slot in the sequence WITHOUT the dragged clip: the slot
+        /// flips when the finger crosses a remaining clip's midpoint (the
+        /// img.ly rule — long clips never need overshooting).
+        private func insertionSlot(forContentX x: CGFloat) -> Int {
+            guard let editor, let reorder else { return 0 }
+            let remaining = editor.clips.filter { $0.id != reorder.draggingClipID }
+            var cursor: CGFloat = 0
+            for (index, clip) in remaining.enumerated() {
+                let width = max(metrics.x(for: clip.timelineDuration), 10)
+                if x < cursor + width / 2 { return index }
+                cursor += width
+            }
+            return remaining.count
         }
     }
 

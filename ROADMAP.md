@@ -59,9 +59,9 @@ round on both, plus C4. Everything else is parked (do not lose)._
 - [ ] Free/paid flags per §4.5 (Negative Set 01 + half Originals free;
       no watermark EVER)
 
-## READY WHEN USER SIGNS OFF PRICING — C5 StoreKit 2 + paywall + onboarding
-Research recommendation (§5): Pro annual $24.99 w/ 7-day trial, lifetime
-$49.99, packs $2.99-4.99 à la carte. NO weekly, NO monthly, no trial toggle.
+## C5 StoreKit 2 + paywall + onboarding — PRICING LOCKED BY USER 2026-07-10
+LOCKED: Pro annual $24.99 w/ 7-day trial, lifetime $49.99, packs $2.99-4.99
+à la carte. NO weekly, NO monthly, no trial toggle.
 Single-screen paywall on the user's own graded media; onboarding folded into
 the same funnel. ASO strings in §5.
 

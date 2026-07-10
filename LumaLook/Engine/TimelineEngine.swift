@@ -284,6 +284,19 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// Drag-to-reorder commit: move a clip to an arbitrary slot in one undo
+    /// step. `slot` is the insertion index in the array *after* the clip has
+    /// been lifted out.
+    func moveClip(id: UUID, toSlot slot: Int) {
+        guard let index = clips.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = min(max(0, slot), clips.count - 1)
+        guard clamped != index else { return }
+        pushUndoSnapshot()
+        let clip = clips.remove(at: index)
+        clips.insert(clip, at: clamped)
+        rebuild()
+    }
+
     func deleteSelected() {
         guard let id = selectedClipID, clips.contains(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
