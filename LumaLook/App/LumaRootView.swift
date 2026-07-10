@@ -10,6 +10,15 @@ struct LumaRootView: View {
                     destination(for: route)
                 }
         }
+        // One fixed tab bar for the whole app: content scrolls under its glass,
+        // and it slides away with a spring when a flow is pushed.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if app.path.isEmpty {
+                LumaTabBar()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: app.path.isEmpty)
         .tint(LumaTheme.purple)
     }
 

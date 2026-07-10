@@ -63,7 +63,6 @@ struct LUTManagerView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) { LumaTabBar() }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [Self.cubeType, .plainText, .data],
                       allowsMultipleSelection: false) { result in

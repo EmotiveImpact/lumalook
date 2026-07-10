@@ -1,6 +1,56 @@
 import SwiftUI
 
-// MARK: - Screen shell with flat caps header
+// MARK: - Press feedback
+
+/// The single most important "native" cue: every tappable surface compresses
+/// on touch with a spring, like a physical object.
+struct LumaPressStyle: ButtonStyle {
+    var scale: CGFloat = 0.965
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == LumaPressStyle {
+    static var lumaPress: LumaPressStyle { LumaPressStyle() }
+}
+
+// MARK: - Card depth
+
+/// Dark-UI depth trick: a top-lit hairline gradient instead of a flat border.
+struct LumaCardChrome: ViewModifier {
+    var cornerRadius: CGFloat = 16
+
+    func body(content: Content) -> some View {
+        content
+            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(
+                        LinearGradient(colors: [.white.opacity(0.13), .white.opacity(0.03)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1
+                    )
+            )
+    }
+}
+
+extension View {
+    func lumaCard(cornerRadius: CGFloat = 16) -> some View {
+        modifier(LumaCardChrome(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Screen shell with pinned glass header
+
+private struct LumaScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
 
 struct LumaScreen<Content: View>: View {
     let title: String
@@ -11,6 +61,7 @@ struct LumaScreen<Content: View>: View {
     var scrollable: Bool = true
     let content: Content
     @Environment(\.dismiss) private var dismiss
+    @State private var scrolled = false
 
     init(title: String, trailingIcon: String? = nil, trailingText: String? = nil,
          trailingAction: (() -> Void)? = nil, showBack: Bool = true, scrollable: Bool = true,
@@ -25,26 +76,54 @@ struct LumaScreen<Content: View>: View {
     }
 
     var body: some View {
-        ZStack {
-            LumaTheme.background.ignoresSafeArea()
-            VStack(spacing: 0) {
-                LumaHeader(title: title, trailingIcon: trailingIcon, trailingText: trailingText,
-                           trailingAction: trailingAction, showBack: showBack) { dismiss() }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 6)
-                    .padding(.bottom, 14)
-                if scrollable {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 20) { content }
-                            .padding(.horizontal, 22)
-                            .padding(.bottom, 90)
-                    }
-                } else {
+        Group {
+            if scrollable {
+                ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) { content }
                         .padding(.horizontal, 22)
+                        .padding(.top, 10)
+                        .padding(.bottom, 36)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: LumaScrollOffsetKey.self,
+                                                       value: proxy.frame(in: .named("luma.scroll")).minY)
+                            }
+                        )
+                }
+                .coordinateSpace(name: "luma.scroll")
+                .onPreferenceChange(LumaScrollOffsetKey.self) { offset in
+                    let isScrolled = offset < 4
+                    if isScrolled != scrolled {
+                        withAnimation(.easeInOut(duration: 0.18)) { scrolled = isScrolled }
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    VStack(spacing: 20) { content }
+                        .padding(.horizontal, 22)
+                        .padding(.top, 10)
                     Spacer(minLength: 0)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(LumaTheme.background.ignoresSafeArea())
+        // Header pinned above the scroll: content passes under it and blurs
+        // through the material once you scroll, exactly like a native bar.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LumaHeader(title: title, trailingIcon: trailingIcon, trailingText: trailingText,
+                       trailingAction: trailingAction, showBack: showBack) { dismiss() }
+                .padding(.horizontal, 22)
+                .padding(.top, 6)
+                .padding(.bottom, 12)
+                .background {
+                    ZStack(alignment: .bottom) {
+                        Rectangle().fill(.ultraThinMaterial)
+                        Hairline()
+                    }
+                    .ignoresSafeArea(edges: .top)
+                    .opacity(scrolled ? 1 : 0)
+                }
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -72,7 +151,9 @@ struct LumaHeader: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 40, height: 40, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.lumaPress)
                 }
                 Spacer()
                 if let trailingText {
@@ -81,13 +162,16 @@ struct LumaHeader: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                     }
+                    .buttonStyle(.lumaPress)
                 } else if let trailingIcon {
                     Button { trailingAction?() } label: {
                         Image(systemName: trailingIcon)
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 40, height: 40, alignment: .trailing)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.lumaPress)
                 }
             }
         }
@@ -120,9 +204,13 @@ struct SolidCTA: View {
     var height: CGFloat = 58
     var fill: Color = LumaTheme.accent
     var action: () -> Void
+    @State private var fired = 0
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            fired += 1
+            action()
+        } label: {
             HStack(spacing: 10) {
                 if let icon {
                     Image(systemName: icon)
@@ -135,9 +223,23 @@ struct SolidCTA: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(fill, in: RoundedRectangle(cornerRadius: 16))
+            .background(
+                LinearGradient(colors: [fill.opacity(1.0), fill.opacity(0.82)],
+                               startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.0)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: fill.opacity(0.35), radius: 16, y: 6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
+        .sensoryFeedback(.impact(weight: .light), trigger: fired)
     }
 }
 
@@ -153,10 +255,17 @@ struct GhostCTA: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
-                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(LumaTheme.hairline))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(
+                            LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.04)],
+                                           startPoint: .top, endPoint: .bottom),
+                            lineWidth: 1
+                        )
+                )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -172,21 +281,33 @@ struct Chip: View {
             .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
-            .background(selected ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+            .background {
+                if selected {
+                    Capsule().fill(LumaTheme.accent)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(Capsule().strokeBorder(.white.opacity(selected ? 0.18 : 0.07), lineWidth: 1))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
 /// Equal-width capsule segments (VIDEO / PHOTOS, IMPORTED / FAVORITES / RECENTS).
+/// The selected capsule physically slides between options.
 struct SegmentPills: View {
     let options: [String]
     @Binding var selection: String
     var caps: Bool = true
+    @Namespace private var ns
 
     var body: some View {
         HStack(spacing: 8) {
             ForEach(options, id: \.self) { option in
                 Button {
-                    withAnimation(.easeOut(duration: 0.15)) { selection = option }
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                        selection = option
+                    }
                 } label: {
                     Text(caps ? option.uppercased() : option)
                         .font(.system(size: 14, weight: .bold))
@@ -194,12 +315,21 @@ struct SegmentPills: View {
                         .foregroundStyle(selection == option ? .white : LumaTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(selection == option ? LumaTheme.accent : LumaTheme.surface,
-                                    in: Capsule())
+                        .background {
+                            if selection == option {
+                                Capsule()
+                                    .fill(LumaTheme.accent)
+                                    .matchedGeometryEffect(id: "segment.pill", in: ns)
+                            } else {
+                                Capsule().fill(.ultraThinMaterial)
+                            }
+                        }
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.06), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 
@@ -222,6 +352,9 @@ struct InlineSlider: View {
                 .tint(LumaTheme.accent)
             Text(display?(value) ?? "\(Int(value))")
                 .font(.system(size: 17, weight: .bold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.snappy(duration: 0.2), value: Int(value))
                 .foregroundStyle(.white)
                 .frame(width: 56, alignment: .trailing)
         }
@@ -242,13 +375,15 @@ struct FlatTool: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 19, weight: .medium))
+                    .symbolVariant(selected ? .fill : .none)
                 Text(title)
                     .font(.system(size: 13))
             }
             .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -264,13 +399,21 @@ struct ToolTile: View {
         Button { action?() } label: {
             VStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(selected ? LumaTheme.accentSoft : LumaTheme.surface)
+                    .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(.ultraThinMaterial))
                     .frame(height: 62)
                     .overlay(Image(systemName: icon)
                         .font(.system(size: 21, weight: .medium))
                         .foregroundStyle(selected ? LumaTheme.accentBright : .white))
-                    .overlay(RoundedRectangle(cornerRadius: 16)
-                        .stroke(selected ? LumaTheme.accent : .clear, lineWidth: 1.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(
+                                selected
+                                    ? AnyShapeStyle(LumaTheme.accent)
+                                    : AnyShapeStyle(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)],
+                                                                   startPoint: .top, endPoint: .bottom)),
+                                lineWidth: selected ? 1.5 : 1
+                            )
+                    )
                 Text(title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
@@ -285,7 +428,8 @@ struct ToolTile: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
@@ -309,7 +453,7 @@ struct SectionHeader: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(LumaTheme.accentBright)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.lumaPress)
             }
         }
     }
@@ -338,11 +482,14 @@ struct LumaTabBar: View {
                     VStack(spacing: 5) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 21, weight: .regular))
+                            .symbolVariant(app.tab == tab ? .fill : .none)
+                            .symbolEffect(.bounce.up.byLayer, options: .speed(1.4), value: app.tab == tab)
                         Text(tab.rawValue)
                             .font(.system(size: 12, weight: app.tab == tab ? .semibold : .regular))
                     }
                     .foregroundStyle(app.tab == tab ? LumaTheme.accentBright : LumaTheme.textMuted)
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -351,7 +498,12 @@ struct LumaTabBar: View {
         .padding(.top, 12)
         .padding(.bottom, 6)
         .background(.ultraThinMaterial)
-        .overlay(alignment: .top) { Hairline() }
+        .overlay(alignment: .top) {
+            LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(height: 1)
+        }
+        .sensoryFeedback(.selection, trigger: app.tab)
     }
 }
 
@@ -363,7 +515,8 @@ struct ExportOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.75).ignoresSafeArea()
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            Color.black.opacity(0.55).ignoresSafeArea()
             VStack(spacing: 22) {
                 ZStack {
                     Circle().stroke(LumaTheme.surfaceStrong, lineWidth: 8)
@@ -374,6 +527,9 @@ struct ExportOverlay: View {
                         .animation(.easeInOut, value: progress)
                     Text("\(Int(progress * 100))%")
                         .font(.system(size: 24, weight: .bold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.snappy(duration: 0.2), value: Int(progress * 100))
                         .foregroundStyle(.white)
                 }
                 .frame(width: 110, height: 110)
@@ -385,7 +541,9 @@ struct ExportOverlay: View {
                 Button("Cancel", action: cancel)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(LumaTheme.accentBright)
+                    .buttonStyle(.lumaPress)
             }
+            .padding(36)
         }
     }
 }
@@ -399,8 +557,9 @@ extension Text {
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12)
-                .stroke(border ? LumaTheme.accentBright : .white.opacity(0.12)))
+                .strokeBorder(border ? LumaTheme.accentBright : .white.opacity(0.12)))
     }
 }

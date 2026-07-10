@@ -124,12 +124,9 @@ struct FilterStoreView: View {
                         }
                     }
                     .padding(.horizontal, 22)
-                    .padding(.bottom, 90)
+                    .padding(.bottom, 36)
                 }
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if isRoot { LumaTabBar() }
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -297,9 +294,6 @@ struct SavedLooksView: View {
             SolidCTA(title: "Create New Look") {
                 app.path.append(.customLook)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if isRoot { LumaTabBar() }
         }
     }
 }
@@ -520,9 +514,6 @@ struct ProjectLibraryView: View {
                 app.editor.startNewProject()
                 app.path.append(.editor)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if isRoot { LumaTabBar() }
         }
     }
 }
@@ -924,9 +915,6 @@ struct SettingsSubscriptionView: View {
                 ("questionmark.circle", "Help & Support", nil, true),
                 ("info.circle", "About LumaLook", "v1.0", true)
             ])
-        }
-        .safeAreaInset(edge: .bottom) {
-            if isRoot { LumaTabBar() }
         }
     }
 }

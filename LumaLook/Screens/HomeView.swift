@@ -63,11 +63,8 @@ struct HomeView: View {
                     RecentProjectsRow(store: app.store)
                 }
                 .padding(.horizontal, 22)
-                .padding(.bottom, 96)
+                .padding(.bottom, 24)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            LumaTabBar()
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -88,7 +85,7 @@ private struct RecentProjectsRow: View {
                 Spacer()
             }
             .padding(16)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+            .lumaCard()
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -111,7 +108,7 @@ private struct RecentProjectsRow: View {
                             }
                             .frame(width: 164)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.lumaPress)
                     }
                 }
             }
@@ -151,8 +148,16 @@ private struct HomeTile: View {
             .padding(18)
             .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
             .background(gradient, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.07)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(
+                        LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.02)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }
