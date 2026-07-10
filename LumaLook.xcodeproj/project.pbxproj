@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B846D621E4F274EC907E0EC /* LumaDial.swift */; };
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
 		0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A5624E7651D005E2DA05C1 /* CameraChrome.swift */; };
@@ -73,6 +74,7 @@
 		5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
 		5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaLookApp.swift; sourceTree = "<group>"; };
 		61A5624E7651D005E2DA05C1 /* CameraChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraChrome.swift; sourceTree = "<group>"; };
+		6B846D621E4F274EC907E0EC /* LumaDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaDial.swift; sourceTree = "<group>"; };
 		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */,
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
+				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
 				4D43F2BD3901B8346CB884BF /* LumaTheme.swift */,
 				79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */,
@@ -354,6 +357,7 @@
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,
+				028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */,
 				D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */,
 				DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */,
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,

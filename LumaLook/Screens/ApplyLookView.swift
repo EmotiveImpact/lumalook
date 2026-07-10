@@ -73,6 +73,7 @@ struct GradedStillView: View {
 
 struct ApplyLookView: View {
     @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var category = "All"
     @State private var activeTool = "Adjust"
@@ -138,7 +139,105 @@ struct ApplyLookView: View {
     }
 
     var body: some View {
-        LumaScreen(title: "Choose Look", trailingIcon: "magnifyingglass") {
+        // Media-first grade room: the footage owns the screen; every control
+        // floats in a pinned bottom glass drawer. No page scroll.
+        VStack(spacing: 0) {
+            mediaSurface
+            drawer
+        }
+        .background(LumaTheme.background.ignoresSafeArea())
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        .task(id: thumbStamp) {
+            thumbs.render(source: app.previewFrame,
+                          looks: MockData.looks,
+                          luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
+        }
+        .task(id: mediaKey) { await loadMediaReadout() }
+    }
+
+    // MARK: Media surface
+
+    @State private var holdingOriginal = false
+    @State private var stashedIntensity: Double?
+
+    private var mediaSurface: some View {
+        LookPreviewSurface(radius: 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.black)
+            .overlay {
+                if app.player != nil, let aspect = videoAspect, aspect >= 1.4 {
+                    LetterboxMattes(contentAspect: aspect)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: videoAspect)
+            // Press-and-hold anywhere on the image to see the original —
+            // the industry-standard before/after peek.
+            .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
+            } onPressingChanged: { pressing in
+                if pressing {
+                    if stashedIntensity == nil { stashedIntensity = app.settings.intensity }
+                    holdingOriginal = true
+                    app.settings.intensity = 0
+                } else if let stashed = stashedIntensity {
+                    app.settings.intensity = stashed
+                    stashedIntensity = nil
+                    holdingOriginal = false
+                }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
+            .overlay(alignment: .top) { topBar }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if holdingOriginal {
+                        TechReadout("ORIGINAL", size: 11)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.5), in: Capsule())
+                            .transition(.opacity)
+                    }
+                    if let mediaReadout {
+                        TechReadout(mediaReadout, size: 10, color: .white.opacity(0.65))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.4), in: Capsule())
+                    }
+                }
+                .padding(12)
+                .animation(.easeOut(duration: 0.12), value: holdingOriginal)
+            }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            Spacer()
+            TechReadout("GRADE", size: 12, color: .white.opacity(0.85))
+            Spacer()
+            Color.clear.frame(width: 40, height: 40)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 14)
+        .background {
+            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    // MARK: Drawer
+
+    private var drawer: some View {
+        VStack(spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(MockData.categories, id: \.self) { chip in
@@ -148,28 +247,77 @@ struct ApplyLookView: View {
                         .buttonStyle(.lumaPress)
                     }
                 }
+                .padding(.horizontal, 22)
+            }
+            .lumaEdgeFade()
+
+            lookStrip
+
+            if app.selectedLUT?.isLogTarget == true {
+                Label("Log LUT — designed for Log footage. If it looks harsh here, lower the intensity.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LumaTheme.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 22)
+                    .transition(.opacity)
             }
 
-            LookPreviewSurface()
-                .frame(height: 400)
-                .overlay {
-                    // Letterbox mattes when grading wide (16:9-ish) video,
-                    // so the surface reads "cinema", not "player".
-                    if app.player != nil, let aspect = videoAspect, aspect >= 1.4 {
-                        LetterboxMattes(contentAspect: aspect)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                            .transition(.opacity)
-                    }
+            LumaDial(title: activeTool == "Adjust" ? "Intensity" : activeTool,
+                     value: dialBinding)
+                .padding(.horizontal, 22)
+
+            HStack(spacing: 4) {
+                FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
+                    activeTool = "Adjust"
                 }
-                .animation(.easeInOut(duration: 0.25), value: videoAspect)
-                .task(id: mediaKey) { await loadMediaReadout() }
-
-            if let mediaReadout {
-                TechReadout(mediaReadout, size: 11, color: LumaTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, -8)
+                FlatTool(title: "Grain", icon: "circle.dotted", selected: activeTool == "Grain") {
+                    activeTool = "Grain"
+                }
+                FlatTool(title: "Bloom", icon: "sun.haze", selected: activeTool == "Bloom") {
+                    activeTool = "Bloom"
+                }
+                FlatTool(title: "Halation", icon: "circle.hexagongrid.circle", selected: activeTool == "Halation") {
+                    activeTool = "Halation"
+                }
+                FlatTool(title: "Vignette", icon: "smallcircle.filled.circle", selected: activeTool == "Vignette") {
+                    activeTool = "Vignette"
+                }
+                FlatTool(title: "More", icon: "dial.high", action: { app.path.append(.customLook) })
             }
+            .padding(.horizontal, 14)
 
+            SolidCTA(title: "Apply Look", height: 52) {
+                app.path.append(.beforeAfter)
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 6)
+        }
+        .padding(.top, 14)
+        .background {
+            ZStack(alignment: .top) {
+                Rectangle().fill(.ultraThinMaterial)
+                LumaTheme.background.opacity(0.45)
+                LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 1)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    /// One dial, five parameters: the dial always edits the active tool.
+    private var dialBinding: Binding<Double> {
+        switch activeTool {
+        case "Grain": return $app.settings.grain
+        case "Bloom": return $app.settings.bloom
+        case "Halation": return $app.settings.halation
+        case "Vignette": return $app.settings.vignette
+        default: return $app.settings.intensity
+        }
+    }
+
+    private var lookStrip: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(filteredLooks) { look in
@@ -210,63 +358,11 @@ struct ApplyLookView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .padding(.horizontal, 22)
             }
+            .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
-            .task(id: thumbStamp) {
-                thumbs.render(source: app.previewFrame,
-                              looks: MockData.looks,
-                              luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
-            }
-
-            if app.selectedLUT?.isLogTarget == true {
-                Label("Log LUT — designed for Log footage. If it looks harsh here, lower the intensity.",
-                      systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(LumaTheme.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
-            }
-
-            InlineSlider(title: "Intensity", value: $app.settings.intensity)
-                .padding(.top, 4)
-
-            Hairline()
-
-            HStack(spacing: 4) {
-                FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
-                    activeTool = "Adjust"
-                    app.path.append(.customLook)
-                }
-                FlatTool(title: "Grain", icon: "circle.dotted", selected: activeTool == "Grain") {
-                    activeTool = "Grain"
-                }
-                FlatTool(title: "Bloom", icon: "sun.haze", selected: activeTool == "Bloom") {
-                    activeTool = "Bloom"
-                }
-                FlatTool(title: "Halation", icon: "circle.hexagongrid.circle", selected: activeTool == "Halation") {
-                    activeTool = "Halation"
-                }
-                FlatTool(title: "Vignette", icon: "smallcircle.filled.circle", selected: activeTool == "Vignette") {
-                    activeTool = "Vignette"
-                }
-            }
-
-            if activeTool == "Bloom" {
-                InlineSlider(title: "Bloom", value: $app.settings.bloom)
-            } else if activeTool == "Vignette" {
-                InlineSlider(title: "Vignette", value: $app.settings.vignette)
-            } else if activeTool == "Grain" {
-                InlineSlider(title: "Grain", value: $app.settings.grain)
-            } else if activeTool == "Halation" {
-                InlineSlider(title: "Halation", value: $app.settings.halation)
-            }
-
-            SolidCTA(title: "Apply Look") {
-                app.path.append(.beforeAfter)
-            }
-            .padding(.top, 4)
-        }
     }
 }
 
