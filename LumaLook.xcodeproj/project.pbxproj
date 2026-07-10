@@ -10,6 +10,7 @@
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
+		1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */; };
 		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
 		260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE2524F01E128404964986C /* hero_golden.jpg */; };
@@ -36,6 +37,7 @@
 		AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D43F2BD3901B8346CB884BF /* LumaTheme.swift */; };
 		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
 		D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 158CFCA17750E771F995959B /* hero_desert.jpg */; };
+		D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */; };
 		D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = FD762DD38BFEE29B06287806 /* CREDITS.md */; };
 		D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */; };
 		DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */; };
@@ -70,6 +72,7 @@
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
+		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
 		982FBAAA5098559374D20381 /* LUTManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTManagerView.swift; sourceTree = "<group>"; };
@@ -80,6 +83,7 @@
 		C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPipeline.swift; sourceTree = "<group>"; };
 		C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipView.swift; sourceTree = "<group>"; };
 		CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_neon.jpg; sourceTree = "<group>"; };
+		D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorChrome.swift; sourceTree = "<group>"; };
 		EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLiveLookView.swift; sourceTree = "<group>"; };
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */ = {isa = PBXFileReference; path = Warm_Cinematic_17.cube; sourceTree = "<group>"; };
@@ -161,8 +165,10 @@
 		8CD83DEF83E5437F197B1EBB /* Design */ = {
 			isa = PBXGroup;
 			children = (
+				D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */,
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
+				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
 				4D43F2BD3901B8346CB884BF /* LumaTheme.swift */,
 				2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */,
 			);
@@ -319,6 +325,7 @@
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,
+				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
 				E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */,
 				6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */,
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
@@ -329,6 +336,7 @@
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,
+				D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */,
 				DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */,
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,
 				300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */,
