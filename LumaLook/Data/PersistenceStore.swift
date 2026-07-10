@@ -12,6 +12,19 @@ struct StoredClip: Codable, Identifiable {
     var speed: Double
 }
 
+/// Background-music track attached to a project.
+struct StoredMusic: Codable {
+    var id: UUID
+    var fileName: String        // inside Documents/Audio
+    var title: String
+    var assetDuration: Double
+    var trimStart: Double
+    var trimEnd: Double
+    var timelineOffset: Double
+    var volume: Double
+    var isMuted: Bool
+}
+
 struct StoredProject: Codable, Identifiable {
     var id: UUID
     var title: String
@@ -25,6 +38,9 @@ struct StoredProject: Codable, Identifiable {
     var fadeOut: Double
     var muteAudio: Bool
     var duration: Double
+    // Optional so pre-music Projects.json files still decode. Never add a
+    // non-optional field here: `load` uses try? and would wipe every project.
+    var music: StoredMusic? = nil
 }
 
 struct SavedLook: Codable, Identifiable {
@@ -47,11 +63,13 @@ final class PersistenceStore: ObservableObject {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     var clipsFolder: URL { documents.appendingPathComponent("Clips", isDirectory: true) }
+    var audioFolder: URL { documents.appendingPathComponent("Audio", isDirectory: true) }
     private var projectsURL: URL { documents.appendingPathComponent("Projects.json") }
     private var looksURL: URL { documents.appendingPathComponent("SavedLooks.json") }
 
     init() {
         try? FileManager.default.createDirectory(at: clipsFolder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: audioFolder, withIntermediateDirectories: true)
         projects = Self.load([StoredProject].self, from: projectsURL) ?? []
         savedLooks = Self.load([SavedLook].self, from: looksURL) ?? []
     }
@@ -72,6 +90,25 @@ final class PersistenceStore: ObservableObject {
 
     func clipURL(for stored: StoredClip) -> URL {
         clipsFolder.appendingPathComponent(stored.fileName)
+    }
+
+    // MARK: Audio library
+
+    /// Copies a picked audio file into the durable audio library.
+    /// Must be called synchronously while any security scope is still open.
+    func importAudioFile(from url: URL) -> URL? {
+        let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+        let destination = audioFolder.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        do {
+            try FileManager.default.copyItem(at: url, to: destination)
+            return destination
+        } catch {
+            return nil
+        }
+    }
+
+    func audioURL(for stored: StoredMusic) -> URL {
+        audioFolder.appendingPathComponent(stored.fileName)
     }
 
     // MARK: Projects

@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import PhotosUI
+import UniformTypeIdentifiers
 import Pow
 
 struct EditorTimelineView: View {
@@ -14,6 +15,8 @@ struct EditorTimelineView: View {
     @State private var trimStart: Double = 0
     @State private var trimEnd: Double = 1
     @State private var showLooksStrip = false
+    @State private var showMusicPanel = false
+    @State private var showMusicImporter = false
     @State private var isExporting = false
     @State private var exportError: String?
 
@@ -29,9 +32,11 @@ struct EditorTimelineView: View {
                 trimStart: $trimStart,
                 trimEnd: $trimEnd,
                 showLooksStrip: $showLooksStrip,
+                showMusicPanel: $showMusicPanel,
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
+                onAddMusic: { showMusicImporter = true },
                 onExport: { startExport() },
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
@@ -41,6 +46,11 @@ struct EditorTimelineView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .photosPicker(isPresented: $showAddPicker, selection: $addPickerItem, matching: .videos)
+        .fileImporter(isPresented: $showMusicImporter,
+                      allowedContentTypes: [.audio],
+                      allowsMultipleSelection: false) { result in
+            handleMusicImport(result)
+        }
         .onChange(of: addPickerItem) { _, newItem in
             guard let newItem else { return }
             isLoadingClip = true
@@ -59,6 +69,7 @@ struct EditorTimelineView: View {
             if editor.isEmpty, let url = app.selectedVideoURL {
                 Task { await editor.addClip(from: url) }
             }
+            applyDebugSeed()
         }
         .onDisappear {
             editor.saveProject()
@@ -68,6 +79,56 @@ struct EditorTimelineView: View {
                 ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
             }
         }
+    }
+
+    /// Debug-only UI-check seeding, sibling to AppModel's LUMA_ROUTE:
+    /// SIMCTL_CHILD_LUMA_SEED_CLIP / _MUSIC point at media files on the host,
+    /// SIMCTL_CHILD_LUMA_SEED_PLAY=1 starts playback once seeded.
+    private func applyDebugSeed() {
+        #if DEBUG
+        let env = ProcessInfo.processInfo.environment
+        guard env["LUMA_SEED_CLIP"] != nil || env["LUMA_SEED_MUSIC"] != nil else { return }
+        Task {
+            if editor.isEmpty, let path = env["LUMA_SEED_CLIP"],
+               FileManager.default.fileExists(atPath: path) {
+                await editor.addClip(from: URL(fileURLWithPath: path))
+            }
+            if editor.music == nil, let path = env["LUMA_SEED_MUSIC"],
+               FileManager.default.fileExists(atPath: path) {
+                let url = URL(fileURLWithPath: path)
+                if let imported = editor.importMusicFile(from: url) {
+                    await editor.setMusic(importedURL: imported,
+                                          title: url.deletingPathExtension().lastPathComponent)
+                }
+            }
+            if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
+                // Wait out the async rebuild before hitting play/export.
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if env["LUMA_SEED_EXPORT"] == "1" {
+                    startExport()
+                } else if !editor.isPlaying {
+                    editor.togglePlayback()
+                }
+            }
+        }
+        #endif
+    }
+
+    /// Copies the picked audio into the library *inside* the security scope,
+    /// synchronously, then hands the durable URL to the engine.
+    private func handleMusicImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let imported = editor.importMusicFile(from: url) else {
+            exportError = "Couldn't import that audio file. If it's in iCloud, download it first."
+            return
+        }
+        exportError = nil
+        let title = url.deletingPathExtension().lastPathComponent
+        Task { await editor.setMusic(importedURL: imported, title: title) }
     }
 
     private func startExport() {
@@ -80,10 +141,9 @@ struct EditorTimelineView: View {
         Task {
             do {
                 let built = try await editor.buildComposition()
-                let mix = editor.makeAudioMix(for: built.composition)
                 let url = try await app.exporter.export(asset: built.composition,
                                                         videoComposition: built.videoComposition,
-                                                        audioMix: mix)
+                                                        audioMix: built.audioMix)
                 try await app.exporter.saveToPhotos(url: url)
                 app.lastExportURL = url
                 isExporting = false
@@ -107,9 +167,11 @@ private struct EditorContent: View {
     @Binding var trimStart: Double
     @Binding var trimEnd: Double
     @Binding var showLooksStrip: Bool
+    @Binding var showMusicPanel: Bool
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
+    let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
     let onOpenCrop: () -> Void
@@ -134,8 +196,9 @@ private struct EditorContent: View {
                 .padding(.horizontal, 22)
                 .padding(.vertical, 8)
 
+            // Timeline V2: edge-to-edge so the fixed playhead sits at true
+            // screen centre and content scrolls under it.
             timeline
-                .padding(.horizontal, 22)
                 .padding(.bottom, 10)
 
             if let exportError {
@@ -153,6 +216,12 @@ private struct EditorContent: View {
                     .padding(.bottom, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            if showMusicPanel, let music = editor.music {
+                musicPanel(music: music)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if showLooksStrip {
                 looksStrip
                     .padding(.bottom, 10)
@@ -163,6 +232,8 @@ private struct EditorContent: View {
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showTrimPanel)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showLooksStrip)
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showMusicPanel)
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.music == nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
         // One physical thump whenever the timeline structure changes
         // (add, split, delete).
@@ -425,89 +496,74 @@ private struct EditorContent: View {
     // MARK: Timeline
 
     private var timeline: some View {
-        VStack(spacing: 10) {
-            GeometryReader { geo in
-                let width = geo.size.width
-                ZStack(alignment: .leading) {
-                    HStack(spacing: 3) {
-                        if editor.isEmpty {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(.ultraThinMaterial)
-                                .overlay(RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                                    .foregroundStyle(.white.opacity(0.15)))
-                                .overlay(Text("Timeline is empty")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(LumaTheme.textMuted))
-                        } else {
-                            ForEach(editor.clips) { clip in
-                                ClipCell(clip: clip,
-                                         totalDuration: editor.totalDuration,
-                                         stripWidth: width,
-                                         selected: clip.id == editor.selectedClipID)
-                                    .onTapGesture { editor.selectedClipID = clip.id }
-                                    .contextMenu {
-                                        Button {
-                                            editor.selectedClipID = clip.id
-                                            editor.moveSelected(by: -1)
-                                        } label: { Label("Move Left", systemImage: "arrow.left") }
-                                        Button {
-                                            editor.selectedClipID = clip.id
-                                            editor.moveSelected(by: 1)
-                                        } label: { Label("Move Right", systemImage: "arrow.right") }
-                                        Button(role: .destructive) {
-                                            editor.selectedClipID = clip.id
-                                            editor.deleteSelected()
-                                        } label: { Label("Delete", systemImage: "trash") }
-                                    }
-                            }
-                        }
-                    }
+        TimelineV2View(editor: editor,
+                       onAddMusic: onAddMusic,
+                       onTapMusic: { showMusicPanel.toggle() })
+    }
 
-                    if !editor.isEmpty, editor.totalDuration > 0 {
-                        Rectangle()
-                            .fill(.white)
-                            .frame(width: 2.5)
-                            .shadow(color: .black.opacity(0.6), radius: 3)
-                            .offset(x: width * CGFloat(editor.currentTime / editor.totalDuration))
-                    }
-                }
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            guard editor.totalDuration > 0 else { return }
-                            let fraction = min(max(0, value.location.x / width), 1)
-                            editor.seek(to: fraction * editor.totalDuration)
-                        }
-                )
-            }
-            .frame(height: 66)
+    // MARK: Music panel
 
-            Button(action: onOpenAudio) {
-                HStack(spacing: 10) {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 14, weight: .bold))
-                    Text(editor.muteAudio ? "Audio muted" : "Ambient Beat")
-                        .font(.system(size: 16, weight: .semibold))
-                    Spacer()
-                    Text(timeString(editor.totalDuration))
-                        .font(.system(size: 13, weight: .semibold))
-                        .monospacedDigit()
-                        .opacity(0.8)
+    private func musicPanel(music: EditorState.MusicTrack) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "music.note")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(LumaTheme.accentBright)
+                Text(music.title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                Text(String(format: "%.1fs", music.timelineDuration))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .monospacedDigit()
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 46)
-                .frame(maxWidth: .infinity)
-                .background(editor.muteAudio ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                             : AnyShapeStyle(LumaTheme.accentDeep),
-                            in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                .buttonStyle(.lumaPress)
             }
-            .buttonStyle(.lumaPress)
+            InlineSlider(title: "Volume", value: Binding(
+                get: { editor.music?.volume ?? 100 },
+                set: { editor.setMusicVolume($0) }
+            )) { "\(Int($0))%" }
+            HStack(spacing: 12) {
+                Button {
+                    editor.setMusicMuted(!music.isMuted)
+                } label: {
+                    Label(music.isMuted ? "Unmute" : "Mute",
+                          systemImage: music.isMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(music.isMuted ? AnyShapeStyle(LumaTheme.accentDeep)
+                                                  : AnyShapeStyle(LumaTheme.surface),
+                                    in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.lumaPress)
+                Button {
+                    editor.removeMusic()
+                    withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(LumaTheme.orange)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.lumaPress)
+            }
         }
+        .padding(16)
+        .lumaCard()
     }
 
     // MARK: Trim panel
@@ -602,65 +658,6 @@ private struct EditorContent: View {
 }
 
 // MARK: - Cells
-
-private struct ClipCell: View {
-    let clip: EditorState.Clip
-    let totalDuration: Double
-    let stripWidth: CGFloat
-    let selected: Bool
-
-    var body: some View {
-        Group {
-            if let thumb = clip.thumbnail {
-                // Filmstrip: repeat the frame in square tiles across the
-                // clip's width, like a real NLE track.
-                HStack(spacing: 0) {
-                    ForEach(0..<max(1, Int(ceil(cellWidth / 44))), id: \.self) { _ in
-                        Color.clear
-                            .frame(width: 44, height: 66)
-                            .overlay {
-                                Image(decorative: thumb, scale: 1)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            }
-                            .clipped()
-                    }
-                }
-                .frame(width: cellWidth, alignment: .leading)
-            } else {
-                LumaTheme.surfaceStrong
-            }
-        }
-        .frame(width: cellWidth, height: 66)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .bottomLeading) {
-            HStack(spacing: 3) {
-                if clip.speed != 1 {
-                    Text(String(format: "%g×", clip.speed))
-                        .font(.system(size: 10, weight: .heavy))
-                }
-                Text(String(format: "%.1fs", clip.timelineDuration))
-                    .font(.system(size: 10, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(.black.opacity(0.55), in: Capsule())
-            .padding(4)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.08),
-                    lineWidth: selected ? 2.5 : 1))
-        .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
-    }
-
-    private var cellWidth: CGFloat {
-        guard totalDuration > 0 else { return 88 }
-        let proportional = stripWidth * CGFloat(clip.timelineDuration / totalDuration)
-        return max(44, proportional - 3)
-    }
-}
 
 private struct LookStripCell: View {
     let look: LookPreset
