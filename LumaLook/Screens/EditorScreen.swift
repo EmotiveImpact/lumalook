@@ -48,6 +48,8 @@ struct EditorTimelineView: View {
                 defer { isLoadingClip = false }
                 if let video = try? await newItem.loadTransferable(type: PickedVideo.self) {
                     await editor.addClip(from: video.url)
+                    // Select the new clip so its tools appear right away.
+                    editor.selectedClipID = editor.clips.last?.id
                 }
                 addPickerItem = nil
             }
@@ -204,15 +206,32 @@ private struct EditorContent: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                HStack {
-                    FlatTool(title: "Add", icon: "plus", action: onAdd)
-                    FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
-                        showLooksStrip.toggle()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        FlatTool(title: "Add", icon: "plus", action: onAdd)
+                            .frame(width: 58)
+                        FlatTool(title: "Edit", icon: "scissors") {
+                            selectClipAtPlayhead()
+                        }
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
+                        FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
+                            showLooksStrip.toggle()
+                        }
+                        .frame(width: 58)
+                        FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
+                            .frame(width: 58)
+                        FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
+                            .frame(width: 58)
+                        FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
+                            .frame(width: 58)
+                        FlatTool(title: "Text", icon: "textformat")
+                            .frame(width: 58)
+                        FlatTool(title: "Overlay", icon: "square.on.square")
+                            .frame(width: 58)
                     }
-                    FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
-                    FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
-                    FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
-                    FlatTool(title: "Text", icon: "textformat")
+                    .padding(.horizontal, 6)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -557,6 +576,21 @@ private struct EditorContent: View {
             }
             .padding(.vertical, 2)
         }
+    }
+
+    /// CapCut-style "Edit": select the clip under the playhead so the
+    /// inspector dock slides in without hunting for a tap target.
+    private func selectClipAtPlayhead() {
+        guard !editor.isEmpty else { return }
+        var elapsed: Double = 0
+        for clip in editor.clips {
+            elapsed += clip.timelineDuration
+            if editor.currentTime < elapsed {
+                editor.selectedClipID = clip.id
+                return
+            }
+        }
+        editor.selectedClipID = editor.clips.last?.id
     }
 
     private func timeString(_ seconds: Double) -> String {
