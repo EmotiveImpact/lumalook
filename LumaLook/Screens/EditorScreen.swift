@@ -114,38 +114,122 @@ private struct EditorContent: View {
     let onOpenAdjust: () -> Void
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 16) {
-                header
-                preview
-                transport
-                Hairline()
-                editTools
-                Hairline()
-                timeline
+        // Editor-app composition (not a page): the preview flexes to fill,
+        // everything else is pinned. Nothing scrolls vertically.
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 22)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
 
-                if showTrimPanel, let clip = editor.selectedClip {
-                    trimPanel(clip: clip)
-                }
-                if showLooksStrip {
-                    looksStrip
-                }
-                if let exportError {
-                    Text(exportError)
-                        .font(.system(size: 13))
-                        .foregroundStyle(LumaTheme.orange)
-                }
+            preview
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 10)
 
-                Hairline()
-                bottomTools
+            transport
+                .padding(.horizontal, 22)
+                .padding(.vertical, 8)
+
+            timeline
+                .padding(.horizontal, 22)
+                .padding(.bottom, 10)
+
+            if let exportError {
+                Text(exportError)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LumaTheme.orange)
+                    .padding(.bottom, 6)
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 6)
-            .padding(.bottom, 30)
+
+            // Sliding panels sit between timeline and dock, img.ly-style.
+            if showTrimPanel, let clip = editor.selectedClip {
+                trimPanel(clip: clip)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if showLooksStrip {
+                looksStrip
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            dock
         }
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showTrimPanel)
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showLooksStrip)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
         // One physical thump whenever the timeline structure changes
         // (add, split, delete).
         .sensoryFeedback(.impact(weight: .medium), trigger: editor.clips.count)
+        .sensoryFeedback(.selection, trigger: editor.selectedClipID)
+    }
+
+    // MARK: Dock
+
+    /// Root tool dock ⇄ clip inspector, swapped on selection with a slide —
+    /// the CapCut/img.ly pattern: context decides the tools.
+    private var dock: some View {
+        ZStack {
+            if editor.selectedClipID != nil, !editor.isEmpty {
+                HStack(spacing: 2) {
+                    Button {
+                        editor.selectedClipID = nil
+                        showTrimPanel = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(LumaTheme.textSecondary)
+                            .frame(width: 34, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.lumaPress)
+                    FlatTool(title: "Trim", icon: "scissors", selected: showTrimPanel) {
+                        guard let clip = editor.selectedClip else { return }
+                        trimStart = clip.trimStart
+                        trimEnd = clip.trimEnd
+                        showTrimPanel.toggle()
+                    }
+                    FlatTool(title: "Split", icon: "square.split.2x1") {
+                        editor.splitAtPlayhead()
+                    }
+                    FlatTool(title: "Delete", icon: "trash") {
+                        editor.deleteSelected()
+                    }
+                    FlatTool(title: "Volume", icon: "speaker.wave.2", action: onOpenAudio)
+                    speedMenu
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                HStack {
+                    FlatTool(title: "Add", icon: "plus", action: onAdd)
+                    FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
+                        showLooksStrip.toggle()
+                    }
+                    FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
+                    FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
+                    FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
+                    FlatTool(title: "Text", icon: "textformat")
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack(alignment: .top) {
+                Rectangle().fill(.ultraThinMaterial)
+                LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 1)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     // MARK: Header
@@ -190,8 +274,10 @@ private struct EditorContent: View {
             Button(action: onExport) {
                 Text("Export")
                     .font(.system(size: 16, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(
                         LinearGradient(colors: [LumaTheme.accent, LumaTheme.accent.opacity(0.82)],
@@ -216,7 +302,7 @@ private struct EditorContent: View {
                 VideoPlayer(player: player)
                     .onDisappear { if editor.isPlaying { editor.togglePlayback() } }
             } else {
-                SceneArt(scene: .forest)
+                HeroImage(photo: .coast)
                     .overlay {
                         VStack(spacing: 12) {
                             if isLoadingClip {
@@ -248,20 +334,18 @@ private struct EditorContent: View {
                     }
             }
         }
-        .frame(height: 300)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.06)))
     }
 
     // MARK: Transport
 
+    /// Timecode leading, play controls dead-centre, rebuild spinner trailing.
     private var transport: some View {
-        HStack {
+        HStack(spacing: 0) {
             Text("\(timeString(editor.currentTime)) / \(timeString(editor.totalDuration))")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(LumaTheme.textSecondary)
                 .monospacedDigit()
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 28) {
                 Button { editor.seekToBoundary(forward: false) } label: {
                     Image(systemName: "backward.end.fill").font(.system(size: 17))
@@ -280,38 +364,14 @@ private struct EditorContent: View {
             .buttonStyle(.lumaPress)
             .disabled(editor.isEmpty)
             .sensoryFeedback(.impact(weight: .light), trigger: editor.isPlaying)
-            Spacer()
-            if editor.isRebuilding {
-                ProgressView().tint(LumaTheme.textMuted).scaleEffect(0.8)
-            } else {
-                Color.clear.frame(width: 20, height: 20)
+            HStack {
+                Spacer()
+                if editor.isRebuilding {
+                    ProgressView().tint(LumaTheme.textMuted).scaleEffect(0.8)
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 2)
-    }
-
-    // MARK: Edit tools
-
-    private var editTools: some View {
-        HStack {
-            FlatTool(title: "Add", icon: "plus", action: onAdd)
-            FlatTool(title: "Trim", icon: "scissors", selected: showTrimPanel) {
-                guard let clip = editor.selectedClip else { return }
-                trimStart = clip.trimStart
-                trimEnd = clip.trimEnd
-                withAnimation(.easeOut(duration: 0.15)) { showTrimPanel.toggle() }
-            }
-            FlatTool(title: "Split", icon: "square.split.2x1") {
-                editor.splitAtPlayhead()
-            }
-            FlatTool(title: "Delete", icon: "trash") {
-                editor.deleteSelected()
-            }
-            FlatTool(title: "Volume", icon: "speaker.wave.2", action: onOpenAudio)
-            speedMenu
-        }
-        .opacity(editor.isEmpty ? 0.35 : 1)
-        .disabled(editor.isEmpty)
     }
 
     private var speedMenu: some View {
@@ -499,21 +559,6 @@ private struct EditorContent: View {
         }
     }
 
-    // MARK: Bottom tools
-
-    private var bottomTools: some View {
-        HStack {
-            FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
-                withAnimation(.easeOut(duration: 0.15)) { showLooksStrip.toggle() }
-            }
-            FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
-            FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
-            FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
-            FlatTool(title: "Text", icon: "textformat")
-            FlatTool(title: "Overlay", icon: "square.on.square")
-        }
-    }
-
     private func timeString(_ seconds: Double) -> String {
         let total = max(0, seconds)
         let m = Int(total) / 60
@@ -533,9 +578,21 @@ private struct ClipCell: View {
     var body: some View {
         Group {
             if let thumb = clip.thumbnail {
-                Image(decorative: thumb, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                // Filmstrip: repeat the frame in square tiles across the
+                // clip's width, like a real NLE track.
+                HStack(spacing: 0) {
+                    ForEach(0..<max(1, Int(ceil(cellWidth / 44))), id: \.self) { _ in
+                        Color.clear
+                            .frame(width: 44, height: 66)
+                            .overlay {
+                                Image(decorative: thumb, scale: 1)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            }
+                            .clipped()
+                    }
+                }
+                .frame(width: cellWidth, alignment: .leading)
             } else {
                 LumaTheme.surfaceStrong
             }
