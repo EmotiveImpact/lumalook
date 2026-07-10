@@ -14,9 +14,14 @@ final class LookThumbs: ObservableObject {
     static func key(look: LookPreset) -> String { "look-\(look.id)" }
     static func key(lut: LUTFile) -> String { "lut-\(lut.id)" }
 
-    /// Painterly fallback rasterized once, for the empty state before any
-    /// real media is selected. Thumbnails are still individually graded.
+    /// Real bundled photograph for the empty state before any media is
+    /// selected — thumbnails are individually graded from day one.
     static let fallbackFrame: CIImage = {
+        if let ci = HeroPhoto.golden.ciImage {
+            let longest = max(ci.extent.width, ci.extent.height)
+            let scale = longest > 440 ? 440 / longest : 1
+            return ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        }
         let renderer = ImageRenderer(content: SceneArt(scene: .sunsetRoad)
             .frame(width: 440, height: 440))
         renderer.scale = 1

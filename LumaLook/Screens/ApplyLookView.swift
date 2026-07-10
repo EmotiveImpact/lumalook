@@ -16,7 +16,7 @@ struct LookPreviewSurface: View {
             } else if let still = app.selectedImage {
                 GradedStillView(source: still)
             } else {
-                SceneArt(scene: .sunsetRoad, grade: app.selectedLook.gradeTint, gradeOpacity: 0.22)
+                GradedHeroPreview()
                     .overlay(alignment: .bottomLeading) {
                         Label("Preview — pick a clip to grade live", systemImage: "film")
                             .font(.system(size: 12, weight: .medium))
@@ -30,6 +30,18 @@ struct LookPreviewSurface: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: radius))
         .overlay(RoundedRectangle(cornerRadius: radius).stroke(.white.opacity(0.06)))
+    }
+}
+
+/// Empty-state preview: the bundled hero photograph run through the LIVE
+/// grade, so the look responds in real time even before a clip is picked.
+struct GradedHeroPreview: View {
+    var body: some View {
+        if let ci = HeroPhoto.golden.ciImage {
+            GradedStillView(source: ci)
+        } else {
+            SceneArt(scene: .sunsetRoad)
+        }
     }
 }
 

@@ -1,6 +1,9 @@
 import SwiftUI
 import CoreImage
 
+/// Full-bleed cinematic viewfinder: the camera feed owns the entire
+/// screen and every control floats above it on scrims and glass —
+/// the shape of a real camera app, not a page with a preview box.
 struct CameraLiveLookView: View {
     @EnvironmentObject private var app: AppModel
     @StateObject private var camera = CameraController()
@@ -10,27 +13,75 @@ struct CameraLiveLookView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            viewfinder
 
             VStack(spacing: 0) {
                 topStrip
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.top, 4)
+                    .padding(.bottom, 16)
+                    .background {
+                        LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .ignoresSafeArea(edges: .top)
+                    }
 
-                preview
-                    .padding(.horizontal, 8)
+                Spacer()
 
-                looksRow
-                    .padding(.top, 16)
-
-                InlineSlider(title: "Intensity", value: $app.settings.intensity)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 12)
-
-                bottomControls
-                    .padding(.top, 14)
-                    .padding(.bottom, 12)
+                VStack(spacing: 14) {
+                    looksRow
+                    InlineSlider(title: "Intensity", value: $app.settings.intensity)
+                        .padding(.horizontal, 22)
+                    bottomControls
+                }
+                .padding(.top, 26)
+                .background {
+                    LinearGradient(colors: [.black.opacity(0), .black.opacity(0.55), .black.opacity(0.78)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea(edges: .bottom)
+                }
             }
+
+            // Status pills float over the feed, top centre.
+            VStack(spacing: 8) {
+                if camera.isRecording {
+                    RecordingPill()
+                }
+                if camera.lastSavedToPhotos {
+                    Label("Saved to Photos", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.teal)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(.black.opacity(0.3), in: Capsule())
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.top, 58)
+
+            // Zoom / flip rail on the right, clear of the bottom cluster.
+            VStack(spacing: 10) {
+                Text("1.0x")
+                    .font(.system(size: 15, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 44)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
+                Button {} label: {
+                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 54, height: 44)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.lumaPress)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(.trailing, 14)
+            .padding(.bottom, 348)
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -47,6 +98,24 @@ struct CameraLiveLookView: View {
             liveThumbSource = CIImage(cgImage: frame)
             thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
         }
+    }
+
+    // MARK: - Viewfinder
+
+    @ViewBuilder
+    private var viewfinder: some View {
+        Group {
+            if camera.isRunning && !camera.cameraUnavailable {
+                FilteredCameraPreview(camera: camera)
+            } else {
+                ZStack {
+                    HeroImage(photo: .golden)
+                    Color.black.opacity(0.38)
+                    fallbackMessage
+                }
+            }
+        }
+        .ignoresSafeArea()
     }
 
     // MARK: - Top icon strip
@@ -75,70 +144,7 @@ struct CameraLiveLookView: View {
             Image(systemName: "gearshape").font(.system(size: 20, weight: .medium))
         }
         .foregroundStyle(.white)
-    }
-
-    // MARK: - Preview
-
-    private var preview: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Group {
-                if camera.isRunning && !camera.cameraUnavailable {
-                    // Live look: frames run through the shared pipeline.
-                    FilteredCameraPreview(camera: camera)
-                } else {
-                    SceneArt(scene: .desert)
-                        .overlay { fallbackMessage }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 430)
-            .clipShape(RoundedRectangle(cornerRadius: 22))
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.06)))
-
-            VStack(spacing: 10) {
-                Text("1.0x")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 54, height: 44)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                Button {} label: {
-                    Image(systemName: "arrow.triangle.2.circlepath.camera")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 54, height: 44)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.lumaPress)
-            }
-            .padding(12)
-
-            if camera.isRecording {
-                VStack {
-                    Spacer()
-                    HStack {
-                        RecordingPill()
-                        Spacer()
-                    }
-                    .padding(12)
-                }
-            }
-
-            if camera.lastSavedToPhotos {
-                VStack {
-                    Label("Saved to Photos", systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(LumaTheme.teal)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.6), in: Capsule())
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 14)
-            }
-        }
+        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
     }
 
     // MARK: - Looks
@@ -165,7 +171,8 @@ struct CameraLiveLookView: View {
                             .frame(width: 78, height: 78)
                             Text(look.name)
                                 .font(.system(size: 12, weight: look.id == app.selectedLook.id ? .semibold : .regular))
-                                .foregroundStyle(look.id == app.selectedLook.id ? .white : LumaTheme.textSecondary)
+                                .foregroundStyle(look.id == app.selectedLook.id ? .white : .white.opacity(0.7))
+                                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                                 .lineLimit(1)
                                 .frame(width: 80)
                         }
@@ -213,6 +220,7 @@ struct CameraLiveLookView: View {
             .buttonStyle(.lumaPress)
         }
         .padding(.horizontal, 26)
+        .padding(.bottom, 6)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
     }
 
@@ -245,7 +253,8 @@ struct CameraLiveLookView: View {
             }
         }
         .padding(24)
-        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 20))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 20))
     }
 }
 
@@ -289,7 +298,7 @@ private struct ShutterButton: View {
     }
 }
 
-/// Pulsing REC indicator shown over the preview while recording.
+/// Pulsing REC indicator shown over the viewfinder while recording.
 private struct RecordingPill: View {
     @State private var pulse = false
 

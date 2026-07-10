@@ -91,7 +91,7 @@ struct FilterStoreView: View {
                                     .foregroundStyle(.white)
                                     .padding(18)
                                     Spacer(minLength: 0)
-                                    SceneArt(scene: .cityNight)
+                                    HeroImage(photo: .neon)
                                         .frame(width: 158)
                                         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
                                                                           bottomTrailingRadius: 18, topTrailingRadius: 18))
@@ -143,7 +143,7 @@ private struct StoreRow: View {
     var body: some View {
         Button { app.path.append(.filterPack) } label: {
             HStack(spacing: 14) {
-                SceneThumb(scene: scene, radius: 12)
+                HeroImage(photo: .forScene(scene), radius: 12)
                     .frame(width: 78, height: 60)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(name)
@@ -192,7 +192,7 @@ struct FilterPackDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Hero with overlaid title.
                     ZStack(alignment: .bottomLeading) {
-                        SceneArt(scene: .cityNight)
+                        HeroImage(photo: .night)
                             .frame(height: 300)
                             .overlay(LinearGradient(colors: [.clear, LumaTheme.background],
                                                     startPoint: .center, endPoint: .bottom))
@@ -696,7 +696,7 @@ struct CropFormatView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            SceneArt(scene: .coast)
+            HeroImage(photo: .coast)
         }
     }
 
