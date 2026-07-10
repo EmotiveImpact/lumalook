@@ -25,6 +25,13 @@ round on both, plus C4. Everything else is parked (do not lose)._
 - [ ] Clip transitions — cross-fade first (opacity ramp on overlapping
       AVMutableComposition ranges), from the Banuba primer checklist
 - [ ] Anything the competitive-research dossier flags as table stakes
+- [ ] PRODUCT TRUTH fixes (Codex audit, research/codex-second-opinion.md):
+      camera HUD must show the REAL capture format (currently says 4K•30 but
+      records 1080p) or capture must move to 4K; hide-or-implement dead
+      controls (Text/Overlay tools, grain/halation/HSL sliders not wired to
+      the pipeline — implement grain + halation in LookPipeline first, they
+      are core to "cinematic"); project delete must remove copied media files
+      (PersistenceStore storage leak)
 
 ## ACTIVE — C4: real LUT packs
 - [ ] Generate real .cube packs; render per-pack preview strips from hero
@@ -33,6 +40,11 @@ round on both, plus C4. Everything else is parked (do not lose)._
 - [ ] Filter Store rows reflect installed/owned state
 
 ## PARKED (do not lose)
+- Codex audit follow-ups (research/codex-second-opinion.md): camera manual
+  controls/waveform/peaking/4K formats; Rec.709-vs-Log LUT targets +
+  SDR/HDR color policy; export reliability hardening (presets, disk/thermal/
+  interruption recovery, dropped-frame handling); per-clip look model in the
+  editor (big architectural win for LUT packs)
 - C5 StoreKit 2 + paywall: products, entitlement matrix (SPEC_ADDENDUM),
   restore, paywall screen. **Blocked on user decisions: pricing + free vs Pro
   split.**
