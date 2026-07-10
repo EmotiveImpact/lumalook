@@ -195,7 +195,7 @@ struct ApplyLookView: View {
                             title: lut.displayName,
                             grade: Color(red: 0.3, green: 0.8, blue: 0.9),
                             selected: app.selectedLUT?.id == lut.id,
-                            badge: "LUT",
+                            badge: lut.isLogTarget ? "LOG" : "LUT",
                             image: thumbs.images[LookThumbs.key(lut: lut)]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
@@ -217,6 +217,15 @@ struct ApplyLookView: View {
                 thumbs.render(source: app.previewFrame,
                               looks: MockData.looks,
                               luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
+            }
+
+            if app.selectedLUT?.isLogTarget == true {
+                Label("Log LUT — designed for Log footage. If it looks harsh here, lower the intensity.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LumaTheme.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
             }
 
             InlineSlider(title: "Intensity", value: $app.settings.intensity)

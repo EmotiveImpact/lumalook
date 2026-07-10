@@ -56,6 +56,17 @@ struct LUTFile: Identifiable, Codable, Hashable {
     var fileSizeBytes: Int?
     var importedAt: Date
     var isFavourite: Bool
+
+    /// The #1 user mistake in the LUT ecosystem is applying a Log-input LUT
+    /// to normal footage ("everything looks washed out / too harsh").
+    /// Detect Log-target LUTs from filename conventions and badge them.
+    var isLogTarget: Bool {
+        let name = originalFileName.lowercased()
+        let markers = ["slog", "s-log", "vlog", "v-log", "clog", "c-log",
+                       "dlog", "d-log", "flog", "f-log", "nlog", "n-log",
+                       "log2", "log3", "logc", "_log", "-log", " log"]
+        return markers.contains { name.contains($0) }
+    }
 }
 
 struct ProjectItem: Identifiable, Hashable {

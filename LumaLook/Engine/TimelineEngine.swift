@@ -54,6 +54,9 @@ final class EditorState: ObservableObject {
         var trimEnd: Double
         var speed: Double = 1.0
         var thumbnail: CGImage?
+        /// Per-second frames across the trimmed range for the timeline
+        /// filmstrip (capped; regenerated on trim/split).
+        var filmstrip: [CGImage] = []
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
@@ -237,6 +240,7 @@ final class EditorState: ObservableObject {
                     self.clips[i].thumbnail = thumb
                 }
             }
+            refreshFilmstrip(clipID: clip.id)
         }
     }
 
@@ -271,6 +275,47 @@ final class EditorState: ObservableObject {
         clips.append(clip)
         selectedClipID = clip.id
         rebuild()
+        refreshFilmstrip(clipID: clip.id)
+    }
+
+    /// Regenerates a clip's filmstrip (one frame per second across the
+    /// trimmed range, capped) off the main thread and publishes it.
+    func refreshFilmstrip(clipID: UUID) {
+        guard let clip = clips.first(where: { $0.id == clipID }) else { return }
+        let url = clip.url
+        let start = clip.trimStart
+        let end = clip.trimEnd
+        Task {
+            let frames = await Self.filmstripFrames(for: AVURLAsset(url: url),
+                                                    start: start, end: end)
+            guard !frames.isEmpty,
+                  let i = self.clips.firstIndex(where: { $0.id == clipID }),
+                  // Trim may have changed while we rendered; stale strips lie.
+                  self.clips[i].trimStart == start, self.clips[i].trimEnd == end
+            else { return }
+            self.clips[i].filmstrip = frames
+        }
+    }
+
+    nonisolated static func filmstripFrames(for asset: AVAsset,
+                                            start: Double, end: Double,
+                                            maxFrames: Int = 12) async -> [CGImage] {
+        let span = max(0.1, end - start)
+        let count = min(maxFrames, max(2, Int(span.rounded())))
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 140, height: 140)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.3, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.3, preferredTimescale: 600)
+        var frames: [CGImage] = []
+        for i in 0..<count {
+            let t = start + span * (Double(i) + 0.5) / Double(count)
+            if let result = try? await generator.image(
+                at: CMTime(seconds: min(t, end - 0.05), preferredTimescale: 600)) {
+                frames.append(result.image)
+            }
+        }
+        return frames
     }
 
     /// Moves the selected clip one position left or right.
@@ -335,6 +380,8 @@ final class EditorState: ObservableObject {
             }
         }
         rebuild()
+        refreshFilmstrip(clipID: first.id)
+        refreshFilmstrip(clipID: second.id)
     }
 
     func applyTrim(start: Double, end: Double) {
@@ -351,6 +398,7 @@ final class EditorState: ObservableObject {
             }
         }
         rebuild()
+        refreshFilmstrip(clipID: clip.id)
     }
 
     func setSpeed(_ speed: Double) {

@@ -252,15 +252,21 @@ struct TimelineClipCell: View {
 
     var body: some View {
         Group {
-            if let thumb = clip.thumbnail {
+            if clip.thumbnail != nil || !clip.filmstrip.isEmpty {
+                // Real filmstrip: each tile shows the frame at that point in
+                // the clip; falls back to the poster frame until the strip
+                // renders.
+                let tiles = max(1, Int(ceil(width / 44)))
                 HStack(spacing: 0) {
-                    ForEach(0..<max(1, Int(ceil(width / 44))), id: \.self) { _ in
+                    ForEach(0..<tiles, id: \.self) { i in
                         Color.clear
                             .frame(width: 44, height: LaneMetrics.video)
                             .overlay {
-                                Image(decorative: thumb, scale: 1)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
+                                if let frame = frameForTile(i, of: tiles) {
+                                    Image(decorative: frame, scale: 1)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                }
                             }
                             .clipped()
                     }
@@ -294,6 +300,16 @@ struct TimelineClipCell: View {
                     lineWidth: selected ? 2.5 : 1))
         .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+    }
+
+    /// Maps a tile position to its filmstrip frame (time-proportional),
+    /// falling back to the poster frame while the strip renders.
+    private func frameForTile(_ index: Int, of tiles: Int) -> CGImage? {
+        guard !clip.filmstrip.isEmpty else { return clip.thumbnail }
+        let position = (Double(index) + 0.5) / Double(tiles)
+        let frameIndex = min(clip.filmstrip.count - 1,
+                             Int(position * Double(clip.filmstrip.count)))
+        return clip.filmstrip[frameIndex]
     }
 }
 
