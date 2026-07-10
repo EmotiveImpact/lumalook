@@ -68,6 +68,10 @@ final class AppModel: ObservableObject {
     let lutRepository = LUTRepository()
     let exporter = VideoExporter()
     let store = PersistenceStore()
+    let packStore = PackStore()
+
+    /// Pack the Store is currently showing in Pack Detail.
+    @Published var selectedPackID: String?
 
     /// Live grade state read by preview and export frame handlers.
     let lookState = LookState()
@@ -97,6 +101,7 @@ final class AppModel: ObservableObject {
             "editor": [.editor],
             "exportComplete": [.exportComplete],
             "filterStore": [.filterStore],
+            "filterPack": [.filterStore, .filterPack],
             "savedLooks": [.savedLooks],
             "projectLibrary": [.projectLibrary],
             "settings": [.settings]

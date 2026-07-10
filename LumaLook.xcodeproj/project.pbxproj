@@ -39,6 +39,7 @@
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F185F22913641FEE760D92 /* LUTRepository.swift */; };
 		AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D43F2BD3901B8346CB884BF /* LumaTheme.swift */; };
+		C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */; };
 		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
 		D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 158CFCA17750E771F995959B /* hero_desert.jpg */; };
 		D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */; };
@@ -80,6 +81,7 @@
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
+		826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPacks.swift; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
@@ -235,6 +237,7 @@
 			isa = PBXGroup;
 			children = (
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
+				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
@@ -354,6 +357,7 @@
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
+				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,

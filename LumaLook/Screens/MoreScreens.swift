@@ -6,92 +6,66 @@ import AVFoundation
 struct FilterStoreView: View {
     @EnvironmentObject private var app: AppModel
     var isRoot: Bool = false
-    @State private var category = "Featured"
+
+    private var featured: LookPack { PackCatalog.packs[1] }   // Cine Print Set 01
 
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                // Header with coin balance.
                 ZStack {
-                    Text("FILTER STORE")
-                        .font(.system(size: 17, weight: .bold))
-                        .tracking(2.2)
-                        .foregroundStyle(.white)
+                    VStack(spacing: 2) {
+                        Text("LOOK STORE")
+                            .font(.system(size: 17, weight: .bold))
+                            .tracking(2.2)
+                            .foregroundStyle(.white)
+                        TechReadout("\(PackCatalog.totalLookCount) LOOKS · \(PackCatalog.packs.count) PACKS",
+                                    size: 10, color: LumaTheme.textMuted)
+                    }
                     HStack {
                         if !isRoot {
                             BackArrow()
                         }
                         Spacer()
-                        HStack(spacing: 7) {
-                            Circle()
-                                .fill(RadialGradient(colors: [LumaTheme.gold, Color(red: 0.85, green: 0.5, blue: 0.05)],
-                                                     center: .center, startRadius: 1, endRadius: 12))
-                                .frame(width: 22, height: 22)
-                                .overlay(Circle().stroke(Color(red: 1.0, green: 0.85, blue: 0.4), lineWidth: 1.5).padding(3))
-                            Text("250")
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
                     }
                 }
-                .frame(height: 44)
+                .frame(height: 52)
                 .padding(.horizontal, 22)
                 .padding(.top, 6)
-                .padding(.bottom, 12)
+                .padding(.bottom, 10)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(LumaTheme.textMuted)
-                            Text("Search looks or packs")
-                                .foregroundStyle(LumaTheme.textMuted)
-                            Spacer()
-                        }
-                        .font(.system(size: 16))
-                        .padding(.horizontal, 16)
-                        .frame(height: 52)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(["Featured", "Film", "Cinematic", "Moody", "Vintage"], id: \.self) { chip in
-                                    Button { category = chip } label: {
-                                        Chip(title: chip, selected: category == chip)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-
                         SectionHeader(title: "Featured Pack")
 
-                        Button { app.path.append(.filterPack) } label: {
+                        Button {
+                            app.selectedPackID = featured.id
+                            app.path.append(.filterPack)
+                        } label: {
                             ZStack(alignment: .topTrailing) {
                                 HStack(spacing: 0) {
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("NOCTURNE")
-                                            .font(.system(size: 26, weight: .heavy))
+                                        Text(featured.name.uppercased())
+                                            .font(.system(size: 24, weight: .heavy))
                                             .tracking(1)
-                                        Text("COLLECTION")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .tracking(2.4)
-                                        Text("12 Cinematic Looks")
+                                            .lineLimit(2)
+                                        Text("\(featured.looks.count) film-print looks")
                                             .font(.system(size: 14))
                                             .foregroundStyle(LumaTheme.textSecondary)
                                             .padding(.top, 2)
-                                        Text("$2.99")
-                                            .font(.system(size: 16, weight: .bold))
+                                        Text(app.packStore.isInstalled(featured) ? "INSTALLED" : featured.price)
+                                            .font(.system(size: 15, weight: .bold))
                                             .padding(.horizontal, 18)
                                             .padding(.vertical, 8)
-                                            .background(LumaTheme.accent, in: Capsule())
+                                            .background(app.packStore.isInstalled(featured)
+                                                        ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                                                        : AnyShapeStyle(LumaTheme.accent), in: Capsule())
                                             .padding(.top, 8)
                                     }
                                     .foregroundStyle(.white)
                                     .padding(18)
                                     Spacer(minLength: 0)
-                                    HeroImage(photo: .neon)
+                                    HeroImage(photo: featured.photo)
                                         .frame(width: 158)
                                         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
                                                                           bottomTrailingRadius: 18, topTrailingRadius: 18))
@@ -109,19 +83,23 @@ struct FilterStoreView: View {
                                     .padding(10)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.lumaPress)
 
-                        SectionHeader(title: "Best Sellers", actionTitle: "See All")
+                        SectionHeader(title: "All Packs")
 
                         VStack(spacing: 0) {
-                            StoreRow(name: "Golden Hour", looks: "10 Looks", price: "$1.99", scene: .goldenField)
-                            Hairline().padding(.leading, 92)
-                            StoreRow(name: "London Rain", looks: "12 Looks", price: "$2.99", scene: .rainyCity)
-                            Hairline().padding(.leading, 92)
-                            StoreRow(name: "Afrobeats Glow", looks: "15 Looks", price: "$2.99", scene: .sunsetRoad)
-                            Hairline().padding(.leading, 92)
-                            StoreRow(name: "Documentary Grit", looks: "8 Looks", price: "$1.99", scene: .coast)
+                            ForEach(Array(PackCatalog.packs.enumerated()), id: \.element.id) { index, pack in
+                                StoreRow(pack: pack)
+                                if index < PackCatalog.packs.count - 1 {
+                                    Hairline().padding(.leading, 92)
+                                }
+                            }
                         }
+
+                        Text(MockData.namingDisclaimer)
+                            .font(.system(size: 11))
+                            .foregroundStyle(LumaTheme.textMuted)
+                            .padding(.top, 8)
                     }
                     .padding(.horizontal, 22)
                     .padding(.bottom, 36)
@@ -135,35 +113,42 @@ struct FilterStoreView: View {
 
 private struct StoreRow: View {
     @EnvironmentObject private var app: AppModel
-    let name: String
-    let looks: String
-    let price: String
-    var scene: MockScene
+    let pack: LookPack
 
     var body: some View {
-        Button { app.path.append(.filterPack) } label: {
+        Button {
+            app.selectedPackID = pack.id
+            app.path.append(.filterPack)
+        } label: {
             HStack(spacing: 14) {
-                HeroImage(photo: .forScene(scene), radius: 12)
+                HeroImage(photo: pack.photo, radius: 12)
                     .frame(width: 78, height: 60)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(name)
+                    Text(pack.name)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.white)
-                    Text(looks)
-                        .font(.system(size: 14))
+                    Text("\(pack.looks.count) looks · \(pack.eraTag)")
+                        .font(.system(size: 13))
                         .foregroundStyle(LumaTheme.textMuted)
+                        .lineLimit(1)
                 }
                 Spacer()
-                Text(price)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 12))
+                if app.packStore.isInstalled(pack) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(LumaTheme.teal)
+                } else {
+                    Text(pack.price)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 12))
+                }
             }
             .padding(.vertical, 12)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -183,7 +168,15 @@ struct BackArrow: View {
 // MARK: - 10 Filter Pack Detail
 
 struct FilterPackDetailView: View {
+    @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var previews: [String: CGImage] = [:]
+    @State private var installing = false
+    @State private var installedFlash = 0
+
+    private var pack: LookPack {
+        app.selectedPackID.flatMap(PackCatalog.pack(id:)) ?? PackCatalog.packs[0]
+    }
 
     var body: some View {
         ZStack {
@@ -192,17 +185,16 @@ struct FilterPackDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Hero with overlaid title.
                     ZStack(alignment: .bottomLeading) {
-                        HeroImage(photo: .night)
+                        HeroImage(photo: pack.photo)
                             .frame(height: 300)
                             .overlay(LinearGradient(colors: [.clear, LumaTheme.background],
                                                     startPoint: .center, endPoint: .bottom))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("NOCTURNE")
-                                .font(.system(size: 42, weight: .heavy))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(pack.name.uppercased())
+                                .font(.system(size: 34, weight: .heavy))
                                 .tracking(2)
-                            Text("COLLECTION")
-                                .font(.system(size: 26, weight: .medium))
-                                .tracking(5)
+                            TechReadout(pack.eraTag.uppercased(), size: 10,
+                                        color: .white.opacity(0.7))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 22)
@@ -220,55 +212,50 @@ struct FilterPackDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("12 Cinematic Looks")
+                        Text("\(pack.looks.count) looks · every one dialable")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.top, 18)
-                        Text("Deep shadows, rich colors\nand a cinematic vibe.")
+                        Text(pack.familyLine)
                             .font(.system(size: 16))
                             .foregroundStyle(LumaTheme.textSecondary)
                             .lineSpacing(3)
 
-                        HStack(spacing: 12) {
-                            // TODO: StoreKit 2 purchase in Phase 6.
-                            Button {} label: {
-                                Text("$2.99")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 58)
-                                    .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 16))
-                            }
-                            .buttonStyle(.plain)
-                            Button {} label: {
-                                Image(systemName: "heart")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 64, height: 58)
-                                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-                                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(LumaTheme.hairline))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.top, 8)
+                        installButton
+                            .padding(.top, 8)
 
                         SectionHeader(title: "Looks Included")
                             .padding(.top, 14)
 
+                        // Every look previewed through the REAL pipeline on
+                        // real photography — locked or not, you always see it.
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 16) {
-                            ForEach(Array(zip(["Nocturne", "Midnight", "Eclipse", "Obsidian", "Neon Rain", "After Dark"],
-                                              [MockScene.cityNight, .duskPurple, .rainyCity, .forest, .neonStreet, .sunsetRoad])),
-                                    id: \.0) { name, scene in
+                            ForEach(pack.looks) { look in
                                 VStack(spacing: 8) {
-                                    SceneThumb(scene: scene, grade: Color(red: 0.25, green: 0.3, blue: 0.7),
-                                               radius: 14)
-                                        .frame(height: 96)
-                                    Text(name)
-                                        .font(.system(size: 14, weight: .semibold))
+                                    Group {
+                                        if let cg = previews[look.code] {
+                                            GradedThumb(image: cg,
+                                                        size: CGSize(width: 104, height: 96),
+                                                        radius: 14)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .fill(LumaTheme.surfaceStrong)
+                                        }
+                                    }
+                                    .frame(height: 96)
+                                    Text(look.name)
+                                        .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
                                 }
                             }
                         }
+
+                        Text(MockData.namingDisclaimer)
+                            .font(.system(size: 11))
+                            .foregroundStyle(LumaTheme.textMuted)
+                            .padding(.top, 10)
                     }
                     .padding(.horizontal, 22)
                     .padding(.bottom, 40)
@@ -278,6 +265,74 @@ struct FilterPackDetailView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .sensoryFeedback(.success, trigger: installedFlash)
+        .task(id: pack.id) { renderPreviews() }
+        .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LUMA_AUTO_INSTALL"] == "1" {
+                performInstall()
+            }
+            #endif
+        }
+    }
+
+    private func performInstall() {
+        guard !app.packStore.isInstalled(pack), !installing else { return }
+        installing = true
+        Task {
+            let count = PackInstaller.install(pack, into: app.lutRepository)
+            installing = false
+            if count > 0 {
+                app.packStore.markInstalled(pack)
+                installedFlash += 1
+            }
+        }
+    }
+
+    private var installButton: some View {
+        Button {
+            performInstall()
+        } label: {
+            HStack(spacing: 10) {
+                if installing {
+                    ProgressView().tint(.white)
+                } else if app.packStore.isInstalled(pack) {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("INSTALLED — IN YOUR LOOKS")
+                } else {
+                    Text(pack.isFree ? "INSTALL FREE" : "\(pack.price) · INSTALL")
+                }
+            }
+            .font(.system(size: 17, weight: .bold))
+            .tracking(1.2)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(app.packStore.isInstalled(pack)
+                        ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                        : AnyShapeStyle(LumaTheme.accent),
+                        in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(app.packStore.isInstalled(pack))
+    }
+
+    /// Renders each pack look onto the hero frame through the pipeline.
+    private func renderPreviews() {
+        let source = LookThumbs.fallbackFrame
+        let looks = pack.looks
+        Task.detached(priority: .userInitiated) {
+            for look in looks {
+                let state = LookState()
+                state.recipe = look.recipe
+                var settings = LookSettings()
+                settings.intensity = 100
+                state.settings = settings
+                if let cg = LookPipeline.shared.gradedStill(source, state: state, maxDimension: 220) {
+                    await MainActor.run { previews[look.code] = cg }
+                }
+            }
+        }
     }
 }
 
