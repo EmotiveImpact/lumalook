@@ -73,6 +73,8 @@ final class EditorState: ObservableObject {
         var timelineOffset: Double    // where the music starts on the timeline
         var volume: Double = 100      // 0…100, independent of clip-audio volume
         var isMuted: Bool = false
+        /// Whole-file RMS buckets for the lane waveform (regenerated, not persisted).
+        var waveform: [Float] = []
 
         var timelineDuration: Double { max(0, trimEnd - trimStart) }
     }
@@ -232,6 +234,7 @@ final class EditorState: ObservableObject {
                               volume: stored.volume, isMuted: stored.isMuted)
         }
         rebuild(keepPosition: false)
+        refreshMusicWaveform()
         // Restore thumbnails asynchronously.
         for clip in clips {
             Task { [id = clip.id, url = clip.url, at = clip.trimStart] in
@@ -442,6 +445,93 @@ final class EditorState: ObservableObject {
                            assetDuration: duration,
                            trimStart: 0, trimEnd: duration, timelineOffset: 0)
         rebuild()
+        refreshMusicWaveform()
+    }
+
+    /// Combined head-trim used by the lane's leading handle: content trims
+    /// AND the bar's timeline position advances, so the tail stays anchored
+    /// (standard NLE behaviour). One undo entry.
+    func trimMusicHead(deltaSeconds: Double) {
+        guard let music else { return }
+        let newStart = min(max(0, music.trimStart + deltaSeconds), music.trimEnd - 0.2)
+        let applied = newStart - music.trimStart
+        guard abs(applied) > 0.01 else { return }
+        pushUndoSnapshot()
+        self.music?.trimStart = newStart
+        self.music?.timelineOffset = min(max(0, music.timelineOffset + applied),
+                                         max(0, totalDuration - 0.2))
+        rebuild()
+    }
+
+    func trimMusicTail(deltaSeconds: Double) {
+        guard let music else { return }
+        let newEnd = max(min(music.assetDuration, music.trimEnd + deltaSeconds),
+                         music.trimStart + 0.2)
+        guard abs(newEnd - music.trimEnd) > 0.01 else { return }
+        pushUndoSnapshot()
+        self.music?.trimEnd = newEnd
+        rebuild()
+    }
+
+    /// Extracts RMS buckets from the audio file for the lane waveform.
+    func refreshMusicWaveform() {
+        guard let music, music.waveform.isEmpty else { return }
+        let url = music.url
+        let id = music.id
+        Task.detached(priority: .utility) {
+            let samples = Self.waveformSamples(url: url)
+            await MainActor.run { [weak self] in
+                guard let self, self.music?.id == id else { return }
+                self.music?.waveform = samples
+            }
+        }
+    }
+
+    nonisolated static func waveformSamples(url: URL, buckets: Int = 140) -> [Float] {
+        let asset = AVURLAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .audio).first,
+              let reader = try? AVAssetReader(asset: asset) else { return [] }
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVNumberOfChannelsKey: 1,
+        ]
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
+        reader.add(output)
+        guard reader.startReading() else { return [] }
+
+        var sums = [Double](repeating: 0, count: buckets)
+        var counts = [Int](repeating: 0, count: buckets)
+        let totalSeconds = asset.duration.seconds
+        guard totalSeconds > 0 else { return [] }
+
+        while reader.status == .reading, let buffer = output.copyNextSampleBuffer() {
+            guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
+            let pts = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
+            let length = CMBlockBufferGetDataLength(block)
+            var data = [Int16](repeating: 0, count: length / 2)
+            data.withUnsafeMutableBytes { raw in
+                _ = CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: length,
+                                               destination: raw.baseAddress!)
+            }
+            let sampleCount = data.count
+            guard sampleCount > 0 else { continue }
+            let bufferSeconds = CMSampleBufferGetDuration(buffer).seconds
+            for (i, value) in data.enumerated() {
+                let t = pts + bufferSeconds * Double(i) / Double(sampleCount)
+                let bucket = min(buckets - 1, max(0, Int(t / totalSeconds * Double(buckets))))
+                let v = Double(value) / 32768.0
+                sums[bucket] += v * v
+                counts[bucket] += 1
+            }
+        }
+        let rms = zip(sums, counts).map { sum, count -> Float in
+            count > 0 ? Float((sum / Double(count)).squareRoot()) : 0
+        }
+        let peak = max(rms.max() ?? 1, 0.001)
+        return rms.map { min(1, $0 / peak) }
     }
 
     func removeMusic() {

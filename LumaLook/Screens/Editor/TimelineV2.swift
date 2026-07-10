@@ -358,12 +358,28 @@ struct MusicLane: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .frame(width: barWidth, height: LaneMetrics.music)
-        .background(music.isMuted ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                  : AnyShapeStyle(LumaTheme.accentDeep),
-                    in: RoundedRectangle(cornerRadius: 9))
+        .background {
+            // Fill + real waveform (trimmed window of whole-file RMS buckets).
+            ZStack {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(music.isMuted ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                                        : AnyShapeStyle(LumaTheme.accentDeep))
+                if !music.waveform.isEmpty {
+                    WaveformBars(samples: music.waveform,
+                                 windowStart: music.trimStart / max(music.assetDuration, 0.01),
+                                 windowEnd: music.trimEnd / max(music.assetDuration, 0.01))
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                }
+            }
+        }
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.12),
                           lineWidth: isDraggingBar ? 2 : 1))
+        .overlay {
+            if barWidth > 120 {
+                MusicTrimHandles(metrics: metrics, editor: editor)
+            }
+        }
         .opacity(isDraggingBar ? 0.92 : 1)
         .offset(x: metrics.x(for: music.timelineOffset) + dragTranslation)
         .onTapGesture(perform: onTapMusic)
@@ -419,6 +435,75 @@ struct MusicLane: View {
             offset = snap
         }
         editor.setMusicOffset(offset)
+    }
+
+    /// Waveform bars over the trimmed sample window.
+    private struct WaveformBars: View {
+        let samples: [Float]
+        let windowStart: Double
+        let windowEnd: Double
+
+        var body: some View {
+            Canvas { context, size in
+                guard !samples.isEmpty, windowEnd > windowStart else { return }
+                let barCount = max(4, Int(size.width / 3))
+                for i in 0..<barCount {
+                    let fraction = windowStart + (windowEnd - windowStart)
+                        * Double(i) / Double(barCount)
+                    let sample = samples[min(samples.count - 1,
+                                             Int(fraction * Double(samples.count)))]
+                    let h = max(1.5, CGFloat(sample) * size.height * 0.72)
+                    let rect = CGRect(x: CGFloat(i) * size.width / CGFloat(barCount),
+                                      y: (size.height - h) / 2,
+                                      width: 1.8, height: h)
+                    context.fill(Path(roundedRect: rect, cornerRadius: 0.9),
+                                 with: .color(.white.opacity(0.28)))
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Leading/trailing trim handles on the music bar. Dragging the head
+    /// trims content AND advances the bar (tail stays anchored); dragging
+    /// the tail just shortens it — standard NLE behaviour.
+    private struct MusicTrimHandles: View {
+        let metrics: TimelineMetrics
+        @ObservedObject var editor: EditorState
+        var body: some View {
+            // One engine commit per drag (single undo entry, single rebuild);
+            // haptic on release confirms the cut landed.
+            HStack {
+                handle(system: "chevron.compact.left")
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onEnded { value in
+                                editor.trimMusicHead(
+                                    deltaSeconds: metrics.time(for: value.translation.width))
+                                LumaHaptics.shared.trimRubberband()
+                            }
+                    )
+                Spacer()
+                handle(system: "chevron.compact.right")
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onEnded { value in
+                                editor.trimMusicTail(
+                                    deltaSeconds: metrics.time(for: value.translation.width))
+                                LumaHaptics.shared.trimRubberband()
+                            }
+                    )
+            }
+        }
+
+        private func handle(system: String) -> some View {
+            Image(systemName: system)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 16, height: LaneMetrics.music)
+                .background(.white.opacity(0.18))
+                .contentShape(Rectangle().inset(by: -6))
+        }
     }
 
     private var addButton: some View {
