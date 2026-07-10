@@ -4,26 +4,26 @@ _Last updated 2026-07-10. Active scope agreed: Waves A + B, then a review/polish
 round on both, plus C4. Everything else is parked (do not lose)._
 
 ## ACTIVE — Wave A: finish the editor
-- [ ] Wire chrome kit into screens: trim / looks / music panels become undimmed
+- [x] Wire chrome kit into screens: trim / looks / music panels become undimmed
       bottom sheets (`.lumaToolSheet`, micro/small detents), `LumaHaptics`
       replaces ad-hoc haptics, `.lumaEdgeFade` on horizontal tool strips
-- [ ] Drag-to-reorder clips (long-press lift → floating clip → drop slots →
+- [x] Drag-to-reorder clips (long-press lift → floating clip → drop slots →
       sibling cascade; full algorithm in the img.ly mine reports)
-- [ ] Real per-second filmstrip frames in clip cells (AVAssetImageGenerator
+- [x] Real per-second filmstrip frames in clip cells (AVAssetImageGenerator
       strip, cached; replaces tiled single thumb)
 - [ ] Snap indicators + haptic detents (playhead / clip edges)
-- [ ] Music trim handles + simple waveform on the music lane
+- [x] Music trim handles + simple waveform on the music lane
 
 ## ACTIVE — Wave B: grade room restructure
-- [ ] Media-first full-bleed grade room: footage owns the screen, look strip +
+- [x] Media-first full-bleed grade room: footage owns the screen, look strip +
       intensity + tools in a pinned bottom glass drawer
-- [ ] Haptic intensity dial (Halide-style precision wheel)
-- [ ] Before/After as press-and-hold on the image (keep wipe screen too)
-- [ ] TS5 (research): trademark-safe look renaming + RNI-style taxonomy
+- [x] Haptic intensity dial (Halide-style precision wheel)
+- [x] Before/After as press-and-hold on the image (keep wipe screen too)
+- [x] TS5 (research): trademark-safe look renaming + RNI-style taxonomy
       (Negative/Slide/B&W/Instant/Cine/Original) — "Kodak 5207" in
       MockData.swift becomes KD52 etc., disclaimer line added. Do BEFORE any
       App Store screenshots
-- [ ] TS1 verify: look thumbs already render from user's frame (LookThumbs);
+- [x] TS1 verify: look thumbs already render from user's frame (LookThumbs);
       confirm they survive the restructure + reduced-res render per look
 
 ## ACTIVE — after A+B: review round
@@ -34,10 +34,10 @@ round on both, plus C4. Everything else is parked (do not lose)._
 - [ ] TS3 PULLED FORWARD: one real-device QA session (camera bake-in, export
       thermals, save reliability) — "everything else is decoration if
       recordings drop"
-- [ ] TS2: implement film grain + halation in LookPipeline (custom kernel;
+- [x] TS2: implement film grain + halation in LookPipeline (custom kernel;
       sliders already exist in UI/model) — the "premium physics" signal
 - [ ] TS8: copy grade between clips (engine already shares LookState; UI only)
-- [ ] TS6: log-LUT tagging + mismatch hint on import (filename heuristics,
+- [x] TS6: log-LUT tagging + mismatch hint on import (filename heuristics,
       badge, suggest lower intensity)
 - [ ] D1: preview/export parity verification matrix (8/10-bit, HDR/SDR,
       photo/video) → becomes the marketed guarantee "the preview never lies"
@@ -50,13 +50,13 @@ round on both, plus C4. Everything else is parked (do not lose)._
       (PersistenceStore storage leak)
 
 ## ACTIVE — C4: real LUT packs (spec: research/OPPORTUNITY_MAP.md §4)
-- [ ] 4 launch packs, 5-7 looks each, KD/FJ/CN/AG/BW/LL naming with
+- [x] 4 launch packs, 5-7 looks each, KD/FJ/CN/AG/BW/LL naming with
       character + era copy per look; 33-point .cube generation + recipe
       defaults, installed via existing LUTRepository path
-- [ ] Pack Detail = hero graded frame + copy + look count; installs pack
-- [ ] Store rows reflect installed/owned; "N looks · M packs" header counts
-- [ ] Locked looks fully previewable on user media; gate export/save only
-- [ ] Free/paid flags per §4.5 (Negative Set 01 + half Originals free;
+- [x] Pack Detail = hero graded frame + copy + look count; installs pack
+- [x] Store rows reflect installed/owned; "N looks · M packs" header counts
+- [x] Locked looks fully previewable on user media; gate export/save only
+- [x] Free/paid flags per §4.5 (Negative Set 01 + half Originals free;
       no watermark EVER)
 
 ## C5 StoreKit 2 + paywall + onboarding — PRICING LOCKED BY USER 2026-07-10
