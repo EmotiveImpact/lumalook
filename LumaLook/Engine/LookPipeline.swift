@@ -192,8 +192,79 @@ final class LookPipeline: @unchecked Sendable {
             output = vignette.outputImage ?? output
         }
 
-        // TODO: grain and halation need a custom kernel / compositing pass. P1.
+        if settings.halation > 0 {
+            output = applyHalation(strength: settings.halation / 100.0, to: output)
+        }
+
+        if settings.grain > 0 {
+            output = applyGrain(strength: settings.grain / 100.0, to: output)
+        }
+
         return output
+    }
+
+    // MARK: - Film physics
+
+    /// Halation: film's red-orange glow around bright highlights (light
+    /// bouncing off the base layer back through the red-sensitive emulsion).
+    /// Isolate highlights → blur wide → tint warm → screen back over.
+    func applyHalation(strength: Double, to image: CIImage) -> CIImage {
+        // 1. Highlight mask: keep only near-white energy.
+        let threshold = CIFilter.colorMatrix()
+        threshold.inputImage = image
+        let gain: CGFloat = 2.2
+        threshold.rVector = CIVector(x: gain, y: 0, z: 0, w: 0)
+        threshold.gVector = CIVector(x: 0, y: gain, z: 0, w: 0)
+        threshold.bVector = CIVector(x: 0, y: 0, z: gain, w: 0)
+        threshold.biasVector = CIVector(x: -1.35, y: -1.35, z: -1.35, w: 0)
+        guard let highlights = threshold.outputImage else { return image }
+
+        // 2. Wide soft blur, scaled with image size so it looks the same in
+        //    thumbnails and 4K exports.
+        let radius = max(image.extent.width, image.extent.height) * 0.012 * (0.6 + strength)
+        let blurred = highlights
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: radius)
+            .cropped(to: image.extent)
+
+        // 3. Warm red-orange tint — the halation signature.
+        let tint = CIFilter.colorMatrix()
+        tint.inputImage = blurred
+        tint.rVector = CIVector(x: CGFloat(1.0 * strength), y: 0, z: 0, w: 0)
+        tint.gVector = CIVector(x: 0, y: CGFloat(0.32 * strength), z: 0, w: 0)
+        tint.bVector = CIVector(x: 0, y: 0, z: CGFloat(0.08 * strength), w: 0)
+        guard let glow = tint.outputImage else { return image }
+
+        // 4. Screen blend back over the frame.
+        let screen = CIFilter.screenBlendMode()
+        screen.inputImage = glow
+        screen.backgroundImage = image
+        return screen.outputImage?.cropped(to: image.extent) ?? image
+    }
+
+    /// Film grain: luminance-only noise, softened a touch, overlay-blended
+    /// so it lives in the midtones like silver halide — not RGB confetti.
+    func applyGrain(strength: Double, to image: CIImage) -> CIImage {
+        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
+
+        // Monochrome the noise and centre it on mid-grey for overlay blend.
+        let mono = CIFilter.colorMatrix()
+        // Slightly coarser than 1:1 pixels so it reads as grain, not sensor noise.
+        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: 1.6, y: 1.6))
+        let amp = CGFloat(0.28 * strength)
+        mono.rVector = CIVector(x: amp, y: 0, z: 0, w: 0)
+        mono.gVector = CIVector(x: amp, y: 0, z: 0, w: 0)
+        mono.bVector = CIVector(x: amp, y: 0, z: 0, w: 0)
+        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        mono.biasVector = CIVector(x: 0.5 - amp / 2, y: 0.5 - amp / 2, z: 0.5 - amp / 2, w: 1)
+        guard let grainField = mono.outputImage?
+            .applyingGaussianBlur(sigma: 0.4)
+            .cropped(to: image.extent) else { return image }
+
+        let overlay = CIFilter.overlayBlendMode()
+        overlay.inputImage = grainField
+        overlay.backgroundImage = image
+        return overlay.outputImage?.cropped(to: image.extent) ?? image
     }
 
     func renderCGImage(from image: CIImage) -> CGImage? {

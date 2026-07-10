@@ -23,6 +23,7 @@
 		52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */; };
 		5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5C594D043EBDE22175C914E7 /* Assets.xcassets */; };
 		6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA55F19B38C01C558951683 /* ExportCompleteView.swift */; };
+		6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */; };
 		6C92A115EA77837121CD8C1E /* hero_coast.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 43EEB129DF4E76FC1523F268 /* hero_coast.jpg */; };
 		6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1C28E748C160529C0841DB /* ApplyLookView.swift */; };
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
@@ -75,6 +76,7 @@
 		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
+		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
 				4D43F2BD3901B8346CB884BF /* LumaTheme.swift */,
+				79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */,
 				2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */,
 			);
 			path = Design;
@@ -358,6 +361,7 @@
 				AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */,
 				22149D2B572771131F02C893 /* MockData.swift in Sources */,
 				EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */,
+				6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */,
 				842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */,
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,

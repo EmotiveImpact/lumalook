@@ -74,18 +74,52 @@ private struct RecentProjectsRow: View {
     @EnvironmentObject private var app: AppModel
     @ObservedObject var store: PersistenceStore
 
+    /// Reference-style sample projects shown until real ones exist — the
+    /// rich photography is what makes the reference Home feel finished.
+    private static let samples: [(title: String, duration: String, photo: HeroPhoto)] = [
+        ("Travel Vlog", "00:18", .golden),
+        ("Dreamscape", "00:34", .coast),
+        ("City Lights", "00:26", .night),
+    ]
+
     var body: some View {
         if store.projects.isEmpty {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(LumaTheme.accentBright)
-                Text("Your edits will appear here — start one from Edit a Video.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Spacer()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(Self.samples, id: \.title) { sample in
+                        Button {
+                            app.editor.startNewProject()
+                            app.path.append(.editor)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HeroImage(photo: sample.photo, radius: 14)
+                                    .frame(width: 164, height: 118)
+                                    .overlay(alignment: .topTrailing) {
+                                        Text("SAMPLE")
+                                            .font(.system(size: 8, weight: .heavy))
+                                            .tracking(1.2)
+                                            .foregroundStyle(.white.opacity(0.85))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(.black.opacity(0.45), in: Capsule())
+                                            .padding(6)
+                                    }
+                                    .overlay(RoundedRectangle(cornerRadius: 14)
+                                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                                Text(sample.title)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                Text(sample.duration)
+                                    .font(.system(size: 14))
+                                    .monospacedDigit()
+                                    .foregroundStyle(LumaTheme.textMuted)
+                            }
+                            .frame(width: 164)
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
             }
-            .padding(16)
-            .lumaCard()
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -131,6 +165,12 @@ private struct HomeTile: View {
                     .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(iconTint)
                     .frame(height: 44)
+                    // Reference-style soft light pooled around the icon.
+                    .background(
+                        RadialGradient(colors: [iconTint.opacity(0.35), .clear],
+                                       center: .center, startRadius: 2, endRadius: 64)
+                            .frame(width: 130, height: 130)
+                    )
                 Spacer(minLength: 2)
                 Text(title.uppercased())
                     .font(.system(size: 17, weight: .heavy))
@@ -148,6 +188,7 @@ private struct HomeTile: View {
             .padding(18)
             .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
             .background(gradient, in: RoundedRectangle(cornerRadius: 20))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(

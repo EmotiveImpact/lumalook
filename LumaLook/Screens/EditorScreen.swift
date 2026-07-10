@@ -304,10 +304,6 @@ private struct EditorContent: View {
                             .frame(width: 58)
                         FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
                             .frame(width: 58)
-                        FlatTool(title: "Text", icon: "textformat")
-                            .frame(width: 58)
-                        FlatTool(title: "Overlay", icon: "square.on.square")
-                            .frame(width: 58)
                     }
                     .padding(.horizontal, 6)
                 }

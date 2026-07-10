@@ -124,8 +124,26 @@ final class PersistenceStore: ObservableObject {
     }
 
     func deleteProject(_ id: UUID) {
+        let removed = projects.first { $0.id == id }
         projects.removeAll { $0.id == id }
         Self.save(projects, to: projectsURL)
+        cleanUpMedia(of: removed)
+    }
+
+    /// Deleting a project must also delete its copied media, or Documents
+    /// balloons forever — but only files no OTHER project still references.
+    private func cleanUpMedia(of removed: StoredProject?) {
+        guard let removed else { return }
+        let liveClipFiles = Set(projects.flatMap { $0.clips.map(\.fileName) })
+        for clip in removed.clips where !liveClipFiles.contains(clip.fileName) {
+            try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(clip.fileName))
+        }
+        if let music = removed.music {
+            let liveAudioFiles = Set(projects.compactMap { $0.music?.fileName })
+            if !liveAudioFiles.contains(music.fileName) {
+                try? FileManager.default.removeItem(at: audioFolder.appendingPathComponent(music.fileName))
+            }
+        }
     }
 
     // MARK: Saved looks

@@ -152,13 +152,11 @@ struct CameraLiveLookView: View {
             .buttonStyle(.lumaPress)
             Spacer()
             // Technical format readout, Blackmagic-style: mono caps, tracked.
-            TechReadout("4K • 30", size: 12, color: .white.opacity(0.85))
+            // States the REAL capture format (1080p30 HEVC today) — the HUD
+            // never lies. Bumps automatically when capture moves to 4K.
+            TechReadout("1080 • 30", size: 12, color: .white.opacity(0.85))
             Spacer()
-            Button {} label: {
-                Image(systemName: "bolt.slash").font(.system(size: 20, weight: .medium))
-            }
-            .buttonStyle(.lumaPress)
-            Spacer()
+            // Only real controls live in the strip — no placebo buttons.
             Button {
                 showGrid.toggle()
                 flashCaption(showGrid ? "GRID ON" : "GRID OFF")
@@ -166,19 +164,11 @@ struct CameraLiveLookView: View {
                 Image(systemName: "squareshape.split.3x3")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(showGrid ? LumaTheme.accentBright : .white)
+                    .frame(width: 40, height: 40, alignment: .trailing)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
             .sensoryFeedback(.selection, trigger: showGrid)
-            Spacer()
-            Button {} label: {
-                Image(systemName: "timer").font(.system(size: 20, weight: .medium))
-            }
-            .buttonStyle(.lumaPress)
-            Spacer()
-            Button {} label: {
-                Image(systemName: "gearshape").font(.system(size: 20, weight: .medium))
-            }
-            .buttonStyle(.lumaPress)
         }
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)

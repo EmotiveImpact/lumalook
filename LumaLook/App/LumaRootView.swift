@@ -24,13 +24,20 @@ struct LumaRootView: View {
 
     @ViewBuilder
     private var rootScreen: some View {
-        switch app.tab {
-        case .home: HomeView()
-        case .store: FilterStoreView(isRoot: true)
-        case .projects: ProjectLibraryView(isRoot: true)
-        case .looks: SavedLooksView(isRoot: true)
-        case .profile: SettingsSubscriptionView(isRoot: true)
+        // Quick cross-fade between tabs: instant swaps read as a web page,
+        // a 160 ms fade reads as an app.
+        ZStack {
+            switch app.tab {
+            case .home: HomeView()
+            case .store: FilterStoreView(isRoot: true)
+            case .projects: ProjectLibraryView(isRoot: true)
+            case .looks: SavedLooksView(isRoot: true)
+            case .profile: SettingsSubscriptionView(isRoot: true)
+            }
         }
+        .id(app.tab)
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.16), value: app.tab)
     }
 
     @ViewBuilder
