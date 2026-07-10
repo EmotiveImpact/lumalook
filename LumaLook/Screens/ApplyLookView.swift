@@ -61,11 +61,16 @@ struct GradedStillView: View {
 
 struct ApplyLookView: View {
     @EnvironmentObject private var app: AppModel
+    @StateObject private var thumbs = LookThumbs()
     @State private var category = "All"
     @State private var activeTool = "Adjust"
 
     private var filteredLooks: [LookPreset] {
         category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
+    }
+
+    private var thumbStamp: String {
+        "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)"
     }
 
     var body: some View {
@@ -90,7 +95,8 @@ struct ApplyLookView: View {
                         LookThumbCell(
                             title: look.name,
                             grade: look.gradeTint,
-                            selected: look.id == app.selectedLook.id && app.selectedLUT == nil
+                            selected: look.id == app.selectedLook.id && app.selectedLUT == nil,
+                            image: thumbs.images[LookThumbs.key(look: look)]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                                 app.selectedLUT = nil
@@ -108,7 +114,8 @@ struct ApplyLookView: View {
                             title: lut.displayName,
                             grade: Color(red: 0.3, green: 0.8, blue: 0.9),
                             selected: app.selectedLUT?.id == lut.id,
-                            badge: "LUT"
+                            badge: "LUT",
+                            image: thumbs.images[LookThumbs.key(lut: lut)]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                                 app.selectedLUT = lut
@@ -125,6 +132,11 @@ struct ApplyLookView: View {
             }
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+            .task(id: thumbStamp) {
+                thumbs.render(source: app.previewFrame,
+                              looks: MockData.looks,
+                              luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
+            }
 
             InlineSlider(title: "Intensity", value: $app.settings.intensity)
                 .padding(.top, 4)
@@ -173,12 +185,19 @@ struct LookThumbCell: View {
     var grade: Color? = nil
     var selected: Bool = false
     var badge: String? = nil
+    var image: CGImage? = nil
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                SceneThumb(scene: .sunsetRoad, grade: grade, radius: 16, selected: selected)
+                Group {
+                    if let image {
+                        GradedThumb(image: image, selected: selected)
+                    } else {
+                        SceneThumb(scene: .sunsetRoad, grade: grade, radius: 16, selected: selected)
+                    }
+                }
                     .frame(width: 96, height: 96)
                     .overlay(alignment: .topLeading) {
                         if let badge {

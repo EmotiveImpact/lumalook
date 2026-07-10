@@ -11,10 +11,44 @@ final class AppModel: ObservableObject {
 
     // Apply a Look flow — video OR still image (SPEC_ADDENDUM §5)
     @Published var selectedVideoURL: URL? {
-        didSet { rebuildPlayer() }
+        didSet {
+            rebuildPlayer()
+            updatePreviewFrame()
+        }
     }
     @Published var selectedImage: CIImage? {
-        didSet { if selectedImage != nil { selectedVideoURL = nil } }
+        didSet {
+            if selectedImage != nil { selectedVideoURL = nil }
+            updatePreviewFrame()
+        }
+    }
+
+    /// A small real frame from the selected media, used to render the look
+    /// strip thumbnails through the actual grading pipeline.
+    @Published private(set) var previewFrame: CIImage?
+    private var frameTask: Task<Void, Never>?
+
+    private func updatePreviewFrame() {
+        frameTask?.cancel()
+        if let image = selectedImage {
+            let longest = max(image.extent.width, image.extent.height)
+            let scale = longest > 480 ? 480 / longest : 1
+            previewFrame = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            return
+        }
+        guard let url = selectedVideoURL else {
+            previewFrame = nil
+            return
+        }
+        frameTask = Task { [weak self] in
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 480, height: 480)
+            guard let result = try? await generator.image(
+                at: CMTime(seconds: 0.05, preferredTimescale: 600)) else { return }
+            guard !Task.isCancelled else { return }
+            self?.previewFrame = CIImage(cgImage: result.image)
+        }
     }
     @Published var selectedLook: LookPreset = MockData.looks[2] {
         didSet { syncLookState() }

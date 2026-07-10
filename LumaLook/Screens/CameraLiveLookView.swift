@@ -1,8 +1,11 @@
 import SwiftUI
+import CoreImage
 
 struct CameraLiveLookView: View {
     @EnvironmentObject private var app: AppModel
     @StateObject private var camera = CameraController()
+    @StateObject private var thumbs = LookThumbs()
+    @State private var liveThumbSource: CIImage?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -34,8 +37,16 @@ struct CameraLiveLookView: View {
         .onAppear {
             camera.lookState = app.lookState
             camera.requestAndStart()
+            thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
         }
         .onDisappear { camera.stopSession() }
+        // Grade the look strip with a real frame from the live camera as
+        // soon as one arrives.
+        .onReceive(camera.$previewImage) { frame in
+            guard liveThumbSource == nil, let frame else { return }
+            liveThumbSource = CIImage(cgImage: frame)
+            thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
+        }
     }
 
     // MARK: - Top icon strip
@@ -140,9 +151,18 @@ struct CameraLiveLookView: View {
                         app.selectedLook = look
                     } label: {
                         VStack(spacing: 6) {
-                            SceneThumb(scene: .desert, grade: look.gradeTint, radius: 14,
-                                       selected: look.id == app.selectedLook.id)
-                                .frame(width: 78, height: 78)
+                            Group {
+                                if let image = thumbs.images[LookThumbs.key(look: look)] {
+                                    GradedThumb(image: image,
+                                                size: CGSize(width: 78, height: 78),
+                                                radius: 14,
+                                                selected: look.id == app.selectedLook.id)
+                                } else {
+                                    SceneThumb(scene: .desert, grade: look.gradeTint, radius: 14,
+                                               selected: look.id == app.selectedLook.id)
+                                }
+                            }
+                            .frame(width: 78, height: 78)
                             Text(look.name)
                                 .font(.system(size: 12, weight: look.id == app.selectedLook.id ? .semibold : .regular))
                                 .foregroundStyle(look.id == app.selectedLook.id ? .white : LumaTheme.textSecondary)

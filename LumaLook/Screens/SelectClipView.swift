@@ -20,14 +20,12 @@ struct PickedVideo: Transferable {
 struct SelectClipView: View {
     @EnvironmentObject private var app: AppModel
     @State private var mode = "Video"
-    @State private var selectedMockIndex: Int? = nil
     @State private var pickerItem: PhotosPickerItem?
-    @State private var showPicker = false
     @State private var isLoading = false
     @State private var loadError: String?
 
     private var hasSelection: Bool {
-        app.selectedVideoURL != nil || app.selectedImage != nil || selectedMockIndex != nil
+        app.selectedVideoURL != nil || app.selectedImage != nil
     }
 
     private var pickingPhotos: Bool { mode == "Photos" }
@@ -38,62 +36,53 @@ struct SelectClipView: View {
             VStack(spacing: 0) {
                 LumaScreenHeaderBar(title: "Select Clip", trailingIcon: "info.circle")
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 18) {
-                        SegmentPills(options: ["Video", "Photos"], selection: $mode)
+                VStack(spacing: 16) {
+                    SegmentPills(options: ["Video", "Photos"], selection: $mode)
+                        .padding(.horizontal, 22)
 
-                        // Source selector opens the real Photos picker
-                        // (videos or still images depending on the segment).
-                        Button { showPicker = true } label: {
-                            HStack {
-                                if isLoading {
-                                    ProgressView().tint(.white)
-                                } else if app.selectedVideoURL != nil {
-                                    Text("Photo Library — video selected")
-                                        .foregroundStyle(LumaTheme.teal)
-                                } else if app.selectedImage != nil {
-                                    Text("Photo Library — photo selected")
-                                        .foregroundStyle(LumaTheme.teal)
-                                } else {
-                                    Text(pickingPhotos ? "All Photos" : "All Videos")
-                                        .foregroundStyle(.white)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(LumaTheme.textSecondary)
-                            }
-                            .font(.system(size: 17, weight: .semibold))
-                            .padding(.horizontal, 18)
-                            .frame(height: 54)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                    HStack(spacing: 8) {
+                        if isLoading {
+                            ProgressView().tint(.white)
+                            Text("Loading…").foregroundStyle(.white)
+                        } else if app.selectedVideoURL != nil {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(LumaTheme.teal)
+                            Text("Video selected").foregroundStyle(LumaTheme.teal)
+                        } else if app.selectedImage != nil {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(LumaTheme.teal)
+                            Text("Photo selected").foregroundStyle(LumaTheme.teal)
+                        } else {
+                            Text(pickingPhotos ? "All Photos" : "All Videos")
+                                .foregroundStyle(.white)
                         }
-                        .buttonStyle(.plain)
-
+                        Spacer()
                         if let loadError {
                             Text(loadError)
                                 .font(.system(size: 13))
                                 .foregroundStyle(LumaTheme.orange)
                         }
-
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                            ForEach(Array(MockData.clips.enumerated()), id: \.element.id) { index, clip in
-                                Button {
-                                    selectedMockIndex = index
-                                    app.selectedVideoURL = nil
-                                } label: {
-                                    SceneThumb(scene: clip.scene, radius: 14,
-                                               duration: clip.duration,
-                                               selected: index == selectedMockIndex,
-                                               showCheck: true)
-                                        .frame(height: 108)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
                     }
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.horizontal, 18)
+                    .frame(height: 48)
+                    .lumaCard(cornerRadius: 14)
                     .padding(.horizontal, 22)
-                    .padding(.bottom, 120)
+
+                    // The real photo library, embedded in our chrome — every
+                    // thumbnail is the user's actual footage.
+                    PhotosPicker(selection: $pickerItem,
+                                 matching: pickingPhotos ? .images : .videos,
+                                 photoLibrary: .shared()) {
+                        Label("Open Library", systemImage: "photo.on.rectangle")
+                    }
+                    .photosPickerStyle(.inline)
+                    .photosPickerDisabledCapabilities(.selectionActions)
+                    .photosPickerAccessoryVisibility(.hidden, edges: .all)
+                    .frame(maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 8)
                 }
             }
         }
@@ -126,8 +115,6 @@ struct SelectClipView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .photosPicker(isPresented: $showPicker, selection: $pickerItem,
-                      matching: pickingPhotos ? .images : .videos)
         .onChange(of: pickerItem) { _, newItem in
             guard let newItem else { return }
             isLoading = true
@@ -139,13 +126,11 @@ struct SelectClipView: View {
                         if let data = try await newItem.loadTransferable(type: Data.self),
                            let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
                             app.selectedImage = image
-                            selectedMockIndex = nil
                         } else {
                             loadError = "Could not load that photo. Try another one."
                         }
                     } else if let video = try await newItem.loadTransferable(type: PickedVideo.self) {
                         app.selectedVideoURL = video.url
-                        selectedMockIndex = nil
                     }
                 } catch {
                     loadError = "Could not load that item. Try another one."

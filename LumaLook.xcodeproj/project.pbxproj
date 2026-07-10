@@ -30,6 +30,7 @@
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F185F22913641FEE760D92 /* LUTRepository.swift */; };
 		AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D43F2BD3901B8346CB884BF /* LumaTheme.swift */; };
+		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
 		D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */; };
 		DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */; };
 		DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0DEA4AC5F988804E0BFE7243 /* Teal_Orange_17.cube */; };
@@ -48,6 +49,7 @@
 		2D4758690F5507F42704B9E3 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneArt.swift; sourceTree = "<group>"; };
 		2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
+		3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookThumbs.swift; sourceTree = "<group>"; };
 		4D43F2BD3901B8346CB884BF /* LumaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaTheme.swift; sourceTree = "<group>"; };
 		4D68EDF7DD7DB6080A0C060B /* LumaLook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LumaLook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5082DDECC065F7185E2AD705 /* MoreScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreScreens.swift; sourceTree = "<group>"; };
@@ -179,6 +181,7 @@
 			children = (
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
+				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
@@ -288,6 +291,7 @@
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
+				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,
 				DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */,
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,
