@@ -11,7 +11,7 @@ round on both, plus C4. Everything else is parked (do not lose)._
       sibling cascade; full algorithm in the img.ly mine reports)
 - [x] Real per-second filmstrip frames in clip cells (AVAssetImageGenerator
       strip, cached; replaces tiled single thumb)
-- [ ] Snap indicators + haptic detents (playhead / clip edges)
+- [x] Snap indicators + haptic detents (playhead / clip edges)
 - [x] Music trim handles + simple waveform on the music lane
 
 ## ACTIVE — Wave B: grade room restructure

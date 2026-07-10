@@ -616,6 +616,7 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         private var pinchStartPPS: CGFloat = 50
         private var pinchWasClamped = false
         private var lastHapticSecond = Int.min
+        private var lastBoundaryHit: Int?
         private let scrubTick = UISelectionFeedbackGenerator()
         private let limitThump = UIImpactFeedbackGenerator(style: .light)
 
@@ -680,6 +681,21 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
             if second != lastHapticSecond {
                 if lastHapticSecond != Int.min { scrubTick.selectionChanged() }
                 lastHapticSecond = second
+            }
+
+            // Firmer detent when the playhead lands on a clip boundary —
+            // the edit points are where scrubbing precision matters.
+            var cursor = 0.0
+            var nearBoundary: Int? = nil
+            for (index, clip) in editor.clips.enumerated().dropLast() {
+                cursor += clip.timelineDuration
+                if abs(clamped - cursor) < 0.06 { nearBoundary = index; break }
+            }
+            if let hit = nearBoundary, hit != lastBoundaryHit {
+                LumaHaptics.shared.timelineSnap()
+                lastBoundaryHit = hit
+            } else if nearBoundary == nil {
+                lastBoundaryHit = nil
             }
         }
 
