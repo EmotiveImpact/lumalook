@@ -1,10 +1,13 @@
 import SwiftUI
 import AVKit
+import Pow
 
 struct ExportCompleteView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
+    @State private var appeared = false
+    @State private var celebrate = 0
 
     var body: some View {
         ZStack {
@@ -16,7 +19,10 @@ struct ExportCompleteView: View {
                             Image(systemName: "arrow.left")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white)
+                                .frame(width: 40, height: 40, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.lumaPress)
                         Spacer()
                     }
                     .padding(.horizontal, 22)
@@ -26,10 +32,19 @@ struct ExportCompleteView: View {
                         Circle()
                             .fill(LumaTheme.teal.opacity(0.13))
                             .frame(width: 128, height: 128)
+                        Circle()
+                            .strokeBorder(LumaTheme.teal.opacity(0.35), lineWidth: 1)
+                            .frame(width: 128, height: 128)
                         Image(systemName: "checkmark")
                             .font(.system(size: 54, weight: .bold))
                             .foregroundStyle(LumaTheme.teal)
                     }
+                    .scaleEffect(appeared ? 1 : 0.4)
+                    .opacity(appeared ? 1 : 0)
+                    .changeEffect(.spray(origin: .center) {
+                        Image(systemName: "sparkle")
+                            .foregroundStyle(LumaTheme.teal)
+                    }, value: celebrate)
                     .padding(.top, 18)
 
                     Text("Export Complete!")
@@ -63,7 +78,15 @@ struct ExportCompleteView: View {
                     }
                     .frame(width: 250, height: 250)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.07)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(
+                                LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.03)],
+                                               startPoint: .top, endPoint: .bottom),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
                     .padding(.top, 26)
 
                     Group {
@@ -75,7 +98,8 @@ struct ExportCompleteView: View {
                             Button { } label: { shareLabel }
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.lumaPress)
+                    .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
                     .padding(.top, 30)
 
                     HStack(spacing: 22) {
@@ -97,22 +121,42 @@ struct ExportCompleteView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
+        .sensoryFeedback(.success, trigger: celebrate)
         .onAppear {
             if app.lastExportImage == nil, let url = app.lastExportURL {
                 player = AVPlayer(url: url)
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.1)) {
+                appeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                celebrate += 1
             }
         }
         .onDisappear { player?.pause() }
     }
 
     private var shareLabel: some View {
-        Text("SHARE VIDEO")
+        Text(app.lastExportImage != nil ? "SHARE PHOTO" : "SHARE VIDEO")
             .font(.system(size: 17, weight: .bold))
             .tracking(1.6)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 58)
-            .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+            .background(
+                LinearGradient(colors: [LumaTheme.accent, LumaTheme.accent.opacity(0.82)],
+                               startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.0)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: LumaTheme.accent.opacity(0.35), radius: 16, y: 6)
     }
 }
 
@@ -127,10 +171,17 @@ struct BrandShareIcon: View {
     var body: some View {
         VStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 18)
-                .fill(LumaTheme.surface)
+                .fill(.ultraThinMaterial)
                 .frame(width: 68, height: 68)
                 .overlay(glyph)
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(LumaTheme.hairline))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(
+                            LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.03)],
+                                           startPoint: .top, endPoint: .bottom),
+                            lineWidth: 1
+                        )
+                )
             Text(kind.rawValue)
                 .font(.system(size: 13))
                 .foregroundStyle(LumaTheme.textSecondary)

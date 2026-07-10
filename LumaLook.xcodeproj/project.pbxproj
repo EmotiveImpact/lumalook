@@ -10,6 +10,7 @@
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
+		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
 		300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */; };
 		369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */; };
@@ -68,6 +69,17 @@
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */ = {isa = PBXFileReference; path = Warm_Cinematic_17.cube; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		70C04B264484D76C10B6B818 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				214E58347DBD7F44941B4FDC /* Pow in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		00B1C9D4EE7E4442565F25D6 /* Screens */ = {
@@ -194,6 +206,7 @@
 			buildPhases = (
 				B01DCCA5C20E79154D83E239 /* Sources */,
 				557EEEA861197D1543916B43 /* Resources */,
+				70C04B264484D76C10B6B818 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -201,6 +214,7 @@
 			);
 			name = LumaLook;
 			packageProductDependencies = (
+				1C6DF81224A4A023BADD016C /* Pow */,
 			);
 			productName = LumaLook;
 			productReference = 4D68EDF7DD7DB6080A0C060B /* LumaLook.app */;
@@ -230,6 +244,9 @@
 			);
 			mainGroup = D134FE5D79919051F2E9AE2A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6A66C1AA0791AEEBFC5252FF /* XCRemoteSwiftPackageReference "Pow" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7722BAD628CD6CBF5934B2A4 /* Products */;
 			projectDirPath = "";
@@ -490,6 +507,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6A66C1AA0791AEEBFC5252FF /* XCRemoteSwiftPackageReference "Pow" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/EmergeTools/Pow";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1C6DF81224A4A023BADD016C /* Pow */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6A66C1AA0791AEEBFC5252FF /* XCRemoteSwiftPackageReference "Pow" */;
+			productName = Pow;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 73D9CFEBA18A924D3BDEA15C /* Project object */;
 }

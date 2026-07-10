@@ -76,7 +76,7 @@ struct ApplyLookView: View {
                         Button { category = chip } label: {
                             Chip(title: chip, selected: chip == category)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.lumaPress)
                     }
                 }
             }
@@ -92,8 +92,15 @@ struct ApplyLookView: View {
                             grade: look.gradeTint,
                             selected: look.id == app.selectedLook.id && app.selectedLUT == nil
                         ) {
-                            app.selectedLUT = nil
-                            app.selectedLook = look
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                app.selectedLUT = nil
+                                app.selectedLook = look
+                            }
+                        }
+                        .scrollTransition(.interactive) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                .opacity(phase.isIdentity ? 1 : 0.6)
                         }
                     }
                     ForEach(app.lutRepository.luts) { lut in
@@ -103,12 +110,21 @@ struct ApplyLookView: View {
                             selected: app.selectedLUT?.id == lut.id,
                             badge: "LUT"
                         ) {
-                            app.selectedLUT = lut
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                app.selectedLUT = lut
+                            }
+                        }
+                        .scrollTransition(.interactive) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                .opacity(phase.isIdentity ? 1 : 0.6)
                         }
                     }
                 }
                 .padding(.vertical, 2)
             }
+            .sensoryFeedback(.selection, trigger: app.selectedLook.id)
+            .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
 
             InlineSlider(title: "Intensity", value: $app.settings.intensity)
                 .padding(.top, 4)
@@ -183,6 +199,6 @@ struct LookThumbCell: View {
                     .frame(width: 96)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }

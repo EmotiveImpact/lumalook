@@ -342,6 +342,13 @@ struct InlineSlider: View {
     var range: ClosedRange<Double> = 0...100
     var display: ((Double) -> String)? = nil
 
+    // 20 haptic detents across the range, like a physical dial.
+    private var tickIndex: Int {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return Int(((value - range.lowerBound) / span) * 20)
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             Text(title)
@@ -358,6 +365,7 @@ struct InlineSlider: View {
                 .foregroundStyle(.white)
                 .frame(width: 56, alignment: .trailing)
         }
+        .sensoryFeedback(.selection, trigger: tickIndex)
     }
 }
 

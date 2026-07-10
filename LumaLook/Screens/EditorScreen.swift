@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import PhotosUI
+import Pow
 
 struct EditorTimelineView: View {
     @EnvironmentObject private var app: AppModel
@@ -142,6 +143,9 @@ private struct EditorContent: View {
             .padding(.top, 6)
             .padding(.bottom, 30)
         }
+        // One physical thump whenever the timeline structure changes
+        // (add, split, delete).
+        .sensoryFeedback(.impact(weight: .medium), trigger: editor.clips.count)
     }
 
     // MARK: Header
@@ -152,8 +156,10 @@ private struct EditorContent: View {
                 Image(systemName: "arrow.left")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(.white)
+                    .frame(width: 36, height: 40, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
             HStack(spacing: 6) {
                 Text(editor.projectTitle)
                     .font(.system(size: 20, weight: .bold))
@@ -167,15 +173,19 @@ private struct EditorContent: View {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(editor.canUndo ? .white : LumaTheme.textMuted)
+                    .frame(width: 32, height: 40)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
             .disabled(!editor.canUndo)
             Button { editor.redo() } label: {
                 Image(systemName: "arrow.uturn.forward")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(editor.canRedo ? .white : LumaTheme.textMuted)
+                    .frame(width: 32, height: 40)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
             .disabled(!editor.canRedo)
             Button(action: onExport) {
                 Text("Export")
@@ -183,9 +193,16 @@ private struct EditorContent: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 13))
+                    .background(
+                        LinearGradient(colors: [LumaTheme.accent, LumaTheme.accent.opacity(0.82)],
+                                       startPoint: .top, endPoint: .bottom),
+                        in: RoundedRectangle(cornerRadius: 13)
+                    )
+                    .overlay(RoundedRectangle(cornerRadius: 13)
+                        .strokeBorder(.white.opacity(0.2), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
+            .conditionalEffect(.repeat(.shine, every: .seconds(4)), condition: !editor.isEmpty)
             .opacity(editor.isEmpty ? 0.4 : 1)
         }
     }
@@ -223,7 +240,7 @@ private struct EditorContent: View {
                                         .padding(.vertical, 12)
                                         .background(LumaTheme.accent, in: Capsule())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.lumaPress)
                             }
                         }
                         .padding(22)
@@ -252,6 +269,7 @@ private struct EditorContent: View {
                 Button { editor.togglePlayback() } label: {
                     Image(systemName: editor.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 26))
+                        .contentTransition(.symbolEffect(.replace))
                         .frame(width: 30)
                 }
                 Button { editor.seekToBoundary(forward: true) } label: {
@@ -259,8 +277,9 @@ private struct EditorContent: View {
                 }
             }
             .foregroundStyle(.white)
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
             .disabled(editor.isEmpty)
+            .sensoryFeedback(.impact(weight: .light), trigger: editor.isPlaying)
             Spacer()
             if editor.isRebuilding {
                 ProgressView().tint(LumaTheme.textMuted).scaleEffect(0.8)
@@ -334,7 +353,10 @@ private struct EditorContent: View {
                     HStack(spacing: 3) {
                         if editor.isEmpty {
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(LumaTheme.surface)
+                                .fill(.ultraThinMaterial)
+                                .overlay(RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                                    .foregroundStyle(.white.opacity(0.15)))
                                 .overlay(Text("Timeline is empty")
                                     .font(.system(size: 13))
                                     .foregroundStyle(LumaTheme.textMuted))
@@ -383,24 +405,29 @@ private struct EditorContent: View {
             }
             .frame(height: 66)
 
-            HStack(spacing: 10) {
-                Image(systemName: "music.note")
-                    .font(.system(size: 14, weight: .bold))
-                Text(editor.muteAudio ? "Audio muted" : "Ambient Beat")
-                    .font(.system(size: 16, weight: .semibold))
-                Spacer()
-                Text(timeString(editor.totalDuration))
-                    .font(.system(size: 13, weight: .semibold))
-                    .opacity(0.8)
+            Button(action: onOpenAudio) {
+                HStack(spacing: 10) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(editor.muteAudio ? "Audio muted" : "Ambient Beat")
+                        .font(.system(size: 16, weight: .semibold))
+                    Spacer()
+                    Text(timeString(editor.totalDuration))
+                        .font(.system(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                        .opacity(0.8)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 46)
+                .frame(maxWidth: .infinity)
+                .background(editor.muteAudio ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                                             : AnyShapeStyle(LumaTheme.accentDeep),
+                            in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(.white.opacity(0.1), lineWidth: 1))
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(height: 46)
-            .frame(maxWidth: .infinity)
-            .background(editor.muteAudio ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                         : AnyShapeStyle(LumaTheme.accentDeep),
-                        in: RoundedRectangle(cornerRadius: 12))
-            .onTapGesture(perform: onOpenAudio)
+            .buttonStyle(.lumaPress)
         }
     }
 
@@ -439,7 +466,7 @@ private struct EditorContent: View {
                         .frame(height: 46)
                         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.lumaPress)
                 Button {
                     editor.applyTrim(start: trimStart, end: trimEnd)
                     withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
@@ -452,11 +479,11 @@ private struct EditorContent: View {
                         .frame(height: 46)
                         .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 13))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.lumaPress)
             }
         }
         .padding(16)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .lumaCard()
     }
 
     // MARK: Looks strip
@@ -533,6 +560,8 @@ private struct ClipCell: View {
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.08),
                     lineWidth: selected ? 2.5 : 1))
+        .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 
     private var cellWidth: CGFloat {
@@ -563,6 +592,6 @@ private struct LookStripCell: View {
                     .frame(width: 70)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
     }
 }

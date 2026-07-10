@@ -45,7 +45,10 @@ struct CameraLiveLookView: View {
             Button { dismiss() } label: {
                 Image(systemName: "arrow.left")
                     .font(.system(size: 20, weight: .semibold))
+                    .frame(width: 40, height: 40, alignment: .leading)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.lumaPress)
             Spacer()
             VStack(spacing: 0) {
                 Text("4K").font(.system(size: 13, weight: .heavy))
@@ -86,17 +89,30 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 54, height: 44)
-                    .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
                 Button {} label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 54, height: 44)
-                        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.lumaPress)
             }
             .padding(12)
+
+            if camera.isRecording {
+                VStack {
+                    Spacer()
+                    HStack {
+                        RecordingPill()
+                        Spacer()
+                    }
+                    .padding(12)
+                }
+            }
 
             if camera.lastSavedToPhotos {
                 VStack {
@@ -134,11 +150,12 @@ struct CameraLiveLookView: View {
                                 .frame(width: 80)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.lumaPress)
                 }
             }
             .padding(.horizontal, 22)
         }
+        .sensoryFeedback(.selection, trigger: app.selectedLook.id)
     }
 
     // MARK: - Bottom controls
@@ -150,32 +167,17 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 64, height: 56)
-                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
 
             Spacer()
 
-            Button {
+            ShutterButton(isRecording: camera.isRecording) {
                 camera.toggleRecording()
-            } label: {
-                ZStack {
-                    Circle()
-                        .stroke(.white, lineWidth: 4)
-                        .frame(width: 82, height: 82)
-                    if camera.isRecording {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LumaTheme.recordRed)
-                            .frame(width: 34, height: 34)
-                    } else {
-                        Circle()
-                            .fill(LumaTheme.recordRed)
-                            .frame(width: 68, height: 68)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: camera.isRecording)
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
@@ -184,11 +186,14 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 64, height: 56)
-                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
         }
         .padding(.horizontal, 26)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
     }
 
     @ViewBuilder
@@ -221,5 +226,72 @@ struct CameraLiveLookView: View {
         }
         .padding(24)
         .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 20))
+    }
+}
+
+// MARK: - Shutter
+
+/// Camera-app style shutter: white ring, red core that morphs into a
+/// rounded square while recording, with a breathing glow.
+private struct ShutterButton: View {
+    let isRecording: Bool
+    let action: () -> Void
+    @State private var breathe = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isRecording {
+                    Circle()
+                        .stroke(LumaTheme.recordRed.opacity(breathe ? 0.45 : 0.12), lineWidth: 10)
+                        .frame(width: 96, height: 96)
+                        .scaleEffect(breathe ? 1.04 : 0.96)
+                }
+                Circle()
+                    .stroke(.white, lineWidth: 4)
+                    .frame(width: 82, height: 82)
+                RoundedRectangle(cornerRadius: isRecording ? 9 : 34)
+                    .fill(LumaTheme.recordRed)
+                    .frame(width: isRecording ? 34 : 68, height: isRecording ? 34 : 68)
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isRecording)
+        }
+        .buttonStyle(.lumaPress)
+        .onChange(of: isRecording) { _, recording in
+            if recording {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    breathe = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) { breathe = false }
+            }
+        }
+    }
+}
+
+/// Pulsing REC indicator shown over the preview while recording.
+private struct RecordingPill: View {
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(LumaTheme.recordRed)
+                .frame(width: 9, height: 9)
+                .opacity(pulse ? 0.35 : 1)
+            Text("REC")
+                .font(.system(size: 13, weight: .heavy))
+                .tracking(1.4)
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
+        .background(.black.opacity(0.3), in: Capsule())
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
     }
 }
