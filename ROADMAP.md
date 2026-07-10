@@ -19,12 +19,28 @@ round on both, plus C4. Everything else is parked (do not lose)._
       intensity + tools in a pinned bottom glass drawer
 - [ ] Haptic intensity dial (Halide-style precision wheel)
 - [ ] Before/After as press-and-hold on the image (keep wipe screen too)
+- [ ] TS5 (research): trademark-safe look renaming + RNI-style taxonomy
+      (Negative/Slide/B&W/Instant/Cine/Original) — "Kodak 5207" in
+      MockData.swift becomes KD52 etc., disclaimer line added. Do BEFORE any
+      App Store screenshots
+- [ ] TS1 verify: look thumbs already render from user's frame (LookThumbs);
+      confirm they survive the restructure + reduced-res render per look
 
 ## ACTIVE — after A+B: review round
 - [ ] On-device feel pass (scrub, pinch, dial, haptics) and fix list
 - [ ] Clip transitions — cross-fade first (opacity ramp on overlapping
       AVMutableComposition ranges), from the Banuba primer checklist
 - [ ] Anything the competitive-research dossier flags as table stakes
+- [ ] TS3 PULLED FORWARD: one real-device QA session (camera bake-in, export
+      thermals, save reliability) — "everything else is decoration if
+      recordings drop"
+- [ ] TS2: implement film grain + halation in LookPipeline (custom kernel;
+      sliders already exist in UI/model) — the "premium physics" signal
+- [ ] TS8: copy grade between clips (engine already shares LookState; UI only)
+- [ ] TS6: log-LUT tagging + mismatch hint on import (filename heuristics,
+      badge, suggest lower intensity)
+- [ ] D1: preview/export parity verification matrix (8/10-bit, HDR/SDR,
+      photo/video) → becomes the marketed guarantee "the preview never lies"
 - [ ] PRODUCT TRUTH fixes (Codex audit, research/codex-second-opinion.md):
       camera HUD must show the REAL capture format (currently says 4K•30 but
       records 1080p) or capture must move to 4K; hide-or-implement dead
@@ -33,11 +49,21 @@ round on both, plus C4. Everything else is parked (do not lose)._
       are core to "cinematic"); project delete must remove copied media files
       (PersistenceStore storage leak)
 
-## ACTIVE — C4: real LUT packs
-- [ ] Generate real .cube packs; render per-pack preview strips from hero
-      photos through the pipeline
-- [ ] Pack Detail actually installs packs into the LUT repository
-- [ ] Filter Store rows reflect installed/owned state
+## ACTIVE — C4: real LUT packs (spec: research/OPPORTUNITY_MAP.md §4)
+- [ ] 4 launch packs, 5-7 looks each, KD/FJ/CN/AG/BW/LL naming with
+      character + era copy per look; 33-point .cube generation + recipe
+      defaults, installed via existing LUTRepository path
+- [ ] Pack Detail = hero graded frame + copy + look count; installs pack
+- [ ] Store rows reflect installed/owned; "N looks · M packs" header counts
+- [ ] Locked looks fully previewable on user media; gate export/save only
+- [ ] Free/paid flags per §4.5 (Negative Set 01 + half Originals free;
+      no watermark EVER)
+
+## READY WHEN USER SIGNS OFF PRICING — C5 StoreKit 2 + paywall + onboarding
+Research recommendation (§5): Pro annual $24.99 w/ 7-day trial, lifetime
+$49.99, packs $2.99-4.99 à la carte. NO weekly, NO monthly, no trial toggle.
+Single-screen paywall on the user's own graded media; onboarding folded into
+the same funnel. ASO strings in §5.
 
 ## PARKED (do not lose)
 - Codex audit follow-ups (research/codex-second-opinion.md): camera manual
