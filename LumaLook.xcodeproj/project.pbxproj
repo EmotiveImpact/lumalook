@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
+		17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71565855D4F4F92716382C0A /* TimelineV2.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
 		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
@@ -67,6 +68,7 @@
 		5C594D043EBDE22175C914E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
 		5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaLookApp.swift; sourceTree = "<group>"; };
+		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
@@ -110,6 +112,7 @@
 				982FBAAA5098559374D20381 /* LUTManagerView.swift */,
 				5082DDECC065F7185E2AD705 /* MoreScreens.swift */,
 				C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */,
+				6179EBD36201DBA3960BCD66 /* Editor */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -131,6 +134,14 @@
 				FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */,
 			);
 			path = SampleLUTs;
+			sourceTree = "<group>";
+		};
+		6179EBD36201DBA3960BCD66 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				71565855D4F4F92716382C0A /* TimelineV2.swift */,
+			);
+			path = Editor;
 			sourceTree = "<group>";
 		};
 		724A9FEAD7FA7A997F12F421 /* Resources */ = {
@@ -339,6 +350,7 @@
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
+				17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */,
 				D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
