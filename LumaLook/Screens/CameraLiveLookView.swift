@@ -9,11 +9,20 @@ struct CameraLiveLookView: View {
     @StateObject private var camera = CameraController()
     @StateObject private var thumbs = LookThumbs()
     @State private var liveThumbSource: CIImage?
+    @State private var showGrid = false
+    @State private var recordStart: Date?
+    @State private var statusCaption: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
             viewfinder
+
+            if showGrid {
+                RuleOfThirdsGrid()
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
 
             VStack(spacing: 0) {
                 topStrip
@@ -45,7 +54,15 @@ struct CameraLiveLookView: View {
             // Status pills float over the feed, top centre.
             VStack(spacing: 8) {
                 if camera.isRecording {
-                    RecordingPill()
+                    RecordingPill(start: recordStart ?? Date())
+                }
+                if let statusCaption {
+                    TechReadout(statusCaption, size: 11)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.4), in: Capsule())
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .id(statusCaption)
                 }
                 if camera.lastSavedToPhotos {
                     Label("Saved to Photos", systemImage: "checkmark.circle.fill")
@@ -91,6 +108,10 @@ struct CameraLiveLookView: View {
             thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
         }
         .onDisappear { camera.stopSession() }
+        .onChange(of: camera.isRecording) { _, recording in
+            recordStart = recording ? Date() : nil
+        }
+        .animation(.easeOut(duration: 0.15), value: showGrid)
         // Grade the look strip with a real frame from the live camera as
         // soon as one arrives.
         .onReceive(camera.$previewImage) { frame in
@@ -130,21 +151,49 @@ struct CameraLiveLookView: View {
             }
             .buttonStyle(.lumaPress)
             Spacer()
-            VStack(spacing: 0) {
-                Text("4K").font(.system(size: 13, weight: .heavy))
-                Text("30").font(.system(size: 11, weight: .semibold))
+            // Technical format readout, Blackmagic-style: mono caps, tracked.
+            TechReadout("4K • 30", size: 12, color: .white.opacity(0.85))
+            Spacer()
+            Button {} label: {
+                Image(systemName: "bolt.slash").font(.system(size: 20, weight: .medium))
             }
+            .buttonStyle(.lumaPress)
             Spacer()
-            Image(systemName: "bolt.slash").font(.system(size: 20, weight: .medium))
+            Button {
+                showGrid.toggle()
+                flashCaption(showGrid ? "GRID ON" : "GRID OFF")
+            } label: {
+                Image(systemName: "squareshape.split.3x3")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(showGrid ? LumaTheme.accentBright : .white)
+            }
+            .buttonStyle(.lumaPress)
+            .sensoryFeedback(.selection, trigger: showGrid)
             Spacer()
-            Image(systemName: "squareshape.split.3x3").font(.system(size: 20, weight: .medium))
+            Button {} label: {
+                Image(systemName: "timer").font(.system(size: 20, weight: .medium))
+            }
+            .buttonStyle(.lumaPress)
             Spacer()
-            Image(systemName: "timer").font(.system(size: 20, weight: .medium))
-            Spacer()
-            Image(systemName: "gearshape").font(.system(size: 20, weight: .medium))
+            Button {} label: {
+                Image(systemName: "gearshape").font(.system(size: 20, weight: .medium))
+            }
+            .buttonStyle(.lumaPress)
         }
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+    }
+
+    /// Transient state caption (Halide-style contextual labeling): flashes
+    /// a small mono caption near the top for ~900ms, then fades.
+    private func flashCaption(_ text: String) {
+        withAnimation(.snappy(duration: 0.2)) { statusCaption = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            if statusCaption == text {
+                withAnimation(.easeOut(duration: 0.25)) { statusCaption = nil }
+            }
+        }
     }
 
     // MARK: - Looks
@@ -298,12 +347,15 @@ private struct ShutterButton: View {
     }
 }
 
-/// Pulsing REC indicator shown over the viewfinder while recording.
+/// Pulsing REC indicator with a live SMPTE timecode, shown over the
+/// viewfinder while recording. The timecode ticks at frame rate off the
+/// recording start date, so it stops the moment the pill disappears.
 private struct RecordingPill: View {
+    let start: Date
     @State private var pulse = false
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 8) {
             Circle()
                 .fill(LumaTheme.recordRed)
                 .frame(width: 9, height: 9)
@@ -312,6 +364,13 @@ private struct RecordingPill: View {
                 .font(.system(size: 13, weight: .heavy))
                 .tracking(1.4)
                 .foregroundStyle(.white)
+            TimelineView(.periodic(from: start, by: 1.0 / 30.0)) { context in
+                Text(Timecode.string(seconds: context.date.timeIntervalSince(start)))
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .kerning(0.6)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)

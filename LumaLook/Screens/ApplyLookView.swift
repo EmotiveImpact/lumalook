@@ -76,6 +76,8 @@ struct ApplyLookView: View {
     @StateObject private var thumbs = LookThumbs()
     @State private var category = "All"
     @State private var activeTool = "Adjust"
+    @State private var mediaReadout: String?
+    @State private var videoAspect: CGFloat?
 
     private var filteredLooks: [LookPreset] {
         category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
@@ -83,6 +85,56 @@ struct ApplyLookView: View {
 
     private var thumbStamp: String {
         "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)"
+    }
+
+    private var mediaKey: String {
+        if let url = app.selectedVideoURL { return url.absoluteString }
+        if let still = app.selectedImage {
+            return "still-\(Int(still.extent.width))x\(Int(still.extent.height))"
+        }
+        return "none"
+    }
+
+    /// Loads a technical metadata readout for the selected media:
+    /// `1920×1080 • 30 FPS • 00:12` for video, `W×H • STILL` for photos.
+    private func loadMediaReadout() async {
+        if let url = app.selectedVideoURL {
+            let asset = AVURLAsset(url: url)
+            guard let duration = try? await asset.load(.duration),
+                  let track = try? await asset.loadTracks(withMediaType: .video).first,
+                  let (naturalSize, transform, fps) = try? await track.load(
+                    .naturalSize, .preferredTransform, .nominalFrameRate)
+            else {
+                mediaReadout = nil
+                videoAspect = nil
+                return
+            }
+            let rect = CGRect(origin: .zero, size: naturalSize).applying(transform)
+            let w = Int(abs(rect.width).rounded())
+            let h = Int(abs(rect.height).rounded())
+
+            var parts = ["\(w)×\(h)"]
+            if fps > 0 {
+                let rounded = fps.rounded()
+                parts.append(abs(Double(fps) - Double(rounded)) < 0.01
+                             ? "\(Int(rounded)) FPS"
+                             : String(format: "%.2f FPS", fps))
+            }
+            let seconds = duration.seconds
+            if seconds.isFinite, seconds > 0 {
+                let s = Int(seconds.rounded())
+                parts.append(String(format: "%02d:%02d", s / 60, s % 60))
+            }
+            mediaReadout = parts.joined(separator: " • ")
+            videoAspect = h > 0 ? CGFloat(w) / CGFloat(h) : nil
+        } else if let still = app.selectedImage {
+            let extent = still.extent
+            mediaReadout = "\(Int(extent.width))×\(Int(extent.height)) • STILL"
+            videoAspect = nil
+        } else {
+            mediaReadout = nil
+            videoAspect = nil
+        }
     }
 
     var body: some View {
@@ -100,6 +152,23 @@ struct ApplyLookView: View {
 
             LookPreviewSurface()
                 .frame(height: 400)
+                .overlay {
+                    // Letterbox mattes when grading wide (16:9-ish) video,
+                    // so the surface reads "cinema", not "player".
+                    if app.player != nil, let aspect = videoAspect, aspect >= 1.4 {
+                        LetterboxMattes(contentAspect: aspect)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: videoAspect)
+                .task(id: mediaKey) { await loadMediaReadout() }
+
+            if let mediaReadout {
+                TechReadout(mediaReadout, size: 11, color: LumaTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, -8)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {

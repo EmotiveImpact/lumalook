@@ -97,25 +97,18 @@ struct BeforeAfterView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
 
-                // Divider + handle at the wipe position.
+                // Vertical wipe line + circular grabber at the split position.
                 let x = geo.size.width * splitFraction
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: 3)
-                    .frame(maxHeight: .infinity)
-                    .position(x: x, y: geo.size.height / 2)
-                    .shadow(color: .black.opacity(0.5), radius: 4)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().fill(.black).frame(width: 10, height: 10))
-                    .shadow(color: .black.opacity(0.4), radius: 6)
+                WipeHandle()
+                    .frame(height: geo.size.height)
                     .position(x: x, y: geo.size.height / 2)
 
+                // Mono caps state labels in the top corners — chrome stays
+                // hueless so it never biases the grade comparison.
                 HStack {
-                    Text("Before").pill()
+                    wipeLabel("ORIGINAL")
                     Spacer()
-                    Text("After").pill(border: true)
+                    wipeLabel("GRADED")
                 }
                 .padding(12)
             }
@@ -132,6 +125,17 @@ struct BeforeAfterView: View {
             )
         }
         .frame(height: 430)
+    }
+
+    private func wipeLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .kerning(1.4)
+            .foregroundStyle(.white.opacity(0.85))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.black.opacity(0.45), in: Capsule())
+            .allowsHitTesting(false)
     }
 
     // MARK: - Playback
@@ -154,6 +158,8 @@ struct BeforeAfterView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.snappy(duration: 0.2), value: progress)
 
             Slider(value: $progress, in: 0...1) { editing in
                 guard let player = app.player else { return }
