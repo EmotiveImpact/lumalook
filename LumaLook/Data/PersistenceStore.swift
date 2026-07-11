@@ -13,6 +13,8 @@ struct StoredClip: Codable, Identifiable {
     // Optional so pre-per-clip-audio projects still decode.
     var volume: Double? = nil
     var isMuted: Bool? = nil
+    /// TransitionStyle rawValue at this clip's out-point (optional: legacy).
+    var transitionAfter: String? = nil
 }
 
 /// Background-music track attached to a project.

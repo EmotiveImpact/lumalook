@@ -41,6 +41,44 @@ enum EditorFormat: String, CaseIterable {
     var aspect: CGFloat { renderSize.width / renderSize.height }
 }
 
+// MARK: - Transitions
+
+/// Phase-A transitions: single-source effects rendered in the CI handler
+/// around a cut (no second frame needed). Real cross-dissolves arrive with
+/// the custom compositor (T1).
+enum TransitionStyle: String, Codable, CaseIterable {
+    case none
+    case fadeBlack
+    case fadeWhite
+    case flash
+
+    var label: String {
+        switch self {
+        case .none: return "Cut"
+        case .fadeBlack: return "Fade Black"
+        case .fadeWhite: return "Fade White"
+        case .flash: return "Flash"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .none: return "squares.leading.rectangle"
+        case .fadeBlack: return "circle.lefthalf.filled"
+        case .fadeWhite: return "circle.righthalf.filled"
+        case .flash: return "bolt.fill"
+        }
+    }
+
+    var duration: Double {
+        switch self {
+        case .none: return 0
+        case .flash: return 0.3
+        default: return 0.6
+        }
+    }
+}
+
 // MARK: - Editor state & composition engine
 
 @MainActor
@@ -57,6 +95,8 @@ final class EditorState: ObservableObject {
         /// Per-clip audio mix (multiplied with the global track volume).
         var volume: Double = 100
         var isMuted: Bool = false
+        /// Transition INTO the next clip (rendered at this clip's out-point).
+        var transitionAfter: TransitionStyle = .none
         var thumbnail: CGImage?
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
@@ -193,7 +233,8 @@ final class EditorState: ObservableObject {
                 StoredClip(id: $0.id, fileName: $0.url.lastPathComponent,
                            assetDuration: $0.assetDuration,
                            trimStart: $0.trimStart, trimEnd: $0.trimEnd, speed: $0.speed,
-                           volume: $0.volume, isMuted: $0.isMuted)
+                           volume: $0.volume, isMuted: $0.isMuted,
+                           transitionAfter: $0.transitionAfter.rawValue)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -228,7 +269,8 @@ final class EditorState: ObservableObject {
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             return Clip(id: stored.id, url: url, assetDuration: stored.assetDuration,
                         trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed,
-                        volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false)
+                        volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false,
+                        transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -380,10 +422,12 @@ final class EditorState: ObservableObject {
         pushUndoSnapshot()
         var first = clip
         first.trimEnd = splitPoint
+        first.transitionAfter = .none
         let second = Clip(id: UUID(), url: clip.url, assetDuration: clip.assetDuration,
                           trimStart: splitPoint, trimEnd: clip.trimEnd,
                           speed: clip.speed, hasAudio: clip.hasAudio,
                           volume: clip.volume, isMuted: clip.isMuted,
+                          transitionAfter: clip.transitionAfter,
                           thumbnail: clip.thumbnail)
         clips[index] = first
         clips.insert(second, at: index + 1)
@@ -559,6 +603,15 @@ final class EditorState: ObservableObject {
         guard audioTracks.contains(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
         audioTracks.removeAll { $0.id == id }
+        rebuild()
+    }
+
+    /// Sets the transition rendered at this clip's cut into the next one.
+    func setTransition(afterClipID id: UUID, style: TransitionStyle) {
+        guard let i = clips.firstIndex(where: { $0.id == id }), i < clips.count - 1 else { return }
+        guard clips[i].transitionAfter != style else { return }
+        pushUndoSnapshot()
+        clips[i].transitionAfter = style
         rebuild()
     }
 
@@ -815,6 +868,17 @@ final class EditorState: ObservableObject {
             }
         }
 
+        // Transition boundaries: cut time + style, sampled by the handler.
+        struct TransitionSpan { let center: Double; let style: TransitionStyle; let half: Double }
+        var spans: [TransitionSpan] = []
+        for (index, clip) in clips.enumerated() where index < clips.count - 1 {
+            guard clip.transitionAfter != .none, index < metas.count else { continue }
+            spans.append(TransitionSpan(center: metas[index].end,
+                                        style: clip.transitionAfter,
+                                        half: clip.transitionAfter.duration / 2))
+        }
+        let transitionSpans = spans
+
         // One CI handler does orientation, aspect-fill crop into the chosen
         // format, and the active look — for preview and export alike.
         let pipeline = LookPipeline.shared
@@ -844,8 +908,23 @@ final class EditorState: ObservableObject {
             let dy = (renderSize.height - image.extent.height) / 2 - image.extent.minY
             image = image.transformed(by: CGAffineTransform(translationX: dx, y: dy))
 
-            let graded = pipeline.apply(state: state, to: image.clampedToExtent(), includeSplit: false)
-            request.finish(with: graded.cropped(to: CGRect(origin: .zero, size: renderSize)),
+            var graded = pipeline.apply(state: state, to: image.clampedToExtent(), includeSplit: false)
+                .cropped(to: CGRect(origin: .zero, size: renderSize))
+
+            // Phase-A transitions: veil the frame toward black/white around
+            // the cut. Triangle envelope — fully veiled exactly at the cut.
+            if let span = transitionSpans.first(where: { abs(seconds - $0.center) < $0.half }) {
+                let strength = 1 - abs(seconds - span.center) / span.half
+                let veilColor: CIColor = span.style == .fadeBlack
+                    ? CIColor(red: 0, green: 0, blue: 0, alpha: strength)
+                    : CIColor(red: 1, green: 1, blue: 1,
+                              alpha: span.style == .flash ? strength * 0.9 : strength)
+                let veil = CIImage(color: veilColor)
+                    .cropped(to: CGRect(origin: .zero, size: renderSize))
+                graded = veil.composited(over: graded)
+            }
+
+            request.finish(with: graded,
                            context: pipeline.context)
         }
         videoComposition.renderSize = renderSize

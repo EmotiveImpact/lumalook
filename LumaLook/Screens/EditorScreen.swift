@@ -18,6 +18,7 @@ struct EditorTimelineView: View {
     @State private var showMusicPanel = false
     @State private var showClipAudioPanel = false
     @State private var selectedAudioID: UUID?
+    @State private var transitionClipID: UUID?
     @State private var showMusicImporter = false
     @State private var isExporting = false
     @State private var exportError: String?
@@ -37,6 +38,7 @@ struct EditorTimelineView: View {
                 showMusicPanel: $showMusicPanel,
                 showClipAudioPanel: $showClipAudioPanel,
                 selectedAudioID: $selectedAudioID,
+                transitionClipID: $transitionClipID,
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
@@ -177,6 +179,7 @@ private struct EditorContent: View {
     @Binding var showMusicPanel: Bool
     @Binding var showClipAudioPanel: Bool
     @Binding var selectedAudioID: UUID?
+    @Binding var transitionClipID: UUID?
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
@@ -258,6 +261,14 @@ private struct EditorContent: View {
             } else {
                 Color.clear.onAppear { showClipAudioPanel = false }
             }
+        }
+        .lumaToolSheet(isPresented: Binding(
+            get: { transitionClipID != nil },
+            set: { if !$0 { transitionClipID = nil } }
+        ), style: .strip) {
+            transitionPicker
+                .padding(.top, 22)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
         .lumaToolSheet(isPresented: $showLooksStrip, style: .strip) {
             looksStrip
@@ -526,6 +537,9 @@ private struct EditorContent: View {
                        onTapMusic: { id in
                            selectedAudioID = id
                            showMusicPanel = true
+                       },
+                       onTapTransition: { id in
+                           transitionClipID = id
                        })
     }
 
@@ -592,6 +606,33 @@ private struct EditorContent: View {
         }
         .padding(16)
         .lumaCard()
+    }
+
+    // MARK: Transition picker
+
+    private var transitionPicker: some View {
+        VStack(spacing: 12) {
+            TechReadout("TRANSITION", size: 11, color: LumaTheme.textSecondary)
+            HStack(spacing: 8) {
+                ForEach(TransitionStyle.allCases, id: \.self) { style in
+                    ToolTile(title: style.label,
+                             icon: style.icon,
+                             selected: currentTransition == style) {
+                        if let id = transitionClipID {
+                            editor.setTransition(afterClipID: id, style: style)
+                            LumaHaptics.shared.tap()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 22)
+        }
+    }
+
+    private var currentTransition: TransitionStyle {
+        guard let id = transitionClipID,
+              let clip = editor.clips.first(where: { $0.id == id }) else { return .none }
+        return clip.transitionAfter
     }
 
     // MARK: Clip audio panel

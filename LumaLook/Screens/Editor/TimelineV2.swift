@@ -64,6 +64,7 @@ struct TimelineV2View: View {
     @ObservedObject var editor: EditorState
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
+    let onTapTransition: (UUID) -> Void
 
     @State private var metrics = TimelineMetrics()
     @StateObject private var reorder = TimelineReorderState()
@@ -77,7 +78,8 @@ struct TimelineV2View: View {
                                  reorder: reorder,
                                  contentHeight: LaneMetrics.total(audioLanes: editor.audioTracks.count)) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
-                                        onAddMusic: onAddMusic, onTapMusic: onTapMusic)
+                                        onAddMusic: onAddMusic, onTapMusic: onTapMusic,
+                                        onTapTransition: onTapTransition)
                 }
                 playhead
             }
@@ -132,12 +134,14 @@ struct TimelineContentView: View {
     @ObservedObject var reorder: TimelineReorderState
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
+    let onTapTransition: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
             RulerLane(duration: editor.totalDuration, metrics: metrics)
             VStack(alignment: .leading, spacing: 4) {
-                VideoLane(editor: editor, metrics: metrics, reorder: reorder)
+                VideoLane(editor: editor, metrics: metrics, reorder: reorder,
+                          onTapTransition: onTapTransition)
                 ClipAudioLane(editor: editor, metrics: metrics)
             }
             ForEach(editor.audioTracks) { track in
@@ -149,6 +153,32 @@ struct TimelineContentView: View {
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
                height: LaneMetrics.total(audioLanes: editor.audioTracks.count),
                alignment: .leading)
+    }
+}
+
+/// Diamond chip at a cut: tap to pick the transition. White ghost = plain
+/// cut, accent = transition set (the CapCut affordance everyone knows).
+struct TransitionChip: View {
+    let style: TransitionStyle
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(style == .none ? AnyShapeStyle(.ultraThinMaterial)
+                                     : AnyShapeStyle(LumaTheme.accent))
+                .frame(width: 22, height: 22)
+                .rotationEffect(.degrees(45))
+                .overlay {
+                    Image(systemName: style == .none ? "plus" : "sparkles")
+                        .font(.system(size: 9, weight: .heavy))
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: .black.opacity(0.5), radius: 3)
+                .contentShape(Rectangle().inset(by: -8))
+        }
+        .buttonStyle(.lumaPress)
+        .frame(height: LaneMetrics.video)
     }
 }
 
@@ -255,6 +285,7 @@ struct VideoLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
     @ObservedObject var reorder: TimelineReorderState
+    let onTapTransition: (UUID) -> Void
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -275,6 +306,16 @@ struct VideoLane: View {
                                 editor.deleteSelected()
                             } label: { Label("Delete", systemImage: "trash") }
                         }
+                }
+            }
+
+            // Transition chips at every cut (hidden while reordering).
+            if !reorder.isDragging {
+                ForEach(Array(editor.clips.enumerated().dropLast()), id: \.element.id) { index, clip in
+                    TransitionChip(style: clip.transitionAfter) {
+                        onTapTransition(clip.id)
+                    }
+                    .offset(x: boundaryX(after: index) - 11)
                 }
             }
 
@@ -300,6 +341,15 @@ struct VideoLane: View {
             }
         }
         .frame(height: LaneMetrics.video, alignment: .leading)
+    }
+
+    /// Content-space x of the cut after clip `index`.
+    private func boundaryX(after index: Int) -> CGFloat {
+        var x: CGFloat = 0
+        for i in 0...index {
+            x += max(metrics.x(for: editor.clips[i].timelineDuration), 10)
+        }
+        return x
     }
 
     /// Content-space x of an insertion slot: the boundary before the clip at
