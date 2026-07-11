@@ -16,6 +16,7 @@ struct EditorTimelineView: View {
     @State private var trimEnd: Double = 1
     @State private var showLooksStrip = false
     @State private var showMusicPanel = false
+    @State private var showClipAudioPanel = false
     @State private var selectedAudioID: UUID?
     @State private var showMusicImporter = false
     @State private var isExporting = false
@@ -34,6 +35,7 @@ struct EditorTimelineView: View {
                 trimEnd: $trimEnd,
                 showLooksStrip: $showLooksStrip,
                 showMusicPanel: $showMusicPanel,
+                showClipAudioPanel: $showClipAudioPanel,
                 selectedAudioID: $selectedAudioID,
                 exportError: exportError,
                 onBack: { dismiss() },
@@ -173,6 +175,7 @@ private struct EditorContent: View {
     @Binding var trimEnd: Double
     @Binding var showLooksStrip: Bool
     @Binding var showMusicPanel: Bool
+    @Binding var showClipAudioPanel: Bool
     @Binding var selectedAudioID: UUID?
     let exportError: String?
     let onBack: () -> Void
@@ -246,6 +249,16 @@ private struct EditorContent: View {
                 Color.clear.onAppear { showMusicPanel = false }
             }
         }
+        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
+            if let clip = editor.selectedClip {
+                clipAudioPanel(clip: clip)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Color.clear.onAppear { showClipAudioPanel = false }
+            }
+        }
         .lumaToolSheet(isPresented: $showLooksStrip, style: .strip) {
             looksStrip
                 .padding(.top, 22)
@@ -284,7 +297,10 @@ private struct EditorContent: View {
                     FlatTool(title: "Delete", icon: "trash") {
                         editor.deleteSelected()
                     }
-                    FlatTool(title: "Volume", icon: "speaker.wave.2", action: onOpenAudio)
+                    FlatTool(title: "Volume", icon: "speaker.wave.2",
+                             selected: showClipAudioPanel) {
+                        showClipAudioPanel.toggle()
+                    }
                     speedMenu
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -567,6 +583,71 @@ private struct EditorContent: View {
                     Label("Remove", systemImage: "trash")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(LumaTheme.orange)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.lumaPress)
+            }
+        }
+        .padding(16)
+        .lumaCard()
+    }
+
+    // MARK: Clip audio panel
+
+    private func clipAudioPanel(clip: EditorState.Clip) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(LumaTheme.teal)
+                Text(clip.hasAudio ? "Clip sound" : "Clip has no sound")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { showClipAudioPanel = false }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
+            }
+            InlineSlider(title: "Volume", value: Binding(
+                get: { editor.selectedClip?.volume ?? 100 },
+                set: { editor.setClipVolume(id: clip.id, $0) }
+            )) { "\(Int($0))%" }
+            .disabled(!clip.hasAudio)
+            .opacity(clip.hasAudio ? 1 : 0.4)
+            HStack(spacing: 12) {
+                Button {
+                    editor.setClipMuted(id: clip.id, !(editor.selectedClip?.isMuted ?? false))
+                } label: {
+                    Label((editor.selectedClip?.isMuted ?? false) ? "Unmute clip" : "Mute clip",
+                          systemImage: (editor.selectedClip?.isMuted ?? false)
+                              ? "speaker.slash.fill" : "speaker.wave.2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background((editor.selectedClip?.isMuted ?? false)
+                                    ? AnyShapeStyle(LumaTheme.accentDeep)
+                                    : AnyShapeStyle(LumaTheme.surface),
+                                    in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.lumaPress)
+                .disabled(!clip.hasAudio)
+                Button {
+                    showClipAudioPanel = false
+                    onOpenAudio()
+                } label: {
+                    Label("Project audio", systemImage: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 46)
                         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))

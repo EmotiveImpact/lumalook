@@ -54,6 +54,9 @@ final class EditorState: ObservableObject {
         var trimEnd: Double
         var speed: Double = 1.0
         var hasAudio: Bool = false
+        /// Per-clip audio mix (multiplied with the global track volume).
+        var volume: Double = 100
+        var isMuted: Bool = false
         var thumbnail: CGImage?
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
@@ -189,7 +192,8 @@ final class EditorState: ObservableObject {
             clips: clips.map {
                 StoredClip(id: $0.id, fileName: $0.url.lastPathComponent,
                            assetDuration: $0.assetDuration,
-                           trimStart: $0.trimStart, trimEnd: $0.trimEnd, speed: $0.speed)
+                           trimStart: $0.trimStart, trimEnd: $0.trimEnd, speed: $0.speed,
+                           volume: $0.volume, isMuted: $0.isMuted)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -223,7 +227,8 @@ final class EditorState: ObservableObject {
             let url = store.clipURL(for: stored)
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             return Clip(id: stored.id, url: url, assetDuration: stored.assetDuration,
-                        trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed)
+                        trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed,
+                        volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -377,7 +382,9 @@ final class EditorState: ObservableObject {
         first.trimEnd = splitPoint
         let second = Clip(id: UUID(), url: clip.url, assetDuration: clip.assetDuration,
                           trimStart: splitPoint, trimEnd: clip.trimEnd,
-                          speed: clip.speed, hasAudio: clip.hasAudio, thumbnail: clip.thumbnail)
+                          speed: clip.speed, hasAudio: clip.hasAudio,
+                          volume: clip.volume, isMuted: clip.isMuted,
+                          thumbnail: clip.thumbnail)
         clips[index] = first
         clips.insert(second, at: index + 1)
         selectedClipID = second.id
@@ -553,6 +560,21 @@ final class EditorState: ObservableObject {
         pushUndoSnapshot()
         audioTracks.removeAll { $0.id == id }
         rebuild()
+    }
+
+    /// Per-clip audio: mix-only changes, live, no rebuild.
+    func setClipVolume(id: UUID, _ volume: Double) {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        clips[i].volume = min(max(0, volume), 100)
+        applyAudioSettings()
+        scheduleAutosave()
+    }
+
+    func setClipMuted(id: UUID, _ muted: Bool) {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        clips[i].isMuted = muted
+        applyAudioSettings()
+        scheduleAutosave()
     }
 
     /// Volume is a mix-only change — no rebuild, no undo entry (live slider).
@@ -852,6 +874,15 @@ final class EditorState: ObservableObject {
             let parameters = AVMutableAudioMixInputParameters(track: clipTrack)
             let base = Float(muteAudio ? 0 : volume / 100.0)
             parameters.setVolume(base, at: .zero)
+            // Per-clip volume/mute: stepped volumes at each clip's start on
+            // the shared clip-audio track (multiplied with the global level).
+            var clipCursor = 0.0
+            for clip in clips {
+                let clipLevel = base * Float(clip.isMuted ? 0 : clip.volume / 100.0)
+                parameters.setVolume(clipLevel,
+                                     at: CMTime(seconds: clipCursor, preferredTimescale: 600))
+                clipCursor += clip.timelineDuration
+            }
             if !muteAudio, fadeIn > 0.05, duration > fadeIn {
                 parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: base,
                                          timeRange: CMTimeRange(start: .zero,

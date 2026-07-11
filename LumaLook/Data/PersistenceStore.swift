@@ -10,6 +10,9 @@ struct StoredClip: Codable, Identifiable {
     var trimStart: Double
     var trimEnd: Double
     var speed: Double
+    // Optional so pre-per-clip-audio projects still decode.
+    var volume: Double? = nil
+    var isMuted: Bool? = nil
 }
 
 /// Background-music track attached to a project.
