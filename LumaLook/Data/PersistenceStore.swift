@@ -41,6 +41,10 @@ struct StoredProject: Codable, Identifiable {
     // Optional so pre-music Projects.json files still decode. Never add a
     // non-optional field here: `load` uses try? and would wipe every project.
     var music: StoredMusic? = nil
+    /// Multi-audio lanes (music/voiceover/sound). Optional so both legacy
+    /// generations of Projects.json still decode; `music` above is only read
+    /// for migration.
+    var audioTracks: [StoredMusic]? = nil
 }
 
 struct SavedLook: Codable, Identifiable {
@@ -138,11 +142,12 @@ final class PersistenceStore: ObservableObject {
         for clip in removed.clips where !liveClipFiles.contains(clip.fileName) {
             try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(clip.fileName))
         }
-        if let music = removed.music {
-            let liveAudioFiles = Set(projects.compactMap { $0.music?.fileName })
-            if !liveAudioFiles.contains(music.fileName) {
-                try? FileManager.default.removeItem(at: audioFolder.appendingPathComponent(music.fileName))
-            }
+        let removedAudio = (removed.audioTracks ?? []) + (removed.music.map { [$0] } ?? [])
+        let liveAudioFiles = Set(projects.flatMap { project in
+            (project.audioTracks ?? []).map(\.fileName) + (project.music.map { [$0.fileName] } ?? [])
+        })
+        for audio in removedAudio where !liveAudioFiles.contains(audio.fileName) {
+            try? FileManager.default.removeItem(at: audioFolder.appendingPathComponent(audio.fileName))
         }
     }
 

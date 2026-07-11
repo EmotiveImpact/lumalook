@@ -505,9 +505,14 @@ struct LumaTabBar: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 6)
-        .background(.ultraThinMaterial)
+        // Solid near-black bar (reference mock) — content fades out above it
+        // instead of tinting through it.
+        .background {
+            Color(red: 0.02, green: 0.025, blue: 0.04).opacity(0.98)
+                .ignoresSafeArea(edges: .bottom)
+        }
         .overlay(alignment: .top) {
-            LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)],
+            LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)],
                            startPoint: .leading, endPoint: .trailing)
                 .frame(height: 1)
         }

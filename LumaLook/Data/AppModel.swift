@@ -83,6 +83,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var player: AVPlayer?
 
     init() {
+        // Without an explicit .playback category, iOS mutes ALL app audio
+        // whenever the ring/silent switch is on silent — the classic
+        // "imported video has no sound" bug. Every media app sets this.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
         syncLookState()
         applyDebugRoute()
     }

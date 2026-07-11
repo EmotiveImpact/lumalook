@@ -18,9 +18,16 @@ struct TimelineMetrics: Equatable {
 enum LaneMetrics {
     static let ruler: CGFloat = 18
     static let video: CGFloat = 66
+    static let clipAudio: CGFloat = 14
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
-    static var total: CGFloat { ruler + video + music + 2 * spacing }
+
+    /// Total stack height for N audio lanes (+1 row for the add button).
+    static func total(audioLanes: Int) -> CGFloat {
+        let lanes = CGFloat(audioLanes + 1)   // + "Add audio" row
+        return ruler + spacing + video + 4 + clipAudio
+             + lanes * (music + spacing)
+    }
 }
 
 // MARK: - Reorder state
@@ -56,7 +63,7 @@ final class TimelineReorderState: ObservableObject {
 struct TimelineV2View: View {
     @ObservedObject var editor: EditorState
     let onAddMusic: () -> Void
-    let onTapMusic: () -> Void
+    let onTapMusic: (UUID) -> Void
 
     @State private var metrics = TimelineMetrics()
     @StateObject private var reorder = TimelineReorderState()
@@ -68,14 +75,15 @@ struct TimelineV2View: View {
             } else {
                 TimelineScroller(editor: editor, metrics: $metrics,
                                  reorder: reorder,
-                                 contentHeight: LaneMetrics.total) { m in
+                                 contentHeight: LaneMetrics.total(audioLanes: editor.audioTracks.count)) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic)
                 }
                 playhead
             }
         }
-        .frame(height: LaneMetrics.total)
+        .frame(height: LaneMetrics.total(audioLanes: editor.audioTracks.count))
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
     }
 
     /// Fixed centre playhead: triangle cap over a full-height line.
@@ -123,17 +131,81 @@ struct TimelineContentView: View {
     let metrics: TimelineMetrics
     @ObservedObject var reorder: TimelineReorderState
     let onAddMusic: () -> Void
-    let onTapMusic: () -> Void
+    let onTapMusic: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
             RulerLane(duration: editor.totalDuration, metrics: metrics)
-            VideoLane(editor: editor, metrics: metrics, reorder: reorder)
-            MusicLane(editor: editor, metrics: metrics,
-                      onAddMusic: onAddMusic, onTapMusic: onTapMusic)
+            VStack(alignment: .leading, spacing: 4) {
+                VideoLane(editor: editor, metrics: metrics, reorder: reorder)
+                ClipAudioLane(editor: editor, metrics: metrics)
+            }
+            ForEach(editor.audioTracks) { track in
+                MusicLane(editor: editor, metrics: metrics, track: track,
+                          onTapMusic: onTapMusic)
+            }
+            AddAudioRow(action: onAddMusic)
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
-               height: LaneMetrics.total, alignment: .leading)
+               height: LaneMetrics.total(audioLanes: editor.audioTracks.count),
+               alignment: .leading)
+    }
+}
+
+/// Slim lane showing which clips carry their own sound — the imported
+/// video's audio, visible as its own track like every NLE.
+struct ClipAudioLane: View {
+    @ObservedObject var editor: EditorState
+    let metrics: TimelineMetrics
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(editor.clips) { clip in
+                Group {
+                    if clip.hasAudio {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(editor.muteAudio ? LumaTheme.surfaceStrong
+                                                   : LumaTheme.teal.opacity(0.42))
+                            .overlay(alignment: .leading) {
+                                Image(systemName: editor.muteAudio ? "speaker.slash.fill" : "waveform")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .padding(.leading, 5)
+                            }
+                            .padding(.horizontal, 1)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: max(metrics.x(for: clip.timelineDuration), 10),
+                       height: LaneMetrics.clipAudio)
+            }
+        }
+        .frame(height: LaneMetrics.clipAudio, alignment: .leading)
+    }
+}
+
+/// Persistent "+ Audio" row under the audio lanes — add as many as you want.
+struct AddAudioRow: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .bold))
+                Text("Add audio")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(LumaTheme.textSecondary)
+            .frame(width: 150, height: LaneMetrics.music)
+            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .foregroundStyle(.white.opacity(0.18)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -318,19 +390,15 @@ struct TimelineClipCell: View {
 struct MusicLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
-    let onAddMusic: () -> Void
-    let onTapMusic: () -> Void
+    let track: EditorState.MusicTrack
+    let onTapMusic: (UUID) -> Void
 
     @State private var dragTranslation: CGFloat = 0
     @State private var isDraggingBar = false
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if let music = editor.music {
-                musicBar(music)
-            } else {
-                addButton
-            }
+            musicBar(track)
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
                height: LaneMetrics.music, alignment: .leading)
@@ -377,22 +445,22 @@ struct MusicLane: View {
                           lineWidth: isDraggingBar ? 2 : 1))
         .overlay {
             if barWidth > 120 {
-                MusicTrimHandles(metrics: metrics, editor: editor)
+                MusicTrimHandles(metrics: metrics, trackID: music.id, editor: editor)
             }
         }
         .opacity(isDraggingBar ? 0.92 : 1)
         .offset(x: metrics.x(for: music.timelineOffset) + dragTranslation)
-        .onTapGesture(perform: onTapMusic)
+        .onTapGesture { onTapMusic(music.id) }
         .contextMenu {
             Button {
-                editor.setMusicMuted(!music.isMuted)
+                editor.setMusicMuted(id: music.id, !music.isMuted)
             } label: {
                 Label(music.isMuted ? "Unmute" : "Mute",
                       systemImage: music.isMuted ? "speaker.wave.2" : "speaker.slash")
             }
             Button(role: .destructive) {
-                editor.removeMusic()
-            } label: { Label("Remove Music", systemImage: "trash") }
+                editor.removeAudioTrack(id: music.id)
+            } label: { Label("Remove Audio", systemImage: "trash") }
         }
         // Long-press-then-drag repositions the music on the timeline; the
         // initial hold lets the scroll view's pan fail first.
@@ -434,7 +502,7 @@ struct MusicLane: View {
            abs(snap - offset) < 0.15 {
             offset = snap
         }
-        editor.setMusicOffset(offset)
+        editor.setMusicOffset(id: music.id, offset)
     }
 
     /// Waveform bars over the trimmed sample window.
@@ -469,6 +537,7 @@ struct MusicLane: View {
     /// the tail just shortens it — standard NLE behaviour.
     private struct MusicTrimHandles: View {
         let metrics: TimelineMetrics
+        let trackID: UUID
         @ObservedObject var editor: EditorState
         var body: some View {
             // One engine commit per drag (single undo entry, single rebuild);
@@ -479,6 +548,7 @@ struct MusicLane: View {
                         DragGesture(minimumDistance: 2)
                             .onEnded { value in
                                 editor.trimMusicHead(
+                                    id: trackID,
                                     deltaSeconds: metrics.time(for: value.translation.width))
                                 LumaHaptics.shared.trimRubberband()
                             }
@@ -489,6 +559,7 @@ struct MusicLane: View {
                         DragGesture(minimumDistance: 2)
                             .onEnded { value in
                                 editor.trimMusicTail(
+                                    id: trackID,
                                     deltaSeconds: metrics.time(for: value.translation.width))
                                 LumaHaptics.shared.trimRubberband()
                             }
@@ -506,24 +577,6 @@ struct MusicLane: View {
         }
     }
 
-    private var addButton: some View {
-        Button(action: onAddMusic) {
-            HStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .bold))
-                Text("Add music")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(LumaTheme.textSecondary)
-            .frame(width: 170, height: LaneMetrics.music)
-            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                .foregroundStyle(.white.opacity(0.18)))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.lumaPress)
-    }
 }
 
 // MARK: - Scroller (UIKit)

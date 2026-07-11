@@ -53,6 +53,7 @@ final class EditorState: ObservableObject {
         var trimStart: Double
         var trimEnd: Double
         var speed: Double = 1.0
+        var hasAudio: Bool = false
         var thumbnail: CGImage?
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
@@ -86,7 +87,7 @@ final class EditorState: ObservableObject {
         let videoComposition: AVMutableVideoComposition
         let audioMix: AVAudioMix?
         let clipAudioTrack: AVMutableCompositionTrack?
-        let musicAudioTrack: AVMutableCompositionTrack?
+        let musicAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)]
         let duration: Double
     }
 
@@ -94,7 +95,7 @@ final class EditorState: ObservableObject {
         var clips: [Clip]
         var format: EditorFormat
         var zoom: Double
-        var music: MusicTrack?
+        var audioTracks: [MusicTrack]
     }
 
     /// Per-clip data the frame handler needs, precomputed on rebuild.
@@ -107,7 +108,7 @@ final class EditorState: ObservableObject {
     // Timeline
     @Published private(set) var clips: [Clip] = []
     @Published var selectedClipID: UUID?
-    @Published private(set) var music: MusicTrack?
+    @Published private(set) var audioTracks: [MusicTrack] = []
 
     // Canvas
     @Published var format: EditorFormat = .widescreen
@@ -144,7 +145,7 @@ final class EditorState: ObservableObject {
     /// Composition tracks from the last preview rebuild, kept so
     /// `applyAudioSettings()` can regenerate the mix without a rebuild.
     /// (`AVAudioMixInputParameters(track:)` only reads the trackID.)
-    private var lastBuiltTracks: (clip: AVMutableCompositionTrack?, music: AVMutableCompositionTrack?) = (nil, nil)
+    private var lastBuiltTracks: (clip: AVMutableCompositionTrack?, music: [(id: UUID, track: AVMutableCompositionTrack)]) = (nil, [])
 
     init(lookState: LookState, store: PersistenceStore) {
         self.lookState = lookState
@@ -193,7 +194,8 @@ final class EditorState: ObservableObject {
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
             duration: clips.reduce(0) { $0 + $1.timelineDuration },
-            music: music.map {
+            music: nil,
+            audioTracks: audioTracks.map {
                 StoredMusic(id: $0.id, fileName: $0.url.lastPathComponent, title: $0.title,
                             assetDuration: $0.assetDuration,
                             trimStart: $0.trimStart, trimEnd: $0.trimEnd,
@@ -224,7 +226,8 @@ final class EditorState: ObservableObject {
                         trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed)
         }
         selectedClipID = clips.last?.id
-        music = project.music.flatMap { stored in
+        let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
+        audioTracks = storedAudio.compactMap { stored in
             let url = store.audioURL(for: stored)
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             return MusicTrack(id: stored.id, url: url, title: stored.title,
@@ -234,13 +237,16 @@ final class EditorState: ObservableObject {
                               volume: stored.volume, isMuted: stored.isMuted)
         }
         rebuild(keepPosition: false)
-        refreshMusicWaveform()
-        // Restore thumbnails asynchronously.
+        refreshAllWaveforms()
+        // Restore thumbnails + audio flags asynchronously.
         for clip in clips {
             Task { [id = clip.id, url = clip.url, at = clip.trimStart] in
-                let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: at + 0.02)
+                let asset = AVURLAsset(url: url)
+                let hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
+                let thumb = await Self.thumbnail(for: asset, at: at + 0.02)
                 if let i = self.clips.firstIndex(where: { $0.id == id }) {
                     self.clips[i].thumbnail = thumb
+                    self.clips[i].hasAudio = hasAudio
                 }
             }
             refreshFilmstrip(clipID: clip.id)
@@ -254,7 +260,7 @@ final class EditorState: ObservableObject {
         projectTitle = "New Project"
         clips = []
         selectedClipID = nil
-        music = nil
+        audioTracks = []
         undoStack.removeAll()
         redoStack.removeAll()
         updateHistoryFlags()
@@ -274,6 +280,7 @@ final class EditorState: ObservableObject {
         pushUndoSnapshot()
         var clip = Clip(id: UUID(), url: durableURL, assetDuration: duration,
                         trimStart: 0, trimEnd: duration)
+        clip.hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
         clip.thumbnail = await Self.thumbnail(for: asset, at: 0.03)
         clips.append(clip)
         selectedClipID = clip.id
@@ -370,7 +377,7 @@ final class EditorState: ObservableObject {
         first.trimEnd = splitPoint
         let second = Clip(id: UUID(), url: clip.url, assetDuration: clip.assetDuration,
                           trimStart: splitPoint, trimEnd: clip.trimEnd,
-                          speed: clip.speed, thumbnail: clip.thumbnail)
+                          speed: clip.speed, hasAudio: clip.hasAudio, thumbnail: clip.thumbnail)
         clips[index] = first
         clips.insert(second, at: index + 1)
         selectedClipID = second.id
@@ -423,7 +430,7 @@ final class EditorState: ObservableObject {
     func applyAudioSettings() {
         guard let item = player?.currentItem else { return }
         item.audioMix = makeAudioMix(clipTrack: lastBuiltTracks.clip,
-                                     musicTrack: lastBuiltTracks.music,
+                                     musicTracks: lastBuiltTracks.music,
                                      duration: totalDuration)
     }
 
@@ -436,53 +443,60 @@ final class EditorState: ObservableObject {
     }
 
     /// Attaches an already-imported audio file as the project's music track.
-    func setMusic(importedURL: URL, title: String) async {
+    /// Adds ANOTHER audio track (music, voiceover, sound) — CapCut-style
+    /// stacking. New tracks start at the playhead so layering feels direct.
+    func addAudioTrack(importedURL: URL, title: String) async {
         let asset = AVURLAsset(url: importedURL)
         guard let duration = try? await asset.load(.duration).seconds,
               duration.isFinite, duration > 0.05 else { return }
         pushUndoSnapshot()
-        music = MusicTrack(id: UUID(), url: importedURL, title: title,
-                           assetDuration: duration,
-                           trimStart: 0, trimEnd: duration, timelineOffset: 0)
+        let offset = audioTracks.isEmpty ? 0 : min(currentTime, max(0, totalDuration - 0.2))
+        audioTracks.append(MusicTrack(id: UUID(), url: importedURL, title: title,
+                                      assetDuration: duration,
+                                      trimStart: 0, trimEnd: duration, timelineOffset: offset))
         rebuild()
-        refreshMusicWaveform()
+        refreshAllWaveforms()
     }
 
     /// Combined head-trim used by the lane's leading handle: content trims
     /// AND the bar's timeline position advances, so the tail stays anchored
     /// (standard NLE behaviour). One undo entry.
-    func trimMusicHead(deltaSeconds: Double) {
-        guard let music else { return }
-        let newStart = min(max(0, music.trimStart + deltaSeconds), music.trimEnd - 0.2)
-        let applied = newStart - music.trimStart
+    func trimMusicHead(id: UUID, deltaSeconds: Double) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        let track = audioTracks[i]
+        let newStart = min(max(0, track.trimStart + deltaSeconds), track.trimEnd - 0.2)
+        let applied = newStart - track.trimStart
         guard abs(applied) > 0.01 else { return }
         pushUndoSnapshot()
-        self.music?.trimStart = newStart
-        self.music?.timelineOffset = min(max(0, music.timelineOffset + applied),
-                                         max(0, totalDuration - 0.2))
+        audioTracks[i].trimStart = newStart
+        audioTracks[i].timelineOffset = min(max(0, track.timelineOffset + applied),
+                                            max(0, totalDuration - 0.2))
         rebuild()
     }
 
-    func trimMusicTail(deltaSeconds: Double) {
-        guard let music else { return }
-        let newEnd = max(min(music.assetDuration, music.trimEnd + deltaSeconds),
-                         music.trimStart + 0.2)
-        guard abs(newEnd - music.trimEnd) > 0.01 else { return }
+    func trimMusicTail(id: UUID, deltaSeconds: Double) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        let track = audioTracks[i]
+        let newEnd = max(min(track.assetDuration, track.trimEnd + deltaSeconds),
+                         track.trimStart + 0.2)
+        guard abs(newEnd - track.trimEnd) > 0.01 else { return }
         pushUndoSnapshot()
-        self.music?.trimEnd = newEnd
+        audioTracks[i].trimEnd = newEnd
         rebuild()
     }
 
-    /// Extracts RMS buckets from the audio file for the lane waveform.
-    func refreshMusicWaveform() {
-        guard let music, music.waveform.isEmpty else { return }
-        let url = music.url
-        let id = music.id
-        Task.detached(priority: .utility) {
-            let samples = Self.waveformSamples(url: url)
-            await MainActor.run { [weak self] in
-                guard let self, self.music?.id == id else { return }
-                self.music?.waveform = samples
+    /// Extracts RMS buckets from the audio files for the lane waveforms.
+    func refreshAllWaveforms() {
+        for track in audioTracks where track.waveform.isEmpty {
+            let url = track.url
+            let id = track.id
+            Task.detached(priority: .utility) {
+                let samples = Self.waveformSamples(url: url)
+                await MainActor.run { [weak self] in
+                    guard let self,
+                          let i = self.audioTracks.firstIndex(where: { $0.id == id }) else { return }
+                    self.audioTracks[i].waveform = samples
+                }
             }
         }
     }
@@ -534,66 +548,56 @@ final class EditorState: ObservableObject {
         return rms.map { min(1, $0 / peak) }
     }
 
-    func removeMusic() {
-        guard music != nil else { return }
+    func removeAudioTrack(id: UUID) {
+        guard audioTracks.contains(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
-        music = nil
+        audioTracks.removeAll { $0.id == id }
         rebuild()
     }
 
     /// Volume is a mix-only change — no rebuild, no undo entry (live slider).
-    func setMusicVolume(_ volume: Double) {
-        guard music != nil else { return }
-        music?.volume = min(max(0, volume), 100)
+    func setMusicVolume(id: UUID, _ volume: Double) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        audioTracks[i].volume = min(max(0, volume), 100)
         applyAudioSettings()
         scheduleAutosave()
     }
 
     /// Mute keeps the track in the composition and zeroes the mix volume,
     /// so toggling never flashes a rebuild.
-    func setMusicMuted(_ muted: Bool) {
-        guard music != nil else { return }
-        music?.isMuted = muted
+    func setMusicMuted(id: UUID, _ muted: Bool) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        audioTracks[i].isMuted = muted
         applyAudioSettings()
         scheduleAutosave()
     }
 
-    func setMusicOffset(_ offset: Double) {
-        guard let music else { return }
+    func setMusicOffset(id: UUID, _ offset: Double) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
         let clamped = min(max(0, offset), max(0, totalDuration - 0.2))
-        guard abs(clamped - music.timelineOffset) > 0.01 else { return }
+        guard abs(clamped - audioTracks[i].timelineOffset) > 0.01 else { return }
         pushUndoSnapshot()
-        self.music?.timelineOffset = clamped
-        rebuild()
-    }
-
-    func setMusicTrim(start: Double, end: Double) {
-        guard let music else { return }
-        let s = max(0, min(start, music.assetDuration - 0.2))
-        let e = min(music.assetDuration, max(end, s + 0.2))
-        pushUndoSnapshot()
-        self.music?.trimStart = s
-        self.music?.trimEnd = e
+        audioTracks[i].timelineOffset = clamped
         rebuild()
     }
 
     // MARK: - Undo / redo
 
     private func pushUndoSnapshot() {
-        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, music: music))
+        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
         redoStack.removeAll()
         updateHistoryFlags()
     }
 
     func undo() {
         guard let snapshot = undoStack.popLast() else { return }
-        redoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, music: music))
+        redoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
         restore(snapshot)
     }
 
     func redo() {
         guard let snapshot = redoStack.popLast() else { return }
-        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, music: music))
+        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
         restore(snapshot)
     }
 
@@ -601,7 +605,7 @@ final class EditorState: ObservableObject {
         clips = snapshot.clips
         format = snapshot.format
         zoom = snapshot.zoom
-        music = snapshot.music
+        audioTracks = snapshot.audioTracks
         if let id = selectedClipID, !clips.contains(where: { $0.id == id }) {
             selectedClipID = clips.last?.id
         }
@@ -675,7 +679,7 @@ final class EditorState: ObservableObject {
             totalDuration = 0
             currentTime = 0
             isPlaying = false
-            lastBuiltTracks = (nil, nil)
+            lastBuiltTracks = (nil, [])
             return
         }
 
@@ -683,7 +687,7 @@ final class EditorState: ObservableObject {
         item.videoComposition = built.videoComposition
         item.audioMix = built.audioMix
         item.audioTimePitchAlgorithm = .spectral
-        lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTrack)
+        lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks)
 
         let player = self.player ?? AVPlayer()
         player.replaceCurrentItem(with: item)
@@ -759,15 +763,17 @@ final class EditorState: ObservableObject {
 
         guard !metas.isEmpty else { throw VideoExportError.noVideoSelected }
 
-        // Music rides on its own audio track, inserted after the clip loop so
-        // clip speed changes (scaleTimeRange) can never touch it. Track stays
-        // lazy: only added when real audio actually inserts — an empty audio
-        // track makes AVAssetExportSession fail with "Operation Stopped".
-        var musicTrack: AVMutableCompositionTrack?
-        if let music, music.timelineDuration > 0.05, music.timelineOffset < cursor.seconds - 0.01 {
+        // Every audio track rides on its own composition track, inserted
+        // after the clip loop so clip speed changes (scaleTimeRange) can
+        // never touch them. Tracks stay lazy: only added when real audio
+        // actually inserts — an empty audio track makes AVAssetExportSession
+        // fail with "Operation Stopped".
+        var musicTracks: [(id: UUID, track: AVMutableCompositionTrack)] = []
+        for music in audioTracks
+        where music.timelineDuration > 0.05 && music.timelineOffset < cursor.seconds - 0.01 {
             let musicAsset = AVURLAsset(url: music.url)
             if let sourceAudio = try? await musicAsset.loadTracks(withMediaType: .audio).first {
-                // v1 policy: music is hard-clipped at the video's end.
+                // v1 policy: audio is hard-clipped at the video's end.
                 let playable = min(music.timelineDuration, cursor.seconds - music.timelineOffset)
                 if playable > 0.05,
                    let track = composition.addMutableTrack(withMediaType: .audio,
@@ -779,7 +785,7 @@ final class EditorState: ObservableObject {
                     do {
                         try track.insertTimeRange(range, of: sourceAudio,
                                                   at: CMTime(seconds: music.timelineOffset, preferredTimescale: 600))
-                        musicTrack = track
+                        musicTracks.append((music.id, track))
                     } catch {
                         composition.removeTrack(track)   // never leave an empty track behind
                     }
@@ -827,10 +833,10 @@ final class EditorState: ObservableObject {
         return BuiltTimeline(composition: composition,
                              videoComposition: videoComposition,
                              audioMix: makeAudioMix(clipTrack: audioTrack,
-                                                    musicTrack: musicTrack,
+                                                    musicTracks: musicTracks,
                                                     duration: duration),
                              clipAudioTrack: audioTrack,
-                             musicAudioTrack: musicTrack,
+                             musicAudioTracks: musicTracks,
                              duration: duration)
     }
 
@@ -838,7 +844,7 @@ final class EditorState: ObservableObject {
     /// independent volume. Track references keyed by ID, so a mix built from
     /// the last rebuild's tracks stays valid for the live player item.
     private func makeAudioMix(clipTrack: AVMutableCompositionTrack?,
-                              musicTrack: AVMutableCompositionTrack?,
+                              musicTracks: [(id: UUID, track: AVMutableCompositionTrack)],
                               duration: Double) -> AVAudioMix? {
         var inputs: [AVMutableAudioMixInputParameters] = []
 
@@ -860,8 +866,9 @@ final class EditorState: ObservableObject {
             inputs.append(parameters)
         }
 
-        if let musicTrack, let music {
-            let parameters = AVMutableAudioMixInputParameters(track: musicTrack)
+        for entry in musicTracks {
+            guard let music = audioTracks.first(where: { $0.id == entry.id }) else { continue }
+            let parameters = AVMutableAudioMixInputParameters(track: entry.track)
             parameters.setVolume(Float(music.isMuted ? 0 : music.volume / 100.0), at: .zero)
             inputs.append(parameters)
         }

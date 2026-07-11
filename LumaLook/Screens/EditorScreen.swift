@@ -16,6 +16,7 @@ struct EditorTimelineView: View {
     @State private var trimEnd: Double = 1
     @State private var showLooksStrip = false
     @State private var showMusicPanel = false
+    @State private var selectedAudioID: UUID?
     @State private var showMusicImporter = false
     @State private var isExporting = false
     @State private var exportError: String?
@@ -33,6 +34,7 @@ struct EditorTimelineView: View {
                 trimEnd: $trimEnd,
                 showLooksStrip: $showLooksStrip,
                 showMusicPanel: $showMusicPanel,
+                selectedAudioID: $selectedAudioID,
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
@@ -93,12 +95,13 @@ struct EditorTimelineView: View {
                FileManager.default.fileExists(atPath: path) {
                 await editor.addClip(from: URL(fileURLWithPath: path))
             }
-            if editor.music == nil, let path = env["LUMA_SEED_MUSIC"],
-               FileManager.default.fileExists(atPath: path) {
-                let url = URL(fileURLWithPath: path)
-                if let imported = editor.importMusicFile(from: url) {
-                    await editor.setMusic(importedURL: imported,
-                                          title: url.deletingPathExtension().lastPathComponent)
+            for key in ["LUMA_SEED_MUSIC", "LUMA_SEED_MUSIC2"] {
+                if let path = env[key], FileManager.default.fileExists(atPath: path) {
+                    let url = URL(fileURLWithPath: path)
+                    if let imported = editor.importMusicFile(from: url) {
+                        await editor.addAudioTrack(importedURL: imported,
+                                                   title: url.deletingPathExtension().lastPathComponent)
+                    }
                 }
             }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
@@ -128,7 +131,7 @@ struct EditorTimelineView: View {
         }
         exportError = nil
         let title = url.deletingPathExtension().lastPathComponent
-        Task { await editor.setMusic(importedURL: imported, title: title) }
+        Task { await editor.addAudioTrack(importedURL: imported, title: title) }
     }
 
     private func startExport() {
@@ -170,6 +173,7 @@ private struct EditorContent: View {
     @Binding var trimEnd: Double
     @Binding var showLooksStrip: Bool
     @Binding var showMusicPanel: Bool
+    @Binding var selectedAudioID: UUID?
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
@@ -213,7 +217,7 @@ private struct EditorContent: View {
 
             dock
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.music == nil)
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
         // One physical thump whenever the timeline structure changes
         // (add, split, delete).
@@ -232,7 +236,8 @@ private struct EditorContent: View {
             }
         }
         .lumaToolSheet(isPresented: $showMusicPanel, style: .panel) {
-            if let music = editor.music {
+            if let music = editor.audioTracks.first(where: { $0.id == selectedAudioID })
+                        ?? editor.audioTracks.first {
                 musicPanel(music: music)
                     .padding(.horizontal, 22)
                     .padding(.top, 18)
@@ -502,7 +507,10 @@ private struct EditorContent: View {
     private var timeline: some View {
         TimelineV2View(editor: editor,
                        onAddMusic: onAddMusic,
-                       onTapMusic: { showMusicPanel.toggle() })
+                       onTapMusic: { id in
+                           selectedAudioID = id
+                           showMusicPanel = true
+                       })
     }
 
     // MARK: Music panel
@@ -534,12 +542,12 @@ private struct EditorContent: View {
                 .buttonStyle(.lumaPress)
             }
             InlineSlider(title: "Volume", value: Binding(
-                get: { editor.music?.volume ?? 100 },
-                set: { editor.setMusicVolume($0) }
+                get: { editor.audioTracks.first(where: { $0.id == music.id })?.volume ?? 100 },
+                set: { editor.setMusicVolume(id: music.id, $0) }
             )) { "\(Int($0))%" }
             HStack(spacing: 12) {
                 Button {
-                    editor.setMusicMuted(!music.isMuted)
+                    editor.setMusicMuted(id: music.id, !music.isMuted)
                 } label: {
                     Label(music.isMuted ? "Unmute" : "Mute",
                           systemImage: music.isMuted ? "speaker.slash.fill" : "speaker.wave.2")
@@ -553,7 +561,7 @@ private struct EditorContent: View {
                 }
                 .buttonStyle(.lumaPress)
                 Button {
-                    editor.removeMusic()
+                    editor.removeAudioTrack(id: music.id)
                     withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
                 } label: {
                     Label("Remove", systemImage: "trash")
