@@ -49,6 +49,8 @@ enum EditorFormat: String, CaseIterable {
 /// the custom compositor (T1).
 enum TransitionStyle: String, Codable, CaseIterable {
     case none
+    case dissolve
+    case wipe
     case fadeBlack
     case fadeWhite
     case flash
@@ -56,6 +58,8 @@ enum TransitionStyle: String, Codable, CaseIterable {
     var label: String {
         switch self {
         case .none: return "Cut"
+        case .dissolve: return "Dissolve"
+        case .wipe: return "Wipe"
         case .fadeBlack: return "Fade Black"
         case .fadeWhite: return "Fade White"
         case .flash: return "Flash"
@@ -65,6 +69,8 @@ enum TransitionStyle: String, Codable, CaseIterable {
     var icon: String {
         switch self {
         case .none: return "squares.leading.rectangle"
+        case .dissolve: return "square.on.square.intersection.dashed"
+        case .wipe: return "arrow.forward.square"
         case .fadeBlack: return "circle.lefthalf.filled"
         case .fadeWhite: return "circle.righthalf.filled"
         case .flash: return "bolt.fill"
@@ -78,6 +84,9 @@ enum TransitionStyle: String, Codable, CaseIterable {
         default: return 0.6
         }
     }
+
+    /// True cross-transitions blend TWO frames (A/B roll); veils only tint one.
+    var isCrossTransition: Bool { self == .dissolve || self == .wipe }
 }
 
 // MARK: - Editor state & composition engine
@@ -1127,6 +1136,48 @@ final class EditorState: ObservableObject {
         return blankAnchor
     }
 
+    /// Inserts `assetLength` seconds of a clip's video into the aux A/B-roll
+    /// track at composition time `at`, occupying `timelineLength` seconds
+    /// (speed-scaled). Tries candidate asset starts in order; the first that
+    /// fits inside the asset wins.
+    private static func insertAux(track: AVMutableCompositionTrack,
+                                  clip: Clip,
+                                  candidateStarts: [Double],
+                                  assetLength: Double,
+                                  timelineLength: Double,
+                                  at: CMTime,
+                                  cursor: CMTime)
+        async -> (inserted: Bool, transform: CGAffineTransform, cursor: CMTime) {
+        let asset = AVURLAsset(url: clip.url)
+        guard let source = try? await asset.loadTracks(withMediaType: .video).first,
+              let assetDuration = try? await asset.load(.duration).seconds else {
+            return (false, .identity, cursor)
+        }
+        let transform = (try? await source.load(.preferredTransform)) ?? .identity
+        guard let start = candidateStarts
+            .map({ min(max(0, $0), max(0, assetDuration - assetLength)) })
+            .first(where: { $0 + assetLength <= assetDuration + 0.001 }),
+              assetLength > 0.02, at >= cursor else {
+            return (false, transform, cursor)
+        }
+        if at > cursor {
+            track.insertEmptyTimeRange(CMTimeRange(start: cursor, end: at))
+        }
+        let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                duration: CMTime(seconds: assetLength, preferredTimescale: 600))
+        do {
+            try track.insertTimeRange(range, of: source, at: at)
+        } catch {
+            return (false, transform, cursor)
+        }
+        let target = CMTime(seconds: timelineLength, preferredTimescale: 600)
+        if abs(assetLength - timelineLength) > 0.001 {
+            track.scaleTimeRange(CMTimeRange(start: at, duration: range.duration),
+                                 toDuration: target)
+        }
+        return (true, transform, at + target)
+    }
+
     /// Builds the composition + video composition + audio mix for preview or export.
     /// `renderScale` multiplies the format's canvas for high-res exports —
     /// the #93 matrix caught 4K exports silently capped at the preview's
@@ -1334,13 +1385,78 @@ final class EditorState: ObservableObject {
         syncOverlayLayout()
 
         // Transition boundaries: cut time + style, sampled by the compositor.
+        // Cross-transitions (dissolve/wipe) get REAL second frames via an aux
+        // A/B-roll track carrying pre/post-roll material around each cut —
+        // cut times never move, so no timeline math ripples.
         var spans: [TransitionSpanSpec] = []
+        var auxTrack: AVMutableCompositionTrack?
+        var auxCursor = CMTime.zero
         for (index, clip) in clips.enumerated() where index < clips.count - 1 {
             guard clip.transitionAfter != .none, index < metas.count else { continue }
-            spans.append(TransitionSpanSpec(center: metas[index].end,
-                                            style: clip.transitionAfter,
-                                            half: (clip.transitionDuration
-                                                   ?? clip.transitionAfter.duration) / 2))
+            let next = clips[index + 1]
+            let cut = metas[index].end
+            var half = (clip.transitionDuration ?? clip.transitionAfter.duration) / 2
+            // A transition can't outlast either neighbour.
+            half = min(half, clip.timelineDuration / 2, next.timelineDuration / 2)
+            guard half > 0.03 else { continue }
+            var span = TransitionSpanSpec(center: cut, style: clip.transitionAfter, half: half)
+
+            if clip.transitionAfter.isCrossTransition {
+                // Photo sides blend from the still cache — no track material.
+                if next.isImage { span.headImageURL = next.url }
+                if clip.isImage { span.tailImageURL = clip.url }
+                span.headLookState = next.grade.map(makeLookState)
+                span.tailLookState = clip.grade.map(makeLookState)
+
+                if !next.isImage || !clip.isImage {
+                    if auxTrack == nil {
+                        auxTrack = composition.addMutableTrack(
+                            withMediaType: .video,
+                            preferredTrackID: kCMPersistentTrackID_Invalid)
+                    }
+                }
+                if let track = auxTrack {
+                    // First half [cut−half, cut): the INCOMING clip's frames.
+                    // Prefer untrimmed pre-roll so motion continues through
+                    // the blend; fall back to the clip's own head material.
+                    if !next.isImage {
+                        let result = await Self.insertAux(
+                            track: track, clip: next,
+                            candidateStarts: [next.trimStart - half * next.speed,
+                                              next.trimStart],
+                            assetLength: half * next.speed,
+                            timelineLength: half,
+                            at: CMTime(seconds: cut - half, preferredTimescale: 600),
+                            cursor: auxCursor)
+                        if result.inserted {
+                            span.headTransform = result.transform
+                            auxCursor = result.cursor
+                        }
+                    }
+                    // Second half [cut, cut+half): the OUTGOING clip's frames.
+                    if !clip.isImage {
+                        let result = await Self.insertAux(
+                            track: track, clip: clip,
+                            candidateStarts: [clip.trimEnd,
+                                              clip.trimEnd - half * clip.speed],
+                            assetLength: half * clip.speed,
+                            timelineLength: half,
+                            at: CMTime(seconds: cut, preferredTimescale: 600),
+                            cursor: auxCursor)
+                        if result.inserted {
+                            span.tailTransform = result.transform
+                            auxCursor = result.cursor
+                        }
+                    }
+                    span.auxTrackID = track.trackID
+                }
+            }
+            spans.append(span)
+        }
+        // An aux track with no real media would sink the export session.
+        if let track = auxTrack, track.segments.allSatisfy({ $0.isEmpty }) {
+            composition.removeTrack(track)
+            for i in spans.indices { spans[i].auxTrackID = kCMPersistentTrackID_Invalid }
         }
 
         // The custom compositor does orientation, aspect-fill crop into the
@@ -1397,6 +1513,12 @@ final class EditorState: ObservableObject {
             cuts.insert(min(max(0, spec.start), total))
             cuts.insert(min(max(0, spec.end), total))
         }
+        // Cross-transition windows need their own segments: the aux track is
+        // only required (and only exists) inside them.
+        for span in transitionSpans where span.style.isCrossTransition {
+            cuts.insert(min(max(0, span.center - span.half), total))
+            cuts.insert(min(max(0, span.center + span.half), total))
+        }
         // Dedupe within a frame's tolerance, then walk consecutive pairs.
         var times = cuts.sorted().reduce(into: [Double]()) { result, t in
             if result.last.map({ t - $0 > 0.001 }) ?? true { result.append(t) }
@@ -1426,6 +1548,12 @@ final class EditorState: ObservableObject {
             where spec.trackID != kCMPersistentTrackID_Invalid
                 && mid >= spec.start - 0.001 && mid < spec.end + 0.001 {
                 trackIDs.append(NSNumber(value: spec.trackID))
+            }
+            for span in transitionSpans
+            where span.auxTrackID != kCMPersistentTrackID_Invalid
+                && mid >= span.center - span.half - 0.001
+                && mid < span.center + span.half + 0.001 {
+                trackIDs.append(NSNumber(value: span.auxTrackID))
             }
 
             instructions.append(LumaCompositionInstruction(

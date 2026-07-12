@@ -162,6 +162,11 @@ struct EditorTimelineView: View {
                FileManager.default.fileExists(atPath: path) {
                 await editor.addClip(from: URL(fileURLWithPath: path))
             }
+            // Second clip for cross-transition cells (different content —
+            // a dissolve between identical frames is invisible by definition).
+            if let path = env["LUMA_SEED_CLIP2"], FileManager.default.fileExists(atPath: path) {
+                await editor.addClip(from: URL(fileURLWithPath: path))
+            }
             // Photo clip on the MAIN track (T7).
             if let path = env["LUMA_SEED_PHOTO"], FileManager.default.fileExists(atPath: path) {
                 await editor.addPhotoClip(from: URL(fileURLWithPath: path))
@@ -203,6 +208,26 @@ struct EditorTimelineView: View {
                     editor.setClipGrade(id: first.id,
                                         ClipGrade(baseLookName: lookName, lutID: nil,
                                                   settings: LookSettings()))
+                }
+            }
+            // True-transition cells: split the seeded clip at its midpoint and
+            // set the given style at the cut, e.g. LUMA_SEED_TRANSITION=dissolve.
+            if let raw = env["LUMA_SEED_TRANSITION"],
+               let style = TransitionStyle(rawValue: raw), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                // Two seeded clips: style the cut between them. One clip:
+                // split it at the midpoint first.
+                if editor.clips.count < 2 {
+                    editor.seek(to: editor.totalDuration / 2)
+                    editor.splitAtPlayhead()
+                    for _ in 0..<40 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+                if let first = editor.clips.first {
+                    editor.setTransition(afterClipID: first.id, style: style)
                 }
             }
             // Parity-matrix cells (#93): drive format + export spec headlessly,

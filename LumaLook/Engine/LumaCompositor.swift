@@ -41,11 +41,26 @@ struct FrameMeta {
     }
 }
 
-/// Phase-A transition boundaries: cut time + style, sampled per frame.
+/// Transition boundaries: cut time + style, sampled per frame. Veil styles
+/// need only the timing; cross-transitions (dissolve/wipe) also carry where
+/// the OTHER clip's frames live during each half of the span — an aux track
+/// with pre/post-roll material, or a still when that side is a photo clip.
 struct TransitionSpanSpec {
     let center: Double
     let style: TransitionStyle
     let half: Double
+    /// Aux track carrying the incoming clip's pre-roll (first half) and the
+    /// outgoing clip's post-roll (second half). Invalid for veil styles.
+    var auxTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
+    /// Orientation for the aux frames in each half (different source assets).
+    var headTransform: CGAffineTransform = .identity   // incoming clip (first half)
+    var tailTransform: CGAffineTransform = .identity   // outgoing clip (second half)
+    /// Stills when a photo clip sits on that side of the cut.
+    var headImageURL: URL? = nil
+    var tailImageURL: URL? = nil
+    /// Per-clip grades for the aux side (nil = global).
+    var headLookState: LookState? = nil
+    var tailLookState: LookState? = nil
 }
 
 /// Live overlay placement values (size/position/opacity). Reference type for
@@ -322,17 +337,53 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             graded = overlay.composited(over: graded).cropped(to: renderRect)
         }
 
-        // --- Phase-A transitions: veil toward black/white around the cut.
-        // Triangle envelope — fully veiled exactly at the cut. Applied last
-        // so a fade takes the PIP with it.
+        // --- Transitions, applied last so they take the PIP with them ------
         if let span = instruction.transitionSpans.first(where: { abs(seconds - $0.center) < $0.half }) {
-            let strength = 1 - abs(seconds - span.center) / span.half
-            let veilColor: CIColor = span.style == .fadeBlack
-                ? CIColor(red: 0, green: 0, blue: 0, alpha: strength)
-                : CIColor(red: 1, green: 1, blue: 1,
-                          alpha: span.style == .flash ? strength * 0.9 : strength)
-            let veil = CIImage(color: veilColor).cropped(to: renderRect)
-            graded = veil.composited(over: graded)
+            if span.style.isCrossTransition {
+                // True dissolve/wipe: blend the main frame with the OTHER
+                // clip's frame (aux A/B-roll track, or a photo clip's still).
+                let firstHalf = seconds < span.center
+                var aux: CIImage?
+                if let url = firstHalf ? span.headImageURL : span.tailImageURL,
+                   let still = stillImage(at: url) {
+                    aux = aspectFill(still, into: renderSize, zoom: instruction.zoomFactor)
+                } else if span.auxTrackID != kCMPersistentTrackID_Invalid,
+                          let buffer = request.sourceFrame(byTrackID: span.auxTrackID) {
+                    var frame = CIImage(cvPixelBuffer: buffer)
+                    let transform = firstHalf ? span.headTransform : span.tailTransform
+                    if !transform.isIdentity {
+                        frame = frame.transformed(by: transform)
+                        frame = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX,
+                                                                        y: -frame.extent.minY))
+                    }
+                    aux = aspectFill(frame, into: renderSize, zoom: instruction.zoomFactor)
+                }
+                if var auxImage = aux {
+                    // The aux side wears ITS clip's grade (per-clip looks).
+                    let auxState = (firstHalf ? span.headLookState : span.tailLookState)
+                        ?? instruction.lookState
+                    auxImage = pipeline.apply(state: auxState,
+                                              to: auxImage.clampedToExtent(),
+                                              includeSplit: false)
+                        .cropped(to: renderRect)
+                    let progress = CGFloat((seconds - (span.center - span.half)) / (span.half * 2))
+                    let incoming = firstHalf ? auxImage : graded
+                    let outgoing = firstHalf ? graded : auxImage
+                    graded = Self.crossBlend(outgoing: outgoing, incoming: incoming,
+                                             progress: progress, style: span.style,
+                                             rect: renderRect)
+                }
+                // Missing aux (failed insert): keep the base — a hard cut.
+            } else {
+                // Phase-A veils: triangle envelope, fully veiled at the cut.
+                let strength = 1 - abs(seconds - span.center) / span.half
+                let veilColor: CIColor = span.style == .fadeBlack
+                    ? CIColor(red: 0, green: 0, blue: 0, alpha: strength)
+                    : CIColor(red: 1, green: 1, blue: 1,
+                              alpha: span.style == .flash ? strength * 0.9 : strength)
+                let veil = CIImage(color: veilColor).cropped(to: renderRect)
+                graded = veil.composited(over: graded)
+            }
         }
 
         // --- Render into the pool buffer and hand it back -------------------
@@ -344,6 +395,36 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         pipeline.context.render(graded, to: outputBuffer, bounds: renderRect,
                                 colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         request.finish(withComposedVideoFrame: outputBuffer)
+    }
+
+    /// Cross-transition blends. Dissolve: linear opacity mix. Wipe: a
+    /// soft-edged left-to-right reveal of the incoming frame.
+    private static func crossBlend(outgoing: CIImage, incoming: CIImage,
+                                   progress: CGFloat, style: TransitionStyle,
+                                   rect: CGRect) -> CIImage {
+        let p = min(max(progress, 0), 1)
+        switch style {
+        case .wipe:
+            let feather = rect.width * 0.05
+            let edge = (rect.width + feather) * p - feather / 2
+            let gradient = CIFilter.smoothLinearGradient()
+            gradient.point0 = CGPoint(x: edge + feather / 2, y: 0)
+            gradient.point1 = CGPoint(x: edge - feather / 2, y: 0)
+            gradient.color0 = CIColor.black
+            gradient.color1 = CIColor.white
+            let mask = (gradient.outputImage ?? CIImage(color: .white)).cropped(to: rect)
+            let blend = CIFilter.blendWithMask()
+            blend.inputImage = incoming
+            blend.backgroundImage = outgoing
+            blend.maskImage = mask
+            return (blend.outputImage ?? incoming).cropped(to: rect)
+        default:
+            let dissolve = CIFilter.dissolveTransition()
+            dissolve.inputImage = outgoing
+            dissolve.targetImage = incoming
+            dissolve.time = Float(p)
+            return (dissolve.outputImage ?? incoming).cropped(to: rect)
+        }
     }
 
     /// Aspect-fill into the render canvas honouring zoom — verbatim port of
