@@ -84,6 +84,11 @@ struct ApplyLookView: View {
     @State private var showLogExplainer = false
     @State private var stashedLookIntensity: Double?
     @State private var showConversionPicker = false
+    @State private var compareMode = false
+    @State private var wipeFraction: Double = 0.5
+    @State private var showExportSheet = false
+    @State private var isExporting = false
+    @State private var compareDuration: Double = 0
 
     private var filteredLooks: [LookPreset] {
         category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
@@ -148,9 +153,14 @@ struct ApplyLookView: View {
         // floats in a pinned bottom glass drawer. No page scroll.
         VStack(spacing: 0) {
             mediaSurface
-            drawer
+            if compareMode {
+                compareBar
+            } else {
+                drawer
+            }
         }
         .background(LumaTheme.background.ignoresSafeArea())
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: compareMode)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: thumbStamp) {
@@ -159,6 +169,19 @@ struct ApplyLookView: View {
                           luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
+        .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
+            ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : compareDuration,
+                            gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
+                            lookState: app.lookState) { spec in
+                showExportSheet = false
+                exportNow(spec: spec)
+            }
+        }
+        .overlay {
+            if isExporting {
+                ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
+            }
+        }
         .lumaToolSheet(isPresented: $showConversionPicker, style: .panel) {
             conversionPicker
                 .padding(.top, 18)
@@ -218,6 +241,11 @@ struct ApplyLookView: View {
                 }
             }
             .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
+            .overlay {
+                if compareMode {
+                    compareOverlay
+                }
+            }
             .overlay(alignment: .top) { topBar }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -328,7 +356,7 @@ struct ApplyLookView: View {
             .padding(.horizontal, 14)
 
             SolidCTA(title: "Apply Look", height: 52) {
-                app.path.append(.beforeAfter)
+                enterCompare()
             }
             .padding(.horizontal, 22)
             .padding(.bottom, 6)
@@ -416,6 +444,124 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+}
+
+// MARK: - Compare mode (queue #7)
+
+extension ApplyLookView {
+    fileprivate func enterCompare() {
+        wipeFraction = 0.5
+        app.lookState.splitFraction = wipeFraction
+        compareMode = true
+        app.refreshPreviewFrame()
+        app.objectWillChange.send()
+        LumaHaptics.shared.tap()
+        Task {
+            if let url = app.selectedVideoURL,
+               let d = try? await AVURLAsset(url: url).load(.duration).seconds { compareDuration = d }
+        }
+    }
+
+    fileprivate func exitCompare() {
+        compareMode = false
+        app.lookState.splitFraction = nil
+        app.refreshPreviewFrame()
+        app.objectWillChange.send()
+    }
+
+    /// Wipe divider + grabber + corner labels, drag anywhere to move.
+    fileprivate var compareOverlay: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Divider + knob at the wipe position.
+                Rectangle()
+                    .fill(.white)
+                    .frame(width: 2)
+                    .shadow(color: .black.opacity(0.7), radius: 5)
+                    .position(x: geo.size.width * wipeFraction, y: geo.size.height / 2)
+                Circle()
+                    .fill(.black.opacity(0.75))
+                    .frame(width: 36, height: 36)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
+                    .overlay(
+                        HStack(spacing: 2) {
+                            Image(systemName: "chevron.left")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                    )
+                    .position(x: geo.size.width * wipeFraction, y: geo.size.height / 2)
+
+                TechReadout("ORIGINAL", size: 8, color: .white.opacity(0.9))
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .position(x: 52, y: 66)
+                TechReadout("GRADED · \(Int(app.settings.intensity))%", size: 8,
+                            color: LumaTheme.accentBright)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .position(x: geo.size.width - 74, y: 66)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { drag in
+                        wipeFraction = min(max(drag.location.x / geo.size.width, 0.05), 0.95)
+                        app.lookState.splitFraction = wipeFraction
+                        app.refreshPreviewFrame()
+                        app.objectWillChange.send()
+                    }
+            )
+        }
+    }
+
+    fileprivate var compareBar: some View {
+        HStack(spacing: 10) {
+            Button { exitCompare() } label: {
+                Text("CANCEL")
+                    .font(.system(size: 13, weight: .bold))
+                    .tracking(1)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(.white.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.lumaPress)
+            SolidCTA(title: "Use This Grade", height: 48) {
+                exitCompare()
+                showExportSheet = true
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background {
+            ZStack(alignment: .top) {
+                Rectangle().fill(.ultraThinMaterial)
+                LumaTheme.background.opacity(0.45)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    fileprivate func exportNow(spec: ExportSpec) {
+        guard app.player != nil || app.selectedImage != nil else {
+            app.exportError = "Pick a video or photo from your library first."
+            return
+        }
+        isExporting = true
+        Task {
+            let success = await app.exportCurrentVideo(spec: spec)
+            isExporting = false
+            if success {
+                LumaHaptics.shared.exportSuccess()
+                app.path.append(.exportComplete)
+            }
+        }
     }
 }
 
