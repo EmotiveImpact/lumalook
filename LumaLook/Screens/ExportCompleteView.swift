@@ -62,7 +62,7 @@ struct ExportCompleteView: View {
                     // succeeded — explain and offer the one-tap fix.
                     if !app.lastExportSavedToPhotos {
                         VStack(spacing: 10) {
-                            Text("LumaLook couldn't add this to your photo library — Photos access is off or limited in Settings. Picking media never needs permission; auto-saving exports does.")
+                            Text("LumaLook couldn't add this to your photo library. In Settings, choose \"Add Photos Only\" — that's the only access LumaLook ever asks for (it never reads your library, so iOS won't show a Full Access option).")
                                 .font(.footnote)
                                 .foregroundStyle(LumaTheme.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -71,7 +71,7 @@ struct ExportCompleteView: View {
                                     UIApplication.shared.open(url)
                                 }
                             } label: {
-                                Label("Allow in Settings", systemImage: "gear")
+                                Label("Turn On \"Add Photos Only\"", systemImage: "gear")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 16)
