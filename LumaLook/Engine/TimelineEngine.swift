@@ -141,13 +141,6 @@ final class EditorState: ObservableObject {
         var audioTracks: [MusicTrack]
     }
 
-    /// Per-clip data the frame handler needs, precomputed on rebuild.
-    private struct FrameMeta {
-        let start: Double
-        let end: Double
-        let transform: CGAffineTransform
-    }
-
     // Timeline
     @Published private(set) var clips: [Clip] = []
     @Published var selectedClipID: UUID?
@@ -175,6 +168,9 @@ final class EditorState: ObservableObject {
     @Published private(set) var canRedo = false
 
     let lookState: LookState
+    /// Live overlay size/position/opacity read by the compositor per frame —
+    /// sliders update it without composition rebuilds (the LookState trick).
+    let overlayLayout = OverlayLayout()
     private let store: PersistenceStore
     private(set) var projectID = UUID()
     private var projectCreatedAt = Date()
@@ -868,66 +864,32 @@ final class EditorState: ObservableObject {
             }
         }
 
-        // Transition boundaries: cut time + style, sampled by the handler.
-        struct TransitionSpan { let center: Double; let style: TransitionStyle; let half: Double }
-        var spans: [TransitionSpan] = []
+        // Overlay (PIP) items: videos ride a second composition video track;
+        // images render straight from the compositor's still cache.
+        let overlaySpecs: [OverlaySpec] = []
+
+        // Transition boundaries: cut time + style, sampled by the compositor.
+        var spans: [TransitionSpanSpec] = []
         for (index, clip) in clips.enumerated() where index < clips.count - 1 {
             guard clip.transitionAfter != .none, index < metas.count else { continue }
-            spans.append(TransitionSpan(center: metas[index].end,
-                                        style: clip.transitionAfter,
-                                        half: clip.transitionAfter.duration / 2))
+            spans.append(TransitionSpanSpec(center: metas[index].end,
+                                            style: clip.transitionAfter,
+                                            half: clip.transitionAfter.duration / 2))
         }
-        let transitionSpans = spans
 
-        // One CI handler does orientation, aspect-fill crop into the chosen
-        // format, and the active look — for preview and export alike.
-        let pipeline = LookPipeline.shared
-        let state = lookState
-        let renderSize = format.renderSize
-        let zoomFactor = max(1.0, zoom / 100.0)
-        let frameMetas = metas
-
-        let videoComposition = AVMutableVideoComposition(asset: composition) { request in
-            let seconds = request.compositionTime.seconds
-            let meta = frameMetas.last(where: { seconds >= $0.start - 0.001 && seconds < $0.end + 0.001 })
-                ?? frameMetas[0]
-
-            var image = request.sourceImage
-            if !meta.transform.isIdentity {
-                image = image.transformed(by: meta.transform)
-                image = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
-                                                                y: -image.extent.minY))
-            }
-
-            // Aspect-fill into the render canvas, honouring zoom.
-            let sx = renderSize.width / image.extent.width
-            let sy = renderSize.height / image.extent.height
-            let scale = max(sx, sy) * zoomFactor
-            image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            let dx = (renderSize.width - image.extent.width) / 2 - image.extent.minX
-            let dy = (renderSize.height - image.extent.height) / 2 - image.extent.minY
-            image = image.transformed(by: CGAffineTransform(translationX: dx, y: dy))
-
-            var graded = pipeline.apply(state: state, to: image.clampedToExtent(), includeSplit: false)
-                .cropped(to: CGRect(origin: .zero, size: renderSize))
-
-            // Phase-A transitions: veil the frame toward black/white around
-            // the cut. Triangle envelope — fully veiled exactly at the cut.
-            if let span = transitionSpans.first(where: { abs(seconds - $0.center) < $0.half }) {
-                let strength = 1 - abs(seconds - span.center) / span.half
-                let veilColor: CIColor = span.style == .fadeBlack
-                    ? CIColor(red: 0, green: 0, blue: 0, alpha: strength)
-                    : CIColor(red: 1, green: 1, blue: 1,
-                              alpha: span.style == .flash ? strength * 0.9 : strength)
-                let veil = CIImage(color: veilColor)
-                    .cropped(to: CGRect(origin: .zero, size: renderSize))
-                graded = veil.composited(over: graded)
-            }
-
-            request.finish(with: graded,
-                           context: pipeline.context)
-        }
-        videoComposition.renderSize = renderSize
+        // The custom compositor does orientation, aspect-fill crop into the
+        // chosen format, the active look, overlays, and transition veils —
+        // for preview and export alike (the D1 parity guarantee).
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.customVideoCompositorClass = LumaVideoCompositor.self
+        videoComposition.renderSize = format.renderSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.instructions = makeInstructions(
+            totalDuration: cursor,
+            mainTrackID: videoTrack.trackID,
+            frameMetas: metas,
+            transitionSpans: spans,
+            overlaySpecs: overlaySpecs)
         videoComposition.applySDRColorPolicy()
 
         let duration = cursor.seconds
@@ -939,6 +901,71 @@ final class EditorState: ObservableObject {
                              clipAudioTrack: audioTrack,
                              musicAudioTracks: musicTracks,
                              duration: duration)
+    }
+
+    /// Segments the timeline into `LumaCompositionInstruction`s. Boundaries
+    /// fall at photo-clip edges and overlay in/out points so each segment's
+    /// `requiredSourceTrackIDs` lists exactly the tracks it reads: photo
+    /// segments require NO tracks (the main track holds an empty range
+    /// there), overlay-video segments add the overlay track. Ranges tile
+    /// [0, duration] contiguously from shared CMTime values — export
+    /// validation rejects gaps or overlaps.
+    private func makeInstructions(totalDuration: CMTime,
+                                  mainTrackID: CMPersistentTrackID,
+                                  frameMetas: [FrameMeta],
+                                  transitionSpans: [TransitionSpanSpec],
+                                  overlaySpecs: [OverlaySpec]) -> [LumaCompositionInstruction] {
+        let total = totalDuration.seconds
+        var cuts: Set<Double> = [0, total]
+        for meta in frameMetas where meta.imageURL != nil {
+            cuts.insert(min(max(0, meta.start), total))
+            cuts.insert(min(max(0, meta.end), total))
+        }
+        for spec in overlaySpecs {
+            cuts.insert(min(max(0, spec.start), total))
+            cuts.insert(min(max(0, spec.end), total))
+        }
+        // Dedupe within a frame's tolerance, then walk consecutive pairs.
+        var times = cuts.sorted().reduce(into: [Double]()) { result, t in
+            if result.last.map({ t - $0 > 0.001 }) ?? true { result.append(t) }
+        }
+        if times.count < 2 { times = [0, max(total, 0.1)] }
+        let timescale = CMTimeScale(600)
+        let cmTimes = times.enumerated().map { index, t in
+            index == times.count - 1 ? totalDuration
+                                     : CMTime(seconds: t, preferredTimescale: timescale)
+        }
+
+        var instructions: [LumaCompositionInstruction] = []
+        for i in 0..<(cmTimes.count - 1) {
+            let range = CMTimeRange(start: cmTimes[i], end: cmTimes[i + 1])
+            guard range.duration.seconds > 0 else { continue }
+            let mid = (times[i] + times[i + 1]) / 2
+
+            var trackIDs: [NSValue] = []
+            let meta = frameMetas.last(where: { mid >= $0.start - 0.001 && mid < $0.end + 0.001 })
+            if meta?.imageURL == nil {
+                trackIDs.append(NSNumber(value: mainTrackID))
+            }
+            for spec in overlaySpecs
+            where spec.trackID != kCMPersistentTrackID_Invalid
+                && mid >= spec.start - 0.001 && mid < spec.end + 0.001 {
+                trackIDs.append(NSNumber(value: spec.trackID))
+            }
+
+            instructions.append(LumaCompositionInstruction(
+                timeRange: range,
+                requiredSourceTrackIDs: trackIDs,
+                mainTrackID: mainTrackID,
+                frameMetas: frameMetas,
+                transitionSpans: transitionSpans,
+                overlays: overlaySpecs,
+                overlayLayout: overlayLayout,
+                lookState: lookState,
+                renderSize: format.renderSize,
+                zoomFactor: max(1.0, zoom / 100.0)))
+        }
+        return instructions
     }
 
     /// Multi-input mix: clip audio gets volume + fades, music gets its own
