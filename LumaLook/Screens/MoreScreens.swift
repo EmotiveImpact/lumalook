@@ -338,6 +338,8 @@ struct FilterPackDetailView: View {
                         Text("Installed — in your Looks")
                     } else if unlocked {
                         Text(pack.isFree ? "Install Free" : "Install")
+                    } else if pack.isProIncluded {
+                        Label("Unlock with Pro", systemImage: "crown.fill")
                     } else {
                         Text("\(displayPrice) · Buy")
                     }
@@ -354,7 +356,7 @@ struct FilterPackDetailView: View {
             .buttonStyle(.lumaPress)
             .disabled(app.packStore.isInstalled(pack) || storeService.purchaseInFlight)
 
-            if !unlocked {
+            if !unlocked && !pack.isProIncluded {
                 Button {
                     showPaywall = true
                 } label: {
@@ -488,6 +490,8 @@ private struct SavedLooksList: View {
 
 struct CustomLookBuilderView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
+    @State private var showLensPaywall = false
     @State private var tab = "ADJUST"
     @State private var showSaveDialog = false
     @State private var lookName = ""
@@ -548,7 +552,13 @@ struct CustomLookBuilderView: View {
                         HStack(spacing: 10) {
                             ForEach(LensKind.allCases, id: \.self) { lens in
                                 let selected = app.settings.lensKind == lens.rawValue
+                                let locked = lens.requiresPro && !storeService.isPro
                                 Button {
+                                    if locked {
+                                        showLensPaywall = true
+                                        LumaHaptics.shared.tap()
+                                        return
+                                    }
                                     app.settings.lensKind = lens.rawValue
                                     LumaHaptics.shared.tap()
                                 } label: {
@@ -559,6 +569,16 @@ struct CustomLookBuilderView: View {
                                             .frame(width: 62, height: 48)
                                             .background(selected ? LumaTheme.accent : LumaTheme.surface,
                                                         in: RoundedRectangle(cornerRadius: 12))
+                                            .overlay(alignment: .topTrailing) {
+                                                if locked {
+                                                    Image(systemName: "crown.fill")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                        .foregroundStyle(.black)
+                                                        .padding(3)
+                                                        .background(LumaTheme.gold, in: Circle())
+                                                        .offset(x: 4, y: -4)
+                                                }
+                                            }
                                         Text(lens.label)
                                             .font(.system(size: 11))
                                             .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
@@ -638,6 +658,7 @@ struct CustomLookBuilderView: View {
                 .buttonStyle(.plain)
             }
         }
+        .sheet(isPresented: $showLensPaywall) { PaywallView() }
         .alert("Save Look", isPresented: $showSaveDialog) {
             TextField("Look name", text: $lookName)
             Button("Save") {

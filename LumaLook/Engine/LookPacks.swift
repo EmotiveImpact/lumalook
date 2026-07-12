@@ -26,6 +26,9 @@ struct LookPack: Identifiable {
     let photo: HeroPhoto
     let isFree: Bool
     let price: String           // display only until StoreKit (C5)
+    /// Included with the Pro membership (not sold à la carte): the film
+    /// archives. Free packs stay free; recipe packs stay purchasable.
+    var isProIncluded: Bool = false
     let looks: [PackLook]
 }
 
@@ -123,8 +126,9 @@ enum PackCatalog {
             familyLine: "Every colour negative in the measured collection — portrait pro stocks to drugstore rolls.",
             eraTag: "Measured colour negative stocks",
             photo: .golden,
-            isFree: true,
-            price: "FREE",
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
             looks: [
                 PackLook(code: "FN160", name: "FN160 · Pastel Neg 160",
                          character: "Soft pastel palette, forgiving highlight roll-off.",
@@ -185,8 +189,9 @@ enum PackCatalog {
             familyLine: "The chrome cabinet: professional and consumer slide films, plus the instant slide oddity.",
             eraTag: "Measured slide films",
             photo: .desert,
-            isFree: true,
-            price: "FREE",
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
             looks: [
                 PackLook(code: "AP100", name: "AP100 · Euro Slide 100",
                          character: "Middle-European chrome — cool, precise, quiet.",
@@ -241,8 +246,9 @@ enum PackCatalog {
             familyLine: "Twenty-two black-and-white emulsions — press, tabular, infrared, ortho and instant monos.",
             eraTag: "Measured monochrome stocks",
             photo: .night,
-            isFree: true,
-            price: "FREE",
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
             looks: [
                 PackLook(code: "APX100", name: "APX100 · Fine Mono 100",
                          character: "European fine-grain classic.",
@@ -318,8 +324,9 @@ enum PackCatalog {
             familyLine: "Integral, silver shade, expired Time-Zero and the peel-apart pack films.",
             eraTag: "Measured instant films",
             photo: .neon,
-            isFree: true,
-            price: "FREE",
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
             looks: [
                 PackLook(code: "PX70W", name: "PX70W · Integral Warm",
                          character: "First-generation integral film, sun-warmed.",
@@ -386,8 +393,9 @@ enum PackCatalog {
             familyLine: "The fifteen in-camera profiles the mirrorless generation shoots — including Classic Chrome and every Acros filter.",
             eraTag: "Measured mirrorless profiles",
             photo: .coast,
-            isFree: true,
-            price: "FREE",
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
             looks: [
                 PackLook(code: "MS1", name: "MS1 · Standard Sim",
                          character: "The mirrorless standard profile.",

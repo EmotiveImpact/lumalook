@@ -76,6 +76,15 @@ enum LensKind: String, Codable, CaseIterable {
         case .plastic: return "Toy camera: crushed corners, popped colour"
         }
     }
+
+    /// The cinematic glass is part of the Pro membership; Diffusion and
+    /// Fisheye stay free so the Lens tool never feels like a locked door.
+    var requiresPro: Bool {
+        switch self {
+        case .none, .diffusion, .fisheye: return false
+        case .anamorphic, .vintage, .tiltShift, .swirl, .plastic: return true
+        }
+    }
 }
 
 struct LookSettings: Codable, Equatable {

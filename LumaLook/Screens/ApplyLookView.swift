@@ -73,11 +73,13 @@ struct GradedStillView: View {
 
 struct ApplyLookView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var category = "All"
     @State private var activeTool =
         ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Adjust"
+    @State private var showLensPaywall = false
     @State private var mediaReadout: String?
     @State private var videoAspect: CGFloat?
     @State private var showLUTImporter = false
@@ -173,6 +175,7 @@ struct ApplyLookView: View {
         }
         .task(id: mediaKey) { await loadMediaReadout() }
         .onDisappear { app.saveGradeSession() }
+        .sheet(isPresented: $showLensPaywall) { PaywallView() }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : compareDuration,
                             gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
@@ -453,7 +456,13 @@ struct ApplyLookView: View {
             HStack(spacing: 10) {
                 ForEach(LensKind.allCases, id: \.self) { lens in
                     let selected = app.settings.lensKind == lens.rawValue
+                    let locked = lens.requiresPro && !storeService.isPro
                     Button {
+                        if locked {
+                            showLensPaywall = true
+                            LumaHaptics.shared.tap()
+                            return
+                        }
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                             app.settings.lensKind = lens.rawValue
                         }
@@ -469,6 +478,16 @@ struct ApplyLookView: View {
                                 .overlay(RoundedRectangle(cornerRadius: 13)
                                     .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.07),
                                             lineWidth: selected ? 1.5 : 1))
+                                .overlay(alignment: .topTrailing) {
+                                    if locked {
+                                        Image(systemName: "crown.fill")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(.black)
+                                            .padding(3)
+                                            .background(LumaTheme.gold, in: Circle())
+                                            .offset(x: 5, y: -5)
+                                    }
+                                }
                             Text(lens.label)
                                 .font(.system(size: 11, weight: selected ? .semibold : .regular))
                                 .foregroundStyle(selected ? .white : LumaTheme.textSecondary)

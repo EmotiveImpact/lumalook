@@ -106,7 +106,9 @@ final class StoreService: ObservableObject {
         ownedPackIDs = packs
     }
 
-    /// A pack is usable if it's free, individually owned, or the user is Pro.
+    /// A pack is usable if it's free, individually owned, or the user is
+    /// Pro. Pro-included packs (the film archives) are NEVER à la carte —
+    /// they exist to make the membership feel enormous.
     func ownsPack(_ packID: String) -> Bool {
         guard let pack = PackCatalog.pack(id: packID) else { return false }
         return pack.isFree || isPro || ownedPackIDs.contains(packID)
