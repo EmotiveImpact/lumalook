@@ -10,29 +10,33 @@ struct HomeView: View {
             LumaTheme.background.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 26) {
-                    HStack {
-                        Button { app.path.append(.settings) } label: {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundStyle(.white)
+                    // Wordmark owns the very top; gear/crown ride its line.
+                    ZStack(alignment: .top) {
+                        HStack {
+                            Button { app.path.append(.settings) } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
+                            Spacer()
+                            Button { app.path.append(.settings) } label: {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(LumaTheme.gold)
+                            }
                         }
-                        Spacer()
-                        Button { app.path.append(.settings) } label: {
-                            Image(systemName: "crown.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(LumaTheme.gold)
-                        }
-                    }
-                    .padding(.top, 4)
+                        .padding(.top, 6)
 
-                    VStack(spacing: 10) {
-                        LumaWordmark(size: 38)
-                        Text("Cinematic looks for your world")
-                            .font(.system(size: 16))
-                            .foregroundStyle(LumaTheme.textSecondary)
+                        VStack(spacing: 8) {
+                            LumaWordmark(size: 34)
+                            Text("Cinematic looks for your world")
+                                .font(.system(size: 15))
+                                .foregroundStyle(LumaTheme.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.top, -18)
-                    .padding(.bottom, 8)
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
                         HomeTile(title: "Apply a Look", subtitle: "Quickly color grade your footage",
