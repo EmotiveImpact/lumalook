@@ -289,7 +289,7 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         let source = CIImage(cvPixelBuffer: pixelBuffer)
         let graded: CIImage
         if let lookState {
-            graded = pipeline.apply(state: lookState, to: source.clampedToExtent(), includeSplit: false)
+            graded = pipeline.apply(state: lookState, to: source, includeSplit: false)
                 .cropped(to: source.extent)
         } else {
             graded = source

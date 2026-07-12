@@ -76,7 +76,8 @@ struct ApplyLookView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var category = "All"
-    @State private var activeTool = "Adjust"
+    @State private var activeTool =
+        ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Adjust"
     @State private var mediaReadout: String?
     @State private var videoAspect: CGFloat?
     @State private var showLUTImporter = false
@@ -371,31 +372,48 @@ struct ApplyLookView: View {
 
             slotChain
 
-            lookStrip
+            if activeTool == "Lens" {
+                lensStrip
+            } else {
+                lookStrip
+            }
 
             LumaDial(title: activeTool == "Adjust" ? "Intensity" : activeTool,
                      value: dialBinding)
                 .padding(.horizontal, 22)
 
-            HStack(spacing: 4) {
-                FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
-                    activeTool = "Adjust"
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
+                        activeTool = "Adjust"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "Lens", icon: "camera.aperture", selected: activeTool == "Lens") {
+                        activeTool = "Lens"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "Grain", icon: "circle.dotted", selected: activeTool == "Grain") {
+                        activeTool = "Grain"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "Bloom", icon: "sun.haze", selected: activeTool == "Bloom") {
+                        activeTool = "Bloom"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "Halation", icon: "circle.hexagongrid.circle", selected: activeTool == "Halation") {
+                        activeTool = "Halation"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "Vignette", icon: "smallcircle.filled.circle", selected: activeTool == "Vignette") {
+                        activeTool = "Vignette"
+                    }
+                    .frame(width: 62)
+                    FlatTool(title: "More", icon: "dial.high", action: { app.path.append(.customLook) })
+                        .frame(width: 62)
                 }
-                FlatTool(title: "Grain", icon: "circle.dotted", selected: activeTool == "Grain") {
-                    activeTool = "Grain"
-                }
-                FlatTool(title: "Bloom", icon: "sun.haze", selected: activeTool == "Bloom") {
-                    activeTool = "Bloom"
-                }
-                FlatTool(title: "Halation", icon: "circle.hexagongrid.circle", selected: activeTool == "Halation") {
-                    activeTool = "Halation"
-                }
-                FlatTool(title: "Vignette", icon: "smallcircle.filled.circle", selected: activeTool == "Vignette") {
-                    activeTool = "Vignette"
-                }
-                FlatTool(title: "More", icon: "dial.high", action: { app.path.append(.customLook) })
+                .padding(.horizontal, 14)
             }
-            .padding(.horizontal, 14)
+            .lumaEdgeFade(leading: 12, trailing: 12)
 
             SolidCTA(title: "Apply Look", height: 52) {
                 enterCompare()
@@ -423,8 +441,48 @@ struct ApplyLookView: View {
         case "Bloom": return $app.settings.bloom
         case "Halation": return $app.settings.halation
         case "Vignette": return $app.settings.vignette
+        case "Lens": return $app.settings.lensAmount
         default: return $app.settings.intensity
         }
+    }
+
+    /// Lens picker strip: glass, not colour — swaps in for the look strip
+    /// while the Lens tool is active.
+    private var lensStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(LensKind.allCases, id: \.self) { lens in
+                    let selected = app.settings.lensKind == lens.rawValue
+                    Button {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                            app.settings.lensKind = lens.rawValue
+                        }
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        VStack(spacing: 7) {
+                            Image(systemName: lens.icon)
+                                .font(.system(size: 21, weight: .medium))
+                                .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                .frame(width: 66, height: 50)
+                                .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                            in: RoundedRectangle(cornerRadius: 13))
+                                .overlay(RoundedRectangle(cornerRadius: 13)
+                                    .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.07),
+                                            lineWidth: selected ? 1.5 : 1))
+                            Text(lens.label)
+                                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                .lineLimit(1)
+                                .frame(width: 74)
+                        }
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 2)
+        }
+        .lumaEdgeFade()
     }
 
     private var lookStrip: some View {

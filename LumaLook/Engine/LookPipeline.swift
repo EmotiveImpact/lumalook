@@ -115,6 +115,18 @@ final class LookPipeline: @unchecked Sendable {
             graded = dissolve.outputImage ?? graded
         }
 
+        // Lens simulation: PHYSICAL glass, applied after the grade and
+        // outside the intensity blend — dialling a look down doesn't
+        // remove the lens the footage was "shot" through.
+        if let lens = LensKind(rawValue: settings.lensKind), lens != .none {
+            graded = applyLens(lens, amount: settings.lensAmount / 100.0, to: graded)
+        }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_DEBUG"] == "1" {
+            print("[LUMA] apply lens=\(settings.lensKind) amount=\(settings.lensAmount)")
+        }
+        #endif
+
         // Before/After wipe: original left of the divider, graded right.
         if includeSplit, let fraction = state.splitFraction {
             let extent = image.extent
@@ -126,6 +138,131 @@ final class LookPipeline: @unchecked Sendable {
         }
 
         return graded.cropped(to: image.extent)
+    }
+
+    // MARK: - Lens simulation (medium transformation)
+
+    /// Optical character of real glass, built from Core Image primitives.
+    /// All spatial — never part of cube bakes (like grain/bloom/vignette).
+    func applyLens(_ kind: LensKind, amount: Double, to image: CIImage) -> CIImage {
+        let a = CGFloat(min(max(amount, 0), 1))
+        guard a > 0.01 else { return image }
+        let extent = image.extent
+        guard extent.width > 4, extent.height > 4, !extent.isInfinite else { return image }
+        let center = CGPoint(x: extent.midX, y: extent.midY)
+
+        switch kind {
+        case .none:
+            return image
+
+        case .anamorphic:
+            // Blue horizontal streak flares: crushed highlights, stretched
+            // wide, tinted scope-blue, screened back over the frame.
+            let highlights = image
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 3, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 3, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 3, w: 0),
+                    "inputBiasVector": CIVector(x: -2.2, y: -2.2, z: -2.2, w: 0),
+                ])
+                .applyingFilter("CIColorClamp", parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+                ])
+            let streak = highlights.clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [
+                    kCIInputRadiusKey: 14 + extent.width * 0.045 * a,
+                    kCIInputAngleKey: 0,
+                ])
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 0.25 * a, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 0.45 * a, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 1.0 * a, w: 0),
+                ])
+                .cropped(to: extent)
+            return streak.applyingFilter("CIScreenBlendMode",
+                                         parameters: [kCIInputBackgroundImageKey: image])
+                .cropped(to: extent)
+
+        case .vintage:
+            // Chromatic aberration: red plane grows, blue shrinks about the
+            // centre — fringing that widens toward the corners — plus the
+            // heavy falloff old coatings couldn't avoid.
+            func plane(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, scale: CGFloat) -> CIImage {
+                var out = image.applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: r, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: g, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: b, w: 0),
+                ])
+                if abs(scale - 1) > 0.0001 {
+                    out = out.transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
+                        .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+                        .concatenating(CGAffineTransform(translationX: center.x, y: center.y)))
+                }
+                return out.cropped(to: extent)
+            }
+            let shift = 0.006 * a
+            let combined = plane(1, 0, 0, scale: 1 + shift)
+                .applyingFilter("CIAdditionCompositing",
+                                parameters: [kCIInputBackgroundImageKey: plane(0, 1, 0, scale: 1)])
+                .applyingFilter("CIAdditionCompositing",
+                                parameters: [kCIInputBackgroundImageKey: plane(0, 0, 1, scale: 1 - shift)])
+            return combined.applyingFilter("CIVignette", parameters: [
+                kCIInputIntensityKey: 1.4 * a,
+                kCIInputRadiusKey: 2.2,
+            ]).cropped(to: extent)
+
+        case .diffusion:
+            // Pro-mist: soft glow screened over the frame + a gentle lift.
+            let glow = image.clampedToExtent()
+                .applyingGaussianBlur(sigma: 8 + 22 * a)
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 0.75 * a, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 0.75 * a, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 0.75 * a, w: 0),
+                ])
+                .cropped(to: extent)
+            return glow.applyingFilter("CIScreenBlendMode",
+                                       parameters: [kCIInputBackgroundImageKey: image])
+                .cropped(to: extent)
+
+        case .fisheye:
+            // Barrel bulge about the centre, cropped back to frame.
+            return image.clampedToExtent()
+                .applyingFilter("CIBumpDistortion", parameters: [
+                    kCIInputCenterKey: CIVector(x: center.x, y: center.y),
+                    kCIInputRadiusKey: max(extent.width, extent.height) * 0.75,
+                    kCIInputScaleKey: 0.55 * a,
+                ])
+                .cropped(to: extent)
+
+        case .tiltShift:
+            // Miniature: a razor focus band across the middle, blur ramping
+            // toward top and bottom via a masked variable blur.
+            let bandTop = extent.minY + extent.height * 0.62
+            let bandBottom = extent.minY + extent.height * 0.38
+            let topMask = CIFilter(name: "CISmoothLinearGradient", parameters: [
+                "inputPoint0": CIVector(x: center.x, y: bandTop),
+                "inputPoint1": CIVector(x: center.x, y: extent.maxY),
+                "inputColor0": CIColor.black,
+                "inputColor1": CIColor.white,
+            ])?.outputImage ?? CIImage(color: .black)
+            let bottomMask = CIFilter(name: "CISmoothLinearGradient", parameters: [
+                "inputPoint0": CIVector(x: center.x, y: bandBottom),
+                "inputPoint1": CIVector(x: center.x, y: extent.minY),
+                "inputColor0": CIColor.black,
+                "inputColor1": CIColor.white,
+            ])?.outputImage ?? CIImage(color: .black)
+            let mask = topMask.applyingFilter("CIAdditionCompositing",
+                                              parameters: [kCIInputBackgroundImageKey: bottomMask])
+                .cropped(to: extent)
+            return image.clampedToExtent()
+                .applyingFilter("CIMaskedVariableBlur", parameters: [
+                    "inputMask": mask,
+                    kCIInputRadiusKey: 14 * a,
+                ])
+                .cropped(to: extent)
+        }
     }
 
     // MARK: - LUT application
@@ -171,7 +308,7 @@ final class LookPipeline: @unchecked Sendable {
 
         if recipe.bloom > 0 {
             let bloom = CIFilter.bloom()
-            bloom.inputImage = output
+            bloom.inputImage = output.clampedToExtent()
             bloom.intensity = recipe.bloom
             bloom.radius = 8
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
@@ -213,7 +350,7 @@ final class LookPipeline: @unchecked Sendable {
 
         if settings.bloom > 0 {
             let bloom = CIFilter.bloom()
-            bloom.inputImage = output
+            bloom.inputImage = output.clampedToExtent()
             bloom.intensity = Float(settings.bloom / 100.0)
             bloom.radius = 10
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
@@ -349,7 +486,7 @@ final class LookPipeline: @unchecked Sendable {
                 input = input.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             }
         }
-        let graded = apply(state: state, to: input.clampedToExtent(), includeSplit: includeSplit)
+        let graded = apply(state: state, to: input, includeSplit: includeSplit)
             .cropped(to: input.extent)
         return context.createCGImage(graded, from: graded.extent,
                                      format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))

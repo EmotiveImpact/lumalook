@@ -19,6 +19,7 @@ enum GradeCubeBaker {
         settings.halation = 0
         settings.bloom = 0
         settings.vignette = 0
+        settings.lensKind = LensKind.none.rawValue   // spatial: corrupts lattices
         clean.settings = settings
         clean.splitFraction = nil
 

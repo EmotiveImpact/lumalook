@@ -25,6 +25,51 @@ struct LookPreset: Identifiable, Hashable {
     var isPremium: Bool = false
 }
 
+/// Lens simulation (medium transformation): optical character applied AFTER
+/// the grade — glass, not colour. Each kind is a distinct piece of physical
+/// glass the footage appears to have been shot through.
+enum LensKind: String, Codable, CaseIterable {
+    case none
+    case anamorphic
+    case vintage
+    case diffusion
+    case fisheye
+    case tiltShift
+
+    var label: String {
+        switch self {
+        case .none: return "None"
+        case .anamorphic: return "Anamorphic"
+        case .vintage: return "Vintage Prime"
+        case .diffusion: return "Diffusion"
+        case .fisheye: return "Fisheye"
+        case .tiltShift: return "Tilt-Shift"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .none: return "circle.slash"
+        case .anamorphic: return "camera.aperture"
+        case .vintage: return "camera.on.rectangle"
+        case .diffusion: return "sun.haze.fill"
+        case .fisheye: return "circle.grid.cross"
+        case .tiltShift: return "square.3.layers.3d.middle.filled"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .none: return "Clean digital glass"
+        case .anamorphic: return "Blue horizontal flares, cinema scope feel"
+        case .vintage: return "Chromatic fringing + heavy corner falloff"
+        case .diffusion: return "Pro-mist glow, lifted dreamy highlights"
+        case .fisheye: return "Curved ultra-wide barrel distortion"
+        case .tiltShift: return "Miniature world, razor focus band"
+        }
+    }
+}
+
 struct LookSettings: Codable, Equatable {
     var intensity: Double = 75
     var exposure: Double = 0
@@ -40,6 +85,10 @@ struct LookSettings: Codable, Equatable {
     var vignette: Double = 0
     var sharpness: Double = 0
     var fade: Double = 0        // lifted blacks, the matte-film look
+    /// Lens simulation (LensKind rawValue) + its strength. Spatial like
+    /// grain/bloom: stripped from cube bakes, applied after the grade.
+    var lensKind: String = LensKind.none.rawValue
+    var lensAmount: Double = 75
 
     init() {}
 
@@ -61,6 +110,8 @@ struct LookSettings: Codable, Equatable {
         vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
         sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
         fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
+        lensKind = try c.decodeIfPresent(String.self, forKey: .lensKind) ?? LensKind.none.rawValue
+        lensAmount = try c.decodeIfPresent(Double.self, forKey: .lensAmount) ?? 75
     }
 }
 

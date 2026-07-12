@@ -122,7 +122,8 @@ final class VideoExporter: ObservableObject {
         let pipeline = LookPipeline.shared
 
         let composition = AVMutableVideoComposition(asset: asset) { request in
-            let source = request.sourceImage.clampedToExtent()
+            // Finite extent: spatial ops (lens et al.) need real frame bounds.
+            let source = request.sourceImage
             // includeSplit: false — the Before/After wipe never bakes into exports.
             let filtered = pipeline.apply(state: lookState, to: source, includeSplit: false)
             request.finish(with: filtered.cropped(to: request.sourceImage.extent), context: pipeline.context)

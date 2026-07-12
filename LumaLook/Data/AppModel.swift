@@ -266,6 +266,13 @@ final class AppModel: ObservableObject {
     private func applyDebugRoute() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+        // Lens cells: LUMA_SEED_LENS=anamorphic|vintage|diffusion|fisheye|tiltShift.
+        // Explicit sync: property observers don't fire during init, so the
+        // shared LookState would otherwise miss the seeded value.
+        if let lens = env["LUMA_SEED_LENS"], LensKind(rawValue: lens) != nil {
+            settings.lensKind = lens
+            syncLookState()
+        }
         // Headless open-in-place check: LUMA_OPEN_FILE=<host path>.
         if let openPath = env["LUMA_OPEN_FILE"], FileManager.default.fileExists(atPath: openPath) {
             handleIncomingFile(url: URL(fileURLWithPath: openPath))

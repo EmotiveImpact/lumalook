@@ -531,6 +531,64 @@ struct CustomLookBuilderView: View {
                         set: { app.settings.fade = max(0, $0) }))
                 }
                 .padding(.top, 6)
+            } else if tab == "EFFECTS" {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Lens")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(LensKind.allCases, id: \.self) { lens in
+                                let selected = app.settings.lensKind == lens.rawValue
+                                Button {
+                                    app.settings.lensKind = lens.rawValue
+                                    LumaHaptics.shared.tap()
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: lens.icon)
+                                            .font(.system(size: 20, weight: .medium))
+                                            .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                            .frame(width: 62, height: 48)
+                                            .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                                        in: RoundedRectangle(cornerRadius: 12))
+                                        Text(lens.label)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                            .lineLimit(1)
+                                            .frame(width: 70)
+                                    }
+                                }
+                                .buttonStyle(.lumaPress)
+                            }
+                        }
+                    }
+                    if let lens = LensKind(rawValue: app.settings.lensKind), lens != .none {
+                        Text(lens.blurb)
+                            .font(.footnote)
+                            .foregroundStyle(LumaTheme.textMuted)
+                        GradeSlider(title: "Lens Strength", value: Binding(
+                            get: { app.settings.lensAmount },
+                            set: { app.settings.lensAmount = max(0, $0) }))
+                    }
+
+                    Text("Film Texture")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .padding(.top, 4)
+                    GradeSlider(title: "Grain", value: Binding(
+                        get: { app.settings.grain },
+                        set: { app.settings.grain = max(0, $0) }))
+                    GradeSlider(title: "Bloom", value: Binding(
+                        get: { app.settings.bloom },
+                        set: { app.settings.bloom = max(0, $0) }))
+                    GradeSlider(title: "Halation", value: Binding(
+                        get: { app.settings.halation },
+                        set: { app.settings.halation = max(0, $0) }))
+                    GradeSlider(title: "Vignette", value: Binding(
+                        get: { app.settings.vignette },
+                        set: { app.settings.vignette = max(0, $0) }))
+                }
+                .padding(.top, 6)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "wand.and.stars")

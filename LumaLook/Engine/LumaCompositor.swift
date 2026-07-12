@@ -319,8 +319,11 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         // --- Grade (same pipeline, split-wipe never baked in) --------------
         // Per-clip look wins over the timeline's global grade.
         let activeState = meta?.clipLookState ?? instruction.lookState
+        // Finite extent in, finite out: spatial ops (lens, halation, bloom)
+        // need real frame bounds; they clamp internally where blurs sample
+        // past the edge.
         var graded = pipeline.apply(state: activeState,
-                                    to: canvas.clampedToExtent(),
+                                    to: canvas.cropped(to: renderRect),
                                     includeSplit: false)
             .cropped(to: renderRect)
 
@@ -354,7 +357,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             // Text stays ungraded: titles must hold their exact colour.
             if !isText {
                 overlay = pipeline.apply(state: activeState,
-                                         to: overlay.clampedToExtent(),
+                                         to: overlay,
                                          includeSplit: false)
                     .cropped(to: overlay.extent)
             }
@@ -425,7 +428,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                     let auxState = (firstHalf ? span.headLookState : span.tailLookState)
                         ?? instruction.lookState
                     auxImage = pipeline.apply(state: auxState,
-                                              to: auxImage.clampedToExtent(),
+                                              to: auxImage.cropped(to: renderRect),
                                               includeSplit: false)
                         .cropped(to: renderRect)
                     let progress = CGFloat((seconds - (span.center - span.half)) / (span.half * 2))
