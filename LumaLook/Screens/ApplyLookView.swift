@@ -181,6 +181,15 @@ struct ApplyLookView: View {
         .overlay {
             if isExporting {
                 ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
+                    .overlay(alignment: .top) {
+                        if let status = app.batchStatus {
+                            TechReadout(status, size: 11, color: .white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(.black.opacity(0.6), in: Capsule())
+                                .padding(.top, 90)
+                        }
+                    }
             }
         }
         .lumaToolSheet(isPresented: $showConversionPicker, style: .panel) {
@@ -280,7 +289,13 @@ struct ApplyLookView: View {
             }
             .buttonStyle(.lumaPress)
             Spacer()
-            TechReadout("GRADE", size: 12, color: .white.opacity(0.85))
+            VStack(spacing: 2) {
+                TechReadout("GRADE", size: 12, color: .white.opacity(0.85))
+                if !app.batchItems.isEmpty {
+                    TechReadout("BATCH · \(app.batchItems.count) ITEMS", size: 8,
+                                color: LumaTheme.teal)
+                }
+            }
             Spacer()
             if app.selectedLUT?.isLogTarget == true {
                 Button { showLogExplainer = true } label: {
@@ -556,11 +571,21 @@ extension ApplyLookView {
         }
         isExporting = true
         Task {
-            let success = await app.exportCurrentVideo(spec: spec)
-            isExporting = false
-            if success {
-                LumaHaptics.shared.exportSuccess()
-                app.path.append(.exportComplete)
+            if !app.batchItems.isEmpty {
+                // One grade across the whole set (queue #10).
+                let done = await app.runBatchExport(spec: spec)
+                isExporting = false
+                if done > 0 {
+                    LumaHaptics.shared.exportSuccess()
+                    app.path.append(.exportComplete)
+                }
+            } else {
+                let success = await app.exportCurrentVideo(spec: spec)
+                isExporting = false
+                if success {
+                    LumaHaptics.shared.exportSuccess()
+                    app.path.append(.exportComplete)
+                }
             }
         }
     }

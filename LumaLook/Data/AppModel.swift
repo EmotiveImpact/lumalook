@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Photos
+import PhotosUI
 import CoreImage
 
 @MainActor
@@ -23,6 +24,36 @@ final class AppModel: ObservableObject {
             updatePreviewFrame()
             if !isRestoringSession { detachGradeSession() }
         }
+    }
+
+    // MARK: Batch grading (queue #10)
+
+    /// Extra picked items queued behind the previewed one — the whole set
+    /// exports with the SAME grade.
+    @Published var batchItems: [PhotosPickerItem] = []
+    @Published var batchStatus: String?
+
+    /// Applies the current grade to every batch item sequentially, saving
+    /// each to Photos. Returns how many succeeded.
+    func runBatchExport(spec: ExportSpec) async -> Int {
+        let items = batchItems
+        guard !items.isEmpty else { return 0 }
+        var succeeded = 0
+        for (index, item) in items.enumerated() {
+            batchStatus = "PROCESSING \(index + 1) OF \(items.count)"
+            if let video = try? await item.loadTransferable(type: PickedVideo.self) {
+                selectedVideoURL = video.url
+            } else if let data = try? await item.loadTransferable(type: Data.self),
+                      let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
+                selectedImage = image
+            } else {
+                continue
+            }
+            if await exportCurrentVideo(spec: spec) { succeeded += 1 }
+        }
+        batchStatus = nil
+        batchItems = []
+        return succeeded
     }
 
     // MARK: Grade sessions (queue #13)

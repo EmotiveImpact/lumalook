@@ -20,12 +20,12 @@ struct PickedVideo: Transferable {
 struct SelectClipView: View {
     @EnvironmentObject private var app: AppModel
     @State private var mode = "Video"
-    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isLoading = false
     @State private var loadError: String?
 
     private var hasSelection: Bool {
-        app.selectedVideoURL != nil || app.selectedImage != nil
+        app.selectedVideoURL != nil || app.selectedImage != nil || pickerItems.count > 1
     }
 
     private var pickingPhotos: Bool { mode == "Photos" }
@@ -49,7 +49,9 @@ struct SelectClipView: View {
                             Text("Video selected").foregroundStyle(LumaTheme.teal)
                         } else if app.selectedImage != nil {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(LumaTheme.teal)
-                            Text("Photo selected").foregroundStyle(LumaTheme.teal)
+                            Text(pickerItems.count > 1 ? "\(pickerItems.count) photos — one grade"
+                                                       : "Photo selected")
+                                .foregroundStyle(LumaTheme.teal)
                         } else {
                             Text(pickingPhotos ? "All Photos" : "All Videos")
                                 .foregroundStyle(.white)
@@ -69,7 +71,8 @@ struct SelectClipView: View {
 
                     // The real photo library, embedded in our chrome — every
                     // thumbnail is the user's actual footage.
-                    PhotosPicker(selection: $pickerItem,
+                    PhotosPicker(selection: $pickerItems,
+                                 maxSelectionCount: 10,
                                  matching: pickingPhotos ? .images : .videos,
                                  photoLibrary: .shared()) {
                         Label("Open Library", systemImage: "photo.on.rectangle")
@@ -90,7 +93,8 @@ struct SelectClipView: View {
             VStack(spacing: 0) {
                 Hairline()
                 HStack {
-                    Text(hasSelection ? "1 clip selected" : "No clip selected")
+                    Text(pickerItems.count > 1 ? "\(pickerItems.count) selected — batch"
+                         : (hasSelection ? "1 clip selected" : "No clip selected"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(hasSelection ? .white : LumaTheme.textMuted)
                     Spacer()
@@ -115,21 +119,23 @@ struct SelectClipView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: pickerItem) { _, newItem in
-            guard let newItem else { return }
+        .onChange(of: pickerItems) { _, newItems in
+            guard let first = newItems.first else { return }
             isLoading = true
             loadError = nil
+            // First item previews; extras queue for batch grading (#10).
+            app.batchItems = newItems.count > 1 ? newItems : []
             Task {
                 defer { isLoading = false }
                 do {
                     if pickingPhotos {
-                        if let data = try await newItem.loadTransferable(type: Data.self),
+                        if let data = try await first.loadTransferable(type: Data.self),
                            let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
                             app.selectedImage = image
                         } else {
                             loadError = "Could not load that photo. Try another one."
                         }
-                    } else if let video = try await newItem.loadTransferable(type: PickedVideo.self) {
+                    } else if let video = try await first.loadTransferable(type: PickedVideo.self) {
                         app.selectedVideoURL = video.url
                     }
                 } catch {
