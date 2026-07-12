@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreImage
+import AVFoundation
 
 /// Full-bleed cinematic viewfinder: the camera feed owns the entire
 /// screen and every control floats above it on scrims and glass —
@@ -51,6 +52,32 @@ struct CameraLiveLookView: View {
                 }
             }
 
+            // Hand-off card: the recording returns a result (img.ly pattern) —
+            // Retake / Grade / Edit, footage lands where you choose.
+            if let recording = camera.lastRecordingURL, !camera.isRecording {
+                HandOffCard(url: recording,
+                            onRetake: { camera.lastRecordingURL = nil },
+                            onGrade: {
+                                camera.lastRecordingURL = nil
+                                app.selectedVideoURL = recording
+                                app.path = [.selectClip, .applyLook]
+                            },
+                            onEdit: {
+                                camera.lastRecordingURL = nil
+                                let editor = app.editor
+                                Task {
+                                    await editor.addClip(from: recording)
+                                    editor.selectedClipID = editor.clips.last?.id
+                                }
+                                app.path = [.editor]
+                            })
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 200)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(50)
+            }
+
             // Status pills float over the feed, top centre.
             VStack(spacing: 8) {
                 if camera.isRecording {
@@ -64,7 +91,7 @@ struct CameraLiveLookView: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .id(statusCaption)
                 }
-                if camera.lastSavedToPhotos {
+                if camera.lastSavedToPhotos, camera.lastRecordingURL == nil {
                     Label("Saved to Photos", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(LumaTheme.teal)
@@ -111,6 +138,8 @@ struct CameraLiveLookView: View {
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil
         }
+        .animation(.spring(response: 0.34, dampingFraction: 0.85),
+                   value: camera.lastRecordingURL != nil)
         .animation(.easeOut(duration: 0.15), value: showGrid)
         // Grade the look strip with a real frame from the live camera as
         // soon as one arrives.
@@ -371,5 +400,85 @@ private struct RecordingPill: View {
                 pulse = true
             }
         }
+    }
+}
+
+
+// MARK: - Recording hand-off (queue #5)
+
+/// After a take: the clip is saved, now choose where it goes. The camera
+/// behaves like an appliance that returns a result.
+private struct HandOffCard: View {
+    let url: URL
+    let onRetake: () -> Void
+    let onGrade: () -> Void
+    let onEdit: () -> Void
+
+    @State private var thumb: CGImage?
+
+    var body: some View {
+        VStack(spacing: 11) {
+            HStack(spacing: 10) {
+                Group {
+                    if let thumb {
+                        Image(decorative: thumb, scale: 1)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        LumaTheme.surfaceStrong
+                    }
+                }
+                .frame(width: 52, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9)
+                    .strokeBorder(.white.opacity(0.14), lineWidth: 1))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Clip saved")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                    TechReadout("SAVED TO PHOTOS · LOOK BAKED IN", size: 8,
+                                color: LumaTheme.textMuted)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                handButton("RETAKE", solid: false, action: onRetake)
+                handButton("GRADE", solid: false, action: onGrade)
+                handButton("EDIT →", solid: true, action: onEdit)
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .background(LumaTheme.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18)
+            .strokeBorder(.white.opacity(0.16), lineWidth: 1))
+        .task {
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 160, height: 160)
+            thumb = try? await generator.image(
+                at: CMTime(seconds: 0.05, preferredTimescale: 600)).image
+        }
+    }
+
+    private func handButton(_ title: String, solid: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+                .background(solid
+                            ? AnyShapeStyle(LinearGradient(colors: [LumaTheme.accent, LumaTheme.accentDeep],
+                                                           startPoint: .top, endPoint: .bottom))
+                            : AnyShapeStyle(.white.opacity(0.08)),
+                            in: RoundedRectangle(cornerRadius: 11))
+                .overlay(RoundedRectangle(cornerRadius: 11)
+                    .strokeBorder(.white.opacity(solid ? 0.22 : 0.1), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
     }
 }

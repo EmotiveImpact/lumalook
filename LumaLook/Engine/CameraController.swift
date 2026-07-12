@@ -13,6 +13,8 @@ final class CameraController: NSObject, ObservableObject {
     @Published var permissionDenied = false
     @Published var cameraUnavailable = false
     @Published var lastSavedToPhotos = false
+    /// The finished recording, kept for the hand-off card (Grade / Edit).
+    @Published var lastRecordingURL: URL?
     @Published var previewImage: CGImage?
 
     /// Injected from AppModel so camera, preview and export share one grade.
@@ -188,6 +190,7 @@ final class CameraController: NSObject, ObservableObject {
             let succeeded = writer.status == .completed
             self?.cleanupWriter()
             guard succeeded else { return }
+            DispatchQueue.main.async { self?.lastRecordingURL = url }
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
                 guard status == .authorized || status == .limited else { return }
                 PHPhotoLibrary.shared().performChanges {

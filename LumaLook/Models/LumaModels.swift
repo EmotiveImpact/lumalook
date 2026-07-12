@@ -38,6 +38,30 @@ struct LookSettings: Codable, Equatable {
     var bloom: Double = 0
     var halation: Double = 0
     var vignette: Double = 0
+    var sharpness: Double = 0
+    var fade: Double = 0        // lifted blacks, the matte-film look
+
+    init() {}
+
+    /// Custom decode: every field optional-with-default so saved looks from
+    /// any app version decode (synthesized decode would throw keyNotFound).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        intensity = try c.decodeIfPresent(Double.self, forKey: .intensity) ?? 75
+        exposure = try c.decodeIfPresent(Double.self, forKey: .exposure) ?? 0
+        contrast = try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 10
+        highlights = try c.decodeIfPresent(Double.self, forKey: .highlights) ?? 0
+        shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
+        saturation = try c.decodeIfPresent(Double.self, forKey: .saturation) ?? 0
+        warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
+        tint = try c.decodeIfPresent(Double.self, forKey: .tint) ?? 0
+        grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
+        bloom = try c.decodeIfPresent(Double.self, forKey: .bloom) ?? 0
+        halation = try c.decodeIfPresent(Double.self, forKey: .halation) ?? 0
+        vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
+        sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
+        fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
+    }
 }
 
 struct MockClip: Identifiable, Hashable {

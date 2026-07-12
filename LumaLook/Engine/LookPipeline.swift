@@ -227,6 +227,38 @@ final class LookPipeline: @unchecked Sendable {
             output = vignette.outputImage ?? output
         }
 
+        // Highlights / shadows: shadow lift-crush via highlightShadowAdjust,
+        // highlight energy via a gentle tone-curve shoulder.
+        if settings.shadows != 0 || settings.highlights < 0 {
+            let hs = CIFilter.highlightShadowAdjust()
+            hs.inputImage = output
+            hs.shadowAmount = Float(settings.shadows / 100.0)
+            // Negative highlights = recovery (industry convention).
+            hs.highlightAmount = Float(1.0 + min(0, settings.highlights) / 100.0 * 0.7)
+            hs.radius = 1.5
+            output = hs.outputImage ?? output
+        }
+
+        if settings.highlights > 0 || settings.fade > 0 {
+            let curve = CIFilter.toneCurve()
+            curve.inputImage = output
+            let lift = CGFloat(settings.fade / 100.0 * 0.12)
+            let shoulder = CGFloat(0.8 + settings.highlights / 100.0 * 0.13)
+            curve.point0 = CGPoint(x: 0, y: lift)
+            curve.point1 = CGPoint(x: 0.25, y: 0.25 + lift * 0.5)
+            curve.point2 = CGPoint(x: 0.5, y: 0.5)
+            curve.point3 = CGPoint(x: 0.8, y: min(0.98, shoulder))
+            curve.point4 = CGPoint(x: 1, y: 1)
+            output = curve.outputImage ?? output
+        }
+
+        if settings.sharpness > 0 {
+            let sharpen = CIFilter.sharpenLuminance()
+            sharpen.inputImage = output
+            sharpen.sharpness = Float(settings.sharpness / 100.0 * 0.9)
+            output = sharpen.outputImage?.cropped(to: image.extent) ?? output
+        }
+
         if settings.halation > 0 {
             output = applyHalation(strength: settings.halation / 100.0, to: output)
         }

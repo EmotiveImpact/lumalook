@@ -472,6 +472,12 @@ struct CustomLookBuilderView: View {
                     GradeSlider(title: "Saturation", value: $app.settings.saturation)
                     GradeSlider(title: "Warmth", value: $app.settings.warmth)
                     GradeSlider(title: "Tint", value: $app.settings.tint)
+                    GradeSlider(title: "Sharpness", value: Binding(
+                        get: { app.settings.sharpness },
+                        set: { app.settings.sharpness = max(0, $0) }))
+                    GradeSlider(title: "Fade", value: Binding(
+                        get: { app.settings.fade },
+                        set: { app.settings.fade = max(0, $0) }))
                 }
                 .padding(.top, 6)
             } else {
