@@ -667,6 +667,35 @@ private struct OverlayBar: View {
             .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.14),
                           lineWidth: isDraggingBar ? 2 : 1))
         .opacity(isDraggingBar ? 0.92 : 1)
+        // Trim handles (gap fix): head trims content + anchors the out-point,
+        // tail adjusts duration. One engine commit per drag.
+        .overlay {
+            if !isDraggingBar, barWidth > 54 {
+                HStack {
+                    overlayTrimHandle(system: "chevron.compact.left")
+                        .gesture(
+                            DragGesture(minimumDistance: 2)
+                                .onEnded { value in
+                                    editor.trimOverlayHead(
+                                        id: item.id,
+                                        deltaSeconds: metrics.time(for: value.translation.width))
+                                    LumaHaptics.shared.trimRubberband()
+                                }
+                        )
+                    Spacer(minLength: 0)
+                    overlayTrimHandle(system: "chevron.compact.right")
+                        .gesture(
+                            DragGesture(minimumDistance: 2)
+                                .onEnded { value in
+                                    editor.trimOverlayTail(
+                                        id: item.id,
+                                        deltaSeconds: metrics.time(for: value.translation.width))
+                                    LumaHaptics.shared.trimRubberband()
+                                }
+                        )
+                }
+            }
+        }
         .offset(x: metrics.x(for: item.timelineOffset) + dragTranslation)
         .onTapGesture { onTapOverlay(item.id) }
         .contextMenu {
@@ -691,6 +720,15 @@ private struct OverlayBar: View {
                 }
         )
         .sensoryFeedback(.impact(weight: .light), trigger: isDraggingBar)
+    }
+
+    private func overlayTrimHandle(system: String) -> some View {
+        Image(systemName: system)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 14, height: LaneMetrics.overlay)
+            .background(.white.opacity(0.2))
+            .contentShape(Rectangle().inset(by: -6))
     }
 
     private func clampTranslation(_ translation: CGFloat) -> CGFloat {

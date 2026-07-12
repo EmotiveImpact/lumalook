@@ -20,7 +20,14 @@ final class CameraController: NSObject, ObservableObject {
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
 
+    /// Live zoom readout for the HUD (1.0x / 2.0x / 3.0x cycle).
+    @Published var zoomFactor: CGFloat = 1
+    /// Which camera feeds the session (flip toggles it).
+    @Published var cameraPosition: AVCaptureDevice.Position = .back
+
     let session = AVCaptureSession()
+    private var activeVideoDevice: AVCaptureDevice?    // sessionQueue only
+    private var activeVideoInput: AVCaptureDeviceInput?  // sessionQueue only
     private let sessionQueue = DispatchQueue(label: "com.emotiveimpact.lumalook.camera.session")
     private let mediaQueue = DispatchQueue(label: "com.emotiveimpact.lumalook.camera.media")
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -80,6 +87,8 @@ final class CameraController: NSObject, ObservableObject {
             return
         }
         session.addInput(videoInput)
+        activeVideoDevice = device
+        activeVideoInput = videoInput
 
         if let mic = AVCaptureDevice.default(for: .audio),
            let audioInput = try? AVCaptureDeviceInput(device: mic),
@@ -104,6 +113,57 @@ final class CameraController: NSObject, ObservableObject {
 
         session.commitConfiguration()
         configured = true
+    }
+
+    // MARK: - Zoom & flip (were placebo buttons — now real)
+
+    /// Cycles 1x → 2x → 3x → 1x, clamped to what the device supports.
+    func cycleZoom() {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            let next: CGFloat = self.zoomFactor >= 2.5 ? 1 : (self.zoomFactor >= 1.5 ? 3 : 2)
+            let clamped = min(next, device.maxAvailableVideoZoomFactor)
+            do {
+                try device.lockForConfiguration()
+                device.ramp(toVideoZoomFactor: clamped, withRate: 8)
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { self.zoomFactor = clamped }
+            } catch {}
+        }
+    }
+
+    /// Switches front/back. Blocked while recording (the writer's frame
+    /// geometry must stay stable for the whole take).
+    func flipCamera() {
+        guard !isRecording else { return }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let target: AVCaptureDevice.Position = self.cameraPosition == .back ? .front : .back
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
+                                                       for: .video, position: target),
+                  let input = try? AVCaptureDeviceInput(device: device) else { return }
+            self.session.beginConfiguration()
+            if let current = self.activeVideoInput {
+                self.session.removeInput(current)
+            }
+            if self.session.canAddInput(input) {
+                self.session.addInput(input)
+                self.activeVideoDevice = device
+                self.activeVideoInput = input
+            } else if let current = self.activeVideoInput {
+                self.session.addInput(current)   // roll back
+            }
+            if let connection = self.videoOutput.connection(with: .video),
+               connection.isVideoRotationAngleSupported(90) {
+                connection.videoRotationAngle = 90
+                connection.isVideoMirrored = target == .front
+            }
+            self.session.commitConfiguration()
+            DispatchQueue.main.async {
+                self.cameraPosition = target
+                self.zoomFactor = 1
+            }
+        }
     }
 
     func stopSession() {

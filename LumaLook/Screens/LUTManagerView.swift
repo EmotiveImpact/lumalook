@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// My LUTs as a NATIVE inset-grouped List (Apple-native tranche 2): swipe
+/// to delete/favourite, native separators and grouping — the moment a
+/// screen becomes a list of records, it should feel like Settings does.
 struct LUTManagerView: View {
     @EnvironmentObject private var app: AppModel
     @State private var filter = "Imported"
@@ -20,48 +23,12 @@ struct LUTManagerView: View {
 
     var body: some View {
         LumaScreen(title: "My LUTs", trailingIcon: "plus",
-                   trailingAction: { showImporter = true }, showBack: true) {
+                   trailingAction: { showImporter = true }, showBack: true,
+                   scrollable: false) {
             SegmentPills(options: ["Imported", "Favorites", "Recents"], selection: $filter)
 
-            SolidCTA(title: "+ Import LUT", height: 56, fill: LumaTheme.accentDeep) {
-                showImporter = true
-            }
-
-            if let importedName {
-                Label("\(importedName) imported", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(LumaTheme.teal)
-            }
-            if let importError {
-                Label(importError, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(LumaTheme.orange)
-            }
-
-            if visibleLUTs.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "cube.transparent")
-                        .font(.system(size: 34))
-                        .foregroundStyle(LumaTheme.textMuted)
-                    Text("No LUTs here yet")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                    Text("Import a .cube file to get started.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(LumaTheme.textMuted)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 44)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(visibleLUTs.enumerated()), id: \.element.id) { index, lut in
-                        LUTRow(lut: lut, scene: MockScene.allCases[index % MockScene.allCases.count])
-                        if index < visibleLUTs.count - 1 {
-                            Hairline().padding(.leading, 78)
-                        }
-                    }
-                }
-            }
+            listBody
+                .padding(.horizontal, -22)   // the List brings its own insets
         }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [Self.cubeType, .plainText, .data],
@@ -86,6 +53,82 @@ struct LUTManagerView: View {
             }
         }
     }
+
+    private var listBody: some View {
+        List {
+            Section {
+                Button {
+                    showImporter = true
+                } label: {
+                    Label("Import LUT", systemImage: "square.and.arrow.down")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LumaTheme.accentBright)
+                }
+                .listRowBackground(LumaTheme.surface)
+
+                if let importedName {
+                    Label("\(importedName) imported", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(LumaTheme.teal)
+                        .listRowBackground(LumaTheme.surface)
+                }
+                if let importError {
+                    Label(importError, systemImage: "exclamationmark.triangle")
+                        .font(.subheadline)
+                        .foregroundStyle(LumaTheme.orange)
+                        .listRowBackground(LumaTheme.surface)
+                }
+            } footer: {
+                Text("You can also open .cube files or ZIP packs from the Files app — they import straight into this library.")
+            }
+
+            if visibleLUTs.isEmpty {
+                Section {
+                    VStack(spacing: 10) {
+                        Image(systemName: "cube.transparent")
+                            .font(.system(size: 34))
+                            .foregroundStyle(LumaTheme.textMuted)
+                        Text("No LUTs Here Yet")
+                            .font(.headline)
+                            .foregroundStyle(LumaTheme.textSecondary)
+                        Text("Import a .cube file to get started.")
+                            .font(.subheadline)
+                            .foregroundStyle(LumaTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 34)
+                    .listRowBackground(Color.clear)
+                }
+            } else {
+                Section {
+                    ForEach(Array(visibleLUTs.enumerated()), id: \.element.id) { index, lut in
+                        LUTRow(lut: lut, scene: MockScene.allCases[index % MockScene.allCases.count])
+                            .listRowBackground(LumaTheme.surface)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    app.lutRepository.delete(lut)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    app.lutRepository.toggleFavourite(lut)
+                                } label: {
+                                    Label(lut.isFavourite ? "Unfavorite" : "Favorite",
+                                          systemImage: lut.isFavourite ? "star.slash" : "star")
+                                }
+                                .tint(LumaTheme.gold)
+                            }
+                    }
+                } header: {
+                    Text("\(visibleLUTs.count) LUT\(visibleLUTs.count == 1 ? "" : "s")")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
 }
 
 private struct LUTRow: View {
@@ -101,45 +144,44 @@ private struct LUTRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            SceneThumb(scene: scene, radius: 10)
-                .frame(width: 64, height: 48)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(lut.originalFileName)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .truncationMode(.middle)
+            SceneThumb(scene: scene, radius: 8)
+                .frame(width: 56, height: 42)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(lut.originalFileName)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if lut.isFavourite {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(LumaTheme.gold)
+                    }
+                }
                 Text(agoText)
-                    .font(.system(size: 14))
+                    .font(.footnote)
                     .foregroundStyle(LumaTheme.textMuted)
             }
             Spacer()
-            Button {
-                app.lutRepository.toggleFavourite(lut)
-            } label: {
-                Image(systemName: lut.isFavourite ? "star.fill" : "star")
-                    .font(.system(size: 20))
-                    .foregroundStyle(lut.isFavourite ? LumaTheme.gold : LumaTheme.textSecondary)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
             Menu {
-                Button("Apply to current clip") {
+                Button("Apply to Current Clip") {
                     app.selectedLUT = lut
                     app.path.append(.applyLook)
+                }
+                Button(lut.isFavourite ? "Remove Favorite" : "Favorite") {
+                    app.lutRepository.toggleFavourite(lut)
                 }
                 Button("Delete", role: .destructive) {
                     app.lutRepository.delete(lut)
                 }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .rotationEffect(.degrees(90))
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 19))
                     .foregroundStyle(LumaTheme.textSecondary)
-                    .frame(width: 30, height: 36)
+                    .frame(width: 32, height: 36)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 2)
     }
 }

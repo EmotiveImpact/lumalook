@@ -664,9 +664,8 @@ private struct EditorContent: View {
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundStyle(.white)
                                 Button(action: onAdd) {
-                                    Text("ADD A CLIP")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .tracking(1.2)
+                                    Text("Add a Clip")
+                                        .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 22)
                                         .padding(.vertical, 12)
@@ -1004,9 +1003,8 @@ private struct EditorContent: View {
                     editor.applyTrim(start: trimStart, end: trimEnd)
                     withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
                 } label: {
-                    Text("APPLY TRIM")
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(1.2)
+                    Text("Apply Trim")
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 46)

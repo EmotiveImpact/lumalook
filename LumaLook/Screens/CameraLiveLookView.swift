@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreImage
 import AVFoundation
+import Photos
 
 /// Full-bleed cinematic viewfinder: the camera feed owns the entire
 /// screen and every control floats above it on scrims and glass —
@@ -13,6 +14,25 @@ struct CameraLiveLookView: View {
     @State private var showGrid = false
     @State private var recordStart: Date?
     @State private var statusCaption: String?
+    @State private var stillSavedFlash = 0
+
+    /// Graded still capture: saves the CURRENT preview frame (look baked in)
+    /// straight to Photos — what you see is what you keep.
+    private func captureStill() {
+        guard let frame = camera.previewImage else { return }
+        Task {
+            let image = UIImage(cgImage: frame)
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard status == .authorized || status == .limited else { return }
+            try? await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
+            stillSavedFlash += 1
+            statusCaption = "Saved to Photos"
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            if statusCaption == "Saved to Photos" { statusCaption = nil }
+        }
+    }
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -106,14 +126,23 @@ struct CameraLiveLookView: View {
 
             // Zoom / flip rail on the right, clear of the bottom cluster.
             VStack(spacing: 10) {
-                Text("1.0x")
-                    .font(.system(size: 15, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .frame(width: 54, height: 44)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                Button {} label: {
+                Button {
+                    camera.cycleZoom()
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Text(String(format: "%.1fx", camera.zoomFactor))
+                        .font(.system(size: 15, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .frame(width: 54, height: 44)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.lumaPress)
+                Button {
+                    camera.flipCamera()
+                    LumaHaptics.shared.tap()
+                } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.white)
@@ -122,6 +151,8 @@ struct CameraLiveLookView: View {
                         .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.lumaPress)
+                .opacity(camera.isRecording ? 0.35 : 1)
+                .disabled(camera.isRecording)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 14)
@@ -257,7 +288,9 @@ struct CameraLiveLookView: View {
 
     private var bottomControls: some View {
         HStack {
-            Button {} label: {
+            Button {
+                app.path = [.selectClip]
+            } label: {
                 Image(systemName: "photo.on.rectangle")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(.white)
@@ -276,7 +309,9 @@ struct CameraLiveLookView: View {
 
             Spacer()
 
-            Button {} label: {
+            Button {
+                captureStill()
+            } label: {
                 Image(systemName: "camera")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(.white)
@@ -290,6 +325,7 @@ struct CameraLiveLookView: View {
         .padding(.horizontal, 26)
         .padding(.bottom, 6)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
+        .sensoryFeedback(.success, trigger: stillSavedFlash)
     }
 
     @ViewBuilder

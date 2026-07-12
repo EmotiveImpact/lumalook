@@ -612,72 +612,99 @@ private struct GradeSlider: View {
 
 // MARK: - 13 Project Library
 
+/// Projects as a NATIVE inset-grouped List (Apple-native tranche 2):
+/// swipe to delete, native separators — records read as records.
 struct ProjectLibraryView: View {
     @EnvironmentObject private var app: AppModel
     var isRoot: Bool = false
 
     var body: some View {
-        LumaScreen(title: "Projects", trailingText: "All", showBack: !isRoot) {
-            ProjectGrid(store: app.store)
-
-            Spacer(minLength: 30)
-
-            SolidCTA(title: "+ New Project") {
-                app.editor.startNewProject()
-                app.path.append(.editor)
-            }
+        LumaScreen(title: "Projects", showBack: !isRoot, scrollable: false) {
+            ProjectList(store: app.store)
+                .padding(.horizontal, -22)   // the List brings its own insets
         }
     }
 }
 
-private struct ProjectGrid: View {
+private struct ProjectList: View {
     @EnvironmentObject private var app: AppModel
     @ObservedObject var store: PersistenceStore
 
     var body: some View {
-        if store.projects.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "film.stack")
-                    .font(.system(size: 34))
-                    .foregroundStyle(LumaTheme.textMuted)
-                Text("No projects yet")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Text("Edits auto-save here as you work.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(LumaTheme.textMuted)
+        List {
+            Section {
+                Button {
+                    app.editor.startNewProject()
+                    app.path.append(.editor)
+                } label: {
+                    Label("New Project", systemImage: "plus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LumaTheme.accentBright)
+                }
+                .listRowBackground(LumaTheme.surface)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 60)
-        } else {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 18) {
-                ForEach(Array(store.projects.enumerated()), id: \.element.id) { index, project in
-                    Button {
-                        app.editor.load(project: project)
-                        app.path.append(.editor)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ProjectThumb(project: project, store: store,
-                                         fallback: MockScene.allCases[index % MockScene.allCases.count])
-                                .frame(height: 118)
-                            Text(project.title)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Text("\(project.updatedAt.formatted(date: .abbreviated, time: .omitted)) • \(timeString(project.duration))")
-                                .font(.system(size: 12))
-                                .foregroundStyle(LumaTheme.textMuted)
+
+            if store.projects.isEmpty {
+                Section {
+                    VStack(spacing: 10) {
+                        Image(systemName: "film.stack")
+                            .font(.system(size: 34))
+                            .foregroundStyle(LumaTheme.textMuted)
+                        Text("No Projects Yet")
+                            .font(.headline)
+                            .foregroundStyle(LumaTheme.textSecondary)
+                        Text("Edits auto-save here as you work.")
+                            .font(.subheadline)
+                            .foregroundStyle(LumaTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .listRowBackground(Color.clear)
+                }
+            } else {
+                Section {
+                    ForEach(Array(store.projects.enumerated()), id: \.element.id) { index, project in
+                        Button {
+                            app.editor.load(project: project)
+                            app.path.append(.editor)
+                        } label: {
+                            HStack(spacing: 14) {
+                                ProjectThumb(project: project, store: store,
+                                             fallback: MockScene.allCases[index % MockScene.allCases.count])
+                                    .frame(width: 92, height: 58)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(project.title)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                    Text("\(project.updatedAt.formatted(date: .abbreviated, time: .omitted)) · \(timeString(project.duration)) · \(project.clips.count) clip\(project.clips.count == 1 ? "" : "s")")
+                                        .font(.footnote)
+                                        .foregroundStyle(LumaTheme.textMuted)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(LumaTheme.textMuted)
+                            }
+                            .padding(.vertical, 2)
                         }
-                        .contextMenu {
-                            Button("Delete", role: .destructive) {
+                        .buttonStyle(.plain)
+                        .listRowBackground(LumaTheme.surface)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
                                 store.deleteProject(project.id)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
                     }
-                    .buttonStyle(.plain)
+                } header: {
+                    Text("\(store.projects.count) Project\(store.projects.count == 1 ? "" : "s")")
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -978,7 +1005,85 @@ struct SettingsSubscriptionView: View {
     @State private var showPaywall = false
 
     var body: some View {
-        LumaScreen(title: "Settings", showBack: !isRoot) {
+        LumaScreen(title: "Settings", showBack: !isRoot, scrollable: false) {
+            settingsList
+                .padding(.horizontal, -22)   // the List brings its own insets
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
+        .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
+                showPaywall = true
+            }
+            #endif
+        }
+    }
+
+    /// NATIVE inset-grouped List (Apple-native tranche 2).
+    private var settingsList: some View {
+        List {
+            Section {
+                subscriptionCard
+                    .listRowBackground(LumaTheme.surface)
+            }
+
+            Section("Purchases") {
+                settingsRow(icon: "creditcard", title: "Subscription",
+                            value: storeService.isPro ? "Pro" : "Free") {
+                    showPaywall = true
+                }
+                settingsRow(icon: "arrow.clockwise", title: "Restore Purchases") {
+                    Task { await storeService.restorePurchases() }
+                }
+            }
+            .listRowBackground(LumaTheme.surface)
+
+            Section("Preferences") {
+                settingsRow(icon: "4k.tv", title: "Export Quality", value: "1080p") {}
+                settingsRow(icon: "drop", title: "Watermark", value: "Off") {}
+                settingsRow(icon: "icloud", title: "iCloud Sync", value: "Off") {}
+                settingsRow(icon: "globe", title: "App Language", value: "English") {}
+            }
+            .listRowBackground(LumaTheme.surface)
+
+            Section("About") {
+                settingsRow(icon: "questionmark.circle", title: "Help & Support") {}
+                settingsRow(icon: "info.circle", title: "About LumaLook", value: "v1.0") {}
+            }
+            .listRowBackground(LumaTheme.surface)
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func settingsRow(icon: String, title: String, value: String? = nil,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 13) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(LumaTheme.accentBright)
+                    .frame(width: 28)
+                Text(title)
+                    .font(.body)
+                    .foregroundStyle(.white)
+                Spacer()
+                if let value {
+                    Text(value)
+                        .font(.body)
+                        .foregroundStyle(LumaTheme.textSecondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var subscriptionCard: some View {
             // Profile / subscription card — live StoreKit 2 status (C5).
             HStack(spacing: 14) {
                 Circle()
@@ -1014,39 +1119,7 @@ struct SettingsSubscriptionView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(16)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 18))
-
-            SettingsGroup(rows: [
-                ("creditcard", "Subscription", storeService.isPro ? "Pro" : "Free", true),
-                ("arrow.clockwise", "Restore Purchases", nil, true),
-                ("4k.tv", "Export Quality", "1080p", true),
-                ("drop", "Watermark", "Off", true),
-                ("icloud", "iCloud Sync", "Off", true),
-                ("globe", "App Language", "English", true)
-            ]) { index in
-                switch index {
-                case 0: showPaywall = true
-                case 1: Task { await storeService.restorePurchases() }
-                default: break
-                }
-            }
-
-            SettingsGroup(rows: [
-                ("questionmark.circle", "Help & Support", nil, true),
-                ("info.circle", "About LumaLook", "v1.0", true)
-            ])
-        }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-        }
-        .onAppear {
-            #if DEBUG
-            if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
-                showPaywall = true
-            }
-            #endif
-        }
+            .padding(.vertical, 6)
     }
 }
 

@@ -150,6 +150,9 @@ final class EditorState: ObservableObject {
         var isImage: Bool
         var timelineOffset: Double    // where the overlay starts on the timeline
         var duration: Double          // seconds on screen
+        /// Trim window into the overlay's own media (video overlays).
+        var mediaStart: Double = 0
+        var mediaDuration: Double = .greatestFiniteMagnitude
         var sizeFraction: Double = 0.45   // overlay width / canvas width (0.25…1)
         var center: CGPoint = CGPoint(x: 0.72, y: 0.25)  // unit coords, y down
         var opacity: Double = 1.0
@@ -338,6 +341,8 @@ final class EditorState: ObservableObject {
                               volume: $0.volume, isMuted: $0.isMuted,
                               rotationDegrees: $0.rotationDegrees,
                               keyframes: $0.keyframes.isEmpty ? nil : $0.keyframes,
+                              mediaStart: $0.mediaStart,
+                              mediaDuration: $0.mediaDuration.isFinite ? $0.mediaDuration : nil,
                               text: $0.text,
                               textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
                               textColorHex: $0.text == nil ? nil : $0.textColorHex)
@@ -387,6 +392,8 @@ final class EditorState: ObservableObject {
             guard stored.text != nil || FileManager.default.fileExists(atPath: url.path) else { return nil }
             var item = OverlayItem(id: stored.id, url: url, isImage: stored.isImage,
                                    timelineOffset: stored.timelineOffset, duration: stored.duration,
+                                   mediaStart: stored.mediaStart ?? 0,
+                                   mediaDuration: stored.mediaDuration ?? .greatestFiniteMagnitude,
                                    sizeFraction: stored.sizeFraction,
                                    center: CGPoint(x: stored.centerX, y: stored.centerY),
                                    opacity: stored.opacity,
@@ -965,9 +972,10 @@ final class EditorState: ObservableObject {
         guard duration > 0.2 else { return }
 
         pushUndoSnapshot()
-        let item = OverlayItem(id: UUID(), url: durableURL, isImage: isImage,
+        var item = OverlayItem(id: UUID(), url: durableURL, isImage: isImage,
                                timelineOffset: offset, duration: duration,
                                title: url.deletingPathExtension().lastPathComponent)
+        if !isImage { item.mediaDuration = mediaDuration }
         overlays.append(item)
         overlays.sort { $0.timelineOffset < $1.timelineOffset }
         rebuild()
@@ -1109,6 +1117,46 @@ final class EditorState: ObservableObject {
         var frames = overlay.keyframes.filter { abs($0.time - offset) > 0.15 }
         frames.append(frame)
         overlays[index].keyframes = frames.sorted { $0.time < $1.time }
+    }
+
+    /// Overlay trim (gap fix): the lane bar's leading handle trims content
+    /// AND advances the bar so the out-point stays anchored; the trailing
+    /// handle adjusts duration. One undo entry per drag.
+    func trimOverlayHead(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let item = overlays[i]
+        var applied = min(deltaSeconds, item.duration - 0.2)
+        if !item.isImage && item.text == nil {
+            applied = max(applied, -item.mediaStart)   // no material before 0
+        }
+        applied = max(applied, -item.timelineOffset)   // can't start before 0
+        guard abs(applied) > 0.01 else { return }
+        pushUndoSnapshot()
+        if !item.isImage && item.text == nil {
+            overlays[i].mediaStart = item.mediaStart + applied
+        }
+        overlays[i].timelineOffset = item.timelineOffset + applied
+        overlays[i].duration = item.duration - applied
+        rebuild()
+    }
+
+    func trimOverlayTail(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let item = overlays[i]
+        var maxDuration = max(0.2, totalDuration - item.timelineOffset)
+        if !item.isImage && item.text == nil {
+            maxDuration = min(maxDuration, item.mediaDuration - item.mediaStart)
+        }
+        if let next = overlays
+            .filter({ $0.id != id && $0.timelineOffset > item.timelineOffset + 0.05 })
+            .min(by: { $0.timelineOffset < $1.timelineOffset }) {
+            maxDuration = min(maxDuration, next.timelineOffset - item.timelineOffset)
+        }
+        let newDuration = min(max(0.2, item.duration + deltaSeconds), maxDuration)
+        guard abs(newDuration - item.duration) > 0.01 else { return }
+        pushUndoSnapshot()
+        overlays[i].duration = newDuration
+        rebuild()
     }
 
     /// Overlay audio: mix-only, live, no rebuild.
@@ -1547,7 +1595,10 @@ final class EditorState: ObservableObject {
         var overlayCursor = CMTime.zero
         for overlay in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
             let start = min(max(0, overlay.timelineOffset), cursor.seconds)
-            let playable = min(overlay.duration, cursor.seconds - start)
+            var playable = min(overlay.duration, cursor.seconds - start)
+            if !overlay.isImage, overlay.text == nil {
+                playable = min(playable, max(0, overlay.mediaDuration - overlay.mediaStart))
+            }
             guard playable > 0.05 else { continue }
 
             if let text = overlay.text {
@@ -1583,7 +1634,7 @@ final class EditorState: ObservableObject {
             if at > overlayCursor {
                 track.insertEmptyTimeRange(CMTimeRange(start: overlayCursor, end: at))
             }
-            let range = CMTimeRange(start: .zero,
+            let range = CMTimeRange(start: CMTime(seconds: overlay.mediaStart, preferredTimescale: 600),
                                     duration: CMTime(seconds: playable, preferredTimescale: 600))
             do {
                 try track.insertTimeRange(range, of: sourceVideo, at: at)
