@@ -15,6 +15,23 @@ struct StoredClip: Codable, Identifiable {
     var isMuted: Bool? = nil
     /// TransitionStyle rawValue at this clip's out-point (optional: legacy).
     var transitionAfter: String? = nil
+    /// Photo clip on the main track (T7). Optional so pre-photo projects
+    /// still decode; nil means video.
+    var isImage: Bool? = nil
+}
+
+/// A picture-in-picture overlay (video or still) attached to a project.
+struct StoredOverlay: Codable {
+    var id: UUID
+    var fileName: String        // inside Documents/Clips
+    var isImage: Bool
+    var title: String? = nil
+    var timelineOffset: Double
+    var duration: Double
+    var sizeFraction: Double
+    var centerX: Double
+    var centerY: Double
+    var opacity: Double
 }
 
 /// Background-music track attached to a project.
@@ -50,6 +67,9 @@ struct StoredProject: Codable, Identifiable {
     /// generations of Projects.json still decode; `music` above is only read
     /// for migration.
     var audioTracks: [StoredMusic]? = nil
+    /// PIP overlay lane (T1). Optional with nil default AT THE STRUCT END —
+    /// every earlier generation of Projects.json must keep decoding.
+    var overlays: [StoredOverlay]? = nil
 }
 
 /// An Apply-a-Look session: the media + the exact grade, restorable from
@@ -162,9 +182,13 @@ final class PersistenceStore: ObservableObject {
     /// balloons forever — but only files no OTHER project still references.
     private func cleanUpMedia(of removed: StoredProject?) {
         guard let removed else { return }
-        let liveClipFiles = Set(projects.flatMap { $0.clips.map(\.fileName) })
-        for clip in removed.clips where !liveClipFiles.contains(clip.fileName) {
-            try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(clip.fileName))
+        // Clip library files are shared by clips AND overlays across projects.
+        let liveClipFiles = Set(projects.flatMap { project in
+            project.clips.map(\.fileName) + (project.overlays ?? []).map(\.fileName)
+        })
+        let removedClipFiles = removed.clips.map(\.fileName) + (removed.overlays ?? []).map(\.fileName)
+        for fileName in removedClipFiles where !liveClipFiles.contains(fileName) {
+            try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(fileName))
         }
         let removedAudio = (removed.audioTracks ?? []) + (removed.music.map { [$0] } ?? [])
         let liveAudioFiles = Set(projects.flatMap { project in
@@ -205,7 +229,10 @@ final class PersistenceStore: ObservableObject {
     }
 
     private func deleteSessionMediaIfOrphaned(_ session: GradeSession) {
-        let inProjects = projects.contains { $0.clips.contains { $0.fileName == session.mediaFileName } }
+        let inProjects = projects.contains { project in
+            project.clips.contains { $0.fileName == session.mediaFileName }
+                || (project.overlays ?? []).contains { $0.fileName == session.mediaFileName }
+        }
         let inSessions = gradeSessions.contains { $0.mediaFileName == session.mediaFileName }
         if !inProjects && !inSessions {
             try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(session.mediaFileName))

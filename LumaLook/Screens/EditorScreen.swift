@@ -10,6 +10,10 @@ struct EditorTimelineView: View {
 
     @State private var addPickerItem: PhotosPickerItem?
     @State private var showAddPicker = false
+    @State private var overlayPickerItem: PhotosPickerItem?
+    @State private var showOverlayPicker = false
+    @State private var showOverlayPanel = false
+    @State private var selectedOverlayID: UUID?
     @State private var isLoadingClip = false
     @State private var showTrimPanel = false
     @State private var trimStart: Double = 0
@@ -40,9 +44,12 @@ struct EditorTimelineView: View {
                 showClipAudioPanel: $showClipAudioPanel,
                 selectedAudioID: $selectedAudioID,
                 transitionClipID: $transitionClipID,
+                showOverlayPanel: $showOverlayPanel,
+                selectedOverlayID: $selectedOverlayID,
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
+                onAddOverlay: { showOverlayPicker = true },
                 onAddMusic: { showMusicImporter = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
@@ -52,7 +59,12 @@ struct EditorTimelineView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .photosPicker(isPresented: $showAddPicker, selection: $addPickerItem, matching: .videos)
+        // Mixed pickers (T7): picking an image adds a photo clip to the MAIN
+        // track; the Overlay picker layers it as PIP instead.
+        .photosPicker(isPresented: $showAddPicker, selection: $addPickerItem,
+                      matching: .any(of: [.images, .videos]))
+        .photosPicker(isPresented: $showOverlayPicker, selection: $overlayPickerItem,
+                      matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showMusicImporter,
                       allowedContentTypes: [.audio],
                       allowsMultipleSelection: false) { result in
@@ -67,8 +79,30 @@ struct EditorTimelineView: View {
                     await editor.addClip(from: video.url)
                     // Select the new clip so its tools appear right away.
                     editor.selectedClipID = editor.clips.last?.id
+                } else if let imageURL = await Self.pickedImageFile(from: newItem) {
+                    await editor.addPhotoClip(from: imageURL)
                 }
                 addPickerItem = nil
+            }
+        }
+        .onChange(of: overlayPickerItem) { _, newItem in
+            guard let newItem else { return }
+            isLoadingClip = true
+            Task {
+                defer { isLoadingClip = false }
+                let before = Set(editor.overlays.map(\.id))
+                if let video = try? await newItem.loadTransferable(type: PickedVideo.self) {
+                    await editor.addOverlay(from: video.url, isImage: false)
+                } else if let imageURL = await Self.pickedImageFile(from: newItem) {
+                    await editor.addOverlay(from: imageURL, isImage: true)
+                }
+                // Open the panel on the freshly added overlay (the array is
+                // offset-sorted, so "last" isn't necessarily the new one).
+                if let added = editor.overlays.first(where: { !before.contains($0.id) }) {
+                    selectedOverlayID = added.id
+                    showOverlayPanel = true
+                }
+                overlayPickerItem = nil
             }
         }
         .onAppear {
@@ -96,17 +130,53 @@ struct EditorTimelineView: View {
         }
     }
 
+    /// Writes a picked photo to a temp file so the engine can import it into
+    /// the durable clip library (photo clips + image overlays need a URL).
+    private static func pickedImageFile(from item: PhotosPickerItem) async -> URL? {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              !data.isEmpty else { return nil }
+        let ext = item.supportedContentTypes
+            .first(where: { $0.conforms(to: .image) })?
+            .preferredFilenameExtension ?? "jpg"
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumaLook_Picked_\(UUID().uuidString).\(ext)")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     /// Debug-only UI-check seeding, sibling to AppModel's LUMA_ROUTE:
-    /// SIMCTL_CHILD_LUMA_SEED_CLIP / _MUSIC point at media files on the host,
-    /// SIMCTL_CHILD_LUMA_SEED_PLAY=1 starts playback once seeded.
+    /// SIMCTL_CHILD_LUMA_SEED_CLIP / _MUSIC / _PHOTO / _OVERLAY point at
+    /// media files on the host, SIMCTL_CHILD_LUMA_SEED_PLAY=1 starts
+    /// playback once seeded.
     private func applyDebugSeed() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
-        guard env["LUMA_SEED_CLIP"] != nil || env["LUMA_SEED_MUSIC"] != nil else { return }
+        let seedKeys = ["LUMA_SEED_CLIP", "LUMA_SEED_MUSIC", "LUMA_SEED_PHOTO", "LUMA_SEED_OVERLAY"]
+        guard seedKeys.contains(where: { env[$0] != nil }) else { return }
         Task {
             if editor.isEmpty, let path = env["LUMA_SEED_CLIP"],
                FileManager.default.fileExists(atPath: path) {
                 await editor.addClip(from: URL(fileURLWithPath: path))
+            }
+            // Photo clip on the MAIN track (T7).
+            if let path = env["LUMA_SEED_PHOTO"], FileManager.default.fileExists(atPath: path) {
+                await editor.addPhotoClip(from: URL(fileURLWithPath: path))
+            }
+            // PIP overlay (T1) — image or video, sniffed by extension.
+            // Placement clamps against totalDuration, which the async
+            // rebuild publishes — wait for the base timeline to settle.
+            if let path = env["LUMA_SEED_OVERLAY"], FileManager.default.fileExists(atPath: path) {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                let url = URL(fileURLWithPath: path)
+                let imageExtensions = ["jpg", "jpeg", "png", "heic", "heif", "webp", "tiff"]
+                await editor.addOverlay(from: url,
+                                        isImage: imageExtensions.contains(url.pathExtension.lowercased()))
             }
             for key in ["LUMA_SEED_MUSIC", "LUMA_SEED_MUSIC2"] {
                 if let path = env[key], FileManager.default.fileExists(atPath: path) {
@@ -190,9 +260,12 @@ private struct EditorContent: View {
     @Binding var showClipAudioPanel: Bool
     @Binding var selectedAudioID: UUID?
     @Binding var transitionClipID: UUID?
+    @Binding var showOverlayPanel: Bool
+    @Binding var selectedOverlayID: UUID?
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
+    let onAddOverlay: () -> Void
     let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
@@ -272,6 +345,19 @@ private struct EditorContent: View {
                 Color.clear.onAppear { showClipAudioPanel = false }
             }
         }
+        .lumaToolSheet(isPresented: $showOverlayPanel, style: .panel) {
+            if let overlay = editor.overlays.first(where: { $0.id == selectedOverlayID })
+                          ?? editor.overlays.first {
+                OverlayPanel(editor: editor, overlayID: overlay.id) {
+                    withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = false }
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Color.clear.onAppear { showOverlayPanel = false }
+            }
+        }
         .lumaToolSheet(isPresented: Binding(
             get: { transitionClipID != nil },
             set: { if !$0 { transitionClipID = nil } }
@@ -336,6 +422,10 @@ private struct EditorContent: View {
                         .frame(width: 58)
                         .opacity(editor.isEmpty ? 0.35 : 1)
                         .disabled(editor.isEmpty)
+                        FlatTool(title: "Overlay", icon: "rectangle.on.rectangle", action: onAddOverlay)
+                            .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
                             showLooksStrip.toggle()
                         }
@@ -550,6 +640,11 @@ private struct EditorContent: View {
                        },
                        onTapTransition: { id in
                            transitionClipID = id
+                       },
+                       onAddOverlay: onAddOverlay,
+                       onTapOverlay: { id in
+                           selectedOverlayID = id
+                           showOverlayPanel = true
                        })
     }
 
@@ -800,6 +895,136 @@ private struct EditorContent: View {
         let m = Int(total) / 60
         let s = Int(total) % 60
         return String(format: "%02d:%02d", m, s)
+    }
+}
+
+// MARK: - Overlay panel (T1)
+
+/// PIP inspector: opacity + size sliders live-update the compositor via
+/// `OverlayLayout` (no rebuild); position via a 3×3 preset grid plus fine
+/// X/Y sliders; remove drops the overlay from the lane.
+private struct OverlayPanel: View {
+    @ObservedObject var editor: EditorState
+    let overlayID: UUID
+    let onClose: () -> Void
+
+    private var overlay: EditorState.OverlayItem? {
+        editor.overlays.first { $0.id == overlayID }
+    }
+
+    /// 3×3 anchor presets in unit canvas coordinates (y down).
+    private static let anchors: [[CGPoint]] = {
+        let xs: [CGFloat] = [0.22, 0.5, 0.78]
+        let ys: [CGFloat] = [0.18, 0.5, 0.82]
+        return ys.map { y in xs.map { x in CGPoint(x: x, y: y) } }
+    }()
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: overlay?.isImage == true ? "photo" : "rectangle.on.rectangle")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(LumaTheme.teal)
+                Text(overlay?.title.isEmpty == false ? overlay!.title : "Overlay")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                Text(String(format: "%.1fs", overlay?.duration ?? 0))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .monospacedDigit()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
+            }
+
+            InlineSlider(title: "Opacity", value: Binding(
+                get: { (overlay?.opacity ?? 1) * 100 },
+                set: { editor.setOverlayOpacity(id: overlayID, $0 / 100) }
+            )) { "\(Int($0))%" }
+
+            InlineSlider(title: "Size", value: Binding(
+                get: { (overlay?.sizeFraction ?? 0.45) * 100 },
+                set: { editor.setOverlaySize(id: overlayID, $0 / 100) }
+            ), range: 25...100) { "\(Int($0))%" }
+
+            HStack(alignment: .top, spacing: 16) {
+                // 3×3 position preset grid.
+                VStack(spacing: 6) {
+                    TechReadout("POSITION", size: 10, color: LumaTheme.textMuted)
+                    VStack(spacing: 5) {
+                        ForEach(0..<3, id: \.self) { row in
+                            HStack(spacing: 5) {
+                                ForEach(0..<3, id: \.self) { column in
+                                    anchorButton(Self.anchors[row][column])
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fine placement.
+                VStack(spacing: 10) {
+                    InlineSlider(title: "X", value: Binding(
+                        get: { (overlay?.center.x ?? 0.5) * 100 },
+                        set: { new in
+                            let y = overlay?.center.y ?? 0.5
+                            editor.setOverlayCenter(id: overlayID,
+                                                    CGPoint(x: new / 100, y: y))
+                        }
+                    )) { "\(Int($0))" }
+                    InlineSlider(title: "Y", value: Binding(
+                        get: { (overlay?.center.y ?? 0.5) * 100 },
+                        set: { new in
+                            let x = overlay?.center.x ?? 0.5
+                            editor.setOverlayCenter(id: overlayID,
+                                                    CGPoint(x: x, y: new / 100))
+                        }
+                    )) { "\(Int($0))" }
+                }
+            }
+
+            Button {
+                editor.removeOverlay(id: overlayID)
+                onClose()
+            } label: {
+                Label("Remove Overlay", systemImage: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LumaTheme.orange)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+            }
+            .buttonStyle(.lumaPress)
+        }
+        .padding(16)
+        .lumaCard()
+    }
+
+    private func anchorButton(_ anchor: CGPoint) -> some View {
+        let current = overlay?.center ?? CGPoint(x: 0.5, y: 0.5)
+        let selected = abs(current.x - anchor.x) < 0.06 && abs(current.y - anchor.y) < 0.06
+        return Button {
+            editor.setOverlayCenter(id: overlayID, anchor)
+            LumaHaptics.shared.tap()
+        } label: {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft)
+                               : AnyShapeStyle(.ultraThinMaterial))
+                .frame(width: 26, height: 26)
+                .overlay(Circle()
+                    .fill(selected ? LumaTheme.accentBright : .white.opacity(0.45))
+                    .frame(width: 5, height: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(selected ? LumaTheme.accent : .white.opacity(0.1),
+                                  lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
     }
 }
 

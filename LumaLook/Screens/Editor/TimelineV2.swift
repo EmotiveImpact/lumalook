@@ -13,19 +13,21 @@ struct TimelineMetrics: Equatable {
     func time(for x: CGFloat) -> Double { Double(x / pointsPerSecond) }
 }
 
-/// Lane heights for the vertical track stack. A future overlay lane is one
-/// more row here + a `total` bump — nothing else changes.
+/// Lane heights for the vertical track stack.
 enum LaneMetrics {
     static let ruler: CGFloat = 18
     static let video: CGFloat = 66
+    static let overlay: CGFloat = 30
     static let clipAudio: CGFloat = 14
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
 
     /// Total stack height for N audio lanes (+1 row for the add button).
+    /// The overlay lane is always present: bars when overlays exist, a slim
+    /// "+ Overlay" affordance when none do.
     static func total(audioLanes: Int) -> CGFloat {
         let lanes = CGFloat(audioLanes + 1)   // + "Add audio" row
-        return ruler + spacing + video + 4 + clipAudio
+        return ruler + spacing + video + 4 + overlay + 4 + clipAudio
              + lanes * (music + spacing)
     }
 }
@@ -65,6 +67,8 @@ struct TimelineV2View: View {
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
     let onTapTransition: (UUID) -> Void
+    let onAddOverlay: () -> Void
+    let onTapOverlay: (UUID) -> Void
 
     @State private var metrics = TimelineMetrics()
     @StateObject private var reorder = TimelineReorderState()
@@ -79,7 +83,8 @@ struct TimelineV2View: View {
                                  contentHeight: LaneMetrics.total(audioLanes: editor.audioTracks.count)) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic,
-                                        onTapTransition: onTapTransition)
+                                        onTapTransition: onTapTransition,
+                                        onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 }
                 playhead
             }
@@ -135,6 +140,8 @@ struct TimelineContentView: View {
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
     let onTapTransition: (UUID) -> Void
+    let onAddOverlay: () -> Void
+    let onTapOverlay: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
@@ -142,6 +149,8 @@ struct TimelineContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 VideoLane(editor: editor, metrics: metrics, reorder: reorder,
                           onTapTransition: onTapTransition)
+                OverlayLane(editor: editor, metrics: metrics,
+                            onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 ClipAudioLane(editor: editor, metrics: metrics)
             }
             ForEach(editor.audioTracks) { track in
@@ -432,6 +441,141 @@ struct TimelineClipCell: View {
         let frameIndex = min(clip.filmstrip.count - 1,
                              Int(position * Double(clip.filmstrip.count)))
         return clip.filmstrip[frameIndex]
+    }
+}
+
+// MARK: - Overlay lane (T1)
+
+/// PIP layer lane between the video lane and the clip-audio strip. Bars
+/// drag horizontally (offset) like the music bar, snap to clip boundaries,
+/// tap to open the overlay panel. Empty state shows a slim "+ Overlay"
+/// affordance consistent with Add audio.
+struct OverlayLane: View {
+    @ObservedObject var editor: EditorState
+    let metrics: TimelineMetrics
+    let onAddOverlay: () -> Void
+    let onTapOverlay: (UUID) -> Void
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if editor.overlays.isEmpty {
+                Button(action: onAddOverlay) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("Overlay")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .frame(width: 110, height: LaneMetrics.overlay)
+                    .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                        .foregroundStyle(.white.opacity(0.18)))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
+            } else {
+                ForEach(editor.overlays) { item in
+                    OverlayBar(editor: editor, metrics: metrics, item: item,
+                               onTapOverlay: onTapOverlay)
+                }
+            }
+        }
+        .frame(width: max(metrics.x(for: editor.totalDuration), 1),
+               height: LaneMetrics.overlay, alignment: .leading)
+    }
+}
+
+/// One overlay's bar: thumbnail chip + title, long-press-drag to move.
+private struct OverlayBar: View {
+    @ObservedObject var editor: EditorState
+    let metrics: TimelineMetrics
+    let item: EditorState.OverlayItem
+    let onTapOverlay: (UUID) -> Void
+
+    @State private var dragTranslation: CGFloat = 0
+    @State private var isDraggingBar = false
+
+    var body: some View {
+        let barWidth = max(metrics.x(for: item.duration), 28)
+        HStack(spacing: 6) {
+            if let thumb = item.thumbnail {
+                Image(decorative: thumb, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 26, height: LaneMetrics.overlay - 8)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: item.isImage ? "photo" : "rectangle.on.rectangle")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            if barWidth > 90 {
+                Text(item.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 2)
+                Text(String(format: "%.1fs", item.duration))
+                    .font(.system(size: 9, weight: .semibold))
+                    .monospacedDigit()
+                    .opacity(0.8)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 6)
+        .frame(width: barWidth, height: LaneMetrics.overlay)
+        .background(RoundedRectangle(cornerRadius: 7)
+            .fill(LumaTheme.teal.opacity(0.34)))
+        .overlay(RoundedRectangle(cornerRadius: 7)
+            .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.14),
+                          lineWidth: isDraggingBar ? 2 : 1))
+        .opacity(isDraggingBar ? 0.92 : 1)
+        .offset(x: metrics.x(for: item.timelineOffset) + dragTranslation)
+        .onTapGesture { onTapOverlay(item.id) }
+        .contextMenu {
+            Button(role: .destructive) {
+                editor.removeOverlay(id: item.id)
+            } label: { Label("Remove Overlay", systemImage: "trash") }
+        }
+        .gesture(
+            LongPressGesture(minimumDuration: 0.25)
+                .sequenced(before: DragGesture())
+                .onChanged { value in
+                    guard case .second(true, let drag) = value else { return }
+                    isDraggingBar = true
+                    dragTranslation = clampTranslation(drag?.translation.width ?? 0)
+                }
+                .onEnded { value in
+                    if case .second(true, let drag) = value {
+                        commitDrag(translation: clampTranslation(drag?.translation.width ?? 0))
+                    }
+                    isDraggingBar = false
+                    dragTranslation = 0
+                }
+        )
+        .sensoryFeedback(.impact(weight: .light), trigger: isDraggingBar)
+    }
+
+    private func clampTranslation(_ translation: CGFloat) -> CGFloat {
+        let minX = -metrics.x(for: item.timelineOffset)
+        let maxX = metrics.x(for: max(0, editor.totalDuration - 0.2 - item.timelineOffset))
+        return min(max(translation, minX), maxX)
+    }
+
+    private func commitDrag(translation: CGFloat) {
+        var offset = item.timelineOffset + metrics.time(for: translation)
+        // Snap to t = 0 and clip boundaries within 0.15 s.
+        var boundaries: [Double] = [0]
+        var cursor = 0.0
+        for clip in editor.clips {
+            cursor += clip.timelineDuration
+            boundaries.append(cursor)
+        }
+        if let snap = boundaries.min(by: { abs($0 - offset) < abs($1 - offset) }),
+           abs(snap - offset) < 0.15 {
+            offset = snap
+        }
+        editor.setOverlayOffset(id: item.id, offset)
     }
 }
 

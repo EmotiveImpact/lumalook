@@ -22,6 +22,7 @@
 		49EC96A150DB992461300428 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21139184E189E20DB4F5FBAA /* AppModel.swift */; };
 		4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */; };
 		52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */; };
+		5689040618691FF213182252 /* LumaCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA07F33B727EC523266C623 /* LumaCompositor.swift */; };
 		5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5C594D043EBDE22175C914E7 /* Assets.xcassets */; };
 		6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA55F19B38C01C558951683 /* ExportCompleteView.swift */; };
 		6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */; };
@@ -35,6 +36,7 @@
 		842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */; };
 		8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */; };
 		916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */; };
+		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8AEF2B3B897BD002287240 /* ExportSheet.swift */; };
@@ -82,7 +84,9 @@
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
+		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
 		826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPacks.swift; sourceTree = "<group>"; };
+		8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */ = {isa = PBXFileReference; path = CompositorBlank.mp4; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
@@ -162,6 +166,7 @@
 		724A9FEAD7FA7A997F12F421 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */,
 				A70BF1FE09932FEDB170F061 /* HeroPhotos */,
 				4954251587B54116361ABC7F /* SampleLUTs */,
 			);
@@ -243,6 +248,7 @@
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
+				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
@@ -328,6 +334,7 @@
 			files = (
 				5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */,
 				D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */,
+				948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */,
 				6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */,
 				DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */,
 				A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */,
@@ -365,6 +372,7 @@
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,
+				5689040618691FF213182252 /* LumaCompositor.swift in Sources */,
 				028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */,
 				D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */,
 				DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */,
