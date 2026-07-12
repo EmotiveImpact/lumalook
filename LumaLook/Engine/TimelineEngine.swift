@@ -102,6 +102,8 @@ final class EditorState: ObservableObject {
         var isMuted: Bool = false
         /// Transition INTO the next clip (rendered at this clip's out-point).
         var transitionAfter: TransitionStyle = .none
+        /// Per-clip grade override; nil follows the timeline's global grade.
+        var grade: ClipGrade? = nil
         var thumbnail: CGImage?
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
@@ -211,9 +213,15 @@ final class EditorState: ObservableObject {
     /// (`AVAudioMixInputParameters(track:)` only reads the trackID.)
     private var lastBuiltTracks: (clip: AVMutableCompositionTrack?, music: [(id: UUID, track: AVMutableCompositionTrack)]) = (nil, [])
 
-    init(lookState: LookState, store: PersistenceStore) {
+    /// Resolves an imported LUT's file URL for per-clip grades (injected so
+    /// the engine never owns the LUT repository).
+    private let lutFileURL: (UUID) -> URL?
+
+    init(lookState: LookState, store: PersistenceStore,
+         lutFileURL: @escaping (UUID) -> URL? = { _ in nil }) {
         self.lookState = lookState
         self.store = store
+        self.lutFileURL = lutFileURL
     }
 
     var selectedClip: Clip? {
@@ -256,7 +264,8 @@ final class EditorState: ObservableObject {
                            trimStart: $0.trimStart, trimEnd: $0.trimEnd, speed: $0.speed,
                            volume: $0.volume, isMuted: $0.isMuted,
                            transitionAfter: $0.transitionAfter.rawValue,
-                           isImage: $0.isImage)
+                           isImage: $0.isImage,
+                           grade: $0.grade)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -301,7 +310,8 @@ final class EditorState: ObservableObject {
                         trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed,
                         isImage: stored.isImage ?? false,
                         volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false,
-                        transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none)
+                        transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none,
+                        grade: stored.grade)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -519,6 +529,7 @@ final class EditorState: ObservableObject {
                           speed: clip.speed, isImage: clip.isImage, hasAudio: clip.hasAudio,
                           volume: clip.volume, isMuted: clip.isMuted,
                           transitionAfter: clip.transitionAfter,
+                          grade: clip.grade,
                           thumbnail: clip.thumbnail, filmstrip: clip.isImage ? clip.filmstrip : [])
         clips[index] = first
         clips.insert(second, at: index + 1)
@@ -709,6 +720,43 @@ final class EditorState: ObservableObject {
         pushUndoSnapshot()
         clips[i].transitionAfter = style
         rebuild()
+    }
+
+    // MARK: - Per-clip looks (Next-10 #1)
+
+    /// Gives one clip its own grade (nil returns it to the global grade).
+    func setClipGrade(id: UUID, _ grade: ClipGrade?) {
+        guard let i = clips.firstIndex(where: { $0.id == id }),
+              clips[i].grade != grade else { return }
+        pushUndoSnapshot()
+        clips[i].grade = grade
+        rebuild()
+    }
+
+    /// Copy-grade-to-all: every clip wears the same override in one undo step.
+    func applyGradeToAllClips(_ grade: ClipGrade?) {
+        guard clips.contains(where: { $0.grade != grade }) else { return }
+        pushUndoSnapshot()
+        for i in clips.indices { clips[i].grade = grade }
+        rebuild()
+    }
+
+    /// Materialises a clip's grade override into the LookState the
+    /// compositor reads. LUT parsing is cached in LookPipeline, so building
+    /// fresh states per rebuild stays cheap.
+    private func makeLookState(from grade: ClipGrade) -> LookState {
+        let state = LookState()
+        let preset = MockData.looks.first { $0.name == grade.baseLookName }
+        #if DEBUG
+        print("[LUMA] clip grade '\(grade.baseLookName)' preset=\(preset?.name ?? "MISS")")
+        #endif
+        state.recipe = preset?.recipe
+            ?? LookRecipe()
+        state.settings = grade.settings
+        if let lutID = grade.lutID, let url = lutFileURL(lutID) {
+            state.lut = try? LookPipeline.shared.loadLUT(at: url)
+        }
+        return state
     }
 
     /// Per-clip audio: mix-only changes, live, no rebuild.
@@ -1098,7 +1146,8 @@ final class EditorState: ObservableObject {
                                        end: (cursor + stillDuration).seconds,
                                        transform: .identity,
                                        imageURL: clip.url,
-                                       hasAnchorFrames: anchored))
+                                       hasAnchorFrames: anchored,
+                                       clipLookState: clip.grade.map(makeLookState)))
                 cursor = cursor + stillDuration
                 continue
             }
@@ -1141,7 +1190,8 @@ final class EditorState: ObservableObject {
 
             metas.append(FrameMeta(start: cursor.seconds,
                                    end: (cursor + insertedDuration).seconds,
-                                   transform: transform))
+                                   transform: transform,
+                                   clipLookState: clip.grade.map(makeLookState)))
             cursor = cursor + insertedDuration
         }
 

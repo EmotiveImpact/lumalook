@@ -18,6 +18,9 @@ struct StoredClip: Codable, Identifiable {
     /// Photo clip on the main track (T7). Optional so pre-photo projects
     /// still decode; nil means video.
     var isImage: Bool? = nil
+    /// Per-clip grade override. Optional so older projects still decode;
+    /// nil means the clip follows the timeline's global grade.
+    var grade: ClipGrade? = nil
 }
 
 /// A picture-in-picture overlay (video or still) attached to a project.

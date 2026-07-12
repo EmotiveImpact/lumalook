@@ -196,7 +196,11 @@ final class AppModel: ObservableObject {
     let lookState = LookState()
 
     /// Phase 5 editor: multi-clip composition timeline sharing the same look state.
-    private(set) lazy var editor = EditorState(lookState: lookState, store: store)
+    private(set) lazy var editor = EditorState(
+        lookState: lookState, store: store,
+        lutFileURL: { [lutRepository] id in
+            lutRepository.luts.first { $0.id == id }.map { lutRepository.fileURL(for: $0) }
+        })
 
     /// Player for the selected clip with the look applied in real time.
     @Published private(set) var player: AVPlayer?

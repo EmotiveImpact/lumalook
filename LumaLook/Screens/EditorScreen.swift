@@ -187,6 +187,24 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            // Per-clip looks (Next-10 #1): split the seeded clip at its
+            // midpoint and give the FIRST half its own grade, so an export
+            // shows two visibly different looks either side of the cut.
+            if let lookName = env["LUMA_SEED_CLIPLOOK"], !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: editor.totalDuration / 2)
+                editor.splitAtPlayhead()
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let first = editor.clips.first {
+                    editor.setClipGrade(id: first.id,
+                                        ClipGrade(baseLookName: lookName, lutID: nil,
+                                                  settings: LookSettings()))
+                }
+            }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
                 // Wait out the async rebuild before hitting play/export.
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -271,6 +289,8 @@ private struct EditorContent: View {
     let onOpenAudio: () -> Void
     let onOpenCrop: () -> Void
     let onOpenAdjust: () -> Void
+    /// When set, the looks strip grades THIS clip instead of the timeline.
+    @State private var looksTargetClipID: UUID?
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -408,6 +428,11 @@ private struct EditorContent: View {
                              selected: showClipAudioPanel) {
                         showClipAudioPanel.toggle()
                     }
+                    FlatTool(title: "Look", icon: "camera.filters",
+                             selected: showLooksStrip && looksTargetClipID != nil) {
+                        looksTargetClipID = editor.selectedClipID
+                        showLooksStrip.toggle()
+                    }
                     speedMenu
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -427,6 +452,7 @@ private struct EditorContent: View {
                             .opacity(editor.isEmpty ? 0.35 : 1)
                             .disabled(editor.isEmpty)
                         FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
+                            looksTargetClipID = nil
                             showLooksStrip.toggle()
                         }
                         .frame(width: 58)
@@ -863,16 +889,41 @@ private struct EditorContent: View {
     // MARK: Looks strip
 
     private var looksStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(MockData.looks) { look in
-                    LookStripCell(look: look, editor: editor)
+        VStack(spacing: 10) {
+            if let clipID = looksTargetClipID,
+               let clip = editor.clips.first(where: { $0.id == clipID }) {
+                HStack(spacing: 10) {
+                    TechnicalReadout("Clip Look")
+                    Spacer()
+                    if clip.grade != nil {
+                        Button("Copy to All") {
+                            editor.applyGradeToAllClips(clip.grade)
+                            LumaHaptics.shared.tap()
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(LumaTheme.accent)
+                        Button("Use Timeline Grade") {
+                            editor.setClipGrade(id: clipID, nil)
+                            LumaHaptics.shared.tap()
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                    }
                 }
+                .padding(.horizontal, 22)
             }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 22)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(MockData.looks) { look in
+                        LookStripCell(look: look, editor: editor,
+                                      targetClipID: looksTargetClipID)
+                    }
+                }
+                .padding(.vertical, 2)
+                .padding(.horizontal, 22)
+            }
+            .lumaEdgeFade()
         }
-        .lumaEdgeFade()
     }
 
     /// CapCut-style "Edit": select the clip under the playhead so the
@@ -1033,20 +1084,35 @@ private struct OverlayPanel: View {
 private struct LookStripCell: View {
     let look: LookPreset
     @ObservedObject var editor: EditorState
+    /// nil grades the whole timeline; set, it grades just that clip.
+    var targetClipID: UUID? = nil
     @EnvironmentObject private var app: AppModel
+
+    private var isSelected: Bool {
+        if let id = targetClipID {
+            return editor.clips.first { $0.id == id }?.grade?.baseLookName == look.name
+        }
+        return app.selectedLook.id == look.id && app.selectedLUT == nil
+    }
 
     var body: some View {
         Button {
-            app.selectedLUT = nil
-            app.selectedLook = look   // lookState updates flow straight into the running preview
+            if let id = targetClipID {
+                editor.setClipGrade(id: id,
+                                    ClipGrade(baseLookName: look.name, lutID: nil,
+                                              settings: LookSettings()))
+            } else {
+                app.selectedLUT = nil
+                app.selectedLook = look   // lookState updates flow straight into the running preview
+            }
         } label: {
             VStack(spacing: 6) {
                 SceneThumb(scene: .forest, grade: look.gradeTint, radius: 12,
-                           selected: app.selectedLook.id == look.id && app.selectedLUT == nil)
+                           selected: isSelected)
                     .frame(width: 66, height: 56)
                 Text(look.name)
                     .font(.system(size: 11))
-                    .foregroundStyle(app.selectedLook.id == look.id ? .white : LumaTheme.textSecondary)
+                    .foregroundStyle(isSelected ? .white : LumaTheme.textSecondary)
                     .lineLimit(1)
                     .frame(width: 70)
             }

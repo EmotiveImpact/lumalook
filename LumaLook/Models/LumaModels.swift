@@ -64,6 +64,14 @@ struct LookSettings: Codable, Equatable {
     }
 }
 
+/// A clip-level grade override in the editor (per-clip looks): the timeline
+/// keeps a global grade; a clip with a ClipGrade wears its own.
+struct ClipGrade: Codable, Equatable {
+    var baseLookName: String
+    var lutID: UUID?
+    var settings: LookSettings
+}
+
 struct MockClip: Identifiable, Hashable {
     let id = UUID()
     let title: String

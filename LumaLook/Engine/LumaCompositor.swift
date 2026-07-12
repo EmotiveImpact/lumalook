@@ -25,14 +25,19 @@ struct FrameMeta {
     /// sim — playback froze at the photo boundary), so the tiny anchor
     /// frames pace the player while the compositor renders the still.
     let hasAnchorFrames: Bool
+    /// Per-clip grade (queue: per-clip looks). Live reference like the global
+    /// LookState; nil = the clip follows the timeline's global grade.
+    let clipLookState: LookState?
 
     init(start: Double, end: Double, transform: CGAffineTransform,
-         imageURL: URL? = nil, hasAnchorFrames: Bool = false) {
+         imageURL: URL? = nil, hasAnchorFrames: Bool = false,
+         clipLookState: LookState? = nil) {
         self.start = start
         self.end = end
         self.transform = transform
         self.imageURL = imageURL
         self.hasAnchorFrames = hasAnchorFrames
+        self.clipLookState = clipLookState
     }
 }
 
@@ -255,7 +260,9 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         }
 
         // --- Grade (same pipeline, split-wipe never baked in) --------------
-        var graded = pipeline.apply(state: instruction.lookState,
+        // Per-clip look wins over the timeline's global grade.
+        let activeState = meta?.clipLookState ?? instruction.lookState
+        var graded = pipeline.apply(state: activeState,
                                     to: canvas.clampedToExtent(),
                                     includeSplit: false)
             .cropped(to: renderRect)
@@ -281,7 +288,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             guard var overlay = overlayImage, overlay.extent.width > 0 else { continue }
 
             // Same look on the PIP as the base — one grade across the frame.
-            overlay = pipeline.apply(state: instruction.lookState,
+            overlay = pipeline.apply(state: activeState,
                                      to: overlay.clampedToExtent(),
                                      includeSplit: false)
                 .cropped(to: overlay.extent)

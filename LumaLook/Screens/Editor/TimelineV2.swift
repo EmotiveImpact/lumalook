@@ -426,6 +426,17 @@ struct TimelineClipCell: View {
                 .padding(4)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            // Per-clip grade badge: this clip wears its own look.
+            if clip.grade != nil {
+                Image(systemName: "camera.filters")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(3)
+                    .background(LumaTheme.accent, in: Circle())
+                    .padding(4)
+            }
+        }
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.08),
                     lineWidth: selected ? 2.5 : 1))
