@@ -25,6 +25,16 @@ struct StoredClip: Codable, Identifiable {
     var transitionDuration: Double? = nil
 }
 
+/// A pinned overlay placement at an offset within the overlay's run (T5).
+struct OverlayKeyframe: Codable, Equatable {
+    var time: Double
+    var sizeFraction: Double
+    var centerX: Double
+    var centerY: Double
+    var opacity: Double
+    var rotationDegrees: Double
+}
+
 /// A picture-in-picture overlay (video or still) attached to a project.
 struct StoredOverlay: Codable {
     var id: UUID
@@ -40,6 +50,9 @@ struct StoredOverlay: Codable {
     /// Overlay audio mix (optional: pre-overlay-audio projects decode).
     var volume: Double? = nil
     var isMuted: Bool? = nil
+    /// Keyframed motion (optional-at-end: legacy projects decode).
+    var rotationDegrees: Double? = nil
+    var keyframes: [OverlayKeyframe]? = nil
 }
 
 /// Background-music track attached to a project.

@@ -71,21 +71,59 @@ final class OverlayLayout: @unchecked Sendable {
         var sizeFraction: Double
         var center: CGPoint     // unit canvas coords, y down (UI convention)
         var opacity: Double
+        var rotationDegrees: Double = 0
+    }
+
+    /// A placement pinned to an offset (seconds) within the overlay's run.
+    struct Keyframe {
+        let time: Double
+        var placement: Placement
+    }
+
+    private struct Entry {
+        var base: Placement
+        var keyframes: [Keyframe]   // sorted by time; empty = static overlay
     }
 
     private let lock = NSLock()
-    private var placements: [UUID: Placement] = [:]
+    private var entries: [UUID: Entry] = [:]
 
-    func set(_ placement: Placement, for id: UUID) {
-        lock.lock(); placements[id] = placement; lock.unlock()
+    func set(_ placement: Placement, keyframes: [Keyframe] = [], for id: UUID) {
+        lock.lock()
+        entries[id] = Entry(base: placement, keyframes: keyframes.sorted { $0.time < $1.time })
+        lock.unlock()
     }
 
-    func placement(for id: UUID) -> Placement? {
-        lock.lock(); defer { lock.unlock() }; return placements[id]
+    /// Placement at `offset` seconds into the overlay: linear interpolation
+    /// between surrounding keyframes; the base placement when none exist.
+    func placement(for id: UUID, at offset: Double = 0) -> Placement? {
+        lock.lock(); defer { lock.unlock() }
+        guard let entry = entries[id] else { return nil }
+        let frames = entry.keyframes
+        guard !frames.isEmpty else { return entry.base }
+        if offset <= frames[0].time { return frames[0].placement }
+        guard let last = frames.last, offset < last.time else { return frames.last?.placement }
+        for i in 0..<(frames.count - 1) where offset >= frames[i].time && offset < frames[i + 1].time {
+            let a = frames[i], b = frames[i + 1]
+            let span = max(b.time - a.time, 0.001)
+            let t = (offset - a.time) / span
+            return Placement(
+                sizeFraction: a.placement.sizeFraction
+                    + (b.placement.sizeFraction - a.placement.sizeFraction) * t,
+                center: CGPoint(
+                    x: a.placement.center.x + (b.placement.center.x - a.placement.center.x) * t,
+                    y: a.placement.center.y + (b.placement.center.y - a.placement.center.y) * t),
+                opacity: a.placement.opacity + (b.placement.opacity - a.placement.opacity) * t,
+                rotationDegrees: a.placement.rotationDegrees
+                    + (b.placement.rotationDegrees - a.placement.rotationDegrees) * t)
+        }
+        return entry.base
     }
 
-    func replaceAll(_ new: [UUID: Placement]) {
-        lock.lock(); placements = new; lock.unlock()
+    func replaceAll(_ new: [UUID: (Placement, [Keyframe])]) {
+        lock.lock()
+        entries = new.mapValues { Entry(base: $0.0, keyframes: $0.1.sorted { $0.time < $1.time }) }
+        lock.unlock()
     }
 }
 
@@ -285,7 +323,8 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         // --- Overlays: graded PIP layers composited over the base ----------
         for spec in instruction.overlays
         where seconds >= spec.start - 0.001 && seconds < spec.end + 0.001 {
-            guard let placement = instruction.overlayLayout.placement(for: spec.id) else { continue }
+            guard let placement = instruction.overlayLayout.placement(
+                for: spec.id, at: seconds - spec.start) else { continue }
 
             var overlayImage: CIImage?
             if let imageURL = spec.imageURL {
@@ -313,6 +352,17 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             let targetWidth = renderSize.width * CGFloat(fraction)
             let scale = targetWidth / overlay.extent.width
             overlay = overlay.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+
+            // Rotation (keyframes): about the overlay's own centre. UI is
+            // clockwise-positive; CI rotates counter-clockwise, so negate.
+            if abs(placement.rotationDegrees) > 0.01 {
+                let radians = -CGFloat(placement.rotationDegrees) * .pi / 180
+                let mid = CGPoint(x: overlay.extent.midX, y: overlay.extent.midY)
+                overlay = overlay
+                    .transformed(by: CGAffineTransform(translationX: -mid.x, y: -mid.y)
+                        .concatenating(CGAffineTransform(rotationAngle: radians))
+                        .concatenating(CGAffineTransform(translationX: mid.x, y: mid.y)))
+            }
 
             // Position: unit center, UI y-down -> CI y-up.
             let ciCenterX = CGFloat(placement.center.x) * renderSize.width

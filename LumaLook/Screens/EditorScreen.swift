@@ -210,6 +210,23 @@ struct EditorTimelineView: View {
                                                   settings: LookSettings()))
                 }
             }
+            // Keyframe cell (T5): overlay animates small/top-left -> large/
+            // bottom-right across its run. LUMA_SEED_KEYFRAMES=1.
+            if env["LUMA_SEED_KEYFRAMES"] == "1", let overlay = editor.overlays.first {
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.setOverlaySize(id: overlay.id, 0.3)
+                editor.setOverlayCenter(id: overlay.id, CGPoint(x: 0.2, y: 0.2))
+                editor.seek(to: overlay.timelineOffset)
+                editor.addOverlayKeyframe(id: overlay.id)
+                editor.seek(to: overlay.timelineOffset + overlay.duration - 0.05)
+                editor.setOverlaySize(id: overlay.id, 0.7)
+                editor.setOverlayCenter(id: overlay.id, CGPoint(x: 0.75, y: 0.75))
+                editor.setOverlayRotation(id: overlay.id, 45)
+                editor.addOverlayKeyframe(id: overlay.id)
+                editor.seek(to: 0)
+            }
             // True-transition cells: split the seeded clip at its midpoint and
             // set the given style at the cut, e.g. LUMA_SEED_TRANSITION=dissolve.
             if let raw = env["LUMA_SEED_TRANSITION"],
@@ -1076,6 +1093,45 @@ private struct OverlayPanel: View {
                 get: { (overlay?.sizeFraction ?? 0.45) * 100 },
                 set: { editor.setOverlaySize(id: overlayID, $0 / 100) }
             ), range: 25...100) { "\(Int($0))%" }
+
+            InlineSlider(title: "Rotation", value: Binding(
+                get: { overlay?.rotationDegrees ?? 0 },
+                set: { editor.setOverlayRotation(id: overlayID, $0) }
+            ), range: -180...180) { "\(Int($0))°" }
+
+            // Keyframes (T5): pin the current placement at the playhead;
+            // sliders then animate between pins.
+            HStack(spacing: 10) {
+                Button {
+                    editor.addOverlayKeyframe(id: overlayID)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Keyframe", systemImage: "diamond.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(LumaTheme.accent, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                if let count = overlay?.keyframes.count, count > 0 {
+                    Text("\(count) pinned")
+                        .font(.footnote)
+                        .foregroundStyle(LumaTheme.textSecondary)
+                    Spacer()
+                    Button("Clear") {
+                        editor.clearOverlayKeyframes(id: overlayID)
+                        LumaHaptics.shared.tap()
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                } else {
+                    Text("Pin placements to animate")
+                        .font(.footnote)
+                        .foregroundStyle(LumaTheme.textMuted)
+                    Spacer()
+                }
+            }
 
             // Overlay audio (video overlays carry sound now).
             if overlay?.isImage == false {

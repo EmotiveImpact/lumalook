@@ -153,6 +153,10 @@ final class EditorState: ObservableObject {
         var sizeFraction: Double = 0.45   // overlay width / canvas width (0.25…1)
         var center: CGPoint = CGPoint(x: 0.72, y: 0.25)  // unit coords, y down
         var opacity: Double = 1.0
+        var rotationDegrees: Double = 0
+        /// Keyframed placement (T5): offsets within the overlay's run.
+        /// Empty = static placement from the fields above.
+        var keyframes: [OverlayKeyframe] = []
         /// Overlay-audio mix (video overlays only; was silently dropped in v1).
         var volume: Double = 100
         var isMuted: Bool = false
@@ -303,7 +307,9 @@ final class EditorState: ObservableObject {
                               sizeFraction: $0.sizeFraction,
                               centerX: $0.center.x, centerY: $0.center.y,
                               opacity: $0.opacity,
-                              volume: $0.volume, isMuted: $0.isMuted)
+                              volume: $0.volume, isMuted: $0.isMuted,
+                              rotationDegrees: $0.rotationDegrees,
+                              keyframes: $0.keyframes.isEmpty ? nil : $0.keyframes)
             }
         )
         store.upsert(project: stored)
@@ -352,6 +358,8 @@ final class EditorState: ObservableObject {
                                sizeFraction: stored.sizeFraction,
                                center: CGPoint(x: stored.centerX, y: stored.centerY),
                                opacity: stored.opacity,
+                               rotationDegrees: stored.rotationDegrees ?? 0,
+                               keyframes: stored.keyframes ?? [],
                                volume: stored.volume ?? 100,
                                isMuted: stored.isMuted ?? false,
                                title: stored.title ?? "Overlay")
@@ -900,6 +908,59 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    func setOverlayRotation(id: UUID, _ degrees: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].rotationDegrees = min(max(-180, degrees), 180)
+        overlayKeyframeAutoUpsert(index: i)
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    // MARK: Overlay keyframes (T5)
+
+    /// Pins the overlay's CURRENT placement at the playhead. Sliders after
+    /// this auto-update the keyframe under the playhead (CapCut model).
+    func addOverlayKeyframe(id: UUID) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let overlay = overlays[i]
+        let offset = min(max(0, currentTime - overlay.timelineOffset), overlay.duration)
+        pushUndoSnapshot()
+        upsertKeyframe(index: i, at: offset)
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    func clearOverlayKeyframes(id: UUID) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              !overlays[i].keyframes.isEmpty else { return }
+        pushUndoSnapshot()
+        overlays[i].keyframes = []
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// While an overlay HAS keyframes, placement sliders write to the
+    /// keyframe at the playhead (creating it if needed) instead of the base.
+    private func overlayKeyframeAutoUpsert(index: Int) {
+        guard !overlays[index].keyframes.isEmpty else { return }
+        let overlay = overlays[index]
+        let offset = min(max(0, currentTime - overlay.timelineOffset), overlay.duration)
+        upsertKeyframe(index: index, at: offset)
+    }
+
+    private func upsertKeyframe(index: Int, at offset: Double) {
+        let overlay = overlays[index]
+        let frame = OverlayKeyframe(time: offset,
+                                    sizeFraction: overlay.sizeFraction,
+                                    centerX: overlay.center.x,
+                                    centerY: overlay.center.y,
+                                    opacity: overlay.opacity,
+                                    rotationDegrees: overlay.rotationDegrees)
+        var frames = overlay.keyframes.filter { abs($0.time - offset) > 0.15 }
+        frames.append(frame)
+        overlays[index].keyframes = frames.sorted { $0.time < $1.time }
+    }
+
     /// Overlay audio: mix-only, live, no rebuild.
     func setOverlayVolume(id: UUID, _ volume: Double) {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
@@ -920,6 +981,7 @@ final class EditorState: ObservableObject {
     func setOverlayOpacity(id: UUID, _ opacity: Double) {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
         overlays[i].opacity = min(max(0, opacity), 1)
+        overlayKeyframeAutoUpsert(index: i)
         syncOverlayLayout(refreshFrame: true)
         scheduleAutosave()
     }
@@ -927,6 +989,7 @@ final class EditorState: ObservableObject {
     func setOverlaySize(id: UUID, _ fraction: Double) {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
         overlays[i].sizeFraction = min(max(0.25, fraction), 1.0)
+        overlayKeyframeAutoUpsert(index: i)
         syncOverlayLayout(refreshFrame: true)
         scheduleAutosave()
     }
@@ -935,6 +998,7 @@ final class EditorState: ObservableObject {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
         overlays[i].center = CGPoint(x: min(max(0, center.x), 1),
                                      y: min(max(0, center.y), 1))
+        overlayKeyframeAutoUpsert(index: i)
         syncOverlayLayout(refreshFrame: true)
         scheduleAutosave()
     }
@@ -943,11 +1007,20 @@ final class EditorState: ObservableObject {
     /// compositor reads, and re-renders the paused frame so edits show
     /// immediately (a paused player never re-runs the compositor on its own).
     private func syncOverlayLayout(refreshFrame: Bool = false) {
-        var map: [UUID: OverlayLayout.Placement] = [:]
+        var map: [UUID: (OverlayLayout.Placement, [OverlayLayout.Keyframe])] = [:]
         for overlay in overlays {
-            map[overlay.id] = OverlayLayout.Placement(sizeFraction: overlay.sizeFraction,
-                                                      center: overlay.center,
-                                                      opacity: overlay.opacity)
+            let base = OverlayLayout.Placement(sizeFraction: overlay.sizeFraction,
+                                               center: overlay.center,
+                                               opacity: overlay.opacity,
+                                               rotationDegrees: overlay.rotationDegrees)
+            let frames = overlay.keyframes.map {
+                OverlayLayout.Keyframe(time: $0.time, placement: OverlayLayout.Placement(
+                    sizeFraction: $0.sizeFraction,
+                    center: CGPoint(x: $0.centerX, y: $0.centerY),
+                    opacity: $0.opacity,
+                    rotationDegrees: $0.rotationDegrees))
+            }
+            map[overlay.id] = (base, frames)
         }
         overlayLayout.replaceAll(map)
         if refreshFrame, let player, player.timeControlStatus != .playing {
