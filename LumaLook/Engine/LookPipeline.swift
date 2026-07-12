@@ -236,6 +236,46 @@ final class LookPipeline: @unchecked Sendable {
                 ])
                 .cropped(to: extent)
 
+        case .swirl:
+            // Vintage Soviet-prime character: the field rotates gently around
+            // the subject while the centre stays planted.
+            let swirled = image.clampedToExtent()
+                .applyingFilter("CITwirlDistortion", parameters: [
+                    kCIInputCenterKey: CIVector(x: center.x, y: center.y),
+                    kCIInputRadiusKey: max(extent.width, extent.height) * 0.85,
+                    kCIInputAngleKey: 0.45 * a,
+                ])
+                .cropped(to: extent)
+            return swirled.applyingFilter("CIVignette", parameters: [
+                kCIInputIntensityKey: 0.8 * a,
+                kCIInputRadiusKey: 2.4,
+            ]).cropped(to: extent)
+
+        case .plastic:
+            // Toy camera: popped saturation, crushed corner falloff, and a
+            // cheap-lens softness ramp toward the edges.
+            let popped = image.applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 1 + 0.35 * a,
+                kCIInputContrastKey: 1 + 0.12 * a,
+            ])
+            let radial = CIFilter(name: "CIRadialGradient", parameters: [
+                kCIInputCenterKey: CIVector(x: center.x, y: center.y),
+                "inputRadius0": min(extent.width, extent.height) * 0.30,
+                "inputRadius1": max(extent.width, extent.height) * 0.72,
+                "inputColor0": CIColor.black,
+                "inputColor1": CIColor.white,
+            ])?.outputImage ?? CIImage(color: .black)
+            let soft = popped.clampedToExtent()
+                .applyingFilter("CIMaskedVariableBlur", parameters: [
+                    "inputMask": radial.cropped(to: extent),
+                    kCIInputRadiusKey: 9 * a,
+                ])
+                .cropped(to: extent)
+            return soft.applyingFilter("CIVignette", parameters: [
+                kCIInputIntensityKey: 1.8 * a,
+                kCIInputRadiusKey: 1.9,
+            ]).cropped(to: extent)
+
         case .tiltShift:
             // Miniature: a razor focus band across the middle, blur ramping
             // toward top and bottom via a masked variable blur.

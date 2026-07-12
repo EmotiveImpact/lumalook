@@ -375,7 +375,15 @@ struct FilterPackDetailView: View {
         Task.detached(priority: .userInitiated) {
             for look in looks {
                 let state = LookState()
-                state.recipe = look.recipe
+                if let cubeFile = look.cubeFile,
+                   let url = Bundle.main.url(
+                       forResource: (cubeFile as NSString).deletingPathExtension,
+                       withExtension: "cube") {
+                    // Measured film stock: preview through the real LUT.
+                    state.lut = try? LookPipeline.shared.loadLUT(at: url)
+                } else {
+                    state.recipe = look.recipe
+                }
                 var settings = LookSettings()
                 settings.intensity = 100
                 state.settings = settings

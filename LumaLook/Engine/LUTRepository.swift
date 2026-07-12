@@ -26,7 +26,7 @@ final class LUTRepository: ObservableObject {
     }
 
     @discardableResult
-    func importLUT(from sourceURL: URL) throws -> LUTFile {
+    func importLUT(from sourceURL: URL, displayName: String? = nil) throws -> LUTFile {
         try FileManager.default.createDirectory(at: lutFolderURL, withIntermediateDirectories: true)
 
         let needsAccess = sourceURL.startAccessingSecurityScopedResource()
@@ -41,7 +41,8 @@ final class LUTRepository: ObservableObject {
 
         let attrs = try? FileManager.default.attributesOfItem(atPath: destination.path)
         let file = LUTFile(
-            displayName: sourceURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_", with: " "),
+            displayName: displayName
+                ?? sourceURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_", with: " "),
             originalFileName: sourceURL.lastPathComponent,
             fileName: uniqueName,
             cubeSize: parsed.size,
@@ -85,7 +86,11 @@ final class LUTRepository: ObservableObject {
     private func seedBundledLUTsIfNeeded() {
         guard luts.isEmpty else { return }
         let bundled = Bundle.main.urls(forResourcesWithExtension: "cube", subdirectory: nil) ?? []
-        for url in bundled where !url.lastPathComponent.hasPrefix("Identity") {
+        // FS_ film stocks are pack-managed (installed from the Store), not
+        // auto-seeded — otherwise fresh installs get 14 duplicates.
+        for url in bundled
+        where !url.lastPathComponent.hasPrefix("Identity")
+            && !url.lastPathComponent.hasPrefix("FS_") {
             _ = try? importLUT(from: url)
         }
     }

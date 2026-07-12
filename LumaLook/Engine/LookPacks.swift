@@ -11,7 +11,10 @@ struct PackLook: Identifiable {
     let code: String            // e.g. "KD2"
     let name: String            // e.g. "KD2 · Golden Gate"
     let character: String       // "thick contrast in the mids, peachy highlights"
-    let recipe: LookRecipe
+    var recipe: LookRecipe = LookRecipe()
+    /// Measured film emulation: a bundled .cube (Resources/FilmLUTs) instead
+    /// of a baked recipe. CC BY-SA data — credits in FilmLUTs/CREDITS.md.
+    var cubeFile: String? = nil
 }
 
 /// A "roll of film": 5 looks, one family, an era tag and a hero image.
@@ -59,6 +62,59 @@ enum PackCatalog {
                          character: "Sun-faded warmth, lifted blacks, quiet saturation.",
                          recipe: LookRecipe(temperature: 5400, tint: 6, contrast: 0.94,
                                             saturation: 0.85, brightness: 0.05, vignette: 0.35, bloom: 0.25)),
+            ]
+        ),
+        LookPack(
+            id: "film-stocks-01",
+            name: "Film Stocks 01",
+            familyLine: "Measured emulations of real photographic film — negative, slide, mono, instant and cinema print.",
+            eraTag: "From community-measured film data",
+            photo: .coast,
+            isFree: true,
+            price: "FREE",
+            looks: [
+                PackLook(code: "PT160", name: "PT160 · Portrait Neg",
+                         character: "The wedding stock: soft contrast, unbeatable skin.",
+                         cubeFile: "FS_PT160.cube"),
+                PackLook(code: "EK100", name: "EK100 · Vivid Neg",
+                         character: "Finest-grain colour negative — punchy but honest.",
+                         cubeFile: "FS_EK100.cube"),
+                PackLook(code: "SP200", name: "SP200 · Drugstore Neg",
+                         character: "The 90s point-and-shoot look, greens forward.",
+                         cubeFile: "FS_SP200.cube"),
+                PackLook(code: "AV200", name: "AV200 · Street Neg",
+                         character: "Sun-baked European street colour.",
+                         cubeFile: "FS_AV200.cube"),
+                PackLook(code: "KC64", name: "KC64 · Chrome 64",
+                         character: "The magazine slide of the 60s — dense reds, deep shadow.",
+                         cubeFile: "FS_KC64.cube"),
+                PackLook(code: "VV50", name: "VV50 · Vivid Slide",
+                         character: "Landscape legend: saturated greens, electric skies.",
+                         cubeFile: "FS_VV50.cube"),
+                PackLook(code: "PR100", name: "PR100 · Clean Slide",
+                         character: "Neutral professional chrome, faithful colour.",
+                         cubeFile: "FS_PR100.cube"),
+                PackLook(code: "XP200", name: "XP200 · Cross Process",
+                         character: "Slide through negative chemistry — teal shadows, wild shifts.",
+                         cubeFile: "FS_XP200.cube"),
+                PackLook(code: "TX400", name: "TX400 · Reportage Mono",
+                         character: "The photojournalist's black and white.",
+                         cubeFile: "FS_TX400.cube"),
+                PackLook(code: "HP400", name: "HP400 · Classic Mono",
+                         character: "British documentary grain and glow.",
+                         cubeFile: "FS_HP400.cube"),
+                PackLook(code: "IN669", name: "IN669 · Instant Warm",
+                         character: "Peel-apart instant film — creamy, nostalgic.",
+                         cubeFile: "FS_IN669.cube"),
+                PackLook(code: "RS100", name: "RS100 · Redscale",
+                         character: "Film shot through its own base: fire-orange everything.",
+                         cubeFile: "FS_RS100.cube"),
+                PackLook(code: "CP2383", name: "CP2383 · Cinema Print",
+                         character: "The Hollywood release-print stock — teal shadows, warm faces.",
+                         cubeFile: "FS_CP2383.cube"),
+                PackLook(code: "CP3513", name: "CP3513 · Cinema Print II",
+                         character: "The alternative print house: gentler, greener.",
+                         cubeFile: "FS_CP3513.cube"),
             ]
         ),
         LookPack(
@@ -232,6 +288,16 @@ enum PackInstaller {
         var installed = 0
         let tmp = FileManager.default.temporaryDirectory
         for look in pack.looks {
+            // Measured film stocks install their bundled .cube directly.
+            if let cubeFile = look.cubeFile {
+                guard let bundled = Bundle.main.url(
+                    forResource: (cubeFile as NSString).deletingPathExtension,
+                    withExtension: "cube") else { continue }
+                if (try? repository.importLUT(from: bundled, displayName: look.name)) != nil {
+                    installed += 1
+                }
+                continue
+            }
             guard let text = cubeText(for: look.recipe, title: look.name) else { continue }
             let url = tmp.appendingPathComponent("\(look.name).cube")
             do {

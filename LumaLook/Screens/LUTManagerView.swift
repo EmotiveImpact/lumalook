@@ -148,7 +148,7 @@ private struct LUTRow: View {
                 .frame(width: 56, height: 42)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(lut.originalFileName)
+                    Text(lut.displayName)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)

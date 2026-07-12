@@ -273,6 +273,10 @@ final class AppModel: ObservableObject {
             settings.lensKind = lens
             syncLookState()
         }
+        // Pack cells: LUMA_SEED_PACK=<pack id> selects the Store detail pack.
+        if let packID = env["LUMA_SEED_PACK"], PackCatalog.pack(id: packID) != nil {
+            selectedPackID = packID
+        }
         // Headless open-in-place check: LUMA_OPEN_FILE=<host path>.
         if let openPath = env["LUMA_OPEN_FILE"], FileManager.default.fileExists(atPath: openPath) {
             handleIncomingFile(url: URL(fileURLWithPath: openPath))

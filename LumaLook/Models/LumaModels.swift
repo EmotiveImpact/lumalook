@@ -35,6 +35,8 @@ enum LensKind: String, Codable, CaseIterable {
     case diffusion
     case fisheye
     case tiltShift
+    case swirl
+    case plastic
 
     var label: String {
         switch self {
@@ -44,6 +46,8 @@ enum LensKind: String, Codable, CaseIterable {
         case .diffusion: return "Diffusion"
         case .fisheye: return "Fisheye"
         case .tiltShift: return "Tilt-Shift"
+        case .swirl: return "Swirl 58"
+        case .plastic: return "Toy Cam"
         }
     }
 
@@ -55,6 +59,8 @@ enum LensKind: String, Codable, CaseIterable {
         case .diffusion: return "sun.haze.fill"
         case .fisheye: return "circle.grid.cross"
         case .tiltShift: return "square.3.layers.3d.middle.filled"
+        case .swirl: return "hurricane"
+        case .plastic: return "camera.macro.circle"
         }
     }
 
@@ -66,6 +72,8 @@ enum LensKind: String, Codable, CaseIterable {
         case .diffusion: return "Pro-mist glow, lifted dreamy highlights"
         case .fisheye: return "Curved ultra-wide barrel distortion"
         case .tiltShift: return "Miniature world, razor focus band"
+        case .swirl: return "Soviet-prime swirl, edges spin around the subject"
+        case .plastic: return "Toy camera: crushed corners, popped colour"
         }
     }
 }
