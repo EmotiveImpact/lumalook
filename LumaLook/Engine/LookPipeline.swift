@@ -11,6 +11,9 @@ final class LookState: @unchecked Sendable {
     private var _recipe: LookRecipe = LookRecipe()
     private var _settings: LookSettings = LookSettings()
     private var _lut: ParsedLUT?
+    private var _lutOpacity: Double = 1.0
+    private var _conversionLUT: ParsedLUT?
+    private var _conversionOpacity: Double = 1.0
     private var _splitFraction: Double?
 
     var recipe: LookRecipe {
@@ -26,6 +29,24 @@ final class LookState: @unchecked Sendable {
     var lut: ParsedLUT? {
         get { lock.lock(); defer { lock.unlock() }; return _lut }
         set { lock.lock(); _lut = newValue; lock.unlock() }
+    }
+
+    /// Creative slot opacity (0…1): blends the creative LUT with its input.
+    var lutOpacity: Double {
+        get { lock.lock(); defer { lock.unlock() }; return _lutOpacity }
+        set { lock.lock(); _lutOpacity = newValue; lock.unlock() }
+    }
+
+    /// Slot 1 — technical/conversion LUT (e.g. AppleLog → Rec.709), applied
+    /// BEFORE the creative look. The PeekLut/Lutter stacking model.
+    var conversionLUT: ParsedLUT? {
+        get { lock.lock(); defer { lock.unlock() }; return _conversionLUT }
+        set { lock.lock(); _conversionLUT = newValue; lock.unlock() }
+    }
+
+    var conversionOpacity: Double {
+        get { lock.lock(); defer { lock.unlock() }; return _conversionOpacity }
+        set { lock.lock(); _conversionOpacity = newValue; lock.unlock() }
     }
 
     /// Before/After wipe position (0…1). nil = full grade. Preview only —
@@ -70,8 +91,14 @@ final class LookPipeline: @unchecked Sendable {
         let settings = state.settings
         var graded = image
 
+        // Slot 1 — conversion (log normalisation), blended by slot opacity.
+        if let conversion = state.conversionLUT {
+            graded = applyLUT(conversion, to: graded, opacity: state.conversionOpacity)
+        }
+
+        // Slot 2 — creative: imported LUT or built-in recipe.
         if let lut = state.lut {
-            graded = applyLUT(lut, to: graded)
+            graded = applyLUT(lut, to: graded, opacity: state.lutOpacity)
         } else {
             graded = applyRecipe(state.recipe, to: graded)
         }
@@ -103,13 +130,21 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - LUT application
 
-    func applyLUT(_ lut: ParsedLUT, to image: CIImage) -> CIImage {
+    func applyLUT(_ lut: ParsedLUT, to image: CIImage, opacity: Double = 1.0) -> CIImage {
         let filter = CIFilter.colorCubeWithColorSpace()
         filter.inputImage = image
         filter.cubeDimension = Float(lut.size)
         filter.cubeData = lut.rgbaFloatData
         filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
-        return filter.outputImage ?? image
+        let out = filter.outputImage ?? image
+        let mix = min(max(opacity, 0), 1)
+        guard mix < 0.999 else { return out }
+        // Per-slot opacity: dissolve the slot's output with its own input.
+        let dissolve = CIFilter.dissolveTransition()
+        dissolve.inputImage = image
+        dissolve.targetImage = out
+        dissolve.time = Float(mix)
+        return dissolve.outputImage ?? out
     }
 
     // MARK: - Built-in look recipes

@@ -83,6 +83,7 @@ struct ApplyLookView: View {
     @State private var lutImportError: String?
     @State private var showLogExplainer = false
     @State private var stashedLookIntensity: Double?
+    @State private var showConversionPicker = false
 
     private var filteredLooks: [LookPreset] {
         category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
@@ -158,6 +159,11 @@ struct ApplyLookView: View {
                           luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
+        .lumaToolSheet(isPresented: $showConversionPicker, style: .panel) {
+            conversionPicker
+                .padding(.top, 18)
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
         .alert("Log LUT active", isPresented: $showLogExplainer) {
             Button("Got it", role: .cancel) {}
         } message: {
@@ -293,6 +299,8 @@ struct ApplyLookView: View {
             }
             .lumaEdgeFade()
 
+            slotChain
+
             lookStrip
 
             LumaDial(title: activeTool == "Adjust" ? "Intensity" : activeTool,
@@ -408,6 +416,143 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+}
+
+// MARK: - LUT slot chain (queue #9)
+
+extension ApplyLookView {
+    /// Conversion x Creative slot chain — the PeekLut/Lutter stacking model.
+    /// Drag horizontally on a slot to set its opacity.
+    private var slotChain: some View {
+        HStack(spacing: 8) {
+            SlotCard(kind: "SLOT 1 · CONVERSION",
+                     name: app.conversionLUT?.displayName ?? "None",
+                     opacity: $app.conversionOpacity,
+                     isActive: app.conversionLUT != nil,
+                     accented: false) {
+                showConversionPicker = true
+            }
+            SlotCard(kind: "SLOT 2 · CREATIVE",
+                     name: app.selectedLUT?.displayName ?? app.selectedLook.name,
+                     opacity: $app.creativeOpacity,
+                     isActive: true,
+                     accented: true) { }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var conversionPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TechReadout("CONVERSION LUT — APPLIED FIRST", size: 9, color: LumaTheme.textMuted)
+                .padding(.horizontal, 22)
+            ScrollView {
+                VStack(spacing: 0) {
+                    Button {
+                        app.conversionLUT = nil
+                        showConversionPicker = false
+                    } label: {
+                        pickerRow(name: "None", tag: nil, selected: app.conversionLUT == nil)
+                    }
+                    .buttonStyle(.lumaPress)
+                    // Log-target LUTs first: that's what conversion slots are for.
+                    ForEach(app.lutRepository.luts.sorted {
+                        ($0.isLogTarget ? 0 : 1, $0.displayName) < ($1.isLogTarget ? 0 : 1, $1.displayName)
+                    }) { lut in
+                        Button {
+                            app.conversionLUT = lut
+                            showConversionPicker = false
+                        } label: {
+                            pickerRow(name: lut.displayName,
+                                      tag: lut.isLogTarget ? "LOG" : nil,
+                                      selected: app.conversionLUT?.id == lut.id)
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
+                .padding(.horizontal, 22)
+            }
+        }
+    }
+
+    private func pickerRow(name: String, tag: String?, selected: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 17))
+                .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textMuted)
+            Text(name)
+                .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            if let tag {
+                TechReadout(tag, size: 8, color: Color(red: 0.95, green: 0.64, blue: 0.36))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.22), in: Capsule())
+            }
+            Spacer()
+        }
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+    }
+}
+
+/// One slot in the chain: kind label, LUT name, opacity bar. Horizontal drag
+/// sets opacity with 10% detents.
+private struct SlotCard: View {
+    let kind: String
+    let name: String
+    @Binding var opacity: Double
+    let isActive: Bool
+    let accented: Bool
+    let onTap: () -> Void
+
+    @State private var dragStart: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            TechReadout(kind, size: 7, color: LumaTheme.textMuted)
+            HStack(alignment: .firstTextBaseline) {
+                Text(name)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(isActive ? .white : LumaTheme.textMuted)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(Int(opacity))%")
+                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .foregroundStyle(isActive ? LumaTheme.accentBright : LumaTheme.textMuted)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.12))
+                    Capsule().fill(LumaTheme.accentBright)
+                        .frame(width: isActive ? geo.size.width * opacity / 100 : 0)
+                }
+            }
+            .frame(height: 3)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(accented ? AnyShapeStyle(LumaTheme.accent.opacity(0.12))
+                             : AnyShapeStyle(.white.opacity(0.04)),
+                    in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11)
+            .strokeBorder(accented ? LumaTheme.accent.opacity(0.55) : .white.opacity(0.14),
+                          lineWidth: 1))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .gesture(
+            DragGesture(minimumDistance: 6)
+                .onChanged { drag in
+                    guard isActive else { return }
+                    if dragStart == nil { dragStart = opacity }
+                    opacity = min(max(0, (dragStart ?? opacity) + Double(drag.translation.width) / 1.4), 100)
+                }
+                .onEnded { _ in dragStart = nil }
+        )
+        .sensoryFeedback(.selection, trigger: Int(opacity / 10))
+        .animation(.snappy(duration: 0.15), value: opacity)
     }
 }
 

@@ -56,6 +56,17 @@ final class AppModel: ObservableObject {
     @Published var selectedLUT: LUTFile? {
         didSet { syncLookState() }
     }
+    /// Slot 1 — conversion/log-normalisation LUT applied before the look.
+    @Published var conversionLUT: LUTFile? {
+        didSet { syncLookState() }
+    }
+    @Published var conversionOpacity: Double = 100 {
+        didSet { syncLookState() }
+    }
+    /// Slot 2 opacity — creative LUT blended against its input.
+    @Published var creativeOpacity: Double = 100 {
+        didSet { syncLookState() }
+    }
     @Published var settings = LookSettings() {
         didSet { syncLookState() }
     }
@@ -125,6 +136,13 @@ final class AppModel: ObservableObject {
         } else {
             lookState.lut = nil
         }
+        if let conversion = conversionLUT {
+            lookState.conversionLUT = try? LookPipeline.shared.loadLUT(at: lutRepository.fileURL(for: conversion))
+        } else {
+            lookState.conversionLUT = nil
+        }
+        lookState.conversionOpacity = conversionOpacity / 100.0
+        lookState.lutOpacity = creativeOpacity / 100.0
         refreshPausedFrame()
     }
 
