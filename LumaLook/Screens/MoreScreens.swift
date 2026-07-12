@@ -169,10 +169,15 @@ struct BackArrow: View {
 
 struct FilterPackDetailView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @State private var previews: [String: CGImage] = [:]
     @State private var installing = false
     @State private var installedFlash = 0
+    @State private var showPaywall = false
+
+    /// Free, individually bought, or unlocked by Pro.
+    private var unlocked: Bool { storeService.ownsPack(pack.id) }
 
     private var pack: LookPack {
         app.selectedPackID.flatMap(PackCatalog.pack(id:)) ?? PackCatalog.packs[0]
@@ -266,6 +271,7 @@ struct FilterPackDetailView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .sensoryFeedback(.success, trigger: installedFlash)
+        .sheet(isPresented: $showPaywall) { PaywallView() }
         .task(id: pack.id) { renderPreviews() }
         .onAppear {
             #if DEBUG
@@ -289,31 +295,77 @@ struct FilterPackDetailView: View {
         }
     }
 
-    private var installButton: some View {
-        Button {
+    /// Paid packs buy through StoreKit first (C5); free/owned packs install
+    /// straight away. LUMA_AUTO_INSTALL keeps bypassing purchase in DEBUG so
+    /// headless verification of the bake pipeline still works.
+    private func buyOrInstall() {
+        if unlocked {
             performInstall()
-        } label: {
-            HStack(spacing: 10) {
-                if installing {
-                    ProgressView().tint(.white)
-                } else if app.packStore.isInstalled(pack) {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Installed — in your Looks")
-                } else {
-                    Text(pack.isFree ? "Install Free" : "\(pack.price) · Install")
-                }
-            }
-            .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 58)
-            .background(app.packStore.isInstalled(pack)
-                        ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                        : AnyShapeStyle(LumaTheme.accent),
-                        in: RoundedRectangle(cornerRadius: 16))
+            return
         }
-        .buttonStyle(.lumaPress)
-        .disabled(app.packStore.isInstalled(pack))
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_AUTO_INSTALL"] == "1" {
+            performInstall()
+            return
+        }
+        #endif
+        guard let product = storeService.packProducts[pack.id] else {
+            // Products unavailable (offline/review): offer Pro instead.
+            showPaywall = true
+            return
+        }
+        Task {
+            if await storeService.purchase(product) {
+                performInstall()
+            }
+        }
+    }
+
+    private var displayPrice: String {
+        storeService.packProducts[pack.id]?.displayPrice ?? pack.price
+    }
+
+    private var installButton: some View {
+        VStack(spacing: 10) {
+            Button {
+                buyOrInstall()
+            } label: {
+                HStack(spacing: 10) {
+                    if installing || storeService.purchaseInFlight {
+                        ProgressView().tint(.white)
+                    } else if app.packStore.isInstalled(pack) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Installed — in your Looks")
+                    } else if unlocked {
+                        Text(pack.isFree ? "Install Free" : "Install")
+                    } else {
+                        Text("\(displayPrice) · Buy")
+                    }
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 58)
+                .background(app.packStore.isInstalled(pack)
+                            ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                            : AnyShapeStyle(LumaTheme.accent),
+                            in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.lumaPress)
+            .disabled(app.packStore.isInstalled(pack) || storeService.purchaseInFlight)
+
+            if !unlocked {
+                Button {
+                    showPaywall = true
+                } label: {
+                    Text("Or get every pack with Pro")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(LumaTheme.accentBright)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
     }
 
     /// Renders each pack look onto the hero frame through the pipeline.
@@ -922,10 +974,12 @@ struct AudioView: View {
 
 struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
+    @EnvironmentObject private var storeService: StoreService
+    @State private var showPaywall = false
 
     var body: some View {
         LumaScreen(title: "Settings", showBack: !isRoot) {
-            // Profile / subscription card.
+            // Profile / subscription card — live StoreKit 2 status (C5).
             HStack(spacing: 14) {
                 Circle()
                     .fill(LumaTheme.surfaceStrong)
@@ -934,21 +988,23 @@ struct SettingsSubscriptionView: View {
                         .font(.system(size: 26))
                         .foregroundStyle(.white.opacity(0.85)))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("LumaLook Pro")
+                    Text(storeService.isPro ? "LumaLook Pro" : "LumaLook Free")
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    Text("Unlimited Access")
+                    Text(storeService.isPro ? "Unlimited Access" : "Upgrade for Every Look")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(LumaTheme.teal)
+                        .foregroundStyle(storeService.isPro ? LumaTheme.teal : LumaTheme.textSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
                 .layoutPriority(1)
                 Spacer()
-                Button {} label: {
-                    Text("Manage")
+                Button {
+                    showPaywall = true
+                } label: {
+                    Text(storeService.isPro ? "Manage" : "Get Pro")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white)
                         .fixedSize()
@@ -961,26 +1017,42 @@ struct SettingsSubscriptionView: View {
             .padding(16)
             .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 18))
 
-            // TODO: StoreKit 2 subscription management in Phase 6.
             SettingsGroup(rows: [
-                ("creditcard", "Subscription", nil, true),
+                ("creditcard", "Subscription", storeService.isPro ? "Pro" : "Free", true),
                 ("arrow.clockwise", "Restore Purchases", nil, true),
                 ("4k.tv", "Export Quality", "1080p", true),
                 ("drop", "Watermark", "Off", true),
                 ("icloud", "iCloud Sync", "Off", true),
                 ("globe", "App Language", "English", true)
-            ])
+            ]) { index in
+                switch index {
+                case 0: showPaywall = true
+                case 1: Task { await storeService.restorePurchases() }
+                default: break
+                }
+            }
 
             SettingsGroup(rows: [
                 ("questionmark.circle", "Help & Support", nil, true),
                 ("info.circle", "About LumaLook", "v1.0", true)
             ])
         }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
+        .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
+                showPaywall = true
+            }
+            #endif
+        }
     }
 }
 
 private struct SettingsGroup: View {
     let rows: [(icon: String, title: String, value: String?, chevron: Bool)]
+    var onTap: ((Int) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1009,6 +1081,8 @@ private struct SettingsGroup: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 13)
+                .contentShape(Rectangle())
+                .onTapGesture { onTap?(index) }
                 if index < rows.count - 1 {
                     Hairline().padding(.leading, 64)
                 }

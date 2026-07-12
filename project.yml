@@ -16,6 +16,9 @@ schemes:
         LumaLook: all
     run:
       config: Debug
+      # Local StoreKit testing: products/trials resolve without App Store
+      # Connect when running from Xcode (C5; pricing locked 2026-07).
+      storeKitConfiguration: LumaLook/LumaLook.storekit
     archive:
       config: Release
 targets:
