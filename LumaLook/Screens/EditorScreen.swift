@@ -210,6 +210,16 @@ struct EditorTimelineView: View {
                                                   settings: LookSettings()))
                 }
             }
+            // Text cell (T6): LUMA_SEED_TEXT="HELLO WORLD" drops a title.
+            if let text = env["LUMA_SEED_TEXT"], !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.addTextOverlay()
+                if let added = editor.overlays.last(where: { $0.text != nil }) {
+                    editor.setOverlayText(id: added.id, text)
+                }
+            }
             // Keyframe cell (T5): overlay animates small/top-left -> large/
             // bottom-right across its run. LUMA_SEED_KEYFRAMES=1.
             if env["LUMA_SEED_KEYFRAMES"] == "1", let overlay = editor.overlays.first {
@@ -501,6 +511,17 @@ private struct EditorContent: View {
                             .frame(width: 58)
                             .opacity(editor.isEmpty ? 0.35 : 1)
                             .disabled(editor.isEmpty)
+                        FlatTool(title: "Text", icon: "textformat") {
+                            let before = Set(editor.overlays.map(\.id))
+                            editor.addTextOverlay()
+                            if let added = editor.overlays.first(where: { !before.contains($0.id) }) {
+                                selectedOverlayID = added.id
+                                withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = true }
+                            }
+                        }
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
                         FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {
                             looksTargetClipID = nil
                             showLooksStrip.toggle()
@@ -1052,6 +1073,64 @@ private struct OverlayPanel: View {
         editor.overlays.first { $0.id == overlayID }
     }
 
+    @State private var draftText: String = ""
+    @FocusState private var textFieldFocused: Bool
+
+    private static let textSwatches = ["#FFFFFF", "#0A0D14", "#F5C518", "#FF5C5C", "#7A68EE", "#3EC8AC"]
+
+    /// Text-layer controls (T6): content, typography preset, colour.
+    private var textControls: some View {
+        VStack(spacing: 10) {
+            TextField("Your Title", text: $draftText)
+                .focused($textFieldFocused)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .submitLabel(.done)
+                .onSubmit { editor.setOverlayText(id: overlayID, draftText) }
+                .onChange(of: textFieldFocused) { _, focused in
+                    if !focused { editor.setOverlayText(id: overlayID, draftText) }
+                }
+                .onAppear { draftText = overlay?.text ?? "" }
+
+            HStack(spacing: 8) {
+                ForEach(EditorState.TextLayerStyle.allCases, id: \.self) { style in
+                    let selected = overlay?.textStyle == style
+                    Button {
+                        editor.setOverlayTextStyle(id: overlayID, style)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text(style.label)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                        in: Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+                Spacer()
+                ForEach(Self.textSwatches, id: \.self) { hex in
+                    let selected = overlay?.textColorHex.uppercased() == hex
+                    Button {
+                        editor.setOverlayTextColor(id: overlayID, hex)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 20, height: 20)
+                            .overlay(Circle().stroke(selected ? LumaTheme.accentBright : .white.opacity(0.2),
+                                                     lineWidth: selected ? 2 : 1))
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+            }
+        }
+    }
+
     /// 3×3 anchor presets in unit canvas coordinates (y down).
     private static let anchors: [[CGPoint]] = {
         let xs: [CGFloat] = [0.22, 0.5, 0.78]
@@ -1082,6 +1161,10 @@ private struct OverlayPanel: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
+            }
+
+            if overlay?.text != nil {
+                textControls
             }
 
             InlineSlider(title: "Opacity", value: Binding(
@@ -1270,5 +1353,18 @@ private struct LookStripCell: View {
             }
         }
         .buttonStyle(.lumaPress)
+    }
+}
+
+// MARK: - Hex colours (text-layer swatches)
+
+extension Color {
+    /// "#RRGGBB" convenience for the text-layer palette.
+    init(hex: String) {
+        let cleaned = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let value = UInt32(cleaned, radix: 16) ?? 0xFFFFFF
+        self.init(red: Double((value >> 16) & 0xFF) / 255,
+                  green: Double((value >> 8) & 0xFF) / 255,
+                  blue: Double(value & 0xFF) / 255)
     }
 }

@@ -53,6 +53,10 @@ struct StoredOverlay: Codable {
     /// Keyframed motion (optional-at-end: legacy projects decode).
     var rotationDegrees: Double? = nil
     var keyframes: [OverlayKeyframe]? = nil
+    /// Text layer (optional-at-end): the string, style raw value, colour hex.
+    var text: String? = nil
+    var textStyle: String? = nil
+    var textColorHex: String? = nil
 }
 
 /// Background-music track attached to a project.

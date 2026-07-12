@@ -153,6 +153,11 @@ final class EditorState: ObservableObject {
         var sizeFraction: Double = 0.45   // overlay width / canvas width (0.25…1)
         var center: CGPoint = CGPoint(x: 0.72, y: 0.25)  // unit coords, y down
         var opacity: Double = 1.0
+        /// Text layer (T6): when set, the compositor renders this string
+        /// instead of media — same lane, same placement, same keyframes.
+        var text: String? = nil
+        var textStyle: TextLayerStyle = .title
+        var textColorHex: String = "#FFFFFF"
         var rotationDegrees: Double = 0
         /// Keyframed placement (T5): offsets within the overlay's run.
         /// Empty = static placement from the fields above.
@@ -164,6 +169,29 @@ final class EditorState: ObservableObject {
         var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
 
         var timelineEnd: Double { timelineOffset + duration }
+    }
+
+    /// Text-layer typography presets (T6).
+    enum TextLayerStyle: String, Codable, CaseIterable {
+        case title
+        case subtitle
+        case mono
+
+        var label: String {
+            switch self {
+            case .title: return "Title"
+            case .subtitle: return "Subtitle"
+            case .mono: return "Mono"
+            }
+        }
+
+        var fontName: String {
+            switch self {
+            case .title: return "HelveticaNeue-Bold"
+            case .subtitle: return "HelveticaNeue-Medium"
+            case .mono: return "Menlo-Bold"
+            }
+        }
     }
 
     /// Everything one `buildComposition()` pass produces — shared between
@@ -309,7 +337,10 @@ final class EditorState: ObservableObject {
                               opacity: $0.opacity,
                               volume: $0.volume, isMuted: $0.isMuted,
                               rotationDegrees: $0.rotationDegrees,
-                              keyframes: $0.keyframes.isEmpty ? nil : $0.keyframes)
+                              keyframes: $0.keyframes.isEmpty ? nil : $0.keyframes,
+                              text: $0.text,
+                              textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
+                              textColorHex: $0.text == nil ? nil : $0.textColorHex)
             }
         )
         store.upsert(project: stored)
@@ -352,17 +383,22 @@ final class EditorState: ObservableObject {
         }
         overlays = (project.overlays ?? []).compactMap { stored in
             let url = store.clipsFolder.appendingPathComponent(stored.fileName)
-            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-            return OverlayItem(id: stored.id, url: url, isImage: stored.isImage,
-                               timelineOffset: stored.timelineOffset, duration: stored.duration,
-                               sizeFraction: stored.sizeFraction,
-                               center: CGPoint(x: stored.centerX, y: stored.centerY),
-                               opacity: stored.opacity,
-                               rotationDegrees: stored.rotationDegrees ?? 0,
-                               keyframes: stored.keyframes ?? [],
-                               volume: stored.volume ?? 100,
-                               isMuted: stored.isMuted ?? false,
-                               title: stored.title ?? "Overlay")
+            // Text layers carry no media file; everything else must exist.
+            guard stored.text != nil || FileManager.default.fileExists(atPath: url.path) else { return nil }
+            var item = OverlayItem(id: stored.id, url: url, isImage: stored.isImage,
+                                   timelineOffset: stored.timelineOffset, duration: stored.duration,
+                                   sizeFraction: stored.sizeFraction,
+                                   center: CGPoint(x: stored.centerX, y: stored.centerY),
+                                   opacity: stored.opacity,
+                                   rotationDegrees: stored.rotationDegrees ?? 0,
+                                   keyframes: stored.keyframes ?? [],
+                                   volume: stored.volume ?? 100,
+                                   isMuted: stored.isMuted ?? false,
+                                   title: stored.title ?? "Overlay")
+            item.text = stored.text
+            item.textStyle = stored.textStyle.flatMap(TextLayerStyle.init) ?? .title
+            item.textColorHex = stored.textColorHex ?? "#FFFFFF"
+            return item
         }
         rebuild(keepPosition: false)
         refreshAllWaveforms()
@@ -878,6 +914,62 @@ final class EditorState: ObservableObject {
         overlays.sort { $0.timelineOffset < $1.timelineOffset }
         rebuild()
         refreshOverlayThumbnails()
+    }
+
+    /// Adds a TEXT layer (T6) on the overlay lane at the playhead. Rides the
+    /// whole overlay machinery: placement, keyframes, opacity, trim.
+    func addTextOverlay() {
+        guard totalDuration > 0.4 else { return }
+        var offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
+        for existing in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
+            if offset < existing.timelineOffset - 0.05 { break }
+            if offset < existing.timelineEnd { offset = existing.timelineEnd }
+        }
+        guard offset < totalDuration - 0.2 else { return }
+        var maxEnd = totalDuration
+        if let next = overlays
+            .filter({ $0.timelineOffset > offset + 0.05 })
+            .min(by: { $0.timelineOffset < $1.timelineOffset }) {
+            maxEnd = min(maxEnd, next.timelineOffset)
+        }
+        let duration = min(3.0, maxEnd - offset)
+        guard duration > 0.2 else { return }
+
+        pushUndoSnapshot()
+        var item = OverlayItem(id: UUID(),
+                               url: URL(fileURLWithPath: "/dev/null"),
+                               isImage: true,
+                               timelineOffset: offset, duration: duration,
+                               title: "Text")
+        item.text = "Your Title"
+        item.sizeFraction = 0.6
+        item.center = CGPoint(x: 0.5, y: 0.5)
+        overlays.append(item)
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+    }
+
+    /// Text content/style edits are live (the compositor's text cache keys
+    /// on the content) — but the SPECS carry the string, so rebuild.
+    func setOverlayText(id: UUID, _ text: String) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].text != nil, overlays[i].text != text else { return }
+        overlays[i].text = text
+        rebuild()
+    }
+
+    func setOverlayTextStyle(id: UUID, _ style: TextLayerStyle) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].text != nil, overlays[i].textStyle != style else { return }
+        overlays[i].textStyle = style
+        rebuild()
+    }
+
+    func setOverlayTextColor(id: UUID, _ hex: String) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].text != nil, overlays[i].textColorHex != hex else { return }
+        overlays[i].textColorHex = hex
+        rebuild()
     }
 
     func removeOverlay(id: UUID) {
@@ -1400,6 +1492,17 @@ final class EditorState: ObservableObject {
             let playable = min(overlay.duration, cursor.seconds - start)
             guard playable > 0.05 else { continue }
 
+            if let text = overlay.text {
+                overlaySpecs.append(OverlaySpec(id: overlay.id,
+                                                trackID: kCMPersistentTrackID_Invalid,
+                                                imageURL: nil,
+                                                transform: .identity,
+                                                start: start, end: start + playable,
+                                                text: text,
+                                                textFontName: overlay.textStyle.fontName,
+                                                textColorHex: overlay.textColorHex))
+                continue
+            }
             if overlay.isImage {
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: kCMPersistentTrackID_Invalid,

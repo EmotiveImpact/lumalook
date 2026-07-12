@@ -140,6 +140,10 @@ struct OverlaySpec {
     let transform: CGAffineTransform
     let start: Double
     let end: Double
+    /// Text layer (T6): rendered by the compositor's text cache; never graded.
+    var text: String? = nil
+    var textFontName: String = "HelveticaNeue-Bold"
+    var textColorHex: String = "#FFFFFF"
 }
 
 // MARK: - Instruction
@@ -327,7 +331,12 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 for: spec.id, at: seconds - spec.start) else { continue }
 
             var overlayImage: CIImage?
-            if let imageURL = spec.imageURL {
+            var isText = false
+            if let text = spec.text {
+                overlayImage = textImage(text, fontName: spec.textFontName,
+                                         colorHex: spec.textColorHex)
+                isText = true
+            } else if let imageURL = spec.imageURL {
                 overlayImage = stillImage(at: imageURL)
             } else if spec.trackID != kCMPersistentTrackID_Invalid,
                       let buffer = request.sourceFrame(byTrackID: spec.trackID) {
@@ -342,10 +351,13 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             guard var overlay = overlayImage, overlay.extent.width > 0 else { continue }
 
             // Same look on the PIP as the base — one grade across the frame.
-            overlay = pipeline.apply(state: activeState,
-                                     to: overlay.clampedToExtent(),
-                                     includeSplit: false)
-                .cropped(to: overlay.extent)
+            // Text stays ungraded: titles must hold their exact colour.
+            if !isText {
+                overlay = pipeline.apply(state: activeState,
+                                         to: overlay.clampedToExtent(),
+                                         includeSplit: false)
+                    .cropped(to: overlay.extent)
+            }
 
             // Scale so the overlay's width is `sizeFraction` of the canvas.
             let fraction = min(max(placement.sizeFraction, 0.05), 1.0)
@@ -488,6 +500,61 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         let dx = (renderSize.width - image.extent.width) / 2 - image.extent.minX
         let dy = (renderSize.height - image.extent.height) / 2 - image.extent.minY
         return image.transformed(by: CGAffineTransform(translationX: dx, y: dy))
+    }
+
+    /// Text-layer cache keyed by content+font+colour. CITextImageGenerator
+    /// is thread-safe and needs no UIKit, so it can run on the render queue.
+    private var textCache: [String: CIImage] = [:]
+    private func textImage(_ text: String, fontName: String, colorHex: String) -> CIImage? {
+        let key = "\(fontName)|\(colorHex)|\(text)"
+        stateLock.lock()
+        if let cached = textCache[key] {
+            stateLock.unlock()
+            return cached
+        }
+        stateLock.unlock()
+
+        let generator = CIFilter.textImageGenerator()
+        generator.text = text
+        generator.fontName = fontName
+        generator.fontSize = 120
+        generator.scaleFactor = 2
+        guard var image = generator.outputImage, image.extent.width > 0 else { return nil }
+
+        // The generator draws BLACK glyphs on transparent (verified in-sim:
+        // a white title exported black). Colour through the alpha channel:
+        // a solid fill masked by the glyphs' alpha.
+        let hex = colorHex.hasPrefix("#") ? String(colorHex.dropFirst()) : colorHex
+        let value = UInt32(hex, radix: 16) ?? 0xFFFFFF
+        let solid = CIImage(color: CIColor(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255)).cropped(to: image.extent)
+        let colorize = CIFilter.blendWithAlphaMask()
+        colorize.inputImage = solid
+        colorize.backgroundImage = CIImage.empty()
+        colorize.maskImage = image
+        image = (colorize.outputImage ?? image).cropped(to: image.extent)
+        // Soft drop shadow so titles read on any footage.
+        let shadow = image
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.55),
+            ])
+            .applyingGaussianBlur(sigma: 6)
+            .transformed(by: CGAffineTransform(translationX: 3, y: -3))
+        let composed = image.composited(over: shadow)
+        let normalised = composed.transformed(by: CGAffineTransform(
+            translationX: -composed.extent.minX, y: -composed.extent.minY))
+
+        stateLock.lock()
+        // Text edits churn keys; keep the cache bounded.
+        if textCache.count > 40 { textCache.removeAll() }
+        textCache[key] = normalised
+        stateLock.unlock()
+        return normalised
     }
 
     /// CIImage cache for photo clips + image overlays. EXIF orientation is
