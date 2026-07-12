@@ -25,6 +25,26 @@ targets:
   LumaLook:
     type: application
     platform: iOS
+    info:
+      path: LumaLook/Info.plist
+      properties:
+        # Open-in-place .cube + ZIP packs (#117): LumaLook registers as a
+        # destination for LUTs from Files/Mail/Safari.
+        LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Cube LUT
+            LSHandlerRank: Owner
+            LSItemContentTypes: [com.emotiveimpact.lumalook.cube]
+          - CFBundleTypeName: ZIP Archive
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.zip-archive]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.emotiveimpact.lumalook.cube
+            UTTypeDescription: Cube LUT
+            UTTypeConformsTo: [public.plain-text, public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [cube, CUBE]
     sources:
       - LumaLook
     dependencies:

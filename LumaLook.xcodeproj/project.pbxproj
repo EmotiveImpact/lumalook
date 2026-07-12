@@ -24,6 +24,7 @@
 		52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */; };
 		5689040618691FF213182252 /* LumaCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA07F33B727EC523266C623 /* LumaCompositor.swift */; };
 		5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5C594D043EBDE22175C914E7 /* Assets.xcassets */; };
+		650993EF4274EEA5FD8721A9 /* ZipReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F752262798C945F44F00B2 /* ZipReader.swift */; };
 		6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 585AC072642EB31074E401C7 /* LumaLook.storekit */; };
 		6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA55F19B38C01C558951683 /* ExportCompleteView.swift */; };
 		6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */; };
@@ -91,6 +92,7 @@
 		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
 		826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPacks.swift; sourceTree = "<group>"; };
 		8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */ = {isa = PBXFileReference; path = CompositorBlank.mp4; sourceTree = "<group>"; };
+		89F752262798C945F44F00B2 /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
@@ -105,6 +107,7 @@
 		CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_neon.jpg; sourceTree = "<group>"; };
 		CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
 		D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorChrome.swift; sourceTree = "<group>"; };
+		DCFFB79AE65C889172E26DA4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DD8AEF2B3B897BD002287240 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
 		EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLiveLookView.swift; sourceTree = "<group>"; };
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
@@ -237,6 +240,7 @@
 			isa = PBXGroup;
 			children = (
 				5C594D043EBDE22175C914E7 /* Assets.xcassets */,
+				DCFFB79AE65C889172E26DA4 /* Info.plist */,
 				585AC072642EB31074E401C7 /* LumaLook.storekit */,
 				41DAC1C8B04ED078777B1180 /* App */,
 				F23EDB45957AA36465FB8BF0 /* Data */,
@@ -261,6 +265,7 @@
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
 				2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */,
+				89F752262798C945F44F00B2 /* ZipReader.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -400,6 +405,7 @@
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
 				17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */,
 				D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */,
+				650993EF4274EEA5FD8721A9 /* ZipReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -415,6 +421,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = FC88M2P4F9;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LumaLook/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LumaLook;
 				INFOPLIST_KEY_CFBundleVersion = 1;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -564,6 +571,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = FC88M2P4F9;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LumaLook/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LumaLook;
 				INFOPLIST_KEY_CFBundleVersion = 1;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;

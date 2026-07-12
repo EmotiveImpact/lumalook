@@ -29,6 +29,11 @@ struct LumaLookApp: App {
                 .onChange(of: showOnboarding) { _, showing in
                     if !showing { hasSeenOnboarding = true }
                 }
+                // Open-in-place (#117): .cube files and ZIP packs arrive here
+                // from Files, Mail, Safari and "Open in LumaLook".
+                .onOpenURL { url in
+                    app.handleIncomingFile(url: url)
+                }
         }
     }
 }

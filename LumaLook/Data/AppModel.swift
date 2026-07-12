@@ -183,6 +183,8 @@ final class AppModel: ObservableObject {
     @Published var lastExportURL: URL?
     @Published var lastExportImage: CGImage?
     @Published var exportError: String?
+    /// Transient confirmation banner for open-in-place imports (#117).
+    @Published var importToast: String?
 
     let lutRepository = LUTRepository()
     let exporter = VideoExporter()
@@ -217,7 +219,58 @@ final class AppModel: ObservableObject {
 
     /// Debug-only: launch straight into a screen for UI verification,
     /// e.g. SIMCTL_CHILD_LUMA_ROUTE=applyLook.
+    // MARK: - Open-in-place imports (#117)
+
+    /// Handles files handed to the app: a .cube imports straight into the
+    /// LUT library; a .zip pack extracts and imports every cube inside.
+    func handleIncomingFile(url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        switch url.pathExtension.lowercased() {
+        case "cube":
+            if let lut = try? lutRepository.importLUT(from: url) {
+                importToast = "Imported \(lut.displayName)"
+                if path.last != .lutManager { path.append(.lutManager) }
+            } else {
+                importToast = "Couldn't read that .cube file."
+            }
+        case "zip":
+            let cubes = ZipReader.entries(in: url)
+                .filter { $0.fileName.lowercased().hasSuffix(".cube") }
+            guard !cubes.isEmpty else {
+                importToast = "No .cube files in that archive."
+                return
+            }
+            var imported = 0
+            // Stage under the ORIGINAL filename (in a unique folder) — the
+            // repository derives the display name from it.
+            let stagingDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("LumaLook_Unzip_\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+            for entry in cubes {
+                let name = (entry.fileName as NSString).lastPathComponent
+                let staging = stagingDir.appendingPathComponent(name)
+                guard (try? entry.data.write(to: staging)) != nil else { continue }
+                if (try? lutRepository.importLUT(from: staging)) != nil { imported += 1 }
+            }
+            try? FileManager.default.removeItem(at: stagingDir)
+            importToast = imported > 0
+                ? "Imported \(imported) LUT\(imported == 1 ? "" : "s") from the pack"
+                : "Couldn't import that pack."
+            if imported > 0, path.last != .lutManager { path.append(.lutManager) }
+        default:
+            break
+        }
+    }
+
     private func applyDebugRoute() {
+        #if DEBUG
+        let env = ProcessInfo.processInfo.environment
+        // Headless open-in-place check: LUMA_OPEN_FILE=<host path>.
+        if let openPath = env["LUMA_OPEN_FILE"], FileManager.default.fileExists(atPath: openPath) {
+            handleIncomingFile(url: URL(fileURLWithPath: openPath))
+        }
+        #endif
         #if DEBUG
         guard let route = ProcessInfo.processInfo.environment["LUMA_ROUTE"] else { return }
         let map: [String: [LumaRoute]] = [

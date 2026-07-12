@@ -20,6 +20,25 @@ struct LumaRootView: View {
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: app.path.isEmpty)
         .tint(LumaTheme.purple)
+        // Import confirmation banner (open-in-place .cube / ZIP packs).
+        .overlay(alignment: .top) {
+            if let toast = app.importToast {
+                Text(toast)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 1))
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(nanoseconds: 2_600_000_000)
+                        withAnimation(.easeOut(duration: 0.25)) { app.importToast = nil }
+                    }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.importToast != nil)
     }
 
     @ViewBuilder
