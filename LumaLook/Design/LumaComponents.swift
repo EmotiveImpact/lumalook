@@ -92,7 +92,9 @@ struct LumaScreen<Content: View>: View {
                 }
                 .coordinateSpace(name: "luma.scroll")
                 .onPreferenceChange(LumaScrollOffsetKey.self) { offset in
-                    let isScrolled = offset < 4
+                    // Only once content actually moves under the bar — at
+                    // rest the header must match the app background exactly.
+                    let isScrolled = offset < -6
                     if isScrolled != scrolled {
                         withAnimation(.easeInOut(duration: 0.18)) { scrolled = isScrolled }
                     }
@@ -477,6 +479,7 @@ struct Hairline: View {
 
 struct LumaTabBar: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
 
     var body: some View {
         HStack {
@@ -490,6 +493,21 @@ struct LumaTabBar: View {
                             .font(.system(size: 21, weight: .regular))
                             .symbolVariant(app.tab == tab ? .fill : .none)
                             .symbolEffect(.bounce.up.byLayer, options: .speed(1.4), value: app.tab == tab)
+                            // Entitlement badge: Pro members see it on their
+                            // profile without opening Settings.
+                            .overlay(alignment: .topTrailing) {
+                                if tab == .profile && storeService.isPro {
+                                    Text("PRO")
+                                        .font(.system(size: 7, weight: .heavy))
+                                        .tracking(0.5)
+                                        .foregroundStyle(.black)
+                                        .fixedSize()
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(LumaTheme.gold, in: Capsule())
+                                        .offset(x: 16, y: -6)
+                                }
+                            }
                         Text(tab.rawValue)
                             .font(.system(size: 12, weight: app.tab == tab ? .semibold : .regular))
                     }
@@ -508,11 +526,6 @@ struct LumaTabBar: View {
         .background {
             Color(red: 0.02, green: 0.025, blue: 0.04).opacity(0.98)
                 .ignoresSafeArea(edges: .bottom)
-        }
-        .overlay(alignment: .top) {
-            LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(height: 1)
         }
         .sensoryFeedback(.selection, trigger: app.tab)
     }

@@ -39,6 +39,13 @@ final class StoreService: ObservableObject {
     private var updatesTask: Task<Void, Never>?
 
     init() {
+        #if DEBUG
+        // UI verification seed: LUMA_SEED_PRO=1 renders the entitled state
+        // (badges, Settings status) without a StoreKit transaction.
+        if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" {
+            isPro = true
+        }
+        #endif
         updatesTask = Task { await listenForTransactions() }
         Task {
             await loadProducts()
@@ -77,6 +84,9 @@ final class StoreService: ObservableObject {
     // MARK: Entitlements
 
     func refreshEntitlements() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" { return }
+        #endif
         var pro = false
         var packs: Set<String> = []
         for await result in Transaction.currentEntitlements {
