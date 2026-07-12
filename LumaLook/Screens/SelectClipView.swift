@@ -19,7 +19,7 @@ struct PickedVideo: Transferable {
 
 struct SelectClipView: View {
     @EnvironmentObject private var app: AppModel
-    @State private var mode = "Video"
+    @State private var mode = "All"
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isLoading = false
     @State private var loadError: String?
@@ -37,7 +37,7 @@ struct SelectClipView: View {
                 LumaScreenHeaderBar(title: "Select Clip", trailingIcon: "info.circle")
 
                 VStack(spacing: 16) {
-                    SegmentPills(options: ["Video", "Photos"], selection: $mode)
+                    SegmentPills(options: ["All", "Video", "Photos"], selection: $mode)
                         .padding(.horizontal, 22)
 
                     HStack(spacing: 8) {
@@ -53,7 +53,8 @@ struct SelectClipView: View {
                                                        : "Photo selected")
                                 .foregroundStyle(LumaTheme.teal)
                         } else {
-                            Text(pickingPhotos ? "All Photos" : "All Videos")
+                            Text(mode == "All" ? "Whole library — videos & photos"
+                                 : (pickingPhotos ? "All Photos" : "All Videos"))
                                 .foregroundStyle(.white)
                         }
                         Spacer()
@@ -73,7 +74,8 @@ struct SelectClipView: View {
                     // thumbnail is the user's actual footage.
                     PhotosPicker(selection: $pickerItems,
                                  maxSelectionCount: 10,
-                                 matching: pickingPhotos ? .images : .videos,
+                                 matching: mode == "All" ? .any(of: [.videos, .images])
+                                          : (pickingPhotos ? .images : .videos),
                                  photoLibrary: .shared()) {
                         Label("Open Library", systemImage: "photo.on.rectangle")
                     }
@@ -135,8 +137,14 @@ struct SelectClipView: View {
                         } else {
                             loadError = "Could not load that photo. Try another one."
                         }
-                    } else if let video = try await first.loadTransferable(type: PickedVideo.self) {
+                    } else if let video = try? await first.loadTransferable(type: PickedVideo.self) {
                         app.selectedVideoURL = video.url
+                    } else if let data = try await first.loadTransferable(type: Data.self),
+                              let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
+                        // "All" mode: the pick was a photo.
+                        app.selectedImage = image
+                    } else {
+                        loadError = "Could not load that item. Try another one."
                     }
                 } catch {
                     loadError = "Could not load that item. Try another one."
