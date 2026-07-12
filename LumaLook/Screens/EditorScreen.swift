@@ -210,6 +210,15 @@ struct EditorTimelineView: View {
                                                   settings: LookSettings()))
                 }
             }
+            // Voiceover cell (#8): record ~2 s of mic and drop the lane.
+            if env["LUMA_SEED_VOICEOVER"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.startVoiceover()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                editor.stopVoiceover()
+            }
             // Text cell (T6): LUMA_SEED_TEXT="HELLO WORLD" drops a title.
             if let text = env["LUMA_SEED_TEXT"], !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -529,6 +538,20 @@ private struct EditorContent: View {
                         .frame(width: 58)
                         FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
                             .frame(width: 58)
+                        FlatTool(title: editor.isRecordingVoiceover ? "Stop" : "Record",
+                                 icon: editor.isRecordingVoiceover ? "stop.circle.fill" : "mic.fill",
+                                 selected: editor.isRecordingVoiceover) {
+                            if editor.isRecordingVoiceover {
+                                editor.stopVoiceover()
+                                LumaHaptics.shared.exportSuccess()
+                            } else {
+                                editor.startVoiceover()
+                                LumaHaptics.shared.tap()
+                            }
+                        }
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
                         FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
                             .frame(width: 58)
                         FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)

@@ -670,17 +670,75 @@ final class EditorState: ObservableObject {
     /// Attaches an already-imported audio file as the project's music track.
     /// Adds ANOTHER audio track (music, voiceover, sound) — CapCut-style
     /// stacking. New tracks start at the playhead so layering feels direct.
-    func addAudioTrack(importedURL: URL, title: String) async {
+    func addAudioTrack(importedURL: URL, title: String, at explicitOffset: Double? = nil) async {
         let asset = AVURLAsset(url: importedURL)
         guard let duration = try? await asset.load(.duration).seconds,
               duration.isFinite, duration > 0.05 else { return }
         pushUndoSnapshot()
-        let offset = audioTracks.isEmpty ? 0 : min(currentTime, max(0, totalDuration - 0.2))
+        let offset = explicitOffset.map { min(max(0, $0), max(0, totalDuration - 0.2)) }
+            ?? (audioTracks.isEmpty ? 0 : min(currentTime, max(0, totalDuration - 0.2)))
         audioTracks.append(MusicTrack(id: UUID(), url: importedURL, title: title,
                                       assetDuration: duration,
                                       trimStart: 0, trimEnd: duration, timelineOffset: offset))
         rebuild()
         refreshAllWaveforms()
+    }
+
+    // MARK: - Voiceover (Next-10 #8)
+
+    /// Records narration to picture: playback rolls MUTED (no mic echo)
+    /// from the playhead while the mic captures; stop drops the take on its
+    /// own audio lane exactly where recording started.
+    @Published private(set) var isRecordingVoiceover = false
+    private var voiceoverRecorder: AVAudioRecorder?
+    private var voiceoverStartOffset: Double = 0
+
+    func startVoiceover() {
+        guard !isRecordingVoiceover, totalDuration > 0.4 else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .videoRecording,
+                                 options: [.defaultToSpeaker])
+        try? session.setActive(true)
+
+        let url = store.audioFolder.appendingPathComponent("Voiceover_\(UUID().uuidString).m4a")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+        ]
+        guard let recorder = try? AVAudioRecorder(url: url, settings: settings),
+              recorder.record() else {
+            try? session.setCategory(.playback, mode: .moviePlayback)
+            return
+        }
+        voiceoverRecorder = recorder
+        voiceoverStartOffset = min(currentTime, max(0, totalDuration - 0.4))
+        isRecordingVoiceover = true
+        player?.isMuted = true
+        if !isPlaying { togglePlayback() }
+    }
+
+    func stopVoiceover() {
+        guard isRecordingVoiceover, let recorder = voiceoverRecorder else { return }
+        recorder.stop()
+        voiceoverRecorder = nil
+        isRecordingVoiceover = false
+        if isPlaying { togglePlayback() }
+        player?.isMuted = false
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        try? session.setActive(true)
+
+        let url = recorder.url
+        let start = voiceoverStartOffset
+        let count = audioTracks.filter { $0.title.hasPrefix("Voiceover") }.count
+        Task {
+            await addAudioTrack(importedURL: url,
+                                title: count == 0 ? "Voiceover" : "Voiceover \(count + 1)",
+                                at: start)
+            seek(to: start)
+        }
     }
 
     /// Combined head-trim used by the lane's leading handle: content trims
