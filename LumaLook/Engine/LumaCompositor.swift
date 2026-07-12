@@ -16,16 +16,23 @@ struct FrameMeta {
     let end: Double
     /// Source preferredTransform (orientation normalisation).
     let transform: CGAffineTransform
-    /// Photo clips on the main track (T7): the composition inserts an EMPTY
-    /// range for this span and the compositor renders this still instead of
-    /// pulling a source frame.
+    /// Photo clips on the main track (T7): the compositor renders this still
+    /// instead of pulling a source frame.
     let imageURL: URL?
+    /// True when the still's range is anchored by real (ignored) frames on
+    /// the main track. Instructions then REQUIRE the main track: AVPlayer
+    /// stalls on instructions with no source tracks at all (verified on the
+    /// sim — playback froze at the photo boundary), so the tiny anchor
+    /// frames pace the player while the compositor renders the still.
+    let hasAnchorFrames: Bool
 
-    init(start: Double, end: Double, transform: CGAffineTransform, imageURL: URL? = nil) {
+    init(start: Double, end: Double, transform: CGAffineTransform,
+         imageURL: URL? = nil, hasAnchorFrames: Bool = false) {
         self.start = start
         self.end = end
         self.transform = transform
         self.imageURL = imageURL
+        self.hasAnchorFrames = hasAnchorFrames
     }
 }
 

@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreImage
+import ImageIO
 import SwiftUI
 
 // MARK: - Editor formats
@@ -91,6 +92,10 @@ final class EditorState: ObservableObject {
         var trimStart: Double
         var trimEnd: Double
         var speed: Double = 1.0
+        /// Photo clip on the main track (T7): renders a still through the
+        /// same grade pipeline; `assetDuration` acts as the max duration cap
+        /// and trim edits the display duration.
+        var isImage: Bool = false
         var hasAudio: Bool = false
         /// Per-clip audio mix (multiplied with the global track volume).
         var volume: Double = 100
@@ -123,6 +128,24 @@ final class EditorState: ObservableObject {
         var timelineDuration: Double { max(0, trimEnd - trimStart) }
     }
 
+    /// A picture-in-picture layer over the main track (T1): a video or a
+    /// still image, free-placed on the timeline, sized/positioned in unit
+    /// canvas coordinates. One overlay lane in v1; the array is the future.
+    struct OverlayItem: Identifiable {
+        let id: UUID
+        let url: URL                  // in PersistenceStore clips folder
+        var isImage: Bool
+        var timelineOffset: Double    // where the overlay starts on the timeline
+        var duration: Double          // seconds on screen
+        var sizeFraction: Double = 0.45   // overlay width / canvas width (0.25…1)
+        var center: CGPoint = CGPoint(x: 0.72, y: 0.25)  // unit coords, y down
+        var opacity: Double = 1.0
+        var title: String = ""
+        var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
+
+        var timelineEnd: Double { timelineOffset + duration }
+    }
+
     /// Everything one `buildComposition()` pass produces — shared between
     /// the preview player and the exporter so both hear the same mix.
     struct BuiltTimeline {
@@ -139,12 +162,14 @@ final class EditorState: ObservableObject {
         var format: EditorFormat
         var zoom: Double
         var audioTracks: [MusicTrack]
+        var overlays: [OverlayItem]
     }
 
     // Timeline
     @Published private(set) var clips: [Clip] = []
     @Published var selectedClipID: UUID?
     @Published private(set) var audioTracks: [MusicTrack] = []
+    @Published private(set) var overlays: [OverlayItem] = []
 
     // Canvas
     @Published var format: EditorFormat = .widescreen
@@ -230,7 +255,8 @@ final class EditorState: ObservableObject {
                            assetDuration: $0.assetDuration,
                            trimStart: $0.trimStart, trimEnd: $0.trimEnd, speed: $0.speed,
                            volume: $0.volume, isMuted: $0.isMuted,
-                           transitionAfter: $0.transitionAfter.rawValue)
+                           transitionAfter: $0.transitionAfter.rawValue,
+                           isImage: $0.isImage)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -242,6 +268,14 @@ final class EditorState: ObservableObject {
                             trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                             timelineOffset: $0.timelineOffset,
                             volume: $0.volume, isMuted: $0.isMuted)
+            },
+            overlays: overlays.map {
+                StoredOverlay(id: $0.id, fileName: $0.url.lastPathComponent,
+                              isImage: $0.isImage, title: $0.title,
+                              timelineOffset: $0.timelineOffset, duration: $0.duration,
+                              sizeFraction: $0.sizeFraction,
+                              centerX: $0.center.x, centerY: $0.center.y,
+                              opacity: $0.opacity)
             }
         )
         store.upsert(project: stored)
@@ -265,6 +299,7 @@ final class EditorState: ObservableObject {
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             return Clip(id: stored.id, url: url, assetDuration: stored.assetDuration,
                         trimStart: stored.trimStart, trimEnd: stored.trimEnd, speed: stored.speed,
+                        isImage: stored.isImage ?? false,
                         volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false,
                         transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none)
         }
@@ -279,10 +314,31 @@ final class EditorState: ObservableObject {
                               timelineOffset: stored.timelineOffset,
                               volume: stored.volume, isMuted: stored.isMuted)
         }
+        overlays = (project.overlays ?? []).compactMap { stored in
+            let url = store.clipsFolder.appendingPathComponent(stored.fileName)
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return OverlayItem(id: stored.id, url: url, isImage: stored.isImage,
+                               timelineOffset: stored.timelineOffset, duration: stored.duration,
+                               sizeFraction: stored.sizeFraction,
+                               center: CGPoint(x: stored.centerX, y: stored.centerY),
+                               opacity: stored.opacity,
+                               title: stored.title ?? "Overlay")
+        }
         rebuild(keepPosition: false)
         refreshAllWaveforms()
         // Restore thumbnails + audio flags asynchronously.
         for clip in clips {
+            if clip.isImage {
+                Task.detached { [id = clip.id, url = clip.url] in
+                    let thumb = Self.imageThumbnail(at: url)
+                    await MainActor.run { [weak self] in
+                        guard let self, let i = self.clips.firstIndex(where: { $0.id == id }) else { return }
+                        self.clips[i].thumbnail = thumb
+                        if let thumb { self.clips[i].filmstrip = [thumb] }
+                    }
+                }
+                continue
+            }
             Task { [id = clip.id, url = clip.url, at = clip.trimStart] in
                 let asset = AVURLAsset(url: url)
                 let hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
@@ -294,6 +350,7 @@ final class EditorState: ObservableObject {
             }
             refreshFilmstrip(clipID: clip.id)
         }
+        refreshOverlayThumbnails()
     }
 
     func startNewProject() {
@@ -304,6 +361,7 @@ final class EditorState: ObservableObject {
         clips = []
         selectedClipID = nil
         audioTracks = []
+        overlays = []
         undoStack.removeAll()
         redoStack.removeAll()
         updateHistoryFlags()
@@ -331,10 +389,47 @@ final class EditorState: ObservableObject {
         refreshFilmstrip(clipID: clip.id)
     }
 
+    /// Default and maximum display durations for photo clips (T7). Trim
+    /// edits the display duration; `assetDuration` carries the cap.
+    static let photoDefaultDuration = 3.0
+    static let photoMaxDuration = 30.0
+
+    /// Adds a still image to the MAIN track (T7): occupies timeline like a
+    /// clip, renders through the same grade pipeline, no source video track.
+    func addPhotoClip(from url: URL) async {
+        let durableURL = url.path.hasPrefix(store.clipsFolder.path)
+            ? url
+            : (store.importClipFile(from: url) ?? url)
+        let thumb = await Task.detached { Self.imageThumbnail(at: durableURL) }.value
+        guard thumb != nil else { return }   // unreadable image: don't add a dead clip
+        pushUndoSnapshot()
+        var clip = Clip(id: UUID(), url: durableURL,
+                        assetDuration: Self.photoMaxDuration,
+                        trimStart: 0, trimEnd: Self.photoDefaultDuration,
+                        isImage: true)
+        clip.thumbnail = thumb
+        clip.filmstrip = thumb.map { [$0] } ?? []
+        clips.append(clip)
+        selectedClipID = clip.id
+        rebuild()
+    }
+
+    /// Downscaled still for photo-clip/overlay thumbnails, EXIF-oriented.
+    nonisolated static func imageThumbnail(at url: URL, maxDimension: CGFloat = 320) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
     /// Regenerates a clip's filmstrip (one frame per second across the
     /// trimmed range, capped) off the main thread and publishes it.
     func refreshFilmstrip(clipID: UUID) {
         guard let clip = clips.first(where: { $0.id == clipID }) else { return }
+        guard !clip.isImage else { return }   // stills: filmstrip is the frame itself
         let url = clip.url
         let start = clip.trimStart
         let end = clip.trimEnd
@@ -421,19 +516,22 @@ final class EditorState: ObservableObject {
         first.transitionAfter = .none
         let second = Clip(id: UUID(), url: clip.url, assetDuration: clip.assetDuration,
                           trimStart: splitPoint, trimEnd: clip.trimEnd,
-                          speed: clip.speed, hasAudio: clip.hasAudio,
+                          speed: clip.speed, isImage: clip.isImage, hasAudio: clip.hasAudio,
                           volume: clip.volume, isMuted: clip.isMuted,
                           transitionAfter: clip.transitionAfter,
-                          thumbnail: clip.thumbnail)
+                          thumbnail: clip.thumbnail, filmstrip: clip.isImage ? clip.filmstrip : [])
         clips[index] = first
         clips.insert(second, at: index + 1)
         selectedClipID = second.id
 
-        // Refresh the second half's thumbnail to its new first frame.
-        Task { [id = second.id, url = clip.url] in
-            let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: splitPoint + 0.02)
-            if let i = self.clips.firstIndex(where: { $0.id == id }) {
-                self.clips[i].thumbnail = thumb
+        // Refresh the second half's thumbnail to its new first frame
+        // (stills keep theirs — every frame is the same frame).
+        if !clip.isImage {
+            Task { [id = second.id, url = clip.url] in
+                let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: splitPoint + 0.02)
+                if let i = self.clips.firstIndex(where: { $0.id == id }) {
+                    self.clips[i].thumbnail = thumb
+                }
             }
         }
         rebuild()
@@ -448,10 +546,12 @@ final class EditorState: ObservableObject {
         clips[index].trimStart = max(0, min(start, end - 0.2))
         clips[index].trimEnd = min(clips[index].assetDuration, max(end, start + 0.2))
         let clip = clips[index]
-        Task { [id = clip.id, url = clip.url, at = clip.trimStart] in
-            let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: at + 0.02)
-            if let i = self.clips.firstIndex(where: { $0.id == id }) {
-                self.clips[i].thumbnail = thumb
+        if !clip.isImage {
+            Task { [id = clip.id, url = clip.url, at = clip.trimStart] in
+                let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: at + 0.02)
+                if let i = self.clips.firstIndex(where: { $0.id == id }) {
+                    self.clips[i].thumbnail = thumb
+                }
             }
         }
         rebuild()
@@ -652,23 +752,168 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    // MARK: - Overlay lane (T1)
+
+    /// Adds a PIP overlay (video or still) starting at the playhead. One
+    /// lane in v1: the new item lands in the first free gap at/after the
+    /// playhead; videos run their full length, images default to 3 s — both
+    /// clamped to the free space and the timeline end.
+    func addOverlay(from url: URL, isImage: Bool) async {
+        guard totalDuration > 0.4 else { return }   // needs a base timeline
+        let durableURL = url.path.hasPrefix(store.clipsFolder.path)
+            ? url
+            : (store.importClipFile(from: url) ?? url)
+        var mediaDuration = Self.photoDefaultDuration
+        if !isImage {
+            let asset = AVURLAsset(url: durableURL)
+            guard let duration = try? await asset.load(.duration).seconds,
+                  duration.isFinite, duration > 0.05 else { return }
+            mediaDuration = duration
+        } else {
+            guard Self.imageThumbnail(at: durableURL, maxDimension: 32) != nil else { return }
+        }
+
+        // First free slot at/after the playhead on the single lane.
+        var offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
+        for existing in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
+            if offset < existing.timelineOffset - 0.05 { break }
+            if offset < existing.timelineEnd { offset = existing.timelineEnd }
+        }
+        guard offset < totalDuration - 0.2 else { return }
+        var maxEnd = totalDuration
+        if let next = overlays
+            .filter({ $0.timelineOffset > offset + 0.05 })
+            .min(by: { $0.timelineOffset < $1.timelineOffset }) {
+            maxEnd = min(maxEnd, next.timelineOffset)
+        }
+        let duration = min(mediaDuration, maxEnd - offset)
+        guard duration > 0.2 else { return }
+
+        pushUndoSnapshot()
+        let item = OverlayItem(id: UUID(), url: durableURL, isImage: isImage,
+                               timelineOffset: offset, duration: duration,
+                               title: url.deletingPathExtension().lastPathComponent)
+        overlays.append(item)
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        refreshOverlayThumbnails()
+    }
+
+    func removeOverlay(id: UUID) {
+        guard overlays.contains(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        overlays.removeAll { $0.id == id }
+        rebuild()
+    }
+
+    /// Repositions an overlay on the timeline, clamped against its lane
+    /// neighbours and the timeline end. Rebuild (track inserts move).
+    func setOverlayOffset(id: UUID, _ offset: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let item = overlays[i]
+        var clamped = min(max(0, offset), max(0, totalDuration - 0.2))
+        for other in overlays where other.id != id {
+            if other.timelineEnd <= item.timelineOffset + 0.001 {
+                clamped = max(clamped, other.timelineEnd)
+            } else if other.timelineOffset >= item.timelineEnd - 0.001 {
+                clamped = min(clamped, max(0, other.timelineOffset - item.duration))
+            }
+        }
+        guard abs(clamped - item.timelineOffset) > 0.01 else { return }
+        pushUndoSnapshot()
+        overlays[i].timelineOffset = clamped
+        overlays[i].duration = min(item.duration, max(0.2, totalDuration - clamped))
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+    }
+
+    /// Size/position/opacity are LIVE: the compositor reads `overlayLayout`
+    /// per frame, so sliders never trigger a rebuild (the LookState trick).
+    func setOverlayOpacity(id: UUID, _ opacity: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].opacity = min(max(0, opacity), 1)
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    func setOverlaySize(id: UUID, _ fraction: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].sizeFraction = min(max(0.25, fraction), 1.0)
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    func setOverlayCenter(id: UUID, _ center: CGPoint) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].center = CGPoint(x: min(max(0, center.x), 1),
+                                     y: min(max(0, center.y), 1))
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Mirrors the overlays' placement values into the live layout box the
+    /// compositor reads, and re-renders the paused frame so edits show
+    /// immediately (a paused player never re-runs the compositor on its own).
+    private func syncOverlayLayout(refreshFrame: Bool = false) {
+        var map: [UUID: OverlayLayout.Placement] = [:]
+        for overlay in overlays {
+            map[overlay.id] = OverlayLayout.Placement(sizeFraction: overlay.sizeFraction,
+                                                      center: overlay.center,
+                                                      opacity: overlay.opacity)
+        }
+        overlayLayout.replaceAll(map)
+        if refreshFrame, let player, player.timeControlStatus != .playing {
+            let time = player.currentTime()
+            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+    }
+
+    private func refreshOverlayThumbnails() {
+        for overlay in overlays where overlay.thumbnail == nil {
+            let id = overlay.id
+            let url = overlay.url
+            if overlay.isImage {
+                Task.detached(priority: .utility) {
+                    let thumb = Self.imageThumbnail(at: url, maxDimension: 120)
+                    await MainActor.run { [weak self] in
+                        guard let self,
+                              let i = self.overlays.firstIndex(where: { $0.id == id }) else { return }
+                        self.overlays[i].thumbnail = thumb
+                    }
+                }
+            } else {
+                Task { [weak self] in
+                    let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: 0.03)
+                    guard let self,
+                          let i = self.overlays.firstIndex(where: { $0.id == id }) else { return }
+                    self.overlays[i].thumbnail = thumb
+                }
+            }
+        }
+    }
+
     // MARK: - Undo / redo
 
+    private func currentSnapshot() -> Snapshot {
+        Snapshot(clips: clips, format: format, zoom: zoom,
+                 audioTracks: audioTracks, overlays: overlays)
+    }
+
     private func pushUndoSnapshot() {
-        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
+        undoStack.append(currentSnapshot())
         redoStack.removeAll()
         updateHistoryFlags()
     }
 
     func undo() {
         guard let snapshot = undoStack.popLast() else { return }
-        redoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
+        redoStack.append(currentSnapshot())
         restore(snapshot)
     }
 
     func redo() {
         guard let snapshot = redoStack.popLast() else { return }
-        undoStack.append(Snapshot(clips: clips, format: format, zoom: zoom, audioTracks: audioTracks))
+        undoStack.append(currentSnapshot())
         restore(snapshot)
     }
 
@@ -677,6 +922,7 @@ final class EditorState: ObservableObject {
         format = snapshot.format
         zoom = snapshot.zoom
         audioTracks = snapshot.audioTracks
+        overlays = snapshot.overlays
         if let id = selectedClipID, !clips.contains(where: { $0.id == id }) {
             selectedClipID = clips.last?.id
         }
@@ -754,6 +1000,16 @@ final class EditorState: ObservableObject {
             return
         }
 
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_DEBUG"] == "1" {
+            let tracks = built.composition.tracks(withMediaType: .video).map { track in
+                "video#\(track.trackID): " + track.segments.map {
+                    "\($0.isEmpty ? "empty" : "media") \($0.timeMapping.target.start.seconds)-\($0.timeMapping.target.end.seconds)"
+                }.joined(separator: ", ")
+            }
+            print("[LUMA] rebuilt duration=\(built.duration) composition=\(built.composition.duration.seconds) instructions=\(built.videoComposition.instructions.map { "\($0.timeRange.start.seconds)-\($0.timeRange.end.seconds) req=\(($0.requiredSourceTrackIDs ?? []).count)" }) tracks=\(tracks)")
+        }
+        #endif
         let item = AVPlayerItem(asset: built.composition)
         item.videoComposition = built.videoComposition
         item.audioMix = built.audioMix
@@ -773,6 +1029,25 @@ final class EditorState: ObservableObject {
         if isPlaying { player.play() }
     }
 
+    /// Tiny bundled black video whose only job is anchoring photo-clip time
+    /// ranges on the main track (trailing empty ranges get dropped by
+    /// AVFoundation). Loaded once, cached for the app's lifetime. The asset
+    /// itself MUST stay referenced: an AVAssetTrack whose parent asset has
+    /// been deallocated makes insertTimeRange throw (observed in-app).
+    private static var blankAnchor: (asset: AVURLAsset, track: AVAssetTrack, duration: CMTime)?
+    private static func loadBlankAnchor() async -> (asset: AVURLAsset, track: AVAssetTrack, duration: CMTime)? {
+        if let cached = blankAnchor { return cached }
+        guard let url = Bundle.main.url(forResource: "CompositorBlank", withExtension: "mp4") else {
+            return nil
+        }
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let duration = try? await asset.load(.duration),
+              duration.seconds > 0 else { return nil }
+        blankAnchor = (asset, track, duration)
+        return blankAnchor
+    }
+
     /// Builds the composition + video composition + audio mix for preview or export.
     func buildComposition() async throws -> BuiltTimeline {
         guard !clips.isEmpty else { throw VideoExportError.noVideoSelected }
@@ -790,6 +1065,44 @@ final class EditorState: ObservableObject {
         var metas: [FrameMeta] = []
 
         for clip in clips {
+            // Photo clip (T7): the still renders through the compositor's
+            // CIImage cache via a no-source instruction — never from track
+            // frames. The main track still needs the RANGE to exist, and
+            // AVFoundation silently DROPS trailing empty ranges (probed:
+            // photo-at-end would truncate the timeline), so a tiny bundled
+            // black video anchors the duration. Its segment is never decoded:
+            // photo segments' instructions don't list the main track.
+            if clip.isImage {
+                let stillDuration = CMTime(seconds: clip.timelineDuration,
+                                           preferredTimescale: 600)
+                guard stillDuration.seconds > 0.05 else { continue }
+                var anchored = false
+                if let blank = await Self.loadBlankAnchor() {
+                    let sourceRange = CMTimeRange(start: .zero, duration: blank.duration)
+                    do {
+                        try videoTrack.insertTimeRange(sourceRange, of: blank.track, at: cursor)
+                        videoTrack.scaleTimeRange(CMTimeRange(start: cursor, duration: blank.duration),
+                                                  toDuration: stillDuration)
+                        anchored = true
+                    } catch {
+                        videoTrack.insertEmptyTimeRange(CMTimeRange(start: cursor,
+                                                                    duration: stillDuration))
+                    }
+                } else {
+                    // Missing resource: mid-timeline photos still work via
+                    // an explicit empty range (trailing ones would clip).
+                    videoTrack.insertEmptyTimeRange(CMTimeRange(start: cursor,
+                                                                duration: stillDuration))
+                }
+                metas.append(FrameMeta(start: cursor.seconds,
+                                       end: (cursor + stillDuration).seconds,
+                                       transform: .identity,
+                                       imageURL: clip.url,
+                                       hasAnchorFrames: anchored))
+                cursor = cursor + stillDuration
+                continue
+            }
+
             let asset = AVURLAsset(url: clip.url)
             guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else { continue }
             let sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
@@ -864,9 +1177,63 @@ final class EditorState: ObservableObject {
             }
         }
 
-        // Overlay (PIP) items: videos ride a second composition video track;
-        // images render straight from the compositor's still cache.
-        let overlaySpecs: [OverlaySpec] = []
+        // Overlay (PIP) items: videos ride a SECOND composition video track
+        // (one lane, so items never overlap); images render straight from
+        // the compositor's still cache — no source track at all. Lazy like
+        // the audio tracks: only created when a video overlay actually
+        // inserts. Gaps between items are explicit empty ranges so segment
+        // targeting stays exact.
+        var overlaySpecs: [OverlaySpec] = []
+        var overlayTrack: AVMutableCompositionTrack?
+        var overlayCursor = CMTime.zero
+        for overlay in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
+            let start = min(max(0, overlay.timelineOffset), cursor.seconds)
+            let playable = min(overlay.duration, cursor.seconds - start)
+            guard playable > 0.05 else { continue }
+
+            if overlay.isImage {
+                overlaySpecs.append(OverlaySpec(id: overlay.id,
+                                                trackID: kCMPersistentTrackID_Invalid,
+                                                imageURL: overlay.url,
+                                                transform: .identity,
+                                                start: start, end: start + playable))
+                continue
+            }
+
+            let overlayAsset = AVURLAsset(url: overlay.url)
+            guard let sourceVideo = try? await overlayAsset.loadTracks(withMediaType: .video).first
+            else { continue }
+            let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
+            if overlayTrack == nil {
+                overlayTrack = composition.addMutableTrack(withMediaType: .video,
+                                                           preferredTrackID: kCMPersistentTrackID_Invalid)
+            }
+            guard let track = overlayTrack else { continue }
+            let at = CMTime(seconds: start, preferredTimescale: 600)
+            if at > overlayCursor {
+                track.insertEmptyTimeRange(CMTimeRange(start: overlayCursor, end: at))
+            }
+            let range = CMTimeRange(start: .zero,
+                                    duration: CMTime(seconds: playable, preferredTimescale: 600))
+            do {
+                try track.insertTimeRange(range, of: sourceVideo, at: at)
+                overlayCursor = at + range.duration
+                overlaySpecs.append(OverlaySpec(id: overlay.id,
+                                                trackID: track.trackID,
+                                                imageURL: nil,
+                                                transform: transform,
+                                                start: start, end: start + playable))
+            } catch {
+                // Failed insert with no real media on the track yet: drop
+                // it so no media-less video track breaks the export session.
+                if track.segments.allSatisfy({ $0.isEmpty }) {
+                    composition.removeTrack(track)
+                    overlayTrack = nil
+                    overlayCursor = .zero
+                }
+            }
+        }
+        syncOverlayLayout()
 
         // Transition boundaries: cut time + style, sampled by the compositor.
         var spans: [TransitionSpanSpec] = []
@@ -944,7 +1311,10 @@ final class EditorState: ObservableObject {
 
             var trackIDs: [NSValue] = []
             let meta = frameMetas.last(where: { mid >= $0.start - 0.001 && mid < $0.end + 0.001 })
-            if meta?.imageURL == nil {
+            // Photo segments still REQUIRE the main track when anchor frames
+            // exist there: source-less instructions stall AVPlayer, so the
+            // anchor paces playback while the compositor ignores its frames.
+            if meta?.imageURL == nil || meta?.hasAnchorFrames == true {
                 trackIDs.append(NSNumber(value: mainTrackID))
             }
             for spec in overlaySpecs
