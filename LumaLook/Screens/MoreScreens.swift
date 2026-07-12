@@ -156,7 +156,7 @@ struct BackArrow: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         Button { dismiss() } label: {
-            Image(systemName: "arrow.left")
+            Image(systemName: "chevron.left")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40, alignment: .leading)
@@ -298,13 +298,12 @@ struct FilterPackDetailView: View {
                     ProgressView().tint(.white)
                 } else if app.packStore.isInstalled(pack) {
                     Image(systemName: "checkmark.circle.fill")
-                    Text("INSTALLED — IN YOUR LOOKS")
+                    Text("Installed — in your Looks")
                 } else {
-                    Text(pack.isFree ? "INSTALL FREE" : "\(pack.price) · INSTALL")
+                    Text(pack.isFree ? "Install Free" : "\(pack.price) · Install")
                 }
             }
-            .font(.system(size: 17, weight: .bold))
-            .tracking(1.2)
+            .font(.body.weight(.semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 58)

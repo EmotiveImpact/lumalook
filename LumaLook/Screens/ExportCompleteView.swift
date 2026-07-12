@@ -16,7 +16,7 @@ struct ExportCompleteView: View {
                 VStack(spacing: 0) {
                     HStack {
                         Button { dismiss() } label: {
-                            Image(systemName: "arrow.left")
+                            Image(systemName: "chevron.left")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 40, height: 40, alignment: .leading)
@@ -137,9 +137,8 @@ struct ExportCompleteView: View {
     }
 
     private var shareLabel: some View {
-        Text(app.lastExportImage != nil ? "SHARE PHOTO" : "SHARE VIDEO")
-            .font(.system(size: 17, weight: .bold))
-            .tracking(1.6)
+        Text(app.lastExportImage != nil ? "Share Photo" : "Share Video")
+            .font(.body.weight(.semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 58)

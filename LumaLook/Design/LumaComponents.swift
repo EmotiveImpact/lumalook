@@ -140,14 +140,15 @@ struct LumaHeader: View {
 
     var body: some View {
         ZStack {
-            Text(title.uppercased())
-                .font(.system(size: 17, weight: .bold))
-                .tracking(2.2)
+            // Title Case, system-nav-bar weight — caps-tracked titles read
+            // as web branding; Apple reads as headline.
+            Text(title)
+                .font(.headline)
                 .foregroundStyle(.white)
             HStack {
                 if showBack {
                     Button(action: backAction) {
-                        Image(systemName: "arrow.left")
+                        Image(systemName: "chevron.left")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 40, height: 40, alignment: .leading)
@@ -216,9 +217,8 @@ struct SolidCTA: View {
                     Image(systemName: icon)
                         .font(.system(size: 17, weight: .bold))
                 }
-                Text(title.uppercased())
-                    .font(.system(size: 17, weight: .bold))
-                    .tracking(1.6)
+                Text(title)
+                    .font(.body.weight(.semibold))
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -249,9 +249,8 @@ struct GhostCTA: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title.uppercased())
-                .font(.system(size: 17, weight: .bold))
-                .tracking(1.6)
+            Text(title)
+                .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
@@ -309,9 +308,8 @@ struct SegmentPills: View {
                         selection = option
                     }
                 } label: {
-                    Text(caps ? option.uppercased() : option)
-                        .font(.system(size: 14, weight: .bold))
-                        .tracking(caps ? 1.2 : 0)
+                    Text(option)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(selection == option ? .white : LumaTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
@@ -451,9 +449,9 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title.uppercased())
-                .font(.system(size: 15, weight: .bold))
-                .tracking(1.8)
-                .foregroundStyle(.white)
+                .font(.footnote.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(LumaTheme.textSecondary)
             Spacer()
             if let actionTitle {
                 Button { action?() } label: {

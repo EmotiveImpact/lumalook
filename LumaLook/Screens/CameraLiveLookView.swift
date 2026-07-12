@@ -173,7 +173,7 @@ struct CameraLiveLookView: View {
     private var topStrip: some View {
         HStack {
             Button { dismiss() } label: {
-                Image(systemName: "arrow.left")
+                Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .semibold))
                     .frame(width: 40, height: 40, alignment: .leading)
                     .contentShape(Rectangle())

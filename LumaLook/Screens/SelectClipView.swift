@@ -103,9 +103,8 @@ struct SelectClipView: View {
                     Button {
                         app.path.append(.applyLook)
                     } label: {
-                        Text("NEXT")
-                            .font(.system(size: 16, weight: .bold))
-                            .tracking(1.4)
+                        Text("Next")
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: 132, height: 52)
                             .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 14))
