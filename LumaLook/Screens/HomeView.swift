@@ -34,6 +34,7 @@ struct HomeView: View {
                                 .foregroundStyle(LumaTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
+                        .padding(.top, 22)
                     }
                     .padding(.top, 2)
                     .padding(.bottom, 4)
