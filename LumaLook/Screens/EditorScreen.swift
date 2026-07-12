@@ -205,13 +205,19 @@ struct EditorTimelineView: View {
                                                   settings: LookSettings()))
                 }
             }
+            // Parity-matrix cells (#93): drive format + export spec headlessly,
+            // e.g. LUMA_SEED_FORMAT=9:16  LUMA_SEED_SPEC="4K|HEVC|24".
+            if let raw = env["LUMA_SEED_FORMAT"], let format = EditorFormat(rawValue: raw) {
+                editor.setFormat(format, zoom: editor.zoom)
+            }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
                 // Wait out the async rebuild before hitting play/export.
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
                 if env["LUMA_SEED_EXPORT"] == "1" {
-                    startExport()
+                    let spec = env["LUMA_SEED_SPEC"].map(ExportSpec.from(rawValue:)) ?? ExportSpec()
+                    startExport(spec: spec)
                 } else if !editor.isPlaying {
                     editor.togglePlayback()
                 }
@@ -244,7 +250,9 @@ struct EditorTimelineView: View {
         isExporting = true
         Task {
             do {
-                let built = try await editor.buildComposition()
+                // 4K spec needs a 4K canvas — renderSize caps the preset.
+                let built = try await editor.buildComposition(
+                    renderScale: spec.resolution == .uhd4K ? 2 : 1)
                 let url = try await app.exporter.export(asset: built.composition,
                                                         videoComposition: built.videoComposition,
                                                         audioMix: built.audioMix,
@@ -750,20 +758,59 @@ private struct EditorContent: View {
                              icon: style.icon,
                              selected: currentTransition == style) {
                         if let id = transitionClipID {
-                            editor.setTransition(afterClipID: id, style: style)
+                            editor.setTransition(afterClipID: id, style: style,
+                                                 duration: currentTransitionClip?.transitionDuration)
                             LumaHaptics.shared.tap()
                         }
                     }
                 }
             }
             .padding(.horizontal, 22)
+
+            // Editable duration (gap fix): nil = the style default.
+            if currentTransition != .none {
+                HStack(spacing: 8) {
+                    Text("Duration")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                    Spacer()
+                    ForEach([0.3, 0.6, 1.0, 1.5], id: \.self) { seconds in
+                        let selected = abs(currentTransitionDuration - seconds) < 0.01
+                        Button {
+                            if let id = transitionClipID {
+                                editor.setTransition(afterClipID: id,
+                                                     style: currentTransition,
+                                                     duration: seconds)
+                                LumaHaptics.shared.tap()
+                            }
+                        } label: {
+                            Text(String(format: "%.1fs", seconds))
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 6)
+                                .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                            in: Capsule())
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
+                .padding(.horizontal, 22)
+            }
         }
     }
 
+    private var currentTransitionClip: EditorState.Clip? {
+        guard let id = transitionClipID else { return nil }
+        return editor.clips.first { $0.id == id }
+    }
+
     private var currentTransition: TransitionStyle {
-        guard let id = transitionClipID,
-              let clip = editor.clips.first(where: { $0.id == id }) else { return .none }
-        return clip.transitionAfter
+        currentTransitionClip?.transitionAfter ?? .none
+    }
+
+    private var currentTransitionDuration: Double {
+        currentTransitionClip?.transitionDuration ?? currentTransition.duration
     }
 
     // MARK: Clip audio panel
@@ -1004,6 +1051,30 @@ private struct OverlayPanel: View {
                 get: { (overlay?.sizeFraction ?? 0.45) * 100 },
                 set: { editor.setOverlaySize(id: overlayID, $0 / 100) }
             ), range: 25...100) { "\(Int($0))%" }
+
+            // Overlay audio (video overlays carry sound now).
+            if overlay?.isImage == false {
+                HStack(spacing: 10) {
+                    Button {
+                        editor.setOverlayMuted(id: overlayID, !(overlay?.isMuted ?? false))
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Image(systemName: overlay?.isMuted == true
+                              ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(overlay?.isMuted == true
+                                             ? LumaTheme.textMuted : LumaTheme.teal)
+                            .frame(width: 32, height: 32)
+                            .background(LumaTheme.surface, in: Circle())
+                    }
+                    .buttonStyle(.lumaPress)
+                    InlineSlider(title: "Volume", value: Binding(
+                        get: { overlay?.volume ?? 100 },
+                        set: { editor.setOverlayVolume(id: overlayID, $0) }
+                    )) { "\(Int($0))%" }
+                    .opacity(overlay?.isMuted == true ? 0.4 : 1)
+                }
+            }
 
             HStack(alignment: .top, spacing: 16) {
                 // 3×3 position preset grid.

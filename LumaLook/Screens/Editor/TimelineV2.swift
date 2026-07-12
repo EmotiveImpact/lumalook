@@ -296,13 +296,33 @@ struct VideoLane: View {
     @ObservedObject var reorder: TimelineReorderState
     let onTapTransition: (UUID) -> Void
 
+    /// Live on-cell trim (#3/#106): point deltas applied to the selected
+    /// clip's cell while a handle drags; committed as ONE applyTrim on
+    /// release (single undo entry, single rebuild).
+    private struct TrimDraft: Equatable {
+        let id: UUID
+        var headX: CGFloat = 0   // + shrinks from the left
+        var tailX: CGFloat = 0   // + extends to the right
+    }
+    @State private var trimDraft: TrimDraft?
+
+    private func draftedWidth(for clip: EditorState.Clip) -> CGFloat {
+        let base = max(metrics.x(for: clip.timelineDuration), 10)
+        guard let draft = trimDraft, draft.id == clip.id else { return base }
+        return max(10, base - draft.headX + draft.tailX)
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             HStack(spacing: 0) {
                 ForEach(editor.clips) { clip in
                     TimelineClipCell(clip: clip,
-                                     width: max(metrics.x(for: clip.timelineDuration), 10),
+                                     width: draftedWidth(for: clip),
                                      selected: clip.id == editor.selectedClipID)
+                        // Head trim: the left edge follows the finger, the
+                        // out-point stays anchored (standard NLE feel).
+                        .padding(.leading,
+                                 trimDraft?.id == clip.id ? (trimDraft?.headX ?? 0) : 0)
                         // Lifted clip stays in layout (siblings don't reflow
                         // mid-drag) but goes ghost, img.ly-style.
                         .opacity(reorder.draggingClipID == clip.id ? 0.25 : 1)
@@ -316,6 +336,32 @@ struct VideoLane: View {
                             } label: { Label("Delete", systemImage: "trash") }
                         }
                 }
+            }
+
+            // On-cell trim handles for the selected clip.
+            if !reorder.isDragging,
+               let selected = editor.clips.first(where: { $0.id == editor.selectedClipID }) {
+                ClipTrimHandles(editor: editor, metrics: metrics, clip: selected,
+                                draftHeadX: Binding(
+                                    get: { trimDraft?.id == selected.id ? trimDraft!.headX : 0 },
+                                    set: { newValue in
+                                        var draft = trimDraft?.id == selected.id
+                                            ? trimDraft! : TrimDraft(id: selected.id)
+                                        draft.headX = newValue
+                                        trimDraft = draft
+                                    }),
+                                draftTailX: Binding(
+                                    get: { trimDraft?.id == selected.id ? trimDraft!.tailX : 0 },
+                                    set: { newValue in
+                                        var draft = trimDraft?.id == selected.id
+                                            ? trimDraft! : TrimDraft(id: selected.id)
+                                        draft.tailX = newValue
+                                        trimDraft = draft
+                                    }),
+                                onCommit: { trimDraft = nil })
+                    .frame(width: draftedWidth(for: selected), height: LaneMetrics.video)
+                    .offset(x: leadingX(of: selected.id)
+                              + (trimDraft?.id == selected.id ? trimDraft!.headX : 0))
             }
 
             // Transition chips at every cut (hidden while reordering).
@@ -352,6 +398,16 @@ struct VideoLane: View {
         .frame(height: LaneMetrics.video, alignment: .leading)
     }
 
+    /// Content-space x of a clip's left edge (pre-draft).
+    private func leadingX(of id: UUID) -> CGFloat {
+        var x: CGFloat = 0
+        for clip in editor.clips {
+            if clip.id == id { return x }
+            x += max(metrics.x(for: clip.timelineDuration), 10)
+        }
+        return x
+    }
+
     /// Content-space x of the cut after clip `index`.
     private func boundaryX(after index: Int) -> CGFloat {
         var x: CGFloat = 0
@@ -371,6 +427,76 @@ struct VideoLane: View {
             x += max(metrics.x(for: clip.timelineDuration), 10)
         }
         return x
+    }
+}
+
+/// On-cell trim handles (#3/#106): bracket-style grips on the selected
+/// clip's edges. Dragging previews the new cell width live; releasing
+/// commits one `applyTrim` (one undo entry, one rebuild) with a haptic.
+private struct ClipTrimHandles: View {
+    @ObservedObject var editor: EditorState
+    let metrics: TimelineMetrics
+    let clip: EditorState.Clip
+    @Binding var draftHeadX: CGFloat
+    @Binding var draftTailX: CGFloat
+    let onCommit: () -> Void
+
+    private var baseWidth: CGFloat { max(metrics.x(for: clip.timelineDuration), 10) }
+
+    var body: some View {
+        HStack {
+            grip(system: "chevron.compact.left")
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            // + shrinks from the left; − extends into unused
+                            // head material (never past the asset start).
+                            let minX = -metrics.x(for: clip.trimStart / clip.speed)
+                            let maxX = baseWidth - metrics.x(for: 0.2 / clip.speed) - draftTailX
+                            draftHeadX = min(max(value.translation.width, minX), max(minX, maxX))
+                        }
+                        .onEnded { _ in commit() }
+                )
+            Spacer(minLength: 0)
+            grip(system: "chevron.compact.right")
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            // + extends into unused tail material.
+                            let maxX = metrics.x(for: (clip.assetDuration - clip.trimEnd) / clip.speed)
+                            let minX = -(baseWidth - metrics.x(for: 0.2 / clip.speed) - draftHeadX)
+                            draftTailX = min(max(value.translation.width, min(minX, maxX)), maxX)
+                        }
+                        .onEnded { _ in commit() }
+                )
+        }
+        .allowsHitTesting(true)
+    }
+
+    private func commit() {
+        let headDelta = metrics.time(for: draftHeadX) * clip.speed
+        let tailDelta = metrics.time(for: draftTailX) * clip.speed
+        if abs(headDelta) > 0.01 || abs(tailDelta) > 0.01 {
+            editor.selectedClipID = clip.id
+            editor.applyTrim(start: clip.trimStart + headDelta,
+                             end: clip.trimEnd + tailDelta)
+            LumaHaptics.shared.trimRubberband()
+        }
+        onCommit()
+    }
+
+    private func grip(system: String) -> some View {
+        Image(systemName: system)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.black)
+            .frame(width: 17, height: LaneMetrics.video)
+            .background(LumaTheme.accentBright)
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: system.contains("left") ? 10 : 0,
+                bottomLeadingRadius: system.contains("left") ? 10 : 0,
+                bottomTrailingRadius: system.contains("left") ? 0 : 10,
+                topTrailingRadius: system.contains("left") ? 0 : 10))
+            .contentShape(Rectangle().inset(by: -8))
     }
 }
 

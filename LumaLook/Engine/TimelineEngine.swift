@@ -104,6 +104,8 @@ final class EditorState: ObservableObject {
         var transitionAfter: TransitionStyle = .none
         /// Per-clip grade override; nil follows the timeline's global grade.
         var grade: ClipGrade? = nil
+        /// Custom duration for `transitionAfter` (nil = the style's default).
+        var transitionDuration: Double? = nil
         var thumbnail: CGImage?
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
@@ -142,6 +144,9 @@ final class EditorState: ObservableObject {
         var sizeFraction: Double = 0.45   // overlay width / canvas width (0.25…1)
         var center: CGPoint = CGPoint(x: 0.72, y: 0.25)  // unit coords, y down
         var opacity: Double = 1.0
+        /// Overlay-audio mix (video overlays only; was silently dropped in v1).
+        var volume: Double = 100
+        var isMuted: Bool = false
         var title: String = ""
         var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
 
@@ -156,6 +161,7 @@ final class EditorState: ObservableObject {
         let audioMix: AVAudioMix?
         let clipAudioTrack: AVMutableCompositionTrack?
         let musicAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)]
+        let overlayAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)]
         let duration: Double
     }
 
@@ -211,7 +217,9 @@ final class EditorState: ObservableObject {
     /// Composition tracks from the last preview rebuild, kept so
     /// `applyAudioSettings()` can regenerate the mix without a rebuild.
     /// (`AVAudioMixInputParameters(track:)` only reads the trackID.)
-    private var lastBuiltTracks: (clip: AVMutableCompositionTrack?, music: [(id: UUID, track: AVMutableCompositionTrack)]) = (nil, [])
+    private var lastBuiltTracks: (clip: AVMutableCompositionTrack?,
+                                  music: [(id: UUID, track: AVMutableCompositionTrack)],
+                                  overlay: [(id: UUID, track: AVMutableCompositionTrack)]) = (nil, [], [])
 
     /// Resolves an imported LUT's file URL for per-clip grades (injected so
     /// the engine never owns the LUT repository).
@@ -265,7 +273,8 @@ final class EditorState: ObservableObject {
                            volume: $0.volume, isMuted: $0.isMuted,
                            transitionAfter: $0.transitionAfter.rawValue,
                            isImage: $0.isImage,
-                           grade: $0.grade)
+                           grade: $0.grade,
+                           transitionDuration: $0.transitionDuration)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -284,7 +293,8 @@ final class EditorState: ObservableObject {
                               timelineOffset: $0.timelineOffset, duration: $0.duration,
                               sizeFraction: $0.sizeFraction,
                               centerX: $0.center.x, centerY: $0.center.y,
-                              opacity: $0.opacity)
+                              opacity: $0.opacity,
+                              volume: $0.volume, isMuted: $0.isMuted)
             }
         )
         store.upsert(project: stored)
@@ -311,7 +321,8 @@ final class EditorState: ObservableObject {
                         isImage: stored.isImage ?? false,
                         volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false,
                         transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none,
-                        grade: stored.grade)
+                        grade: stored.grade,
+                        transitionDuration: stored.transitionDuration)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -332,6 +343,8 @@ final class EditorState: ObservableObject {
                                sizeFraction: stored.sizeFraction,
                                center: CGPoint(x: stored.centerX, y: stored.centerY),
                                opacity: stored.opacity,
+                               volume: stored.volume ?? 100,
+                               isMuted: stored.isMuted ?? false,
                                title: stored.title ?? "Overlay")
         }
         rebuild(keepPosition: false)
@@ -589,6 +602,7 @@ final class EditorState: ObservableObject {
         guard let item = player?.currentItem else { return }
         item.audioMix = makeAudioMix(clipTrack: lastBuiltTracks.clip,
                                      musicTracks: lastBuiltTracks.music,
+                                     overlayTracks: lastBuiltTracks.overlay,
                                      duration: totalDuration)
     }
 
@@ -714,11 +728,13 @@ final class EditorState: ObservableObject {
     }
 
     /// Sets the transition rendered at this clip's cut into the next one.
-    func setTransition(afterClipID id: UUID, style: TransitionStyle) {
+    func setTransition(afterClipID id: UUID, style: TransitionStyle, duration: Double? = nil) {
         guard let i = clips.firstIndex(where: { $0.id == id }), i < clips.count - 1 else { return }
-        guard clips[i].transitionAfter != style else { return }
+        guard clips[i].transitionAfter != style
+                || clips[i].transitionDuration != duration else { return }
         pushUndoSnapshot()
         clips[i].transitionAfter = style
+        clips[i].transitionDuration = duration
         rebuild()
     }
 
@@ -873,6 +889,21 @@ final class EditorState: ObservableObject {
         overlays[i].duration = min(item.duration, max(0.2, totalDuration - clamped))
         overlays.sort { $0.timelineOffset < $1.timelineOffset }
         rebuild()
+    }
+
+    /// Overlay audio: mix-only, live, no rebuild.
+    func setOverlayVolume(id: UUID, _ volume: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].volume = min(max(0, volume), 100)
+        applyAudioSettings()
+        scheduleAutosave()
+    }
+
+    func setOverlayMuted(id: UUID, _ muted: Bool) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].isMuted = muted
+        applyAudioSettings()
+        scheduleAutosave()
     }
 
     /// Size/position/opacity are LIVE: the compositor reads `overlayLayout`
@@ -1044,7 +1075,7 @@ final class EditorState: ObservableObject {
             totalDuration = 0
             currentTime = 0
             isPlaying = false
-            lastBuiltTracks = (nil, [])
+            lastBuiltTracks = (nil, [], [])
             return
         }
 
@@ -1062,7 +1093,7 @@ final class EditorState: ObservableObject {
         item.videoComposition = built.videoComposition
         item.audioMix = built.audioMix
         item.audioTimePitchAlgorithm = .spectral
-        lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks)
+        lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks, built.overlayAudioTracks)
 
         let player = self.player ?? AVPlayer()
         player.replaceCurrentItem(with: item)
@@ -1097,7 +1128,10 @@ final class EditorState: ObservableObject {
     }
 
     /// Builds the composition + video composition + audio mix for preview or export.
-    func buildComposition() async throws -> BuiltTimeline {
+    /// `renderScale` multiplies the format's canvas for high-res exports —
+    /// the #93 matrix caught 4K exports silently capped at the preview's
+    /// 1080p renderSize (the preset can't exceed the composition canvas).
+    func buildComposition(renderScale: CGFloat = 1) async throws -> BuiltTimeline {
         guard !clips.isEmpty else { throw VideoExportError.noVideoSelected }
 
         let composition = AVMutableComposition()
@@ -1235,6 +1269,7 @@ final class EditorState: ObservableObject {
         // targeting stays exact.
         var overlaySpecs: [OverlaySpec] = []
         var overlayTrack: AVMutableCompositionTrack?
+        var overlayAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)] = []
         var overlayCursor = CMTime.zero
         for overlay in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
             let start = min(max(0, overlay.timelineOffset), cursor.seconds)
@@ -1273,6 +1308,19 @@ final class EditorState: ObservableObject {
                                                 imageURL: nil,
                                                 transform: transform,
                                                 start: start, end: start + playable))
+                // Overlay AUDIO rides its own lazy track (was silently
+                // dropped in v1). Same rule as everywhere: never leave an
+                // empty audio track behind — export dies on it.
+                if let sourceAudio = try? await overlayAsset.loadTracks(withMediaType: .audio).first,
+                   let audioTrack = composition.addMutableTrack(withMediaType: .audio,
+                                                                preferredTrackID: kCMPersistentTrackID_Invalid) {
+                    do {
+                        try audioTrack.insertTimeRange(range, of: sourceAudio, at: at)
+                        overlayAudioTracks.append((overlay.id, audioTrack))
+                    } catch {
+                        composition.removeTrack(audioTrack)
+                    }
+                }
             } catch {
                 // Failed insert with no real media on the track yet: drop
                 // it so no media-less video track breaks the export session.
@@ -1291,22 +1339,26 @@ final class EditorState: ObservableObject {
             guard clip.transitionAfter != .none, index < metas.count else { continue }
             spans.append(TransitionSpanSpec(center: metas[index].end,
                                             style: clip.transitionAfter,
-                                            half: clip.transitionAfter.duration / 2))
+                                            half: (clip.transitionDuration
+                                                   ?? clip.transitionAfter.duration) / 2))
         }
 
         // The custom compositor does orientation, aspect-fill crop into the
         // chosen format, the active look, overlays, and transition veils —
         // for preview and export alike (the D1 parity guarantee).
+        let renderSize = CGSize(width: format.renderSize.width * renderScale,
+                                height: format.renderSize.height * renderScale)
         let videoComposition = AVMutableVideoComposition()
         videoComposition.customVideoCompositorClass = LumaVideoCompositor.self
-        videoComposition.renderSize = format.renderSize
+        videoComposition.renderSize = renderSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
         videoComposition.instructions = makeInstructions(
             totalDuration: cursor,
             mainTrackID: videoTrack.trackID,
             frameMetas: metas,
             transitionSpans: spans,
-            overlaySpecs: overlaySpecs)
+            overlaySpecs: overlaySpecs,
+            renderSize: renderSize)
         videoComposition.applySDRColorPolicy()
 
         let duration = cursor.seconds
@@ -1314,9 +1366,11 @@ final class EditorState: ObservableObject {
                              videoComposition: videoComposition,
                              audioMix: makeAudioMix(clipTrack: audioTrack,
                                                     musicTracks: musicTracks,
+                                                    overlayTracks: overlayAudioTracks,
                                                     duration: duration),
                              clipAudioTrack: audioTrack,
                              musicAudioTracks: musicTracks,
+                             overlayAudioTracks: overlayAudioTracks,
                              duration: duration)
     }
 
@@ -1331,7 +1385,8 @@ final class EditorState: ObservableObject {
                                   mainTrackID: CMPersistentTrackID,
                                   frameMetas: [FrameMeta],
                                   transitionSpans: [TransitionSpanSpec],
-                                  overlaySpecs: [OverlaySpec]) -> [LumaCompositionInstruction] {
+                                  overlaySpecs: [OverlaySpec],
+                                  renderSize: CGSize) -> [LumaCompositionInstruction] {
         let total = totalDuration.seconds
         var cuts: Set<Double> = [0, total]
         for meta in frameMetas where meta.imageURL != nil {
@@ -1382,7 +1437,7 @@ final class EditorState: ObservableObject {
                 overlays: overlaySpecs,
                 overlayLayout: overlayLayout,
                 lookState: lookState,
-                renderSize: format.renderSize,
+                renderSize: renderSize,
                 zoomFactor: max(1.0, zoom / 100.0)))
         }
         return instructions
@@ -1393,6 +1448,7 @@ final class EditorState: ObservableObject {
     /// the last rebuild's tracks stays valid for the live player item.
     private func makeAudioMix(clipTrack: AVMutableCompositionTrack?,
                               musicTracks: [(id: UUID, track: AVMutableCompositionTrack)],
+                              overlayTracks: [(id: UUID, track: AVMutableCompositionTrack)] = [],
                               duration: Double) -> AVAudioMix? {
         var inputs: [AVMutableAudioMixInputParameters] = []
 
@@ -1427,6 +1483,13 @@ final class EditorState: ObservableObject {
             guard let music = audioTracks.first(where: { $0.id == entry.id }) else { continue }
             let parameters = AVMutableAudioMixInputParameters(track: entry.track)
             parameters.setVolume(Float(music.isMuted ? 0 : music.volume / 100.0), at: .zero)
+            inputs.append(parameters)
+        }
+
+        for entry in overlayTracks {
+            guard let overlay = overlays.first(where: { $0.id == entry.id }) else { continue }
+            let parameters = AVMutableAudioMixInputParameters(track: entry.track)
+            parameters.setVolume(Float(overlay.isMuted ? 0 : overlay.volume / 100.0), at: .zero)
             inputs.append(parameters)
         }
 

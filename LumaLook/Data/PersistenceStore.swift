@@ -21,6 +21,8 @@ struct StoredClip: Codable, Identifiable {
     /// Per-clip grade override. Optional so older projects still decode;
     /// nil means the clip follows the timeline's global grade.
     var grade: ClipGrade? = nil
+    /// Custom transition duration at this clip's out-point (nil = style default).
+    var transitionDuration: Double? = nil
 }
 
 /// A picture-in-picture overlay (video or still) attached to a project.
@@ -35,6 +37,9 @@ struct StoredOverlay: Codable {
     var centerX: Double
     var centerY: Double
     var opacity: Double
+    /// Overlay audio mix (optional: pre-overlay-audio projects decode).
+    var volume: Double? = nil
+    var isMuted: Bool? = nil
 }
 
 /// Background-music track attached to a project.
