@@ -52,6 +52,22 @@ struct StoredProject: Codable, Identifiable {
     var audioTracks: [StoredMusic]? = nil
 }
 
+/// An Apply-a-Look session: the media + the exact grade, restorable from
+/// Recent Projects (queue #13 — all three LUT-niche competitors converge).
+struct GradeSession: Codable, Identifiable {
+    var id: UUID
+    var createdAt: Date
+    var updatedAt: Date
+    var mediaFileName: String       // inside Documents/Clips
+    var isVideo: Bool
+    var baseLookName: String
+    var settings: LookSettings
+    var lutID: UUID?
+    var conversionLUTID: UUID?
+    var conversionOpacity: Double?
+    var creativeOpacity: Double?
+}
+
 struct SavedLook: Codable, Identifiable {
     var id: UUID
     var name: String
@@ -67,6 +83,7 @@ struct SavedLook: Codable, Identifiable {
 final class PersistenceStore: ObservableObject {
     @Published private(set) var projects: [StoredProject] = []
     @Published private(set) var savedLooks: [SavedLook] = []
+    @Published private(set) var gradeSessions: [GradeSession] = []
 
     private var documents: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -75,12 +92,14 @@ final class PersistenceStore: ObservableObject {
     var audioFolder: URL { documents.appendingPathComponent("Audio", isDirectory: true) }
     private var projectsURL: URL { documents.appendingPathComponent("Projects.json") }
     private var looksURL: URL { documents.appendingPathComponent("SavedLooks.json") }
+    private var sessionsURL: URL { documents.appendingPathComponent("GradeSessions.json") }
 
     init() {
         try? FileManager.default.createDirectory(at: clipsFolder, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: audioFolder, withIntermediateDirectories: true)
         projects = Self.load([StoredProject].self, from: projectsURL) ?? []
         savedLooks = Self.load([SavedLook].self, from: looksURL) ?? []
+        gradeSessions = Self.load([GradeSession].self, from: sessionsURL) ?? []
     }
 
     // MARK: Clips library
@@ -153,6 +172,43 @@ final class PersistenceStore: ObservableObject {
         })
         for audio in removedAudio where !liveAudioFiles.contains(audio.fileName) {
             try? FileManager.default.removeItem(at: audioFolder.appendingPathComponent(audio.fileName))
+        }
+    }
+
+    // MARK: Grade sessions
+
+    func upsert(session: GradeSession) {
+        if let index = gradeSessions.firstIndex(where: { $0.id == session.id }) {
+            gradeSessions[index] = session
+        } else {
+            gradeSessions.insert(session, at: 0)
+        }
+        gradeSessions.sort { $0.updatedAt > $1.updatedAt }
+        // Keep the ten most recent; older sessions age out with their media
+        // (unless a project also references the file).
+        while gradeSessions.count > 10 {
+            let dropped = gradeSessions.removeLast()
+            deleteSessionMediaIfOrphaned(dropped)
+        }
+        Self.save(gradeSessions, to: sessionsURL)
+    }
+
+    func deleteSession(_ id: UUID) {
+        guard let session = gradeSessions.first(where: { $0.id == id }) else { return }
+        gradeSessions.removeAll { $0.id == id }
+        Self.save(gradeSessions, to: sessionsURL)
+        deleteSessionMediaIfOrphaned(session)
+    }
+
+    func sessionMediaURL(_ session: GradeSession) -> URL {
+        clipsFolder.appendingPathComponent(session.mediaFileName)
+    }
+
+    private func deleteSessionMediaIfOrphaned(_ session: GradeSession) {
+        let inProjects = projects.contains { $0.clips.contains { $0.fileName == session.mediaFileName } }
+        let inSessions = gradeSessions.contains { $0.mediaFileName == session.mediaFileName }
+        if !inProjects && !inSessions {
+            try? FileManager.default.removeItem(at: clipsFolder.appendingPathComponent(session.mediaFileName))
         }
     }
 

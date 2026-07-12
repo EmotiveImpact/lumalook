@@ -14,13 +14,90 @@ final class AppModel: ObservableObject {
         didSet {
             rebuildPlayer()
             updatePreviewFrame()
+            if !isRestoringSession { detachGradeSession() }
         }
     }
     @Published var selectedImage: CIImage? {
         didSet {
             if selectedImage != nil { selectedVideoURL = nil }
             updatePreviewFrame()
+            if !isRestoringSession { detachGradeSession() }
         }
+    }
+
+    // MARK: Grade sessions (queue #13)
+
+    private var currentSessionID: UUID?
+    private var sessionMediaFileName: String?
+    private var isRestoringSession = false
+
+    private func detachGradeSession() {
+        currentSessionID = nil
+        sessionMediaFileName = nil
+    }
+
+    /// Autosaves the current Apply-a-Look session (media copied durable +
+    /// the exact grade) so it reappears in Recent Projects.
+    func saveGradeSession() {
+        guard selectedVideoURL != nil || selectedImage != nil else { return }
+        if sessionMediaFileName == nil {
+            if let url = selectedVideoURL {
+                let durable = url.path.hasPrefix(store.clipsFolder.path)
+                    ? url : store.importClipFile(from: url)
+                guard let durable else { return }
+                sessionMediaFileName = durable.lastPathComponent
+            } else if let image = selectedImage {
+                let name = "\(UUID().uuidString).jpg"
+                let dest = store.clipsFolder.appendingPathComponent(name)
+                guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                      (try? LookPipeline.shared.context.writeJPEGRepresentation(
+                          of: image, to: dest, colorSpace: space)) != nil else { return }
+                sessionMediaFileName = name
+            }
+        }
+        guard let fileName = sessionMediaFileName else { return }
+        let id = currentSessionID ?? UUID()
+        currentSessionID = id
+        let existing = store.gradeSessions.first { $0.id == id }
+        store.upsert(session: GradeSession(
+            id: id,
+            createdAt: existing?.createdAt ?? Date(),
+            updatedAt: Date(),
+            mediaFileName: fileName,
+            isVideo: selectedVideoURL != nil,
+            baseLookName: selectedLook.name,
+            settings: settings,
+            lutID: selectedLUT?.id,
+            conversionLUTID: conversionLUT?.id,
+            conversionOpacity: conversionOpacity,
+            creativeOpacity: creativeOpacity))
+    }
+
+    /// Reopens a saved grade session exactly where it was left.
+    func restoreGradeSession(_ session: GradeSession) {
+        let url = store.sessionMediaURL(session)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            store.deleteSession(session.id)
+            return
+        }
+        isRestoringSession = true
+        if let base = MockData.looks.first(where: { $0.name == session.baseLookName }) {
+            selectedLook = base
+        }
+        selectedLUT = session.lutID.flatMap { id in lutRepository.luts.first { $0.id == id } }
+        conversionLUT = session.conversionLUTID.flatMap { id in lutRepository.luts.first { $0.id == id } }
+        conversionOpacity = session.conversionOpacity ?? 100
+        creativeOpacity = session.creativeOpacity ?? 100
+        settings = session.settings
+        if session.isVideo {
+            selectedVideoURL = url
+        } else {
+            selectedImage = CIImage(contentsOf: url, options: [.applyOrientationProperty: true])
+        }
+        currentSessionID = session.id
+        sessionMediaFileName = session.mediaFileName
+        isRestoringSession = false
+        path = [.selectClip, .applyLook]
     }
 
     /// A small real frame from the selected media, used to render the look

@@ -169,6 +169,7 @@ struct ApplyLookView: View {
                           luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
+        .onDisappear { app.saveGradeSession() }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : compareDuration,
                             gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",

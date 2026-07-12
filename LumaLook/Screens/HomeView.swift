@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import CoreImage
 
 struct HomeView: View {
     @EnvironmentObject private var app: AppModel
@@ -83,7 +85,7 @@ private struct RecentProjectsRow: View {
     ]
 
     var body: some View {
-        if store.projects.isEmpty {
+        if store.projects.isEmpty && store.gradeSessions.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(Self.samples, id: \.title) { sample in
@@ -123,6 +125,9 @@ private struct RecentProjectsRow: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
+                    ForEach(store.gradeSessions.prefix(3)) { session in
+                        GradeSessionCard(session: session)
+                    }
                     ForEach(Array(store.projects.prefix(5).enumerated()), id: \.element.id) { index, project in
                         Button {
                             app.editor.load(project: project)
@@ -145,6 +150,68 @@ private struct RecentProjectsRow: View {
                         .buttonStyle(.lumaPress)
                     }
                 }
+            }
+        }
+    }
+}
+
+/// A saved Apply-a-Look session in Recents: real media thumb + GRADE badge;
+/// tap restores the exact grade (queue #13).
+private struct GradeSessionCard: View {
+    @EnvironmentObject private var app: AppModel
+    let session: GradeSession
+    @State private var thumb: CGImage?
+
+    var body: some View {
+        Button {
+            app.restoreGradeSession(session)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Group {
+                    if let thumb {
+                        Color.clear.overlay {
+                            Image(decorative: thumb, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                    } else {
+                        LumaTheme.surfaceStrong
+                    }
+                }
+                .frame(width: 164, height: 118)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(alignment: .topTrailing) {
+                    TechReadout("GRADE", size: 8, color: .white.opacity(0.9))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(LumaTheme.accent.opacity(0.85), in: Capsule())
+                        .padding(6)
+                }
+                .overlay(RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                Text(session.baseLookName)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(session.updatedAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(.system(size: 14))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+            .frame(width: 164)
+        }
+        .buttonStyle(.lumaPress)
+        .task {
+            let url = app.store.sessionMediaURL(session)
+            if session.isVideo {
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 340, height: 340)
+                thumb = try? await generator.image(
+                    at: CMTime(seconds: 0.05, preferredTimescale: 600)).image
+            } else if let ci = CIImage(contentsOf: url) {
+                let scale = min(1, 340 / max(ci.extent.width, ci.extent.height))
+                let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                thumb = LookPipeline.shared.renderCGImage(from: scaled)
             }
         }
     }
