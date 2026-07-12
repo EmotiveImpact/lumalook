@@ -23,7 +23,12 @@ struct CameraLiveLookView: View {
         Task {
             let image = UIImage(cgImage: frame)
             let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            guard status == .authorized || status == .limited else { return }
+            guard status == .authorized || status == .limited else {
+                statusCaption = "Allow Photos access in Settings to save"
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if statusCaption?.hasPrefix("Allow Photos") == true { statusCaption = nil }
+                return
+            }
             try? await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }

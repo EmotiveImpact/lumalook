@@ -202,13 +202,21 @@ final class VideoExporter: ObservableObject {
         session?.cancelExport()
     }
 
-    func saveToPhotos(url: URL) async throws {
+    /// Saves to the photo library. Returns false (NEVER throws a scary
+    /// error) when the user has Photos access denied or add-only blocked —
+    /// the export itself succeeded and must still reach the success screen,
+    /// where a banner offers the Settings deep link.
+    @discardableResult
+    func saveToPhotos(url: URL) async -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else {
-            throw VideoExportError.exportFailed
-        }
-        try await PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+        guard status == .authorized || status == .limited else { return false }
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            }
+            return true
+        } catch {
+            return false
         }
     }
 }

@@ -332,7 +332,7 @@ struct EditorTimelineView: View {
                                                         videoComposition: built.videoComposition,
                                                         audioMix: built.audioMix,
                                                         spec: spec)
-                try await app.exporter.saveToPhotos(url: url)
+                app.lastExportSavedToPhotos = await app.exporter.saveToPhotos(url: url)
                 app.lastExportURL = url
                 isExporting = false
                 LumaHaptics.shared.exportSuccess()

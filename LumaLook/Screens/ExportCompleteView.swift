@@ -51,10 +51,40 @@ struct ExportCompleteView: View {
                         .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.top, 22)
-                    Text("Saved to your photos")
+                    Text(app.lastExportSavedToPhotos
+                         ? "Saved to your photos"
+                         : "Ready to share below")
                         .font(.system(size: 17))
                         .foregroundStyle(LumaTheme.textSecondary)
                         .padding(.top, 6)
+
+                    // Photos access denied/limited: the export still
+                    // succeeded — explain and offer the one-tap fix.
+                    if !app.lastExportSavedToPhotos {
+                        VStack(spacing: 10) {
+                            Text("LumaLook couldn't add this to your photo library — Photos access is off or limited in Settings. Picking media never needs permission; auto-saving exports does.")
+                                .font(.footnote)
+                                .foregroundStyle(LumaTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                            Button {
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            } label: {
+                                Label("Allow in Settings", systemImage: "gear")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 9)
+                                    .background(LumaTheme.accent, in: Capsule())
+                            }
+                            .buttonStyle(.lumaPress)
+                        }
+                        .padding(14)
+                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal, 22)
+                        .padding(.top, 14)
+                    }
 
                     // Centered media card — video or graded photo.
                     Group {

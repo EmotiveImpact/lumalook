@@ -180,6 +180,9 @@ final class AppModel: ObservableObject {
     }
 
     // Export results — one of the two
+    /// False when the export finished but Photos access was denied — the
+    /// success screen shows the Settings banner instead of a scary error.
+    @Published var lastExportSavedToPhotos = true
     @Published var lastExportURL: URL?
     @Published var lastExportImage: CGImage?
     @Published var exportError: String?
@@ -408,7 +411,7 @@ final class AppModel: ObservableObject {
         lookState.splitFraction = nil
         do {
             let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
-            try await exporter.saveToPhotos(url: output)
+            lastExportSavedToPhotos = await exporter.saveToPhotos(url: output)
             lastExportImage = nil
             lastExportURL = output
             return true
@@ -428,19 +431,24 @@ final class AppModel: ObservableObject {
             return false
         }
         let ui = UIImage(cgImage: cg)
+        // The graded photo ALWAYS succeeds — Photos access only decides
+        // whether it auto-saves. Denied? The success screen offers the
+        // share sheet and a Settings link instead of a dead end.
+        let jpegURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumaLook_Photo_\(UUID().uuidString).jpg")
+        try? ui.jpegData(compressionQuality: 0.92)?.write(to: jpegURL)
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            exportError = "Allow photo library access to save your photo."
-            return false
+            lastExportSavedToPhotos = false
+            lastExportURL = jpegURL
+            lastExportImage = cg
+            return true
         }
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: ui)
             }
-            // Also write a JPEG so the share sheet has a file to offer.
-            let jpegURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("LumaLook_Photo_\(UUID().uuidString).jpg")
-            try? ui.jpegData(compressionQuality: 0.92)?.write(to: jpegURL)
+            lastExportSavedToPhotos = true
             lastExportURL = jpegURL
             lastExportImage = cg
             return true
