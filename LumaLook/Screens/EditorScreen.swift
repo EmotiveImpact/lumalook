@@ -26,6 +26,7 @@ struct EditorTimelineView: View {
     @State private var showMusicImporter = false
     @State private var isExporting = false
     @State private var showExportSheet = false
+    @State private var showFullscreenPreview = false
     @State private var exportError: String?
 
     private var editor: EditorState { app.editor }
@@ -46,6 +47,7 @@ struct EditorTimelineView: View {
                 transitionClipID: $transitionClipID,
                 showOverlayPanel: $showOverlayPanel,
                 selectedOverlayID: $selectedOverlayID,
+                showFullscreenPreview: $showFullscreenPreview,
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
@@ -127,6 +129,11 @@ struct EditorTimelineView: View {
             if isExporting {
                 ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
             }
+        }
+        // TikTok-style fullscreen preview: the footage owns the whole
+        // display; one tap minimises back into the editor.
+        .fullScreenCover(isPresented: $showFullscreenPreview) {
+            FullscreenPreview(editor: editor)
         }
     }
 
@@ -271,6 +278,13 @@ struct EditorTimelineView: View {
             if let raw = env["LUMA_SEED_FORMAT"], let format = EditorFormat(rawValue: raw) {
                 editor.setFormat(format, zoom: editor.zoom)
             }
+            // Fullscreen preview cell: LUMA_SEED_FULLSCREEN=1.
+            if env["LUMA_SEED_FULLSCREEN"] == "1" {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                showFullscreenPreview = true
+            }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
                 // Wait out the async rebuild before hitting play/export.
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -349,6 +363,7 @@ private struct EditorContent: View {
     @Binding var transitionClipID: UUID?
     @Binding var showOverlayPanel: Bool
     @Binding var selectedOverlayID: UUID?
+    @Binding var showFullscreenPreview: Bool
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
@@ -647,6 +662,19 @@ private struct EditorContent: View {
             if let player = editor.player {
                 VideoPlayer(player: player)
                     .onDisappear { if editor.isPlaying { editor.togglePlayback() } }
+                    .overlay(alignment: .topTrailing) {
+                        Button {
+                            showFullscreenPreview = true
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 34, height: 34)
+                                .background(.black.opacity(0.45), in: Circle())
+                        }
+                        .buttonStyle(.lumaPress)
+                        .padding(10)
+                    }
             } else {
                 HeroImage(photo: .coast)
                     .overlay {
@@ -1387,5 +1415,100 @@ extension Color {
         self.init(red: Double((value >> 16) & 0xFF) / 255,
                   green: Double((value >> 8) & 0xFF) / 255,
                   blue: Double(value & 0xFF) / 255)
+    }
+}
+
+// MARK: - Fullscreen preview (TikTok-style)
+
+/// The footage full-screen on black: tap to play/pause, scrub bar along the
+/// bottom, minimise back into the editor. Same AVPlayer — same compositor
+/// frames — zero rebuilds.
+private struct FullscreenPreview: View {
+    @ObservedObject var editor: EditorState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let player = editor.player {
+                FullscreenPlayerSurface(player: player)
+                    .ignoresSafeArea()
+            }
+
+            // Tap anywhere toggles playback.
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { editor.togglePlayback() }
+
+            if !editor.isPlaying {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.6), radius: 12)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(.black.opacity(0.5), in: Circle())
+            }
+            .buttonStyle(.lumaPress)
+            .padding(.trailing, 16)
+            .padding(.top, 8)
+        }
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 12) {
+                Text(timeString(editor.currentTime))
+                Slider(value: Binding(
+                    get: { editor.currentTime },
+                    set: { editor.seek(to: $0) }
+                ), in: 0...max(editor.totalDuration, 0.1))
+                .tint(.white)
+                Text(timeString(editor.totalDuration))
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 10)
+        }
+        .animation(.easeOut(duration: 0.18), value: editor.isPlaying)
+        .statusBarHidden()
+    }
+
+    private func timeString(_ seconds: Double) -> String {
+        let total = max(0, seconds)
+        return String(format: "%02d:%02d", Int(total) / 60, Int(total) % 60)
+    }
+}
+
+/// Bare AVPlayerLayer host — no system chrome, aspect-fit on black.
+private struct FullscreenPlayerSurface: UIViewRepresentable {
+    let player: AVPlayer
+
+    final class PlayerLayerView: UIView {
+        override static var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+
+    func makeUIView(context: Context) -> PlayerLayerView {
+        let view = PlayerLayerView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .black
+        return view
+    }
+
+    func updateUIView(_ view: PlayerLayerView, context: Context) {
+        if view.playerLayer.player !== player {
+            view.playerLayer.player = player
+        }
     }
 }

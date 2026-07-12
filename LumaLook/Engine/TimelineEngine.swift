@@ -461,6 +461,16 @@ final class EditorState: ObservableObject {
         let asset = AVURLAsset(url: durableURL)
         guard let duration = try? await asset.load(.duration).seconds,
               duration.isFinite, duration > 0.05 else { return }
+        // Phone footage first: the FIRST clip decides the canvas. A portrait
+        // clip gets a 9:16 canvas instead of being letterboxed into 16:9.
+        if clips.isEmpty,
+           let track = try? await asset.loadTracks(withMediaType: .video).first {
+            let naturalSize = (try? await track.load(.naturalSize)) ?? .zero
+            let transform = (try? await track.load(.preferredTransform)) ?? .identity
+            let display = naturalSize.applying(transform)
+            let aspect = abs(display.width) / max(abs(display.height), 1)
+            format = aspect < 0.85 ? .vertical : (aspect < 1.15 ? .square : .widescreen)
+        }
         pushUndoSnapshot()
         var clip = Clip(id: UUID(), url: durableURL, assetDuration: duration,
                         trimStart: 0, trimEnd: duration)
@@ -484,14 +494,19 @@ final class EditorState: ObservableObject {
             ? url
             : (store.importClipFile(from: url) ?? url)
         let thumb = await Task.detached { Self.imageThumbnail(at: durableURL) }.value
-        guard thumb != nil else { return }   // unreadable image: don't add a dead clip
+        guard let thumb else { return }   // unreadable image: don't add a dead clip
+        // First media decides the canvas (photos too).
+        if clips.isEmpty {
+            let aspect = CGFloat(thumb.width) / max(CGFloat(thumb.height), 1)
+            format = aspect < 0.85 ? .vertical : (aspect < 1.15 ? .square : .widescreen)
+        }
         pushUndoSnapshot()
         var clip = Clip(id: UUID(), url: durableURL,
                         assetDuration: Self.photoMaxDuration,
                         trimStart: 0, trimEnd: Self.photoDefaultDuration,
                         isImage: true)
         clip.thumbnail = thumb
-        clip.filmstrip = thumb.map { [$0] } ?? []
+        clip.filmstrip = [thumb]
         clips.append(clip)
         selectedClipID = clip.id
         rebuild()
