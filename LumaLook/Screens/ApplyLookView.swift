@@ -84,6 +84,8 @@ struct ApplyLookView: View {
     @State private var showLogExplainer = false
     @State private var stashedLookIntensity: Double?
     @State private var showConversionPicker = false
+    @AppStorage("lumalook.showScope") private var showScope = false
+    @State private var scopeImage: CGImage?
     @State private var compareMode = false
     @State private var wipeFraction: Double = 0.5
     @State private var showExportSheet = false
@@ -256,6 +258,30 @@ struct ApplyLookView: View {
                     compareOverlay
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                if showScope, !compareMode {
+                    scopeOverlay
+                        .padding(.top, 104)
+                        .padding(.trailing, 10)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topTrailing)))
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    showScope.toggle()
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Image(systemName: "waveform.path.ecg.rectangle")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(showScope ? LumaTheme.accentBright : .white.opacity(0.85))
+                        .frame(width: 38, height: 34)
+                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.lumaPress)
+                .padding(.trailing, 12)
+                .padding(.bottom, 12)
+            }
+            .animation(.easeOut(duration: 0.18), value: showScope)
             .overlay(alignment: .top) { topBar }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -460,6 +486,60 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+}
+
+// MARK: - Luma scope (queue #15)
+
+extension ApplyLookView {
+    fileprivate var scopeStamp: String {
+        "\(app.settings)-\(app.selectedLook.id)-\(app.selectedLUT?.id.uuidString ?? "")-\(app.conversionLUT?.id.uuidString ?? "")-\(Int(app.conversionOpacity))-\(Int(app.creativeOpacity))-\(mediaKey)"
+    }
+
+    fileprivate var scopeOverlay: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            TechReadout("LUMA HISTOGRAM", size: 6.5, color: LumaTheme.textMuted)
+            Group {
+                if let scopeImage {
+                    Image(decorative: scopeImage, scale: 1)
+                        .resizable()
+                        .frame(width: 108, height: 44)
+                } else {
+                    Color.black.frame(width: 108, height: 44)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .padding(7)
+        .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(.white.opacity(0.16), lineWidth: 1))
+        .allowsHitTesting(false)
+        .task(id: scopeStamp) {
+            guard showScope else { return }
+            scopeImage = await Self.renderHistogram(frame: app.previewFrame ?? LookThumbs.fallbackFrame,
+                                                    state: app.lookState)
+        }
+    }
+
+    /// Histogram of the GRADED frame — the scope reads what you'll export.
+    fileprivate static func renderHistogram(frame: CIImage, state: LookState) async -> CGImage? {
+        await Task.detached(priority: .userInitiated) {
+            let graded = LookPipeline.shared.apply(state: state, to: frame, includeSplit: false)
+            let area = CIFilter.areaHistogram()
+            area.inputImage = graded
+            area.extent = graded.extent
+            area.count = 64
+            area.scale = 12
+            guard let histogram = area.outputImage else { return nil }
+            let display = CIFilter.histogramDisplay()
+            display.inputImage = histogram
+            display.height = 44
+            display.highLimit = 1
+            display.lowLimit = 0
+            guard let image = display.outputImage else { return nil }
+            return LookPipeline.shared.context.createCGImage(image, from: image.extent)
+        }.value
     }
 }
 
