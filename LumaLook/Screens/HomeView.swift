@@ -31,7 +31,7 @@ struct HomeView: View {
                             .font(.system(size: 16))
                             .foregroundStyle(LumaTheme.textSecondary)
                     }
-                    .padding(.top, 26)
+                    .padding(.top, -18)
                     .padding(.bottom, 8)
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
