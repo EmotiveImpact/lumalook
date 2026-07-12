@@ -21,6 +21,7 @@ struct EditorTimelineView: View {
     @State private var transitionClipID: UUID?
     @State private var showMusicImporter = false
     @State private var isExporting = false
+    @State private var showExportSheet = false
     @State private var exportError: String?
 
     private var editor: EditorState { app.editor }
@@ -43,7 +44,7 @@ struct EditorTimelineView: View {
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
                 onAddMusic: { showMusicImporter = true },
-                onExport: { startExport() },
+                onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
                 onOpenAdjust: { app.path.append(.customLook) }
@@ -79,6 +80,14 @@ struct EditorTimelineView: View {
         }
         .onDisappear {
             editor.saveProject()
+        }
+        .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
+            ExportSpecSheet(durationSeconds: editor.totalDuration,
+                            gradeCubeTitle: nil,
+                            lookState: nil) { spec in
+                showExportSheet = false
+                startExport(spec: spec)
+            }
         }
         .overlay {
             if isExporting {
@@ -138,7 +147,7 @@ struct EditorTimelineView: View {
         Task { await editor.addAudioTrack(importedURL: imported, title: title) }
     }
 
-    private func startExport() {
+    private func startExport(spec: ExportSpec = ExportSpec()) {
         guard !editor.isEmpty else {
             exportError = "Add a clip to the timeline first."
             return
@@ -150,7 +159,8 @@ struct EditorTimelineView: View {
                 let built = try await editor.buildComposition()
                 let url = try await app.exporter.export(asset: built.composition,
                                                         videoComposition: built.videoComposition,
-                                                        audioMix: built.audioMix)
+                                                        audioMix: built.audioMix,
+                                                        spec: spec)
                 try await app.exporter.saveToPhotos(url: url)
                 app.lastExportURL = url
                 isExporting = false

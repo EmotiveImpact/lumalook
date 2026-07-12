@@ -202,7 +202,7 @@ final class AppModel: ObservableObject {
 
     // MARK: - Export
 
-    func exportCurrentVideo() async -> Bool {
+    func exportCurrentVideo(spec: ExportSpec = ExportSpec()) async -> Bool {
         if let image = selectedImage {
             return await exportStill(image)
         }
@@ -213,7 +213,7 @@ final class AppModel: ObservableObject {
         exportError = nil
         lookState.splitFraction = nil
         do {
-            let output = try await exporter.export(videoURL: url, lookState: lookState)
+            let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
             try await exporter.saveToPhotos(url: output)
             lastExportImage = nil
             lastExportURL = output

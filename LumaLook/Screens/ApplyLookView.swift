@@ -79,6 +79,10 @@ struct ApplyLookView: View {
     @State private var activeTool = "Adjust"
     @State private var mediaReadout: String?
     @State private var videoAspect: CGFloat?
+    @State private var showLUTImporter = false
+    @State private var lutImportError: String?
+    @State private var showLogExplainer = false
+    @State private var stashedLookIntensity: Double?
 
     private var filteredLooks: [LookPreset] {
         category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
@@ -154,6 +158,27 @@ struct ApplyLookView: View {
                           luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
+        .alert("Log LUT active", isPresented: $showLogExplainer) {
+            Button("Got it", role: .cancel) {}
+        } message: {
+            Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh — lower the intensity, or shoot Log for the intended result.")
+        }
+        .fileImporter(isPresented: $showLUTImporter,
+                      allowedContentTypes: [.data, .plainText],
+                      allowsMultipleSelection: false) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let imported = try app.lutRepository.importLUT(from: url)
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    app.selectedLUT = imported
+                }
+                lutImportError = nil
+            } catch {
+                lutImportError = "Couldn't read that file as a .cube LUT."
+            }
+        }
     }
 
     // MARK: Media surface
@@ -222,7 +247,24 @@ struct ApplyLookView: View {
             Spacer()
             TechReadout("GRADE", size: 12, color: .white.opacity(0.85))
             Spacer()
-            Color.clear.frame(width: 40, height: 40)
+            if app.selectedLUT?.isLogTarget == true {
+                Button { showLogExplainer = true } label: {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color(red: 0.95, green: 0.64, blue: 0.36))
+                            .frame(width: 6, height: 6)
+                        TechReadout("LOG LUT", size: 9,
+                                    color: Color(red: 0.95, green: 0.64, blue: 0.36))
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.24), in: Capsule())
+                    .overlay(Capsule().strokeBorder(
+                        Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.65), lineWidth: 1))
+                }
+                .buttonStyle(.lumaPress)
+            } else {
+                Color.clear.frame(width: 40, height: 40)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 2)
@@ -252,16 +294,6 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
 
             lookStrip
-
-            if app.selectedLUT?.isLogTarget == true {
-                Label("Log LUT — designed for Log footage. If it looks harsh here, lower the intensity.",
-                      systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(LumaTheme.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 22)
-                    .transition(.opacity)
-            }
 
             LumaDial(title: activeTool == "Adjust" ? "Intensity" : activeTool,
                      value: dialBinding)
@@ -320,6 +352,18 @@ struct ApplyLookView: View {
     private var lookStrip: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
+                    // ORIGINAL: one tap to zero the grade, tap again to return.
+                    OriginalTile(active: app.settings.intensity == 0) {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                            if app.settings.intensity == 0 {
+                                app.settings.intensity = stashedLookIntensity ?? 75
+                                stashedLookIntensity = nil
+                            } else {
+                                stashedLookIntensity = app.settings.intensity
+                                app.settings.intensity = 0
+                            }
+                        }
+                    }
                     ForEach(filteredLooks) { look in
                         LookThumbCell(
                             title: look.name,
@@ -356,6 +400,7 @@ struct ApplyLookView: View {
                                 .opacity(phase.isIdentity ? 1 : 0.6)
                         }
                     }
+                    AddLUTTile { showLUTImporter = true }
                 }
                 .padding(.vertical, 2)
                 .padding(.horizontal, 22)
@@ -363,6 +408,61 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+}
+
+/// Strip-leading ORIGINAL tile: the ungraded frame, one tap away — the
+/// grading-app equivalent of a reference monitor.
+private struct OriginalTile: View {
+    let active: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(LumaTheme.background)
+                    .frame(width: 96, height: 96)
+                    .overlay {
+                        TechReadout("ORIG", size: 9,
+                                    color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
+                        .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.18)))
+                Text("Original")
+                    .font(.system(size: 13, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? .white : LumaTheme.textSecondary)
+            }
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// Strip-trailing import tile: .cube files land directly in the strip.
+private struct AddLUTTile: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.white.opacity(0.04))
+                    .frame(width: 96, height: 96)
+                    .overlay {
+                        Image(systemName: "plus")
+                            .font(.system(size: 22, weight: .light))
+                            .foregroundStyle(LumaTheme.accentBright)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                        .foregroundStyle(.white.opacity(0.18)))
+                Text("Add LUT")
+                    .font(.system(size: 13))
+                    .foregroundStyle(LumaTheme.textSecondary)
+            }
+        }
+        .buttonStyle(.lumaPress)
     }
 }
 

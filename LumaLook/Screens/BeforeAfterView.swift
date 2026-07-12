@@ -5,6 +5,7 @@ struct BeforeAfterView: View {
     @EnvironmentObject private var app: AppModel
     @State private var splitFraction: Double = 0.5
     @State private var isExporting = false
+    @State private var showExportSheet = false
     @State private var activeTool: String? = nil
     @State private var isPlaying = true
     @State private var progress: Double = 0
@@ -17,7 +18,7 @@ struct BeforeAfterView: View {
 
     var body: some View {
         LumaScreen(title: "Before / After", trailingIcon: "square.and.arrow.up",
-                   trailingAction: { startExport() }) {
+                   trailingAction: { showExportSheet = true }) {
             viewer
 
             playbackBar
@@ -59,8 +60,16 @@ struct BeforeAfterView: View {
                     .foregroundStyle(LumaTheme.orange)
             }
 
-            SolidCTA(title: "Export") { startExport() }
+            SolidCTA(title: "Export") { showExportSheet = true }
                 .padding(.top, 2)
+        }
+        .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
+            ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : duration,
+                            gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
+                            lookState: app.lookState) { spec in
+                showExportSheet = false
+                startExport(spec: spec)
+            }
         }
         .overlay {
             if isExporting { exportOverlay }
@@ -219,14 +228,14 @@ struct BeforeAfterView: View {
 
     // MARK: - Export
 
-    private func startExport() {
+    private func startExport(spec: ExportSpec) {
         guard hasRealMedia else {
             app.exportError = "Pick a video or photo from your library on the Select Clip screen to export."
             return
         }
         isExporting = true
         Task {
-            let success = await app.exportCurrentVideo()
+            let success = await app.exportCurrentVideo(spec: spec)
             isExporting = false
             if success {
                 app.path.append(.exportComplete)

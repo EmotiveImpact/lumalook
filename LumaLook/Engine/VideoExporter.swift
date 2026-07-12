@@ -17,6 +17,38 @@ enum VideoExportError: Error, LocalizedError {
     }
 }
 
+/// User-facing export options (queue #6). Remembered across sessions.
+struct ExportSpec: Equatable {
+    enum Resolution: String, CaseIterable { case hd1080 = "1080p", uhd4K = "4K" }
+    enum Codec: String, CaseIterable { case h264 = "H.264", hevc = "HEVC" }
+
+    var resolution: Resolution = .hd1080
+    var codec: Codec = .hevc
+    var fps: Int = 30
+
+    var presetName: String {
+        switch (resolution, codec) {
+        case (.hd1080, .h264): return AVAssetExportPreset1920x1080
+        case (.uhd4K, .h264): return AVAssetExportPreset3840x2160
+        case (.hd1080, .hevc): return AVAssetExportPresetHEVC1920x1080
+        case (.uhd4K, .hevc): return AVAssetExportPresetHEVC3840x2160
+        }
+    }
+
+    /// AppStorage-friendly encoding.
+    var rawValue: String { "\(resolution.rawValue)|\(codec.rawValue)|\(fps)" }
+    static func from(rawValue: String) -> ExportSpec {
+        let parts = rawValue.split(separator: "|").map(String.init)
+        var spec = ExportSpec()
+        if parts.count == 3 {
+            spec.resolution = Resolution(rawValue: parts[0]) ?? .hd1080
+            spec.codec = Codec(rawValue: parts[1]) ?? .hevc
+            spec.fps = Int(parts[2]) ?? 30
+        }
+        return spec
+    }
+}
+
 @MainActor
 final class VideoExporter: ObservableObject {
     @Published var progress: Double = 0
@@ -26,7 +58,8 @@ final class VideoExporter: ObservableObject {
     private var progressTask: Task<Void, Never>?
 
     /// Single-clip Apply-a-Look export.
-    func export(videoURL: URL, lookState: LookState) async throws -> URL {
+    func export(videoURL: URL, lookState: LookState,
+                spec: ExportSpec = ExportSpec()) async throws -> URL {
         let asset = AVURLAsset(url: videoURL)
         let pipeline = LookPipeline.shared
 
@@ -38,11 +71,16 @@ final class VideoExporter: ObservableObject {
         }
         composition.applySDRColorPolicy()
 
-        return try await export(asset: asset, videoComposition: composition, audioMix: nil)
+        return try await export(asset: asset, videoComposition: composition, audioMix: nil, spec: spec)
     }
 
     /// Shared export path — also used for full editor timelines.
-    func export(asset: AVAsset, videoComposition: AVVideoComposition?, audioMix: AVAudioMix?) async throws -> URL {
+    func export(asset: AVAsset, videoComposition: AVVideoComposition?, audioMix: AVAudioMix?,
+                spec: ExportSpec = ExportSpec()) async throws -> URL {
+        // Frame-rate choice resamples the CI handler cadence.
+        if let mutable = videoComposition as? AVMutableVideoComposition, spec.fps > 0 {
+            mutable.frameDuration = CMTime(value: 1, timescale: CMTimeScale(spec.fps))
+        }
         isExporting = true
         progress = 0
         defer {
@@ -53,7 +91,8 @@ final class VideoExporter: ObservableObject {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("LumaLook_Export_\(UUID().uuidString).mov")
 
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1920x1080) else {
+        guard let session = AVAssetExportSession(asset: asset, presetName: spec.presetName)
+                ?? AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1920x1080) else {
             throw VideoExportError.exportSessionCreationFailed
         }
         self.session = session
