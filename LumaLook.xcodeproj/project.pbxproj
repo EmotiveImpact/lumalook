@@ -7,95 +7,219 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00DB64A93DB7EF3EADE7BA57 /* FS_SX200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */; };
 		028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B846D621E4F274EC907E0EC /* LumaDial.swift */; };
+		02D068F0678DC92F743732EA /* FS_VV100.cube in Resources */ = {isa = PBXBuildFile; fileRef = BC7A950FA2B975BBA5B6B694 /* FS_VV100.cube */; };
+		03B330DD7722E9A08F27B121 /* FS_PT160V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3481632CC4B70ABB890BC517 /* FS_PT160V.cube */; };
+		05EA0E2E6674569C1D8496A2 /* FS_FN800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8B0D225A84F898394B902E73 /* FS_FN800.cube */; };
+		066ED006DB07EE0B6F0AE6A0 /* FS_FP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = B04A5030E4C98B0AC8663228 /* FS_FP100.cube */; };
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
+		0A20B65141FA9DF7CBEA1362 /* FS_NP1600.cube in Resources */ = {isa = PBXBuildFile; fileRef = A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */; };
+		0C21A2716659C5C2D3B6CA49 /* FS_FN400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 65114680C08ADE0365D4F133 /* FS_FN400.cube */; };
 		0E17EE8AB98876B6CD3CA10C /* FS_AV200.cube in Resources */ = {isa = PBXBuildFile; fileRef = B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */; };
 		0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A5624E7651D005E2DA05C1 /* CameraChrome.swift */; };
+		123409A8B9084A6F751FEC62 /* FS_PT800H.cube in Resources */ = {isa = PBXBuildFile; fileRef = EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */; };
 		17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71565855D4F4F92716382C0A /* TimelineV2.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
+		18C1DF236A3E5618431BA1DD /* FS_MS14.cube in Resources */ = {isa = PBXBuildFile; fileRef = 45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */; };
+		1C1A4D8D9504B11FFBD650BE /* FS_DL400.cube in Resources */ = {isa = PBXBuildFile; fileRef = BE8EA353524205957ACA01CD /* FS_DL400.cube */; };
+		1C6901E0A436E9ADAE380311 /* FS_EL400.cube in Resources */ = {isa = PBXBuildFile; fileRef = B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */; };
+		1EE1835791BA9C9AE4AD4A33 /* FS_FP3000N.cube in Resources */ = {isa = PBXBuildFile; fileRef = FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */; };
 		1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */; };
 		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
+		25D91202BA6C2E9F0CDD6D9C /* FS_SP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 55A66FB773AEE510A8E14555 /* FS_SP400.cube */; };
 		260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE2524F01E128404964986C /* hero_golden.jpg */; };
+		27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */ = {isa = PBXBuildFile; fileRef = 222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */; };
 		2BF4BFEE36116C1A8F0B3013 /* FS_EK100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 48B3A573684BF7B15A188E7D /* FS_EK100.cube */; };
 		300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */; };
 		3027C848F4DB05F3BE35BB8D /* FS_CP2383.cube in Resources */ = {isa = PBXBuildFile; fileRef = 5F1F68DD59817F2629702B2B /* FS_CP2383.cube */; };
 		369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */; };
+		3769715A54DA8D00C7C43F29 /* FS_TZ0C.cube in Resources */ = {isa = PBXBuildFile; fileRef = CBD94C74B308262B83000612 /* FS_TZ0C.cube */; };
+		377D8EABD3C369AD9AF8DF3D /* FS_APX25.cube in Resources */ = {isa = PBXBuildFile; fileRef = 35D23AAB06F406BE71A9D491 /* FS_APX25.cube */; };
+		3849E449A879062F20389775 /* FS_APX100.cube in Resources */ = {isa = PBXBuildFile; fileRef = F609748FA3A8B7FE5FC475BC /* FS_APX100.cube */; };
+		38D736390A592C07ECC22731 /* FS_MS5.cube in Resources */ = {isa = PBXBuildFile; fileRef = D7804F266F5E284C813A5347 /* FS_MS5.cube */; };
 		3934AA68236DAAE15D0C78CD /* FS_VV50.cube in Resources */ = {isa = PBXBuildFile; fileRef = BD7E1B207E2D488AAA08E3AB /* FS_VV50.cube */; };
+		3A31749B53F8176168AEA445 /* FS_PL690.cube in Resources */ = {isa = PBXBuildFile; fileRef = 73DAA7F9A11628B31666692E /* FS_PL690.cube */; };
+		3ABFF863D994FAA7A25652AD /* FS_EL100X.cube in Resources */ = {isa = PBXBuildFile; fileRef = 400A15E9F4B13EC5E84CCCEE /* FS_EL100X.cube */; };
+		3B48606084DF05935B94FD79 /* FS_PL665.cube in Resources */ = {isa = PBXBuildFile; fileRef = 15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */; };
+		4035653A6A2ADFF691411433 /* FS_PT400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 03F736AA8559132E21CD652A /* FS_PT400.cube */; };
+		43A18BFFCF9F57D78D79CF71 /* FS_PX680W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */; };
 		43B6BBEA0F03D814152B4832 /* FILM_LUTS_CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */; };
+		44256AF26387DA5DB6878E5C /* FS_FP3000.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AF262175592322441A7BEE4 /* FS_FP3000.cube */; };
 		49EC96A150DB992461300428 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21139184E189E20DB4F5FBAA /* AppModel.swift */; };
 		4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */; };
+		4DEBB0FD5E3D6006B3759EC7 /* FS_SP1600.cube in Resources */ = {isa = PBXBuildFile; fileRef = 41FBDDA8C50CE4E77289F3ED /* FS_SP1600.cube */; };
+		4F6D8FC03BE24FB090B7629F /* FS_PX100W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */; };
+		5115DD16558EADCE8A2A408D /* FS_PX680C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */; };
 		52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */; };
 		53C37CA44870DB5CFEB9397D /* FS_KC64.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3481F9BB808BEE8D58CED37F /* FS_KC64.cube */; };
+		549DC8B77628BCE22C6CFCC2 /* FS_EC100V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9E8F2A13BBEAE025610F8313 /* FS_EC100V.cube */; };
 		5689040618691FF213182252 /* LumaCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA07F33B727EC523266C623 /* LumaCompositor.swift */; };
+		57113952AAA6A575445CBD3E /* FS_MS2.cube in Resources */ = {isa = PBXBuildFile; fileRef = 94E131FFACC1D76FA27CDC79 /* FS_MS2.cube */; };
+		5821266F087CD85D9C64A385 /* FS_IR840.cube in Resources */ = {isa = PBXBuildFile; fileRef = 944D03FD177DCA04583DC882 /* FS_IR840.cube */; };
+		5B401415AFACCFB8252231E6 /* FS_PL690W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 287AE756E62DCB0452572E82 /* FS_PL690W.cube */; };
 		5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5C594D043EBDE22175C914E7 /* Assets.xcassets */; };
 		5EF9717C3647997978CD7D63 /* FS_PR100.cube in Resources */ = {isa = PBXBuildFile; fileRef = DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */; };
+		614C52B9245B43AD8FDA4143 /* FS_PL664.cube in Resources */ = {isa = PBXBuildFile; fileRef = A43A5E47275D318BFCB0C555 /* FS_PL664.cube */; };
+		63FB5D8E520E9849ECEF1313 /* FS_PX680.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4D02621852558286323E1667 /* FS_PX680.cube */; };
 		650993EF4274EEA5FD8721A9 /* ZipReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F752262798C945F44F00B2 /* ZipReader.swift */; };
+		68875AAF217C2B56E82B5614 /* FS_AP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 20FB8E4B65E46E4A81EE4C58 /* FS_AP100.cube */; };
+		696C5A655EC29A85E4009B3F /* FS_MS9.cube in Resources */ = {isa = PBXBuildFile; fileRef = A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */; };
+		69ED995FA51B0BCC607C1E63 /* FS_PT400N.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4663C3D90BD5F02587298D57 /* FS_PT400N.cube */; };
 		6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 585AC072642EB31074E401C7 /* LumaLook.storekit */; };
 		6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA55F19B38C01C558951683 /* ExportCompleteView.swift */; };
 		6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */; };
+		6C90EB412D90607F0AB2A85A /* FS_EC100G.cube in Resources */ = {isa = PBXBuildFile; fileRef = 396331E331CF8435E978C3C7 /* FS_EC100G.cube */; };
 		6C92A115EA77837121CD8C1E /* hero_coast.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 43EEB129DF4E76FC1523F268 /* hero_coast.jpg */; };
 		6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1C28E748C160529C0841DB /* ApplyLookView.swift */; };
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
+		7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3DD911A59C44434B989660EB /* FS_RIR400.cube */; };
+		731C9C361762A468317EB7ED /* FS_MS12.cube in Resources */ = {isa = PBXBuildFile; fileRef = D4DE7A157110C99E2B346F44 /* FS_MS12.cube */; };
+		735513DF21933A64978E1BAF /* FS_PR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0AB79D07DD8C1021B30F192D /* FS_PR400.cube */; };
+		73CBA4F60D83B1049F47B146 /* FS_IN669C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */; };
+		755C49E8853CD2477DBAA9ED /* FS_PC35.cube in Resources */ = {isa = PBXBuildFile; fileRef = FF6FEEFAD7324BDEA8FB4BAD /* FS_PC35.cube */; };
+		75F812E8CA2261FE7EFE9D7B /* FS_XP2.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2B8592E7EACC01C8A94112A6 /* FS_XP2.cube */; };
 		76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */; };
+		77B60E49F5729D3C56895B6B /* FS_TZ0.cube in Resources */ = {isa = PBXBuildFile; fileRef = 87F176B33481AA29E661CF5E /* FS_TZ0.cube */; };
 		7B0B4B2AFFAD2E51FB985BDD /* hero_night.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 9822ECA6F64920F625730286 /* hero_night.jpg */; };
+		7B0F90A1E94C763D028DBDC5 /* FS_PT400U.cube in Resources */ = {isa = PBXBuildFile; fileRef = 061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */; };
 		7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */; };
+		7C6CC7EC14EE46B845684B11 /* FS_MS11.cube in Resources */ = {isa = PBXBuildFile; fileRef = 51847FFB61D4C591A507AF23 /* FS_MS11.cube */; };
+		819C69108B953E1736A91C32 /* FS_MS1.cube in Resources */ = {isa = PBXBuildFile; fileRef = E2E440096EDED38FA0B90A53 /* FS_MS1.cube */; };
 		83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */; };
+		83CB756F656B59A651F25695 /* FS_RO25.cube in Resources */ = {isa = PBXBuildFile; fileRef = 6B8727A81A0DEF252195C4BD /* FS_RO25.cube */; };
 		842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */; };
+		84820D410D62E5B492BD031A /* FS_BW400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */; };
+		85259369029BD2B8C7645CF7 /* FS_SP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 41753F4EEB74CF332AB8096D /* FS_SP100.cube */; };
 		895EDCA479BE52D0053E8389 /* FS_HP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = B38478EF2EEA2A8135980EED /* FS_HP400.cube */; };
 		89FD0992EDFC25BD86AB9B66 /* FS_CP3513.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */; };
 		8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */; };
+		8FD065863BAA8A76266B9602 /* FS_DL100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */; };
 		916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */; };
 		92D8AA2EF28C67C5693F8207 /* FS_RS100.cube in Resources */ = {isa = PBXBuildFile; fileRef = F58E6ECD1EA58596156C36BD /* FS_RS100.cube */; };
 		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
 		9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */; };
+		A0576CA334B7E390B01D9BBE /* FS_MS4.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AB35F2AD0526EF4380F835E /* FS_MS4.cube */; };
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8AEF2B3B897BD002287240 /* ExportSheet.swift */; };
+		A4652A4EB2393C7AB0D4FCDC /* FS_PX70W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0286A2B6DDAEAFC8A4B5C316 /* FS_PX70W.cube */; };
+		A7479CAE99F5EE8EC57C43A9 /* FS_FN160.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7E1AF5A705895B01F7D17A52 /* FS_FN160.cube */; };
+		A78D91357631EF59B2AC1445 /* FS_PX70.cube in Resources */ = {isa = PBXBuildFile; fileRef = FC3D739E7CFC0E1DC1CE0ADD /* FS_PX70.cube */; };
 		A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07F185F22913641FEE760D92 /* LUTRepository.swift */; };
+		AAD4D25FE4DBB06F69BD1359 /* FS_PT160N.cube in Resources */ = {isa = PBXBuildFile; fileRef = 58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */; };
 		AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D43F2BD3901B8346CB884BF /* LumaTheme.swift */; };
+		AF0A84720B2F4F5E8DA3C012 /* FS_MS13.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */; };
 		B16D7C5940E83006267251B2 /* FS_IN669.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2259E3CB086EC2E8E52929EB /* FS_IN669.cube */; };
+		B809BB3A60F4ACD00A533573 /* FS_MS10.cube in Resources */ = {isa = PBXBuildFile; fileRef = 53841C670501E1F71C5CA8F5 /* FS_MS10.cube */; };
+		BAED802D59A26776874421CB /* FS_MS6.cube in Resources */ = {isa = PBXBuildFile; fileRef = BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */; };
+		BBB3750CC2EC3B5E8F4DEBCD /* FS_HPS800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 02C6D5846347C786254AC84E /* FS_HPS800.cube */; };
+		C07E9021B8EACADFCB81E9DA /* FS_PX70C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */; };
 		C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */; };
 		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
+		C16B1359066E085945BF3413 /* FS_PT800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */; };
 		C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */; };
+		CAC199F8B3352305B306C8A5 /* FS_MS3.cube in Resources */ = {isa = PBXBuildFile; fileRef = BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */; };
+		CC2B75F8447C61F9064E9596 /* FS_FP100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */; };
+		CC96F7992C81799F1D971606 /* FS_PF50.cube in Resources */ = {isa = PBXBuildFile; fileRef = 17D87D9EC09C9235D29B2913 /* FS_PF50.cube */; };
+		CD11513E989BF30CC434E279 /* FS_FP125.cube in Resources */ = {isa = PBXBuildFile; fileRef = 71A6E32214C9321C7379CCC6 /* FS_FP125.cube */; };
+		D09DE830CF50582B4F392811 /* FS_PL667.cube in Resources */ = {isa = PBXBuildFile; fileRef = F2F63CA8389113D35C675EEE /* FS_PL667.cube */; };
 		D20F0AAE5FC1E0307AE1F2DD /* FS_SP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = E22A35DFADB72BF4DB87151D /* FS_SP200.cube */; };
 		D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 158CFCA17750E771F995959B /* hero_desert.jpg */; };
+		D33CDA48E36671A1DF745435 /* FS_CP2393.cube in Resources */ = {isa = PBXBuildFile; fileRef = D815AF71877366D60E429A6F /* FS_CP2393.cube */; };
 		D3A8DB9D19CD23938893D92E /* LumaHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */; };
 		D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = FD762DD38BFEE29B06287806 /* CREDITS.md */; };
+		D4EE3E54D3C31485223F4D49 /* FS_MS8.cube in Resources */ = {isa = PBXBuildFile; fileRef = 891A0BF1C013405CA3F546AF /* FS_MS8.cube */; };
 		D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */; };
+		D66F2C7AA85159A9B633E0F9 /* FS_AS100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 476EEF99D87977383B9E4673 /* FS_AS100.cube */; };
+		D7DF8C2282C38ADF59368389 /* FS_KC200.cube in Resources */ = {isa = PBXBuildFile; fileRef = AE6F396DED2949332902CD15 /* FS_KC200.cube */; };
+		D8109274404403032FAB300A /* FS_TM400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2A5A3DAE1AA84F1E210C0EB2 /* FS_TM400.cube */; };
 		D8533508636292B9BAA88A63 /* FS_TX400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 85F7604D70414A0B449CAADF /* FS_TX400.cube */; };
 		D87ECA92A8A07C3ABC0608D3 /* FS_PT160.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9E69B51B414C8DCD348D61D8 /* FS_PT160.cube */; };
+		DB410DD336810EA3BA24A68D /* FS_SN100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */; };
 		DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */; };
 		DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0DEA4AC5F988804E0BFE7243 /* Teal_Orange_17.cube */; };
+		E08F788FB3FEFC7B757B88D8 /* FS_NP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */; };
 		E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9688DBD03E8614DC1F6D9E91 /* HomeView.swift */; };
+		E30EB6BE9128883888A3F8BE /* FS_EL200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9F87D838065AE54E0D455078 /* FS_EL200.cube */; };
+		E3A8651B6919B7E16BA13277 /* FS_FP100N.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0D060D290293885AE500BC04 /* FS_FP100N.cube */; };
+		E3D32EFCC5FD15CA910F181B /* FS_KC25.cube in Resources */ = {isa = PBXBuildFile; fileRef = FD72C902555C7738AE0D8BCE /* FS_KC25.cube */; };
 		E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D131E42DD31D663F90B81B /* EditorScreen.swift */; };
+		E66A752A5BDB9723BCBA72AF /* FS_TM100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96693A53A846C4E953596A7B /* FS_TM100.cube */; };
+		E7F24CDC9DCE6379B075F31C /* FS_TM3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = CE43932D10683135B309ABE7 /* FS_TM3200.cube */; };
+		EA12744C42B2C5D1F18FF067 /* FS_MS15.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */; };
 		EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5082DDECC065F7185E2AD705 /* MoreScreens.swift */; };
+		ECED4E0B9CD06827B3E0C4AA /* FS_PL672.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1A04F1F9F823E1A52448E291 /* FS_PL672.cube */; };
+		EE5F14B85BDABDCC7E000EF1 /* FS_DL3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7F298D108110F6DD3E095A95 /* FS_DL3200.cube */; };
+		F16A4058B43C136764ABF0A8 /* FS_PT400V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 63190B53784A9183F103288A /* FS_PT400V.cube */; };
 		F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */; };
+		F5FF40F29D92772033824046 /* FS_PR400X.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2502776385F3CECA843CFFB0 /* FS_PR400X.cube */; };
+		F97B0E5AEE62FCDBD5F87A55 /* FS_SP800.cube in Resources */ = {isa = PBXBuildFile; fileRef = CF404D1CD17AE20761886DF1 /* FS_SP800.cube */; };
+		FDCF6C03A26097C6598C089E /* FS_MS7.cube in Resources */ = {isa = PBXBuildFile; fileRef = C6D8B84208BCDA1900855A3E /* FS_MS7.cube */; };
+		FE277A40D2B2BFFB99B02B43 /* FS_PX100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4DA7C8BD45757B0C5EBF05F8 /* FS_PX100C.cube */; };
+		FE4BDA0FC9925E8CC913532D /* FS_RR80.cube in Resources */ = {isa = PBXBuildFile; fileRef = C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0286A2B6DDAEAFC8A4B5C316 /* FS_PX70W.cube */ = {isa = PBXFileReference; path = FS_PX70W.cube; sourceTree = "<group>"; };
+		02C6D5846347C786254AC84E /* FS_HPS800.cube */ = {isa = PBXFileReference; path = FS_HPS800.cube; sourceTree = "<group>"; };
+		03F736AA8559132E21CD652A /* FS_PT400.cube */ = {isa = PBXFileReference; path = FS_PT400.cube; sourceTree = "<group>"; };
+		061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */ = {isa = PBXFileReference; path = FS_PT400U.cube; sourceTree = "<group>"; };
 		07F185F22913641FEE760D92 /* LUTRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTRepository.swift; sourceTree = "<group>"; };
+		0AB79D07DD8C1021B30F192D /* FS_PR400.cube */ = {isa = PBXFileReference; path = FS_PR400.cube; sourceTree = "<group>"; };
+		0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */ = {isa = PBXFileReference; path = FS_SN100.cube; sourceTree = "<group>"; };
+		0D060D290293885AE500BC04 /* FS_FP100N.cube */ = {isa = PBXFileReference; path = FS_FP100N.cube; sourceTree = "<group>"; };
 		0DEA4AC5F988804E0BFE7243 /* Teal_Orange_17.cube */ = {isa = PBXFileReference; path = Teal_Orange_17.cube; sourceTree = "<group>"; };
 		14D131E42DD31D663F90B81B /* EditorScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorScreen.swift; sourceTree = "<group>"; };
 		158CFCA17750E771F995959B /* hero_desert.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_desert.jpg; sourceTree = "<group>"; };
+		15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */ = {isa = PBXFileReference; path = FS_PL665.cube; sourceTree = "<group>"; };
+		17D87D9EC09C9235D29B2913 /* FS_PF50.cube */ = {isa = PBXFileReference; path = FS_PF50.cube; sourceTree = "<group>"; };
+		1A04F1F9F823E1A52448E291 /* FS_PL672.cube */ = {isa = PBXFileReference; path = FS_PL672.cube; sourceTree = "<group>"; };
+		1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */ = {isa = PBXFileReference; path = FS_NP100.cube; sourceTree = "<group>"; };
 		1D39A8A786EB61B4513AE82F /* Identity_17.cube */ = {isa = PBXFileReference; path = Identity_17.cube; sourceTree = "<group>"; };
 		1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FILM_LUTS_CREDITS.md; sourceTree = "<group>"; };
+		20FB8E4B65E46E4A81EE4C58 /* FS_AP100.cube */ = {isa = PBXFileReference; path = FS_AP100.cube; sourceTree = "<group>"; };
 		21139184E189E20DB4F5FBAA /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */ = {isa = PBXFileReference; path = FS_CP3510.cube; sourceTree = "<group>"; };
 		2259E3CB086EC2E8E52929EB /* FS_IN669.cube */ = {isa = PBXFileReference; path = FS_IN669.cube; sourceTree = "<group>"; };
+		2502776385F3CECA843CFFB0 /* FS_PR400X.cube */ = {isa = PBXFileReference; path = FS_PR400X.cube; sourceTree = "<group>"; };
 		26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaComponents.swift; sourceTree = "<group>"; };
+		287AE756E62DCB0452572E82 /* FS_PL690W.cube */ = {isa = PBXFileReference; path = FS_PL690W.cube; sourceTree = "<group>"; };
+		2A5A3DAE1AA84F1E210C0EB2 /* FS_TM400.cube */ = {isa = PBXFileReference; path = FS_TM400.cube; sourceTree = "<group>"; };
+		2B8592E7EACC01C8A94112A6 /* FS_XP2.cube */ = {isa = PBXFileReference; path = FS_XP2.cube; sourceTree = "<group>"; };
 		2D4758690F5507F42704B9E3 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneArt.swift; sourceTree = "<group>"; };
 		2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
+		3481632CC4B70ABB890BC517 /* FS_PT160V.cube */ = {isa = PBXFileReference; path = FS_PT160V.cube; sourceTree = "<group>"; };
 		3481F9BB808BEE8D58CED37F /* FS_KC64.cube */ = {isa = PBXFileReference; path = FS_KC64.cube; sourceTree = "<group>"; };
+		35D23AAB06F406BE71A9D491 /* FS_APX25.cube */ = {isa = PBXFileReference; path = FS_APX25.cube; sourceTree = "<group>"; };
+		396331E331CF8435E978C3C7 /* FS_EC100G.cube */ = {isa = PBXFileReference; path = FS_EC100G.cube; sourceTree = "<group>"; };
 		3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookThumbs.swift; sourceTree = "<group>"; };
+		3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */ = {isa = PBXFileReference; path = FS_BW400.cube; sourceTree = "<group>"; };
+		3DD911A59C44434B989660EB /* FS_RIR400.cube */ = {isa = PBXFileReference; path = FS_RIR400.cube; sourceTree = "<group>"; };
+		400A15E9F4B13EC5E84CCCEE /* FS_EL100X.cube */ = {isa = PBXFileReference; path = FS_EL100X.cube; sourceTree = "<group>"; };
+		41753F4EEB74CF332AB8096D /* FS_SP100.cube */ = {isa = PBXFileReference; path = FS_SP100.cube; sourceTree = "<group>"; };
+		41FBDDA8C50CE4E77289F3ED /* FS_SP1600.cube */ = {isa = PBXFileReference; path = FS_SP1600.cube; sourceTree = "<group>"; };
 		43EEB129DF4E76FC1523F268 /* hero_coast.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_coast.jpg; sourceTree = "<group>"; };
+		45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */ = {isa = PBXFileReference; path = FS_MS14.cube; sourceTree = "<group>"; };
+		4663C3D90BD5F02587298D57 /* FS_PT400N.cube */ = {isa = PBXFileReference; path = FS_PT400N.cube; sourceTree = "<group>"; };
+		476EEF99D87977383B9E4673 /* FS_AS100.cube */ = {isa = PBXFileReference; path = FS_AS100.cube; sourceTree = "<group>"; };
 		48B3A573684BF7B15A188E7D /* FS_EK100.cube */ = {isa = PBXFileReference; path = FS_EK100.cube; sourceTree = "<group>"; };
+		4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */ = {isa = PBXFileReference; path = FS_MS13.cube; sourceTree = "<group>"; };
+		4D02621852558286323E1667 /* FS_PX680.cube */ = {isa = PBXFileReference; path = FS_PX680.cube; sourceTree = "<group>"; };
 		4D43F2BD3901B8346CB884BF /* LumaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaTheme.swift; sourceTree = "<group>"; };
 		4D68EDF7DD7DB6080A0C060B /* LumaLook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LumaLook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4DA7C8BD45757B0C5EBF05F8 /* FS_PX100C.cube */ = {isa = PBXFileReference; path = FS_PX100C.cube; sourceTree = "<group>"; };
+		4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */ = {isa = PBXFileReference; path = FS_MS15.cube; sourceTree = "<group>"; };
 		5082DDECC065F7185E2AD705 /* MoreScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreScreens.swift; sourceTree = "<group>"; };
+		51847FFB61D4C591A507AF23 /* FS_MS11.cube */ = {isa = PBXFileReference; path = FS_MS11.cube; sourceTree = "<group>"; };
+		53841C670501E1F71C5CA8F5 /* FS_MS10.cube */ = {isa = PBXFileReference; path = FS_MS10.cube; sourceTree = "<group>"; };
+		55A66FB773AEE510A8E14555 /* FS_SP400.cube */ = {isa = PBXFileReference; path = FS_SP400.cube; sourceTree = "<group>"; };
 		5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaRootView.swift; sourceTree = "<group>"; };
+		58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */ = {isa = PBXFileReference; path = FS_PT160N.cube; sourceTree = "<group>"; };
 		585AC072642EB31074E401C7 /* LumaLook.storekit */ = {isa = PBXFileReference; path = LumaLook.storekit; sourceTree = "<group>"; };
 		5AA55F19B38C01C558951683 /* ExportCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportCompleteView.swift; sourceTree = "<group>"; };
 		5C594D043EBDE22175C914E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -103,46 +227,98 @@
 		5F1F68DD59817F2629702B2B /* FS_CP2383.cube */ = {isa = PBXFileReference; path = FS_CP2383.cube; sourceTree = "<group>"; };
 		5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaLookApp.swift; sourceTree = "<group>"; };
 		61A5624E7651D005E2DA05C1 /* CameraChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraChrome.swift; sourceTree = "<group>"; };
+		63190B53784A9183F103288A /* FS_PT400V.cube */ = {isa = PBXFileReference; path = FS_PT400V.cube; sourceTree = "<group>"; };
+		65114680C08ADE0365D4F133 /* FS_FN400.cube */ = {isa = PBXFileReference; path = FS_FN400.cube; sourceTree = "<group>"; };
 		6B846D621E4F274EC907E0EC /* LumaDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaDial.swift; sourceTree = "<group>"; };
+		6B8727A81A0DEF252195C4BD /* FS_RO25.cube */ = {isa = PBXFileReference; path = FS_RO25.cube; sourceTree = "<group>"; };
 		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
+		71A6E32214C9321C7379CCC6 /* FS_FP125.cube */ = {isa = PBXFileReference; path = FS_FP125.cube; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
+		73DAA7F9A11628B31666692E /* FS_PL690.cube */ = {isa = PBXFileReference; path = FS_PL690.cube; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
+		7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */ = {isa = PBXFileReference; path = FS_PT800.cube; sourceTree = "<group>"; };
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
 		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
+		7E1AF5A705895B01F7D17A52 /* FS_FN160.cube */ = {isa = PBXFileReference; path = FS_FN160.cube; sourceTree = "<group>"; };
+		7F298D108110F6DD3E095A95 /* FS_DL3200.cube */ = {isa = PBXFileReference; path = FS_DL3200.cube; sourceTree = "<group>"; };
 		8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */ = {isa = PBXFileReference; path = FS_CP3513.cube; sourceTree = "<group>"; };
 		826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPacks.swift; sourceTree = "<group>"; };
 		85F7604D70414A0B449CAADF /* FS_TX400.cube */ = {isa = PBXFileReference; path = FS_TX400.cube; sourceTree = "<group>"; };
 		8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */ = {isa = PBXFileReference; path = CompositorBlank.mp4; sourceTree = "<group>"; };
+		87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */ = {isa = PBXFileReference; path = FS_PX680C.cube; sourceTree = "<group>"; };
+		87F176B33481AA29E661CF5E /* FS_TZ0.cube */ = {isa = PBXFileReference; path = FS_TZ0.cube; sourceTree = "<group>"; };
+		891A0BF1C013405CA3F546AF /* FS_MS8.cube */ = {isa = PBXFileReference; path = FS_MS8.cube; sourceTree = "<group>"; };
 		89F752262798C945F44F00B2 /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
+		8B0D225A84F898394B902E73 /* FS_FN800.cube */ = {isa = PBXFileReference; path = FS_FN800.cube; sourceTree = "<group>"; };
+		8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */ = {isa = PBXFileReference; path = FS_IN669C.cube; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
+		944D03FD177DCA04583DC882 /* FS_IR840.cube */ = {isa = PBXFileReference; path = FS_IR840.cube; sourceTree = "<group>"; };
+		94E131FFACC1D76FA27CDC79 /* FS_MS2.cube */ = {isa = PBXFileReference; path = FS_MS2.cube; sourceTree = "<group>"; };
+		96693A53A846C4E953596A7B /* FS_TM100.cube */ = {isa = PBXFileReference; path = FS_TM100.cube; sourceTree = "<group>"; };
 		9688DBD03E8614DC1F6D9E91 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */ = {isa = PBXFileReference; path = FS_FP100C.cube; sourceTree = "<group>"; };
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
 		982FBAAA5098559374D20381 /* LUTManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTManagerView.swift; sourceTree = "<group>"; };
+		987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */ = {isa = PBXFileReference; path = FS_PX100W.cube; sourceTree = "<group>"; };
+		991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */ = {isa = PBXFileReference; path = FS_PX680W.cube; sourceTree = "<group>"; };
+		9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */ = {isa = PBXFileReference; path = FS_PX70C.cube; sourceTree = "<group>"; };
+		9AB35F2AD0526EF4380F835E /* FS_MS4.cube */ = {isa = PBXFileReference; path = FS_MS4.cube; sourceTree = "<group>"; };
+		9AF262175592322441A7BEE4 /* FS_FP3000.cube */ = {isa = PBXFileReference; path = FS_FP3000.cube; sourceTree = "<group>"; };
 		9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		9E69B51B414C8DCD348D61D8 /* FS_PT160.cube */ = {isa = PBXFileReference; path = FS_PT160.cube; sourceTree = "<group>"; };
+		9E8F2A13BBEAE025610F8313 /* FS_EC100V.cube */ = {isa = PBXFileReference; path = FS_EC100V.cube; sourceTree = "<group>"; };
+		9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */ = {isa = PBXFileReference; path = FS_DL100.cube; sourceTree = "<group>"; };
+		9F87D838065AE54E0D455078 /* FS_EL200.cube */ = {isa = PBXFileReference; path = FS_EL200.cube; sourceTree = "<group>"; };
+		A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */ = {isa = PBXFileReference; path = FS_MS9.cube; sourceTree = "<group>"; };
+		A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */ = {isa = PBXFileReference; path = FS_NP1600.cube; sourceTree = "<group>"; };
+		A43A5E47275D318BFCB0C555 /* FS_PL664.cube */ = {isa = PBXFileReference; path = FS_PL664.cube; sourceTree = "<group>"; };
 		AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceStore.swift; sourceTree = "<group>"; };
 		AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeforeAfterView.swift; sourceTree = "<group>"; };
+		AE6F396DED2949332902CD15 /* FS_KC200.cube */ = {isa = PBXFileReference; path = FS_KC200.cube; sourceTree = "<group>"; };
+		B04A5030E4C98B0AC8663228 /* FS_FP100.cube */ = {isa = PBXFileReference; path = FS_FP100.cube; sourceTree = "<group>"; };
+		B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */ = {isa = PBXFileReference; path = FS_EL400.cube; sourceTree = "<group>"; };
 		B38478EF2EEA2A8135980EED /* FS_HP400.cube */ = {isa = PBXFileReference; path = FS_HP400.cube; sourceTree = "<group>"; };
 		B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */ = {isa = PBXFileReference; path = FS_AV200.cube; sourceTree = "<group>"; };
+		BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */ = {isa = PBXFileReference; path = FS_MS6.cube; sourceTree = "<group>"; };
+		BC7A950FA2B975BBA5B6B694 /* FS_VV100.cube */ = {isa = PBXFileReference; path = FS_VV100.cube; sourceTree = "<group>"; };
+		BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */ = {isa = PBXFileReference; path = FS_MS3.cube; sourceTree = "<group>"; };
 		BD7E1B207E2D488AAA08E3AB /* FS_VV50.cube */ = {isa = PBXFileReference; path = FS_VV50.cube; sourceTree = "<group>"; };
 		BE1C28E748C160529C0841DB /* ApplyLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplyLookView.swift; sourceTree = "<group>"; };
+		BE8EA353524205957ACA01CD /* FS_DL400.cube */ = {isa = PBXFileReference; path = FS_DL400.cube; sourceTree = "<group>"; };
 		C01A0C1280A23592103B3574 /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPipeline.swift; sourceTree = "<group>"; };
+		C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */ = {isa = PBXFileReference; path = FS_RR80.cube; sourceTree = "<group>"; };
 		C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipView.swift; sourceTree = "<group>"; };
+		C6D8B84208BCDA1900855A3E /* FS_MS7.cube */ = {isa = PBXFileReference; path = FS_MS7.cube; sourceTree = "<group>"; };
 		CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_neon.jpg; sourceTree = "<group>"; };
+		CBD94C74B308262B83000612 /* FS_TZ0C.cube */ = {isa = PBXFileReference; path = FS_TZ0C.cube; sourceTree = "<group>"; };
 		CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
+		CE43932D10683135B309ABE7 /* FS_TM3200.cube */ = {isa = PBXFileReference; path = FS_TM3200.cube; sourceTree = "<group>"; };
+		CF404D1CD17AE20761886DF1 /* FS_SP800.cube */ = {isa = PBXFileReference; path = FS_SP800.cube; sourceTree = "<group>"; };
 		D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorChrome.swift; sourceTree = "<group>"; };
+		D4DE7A157110C99E2B346F44 /* FS_MS12.cube */ = {isa = PBXFileReference; path = FS_MS12.cube; sourceTree = "<group>"; };
+		D7804F266F5E284C813A5347 /* FS_MS5.cube */ = {isa = PBXFileReference; path = FS_MS5.cube; sourceTree = "<group>"; };
+		D815AF71877366D60E429A6F /* FS_CP2393.cube */ = {isa = PBXFileReference; path = FS_CP2393.cube; sourceTree = "<group>"; };
 		DCFFB79AE65C889172E26DA4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DD8AEF2B3B897BD002287240 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
 		DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */ = {isa = PBXFileReference; path = FS_PR100.cube; sourceTree = "<group>"; };
 		E22A35DFADB72BF4DB87151D /* FS_SP200.cube */ = {isa = PBXFileReference; path = FS_SP200.cube; sourceTree = "<group>"; };
+		E2E440096EDED38FA0B90A53 /* FS_MS1.cube */ = {isa = PBXFileReference; path = FS_MS1.cube; sourceTree = "<group>"; };
 		EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLiveLookView.swift; sourceTree = "<group>"; };
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */ = {isa = PBXFileReference; path = FS_XP200.cube; sourceTree = "<group>"; };
+		EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */ = {isa = PBXFileReference; path = FS_PT800H.cube; sourceTree = "<group>"; };
+		EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */ = {isa = PBXFileReference; path = FS_SX200.cube; sourceTree = "<group>"; };
+		F2F63CA8389113D35C675EEE /* FS_PL667.cube */ = {isa = PBXFileReference; path = FS_PL667.cube; sourceTree = "<group>"; };
 		F58E6ECD1EA58596156C36BD /* FS_RS100.cube */ = {isa = PBXFileReference; path = FS_RS100.cube; sourceTree = "<group>"; };
+		F609748FA3A8B7FE5FC475BC /* FS_APX100.cube */ = {isa = PBXFileReference; path = FS_APX100.cube; sourceTree = "<group>"; };
 		FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */ = {isa = PBXFileReference; path = Warm_Cinematic_17.cube; sourceTree = "<group>"; };
+		FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */ = {isa = PBXFileReference; path = FS_FP3000N.cube; sourceTree = "<group>"; };
+		FC3D739E7CFC0E1DC1CE0ADD /* FS_PX70.cube */ = {isa = PBXFileReference; path = FS_PX70.cube; sourceTree = "<group>"; };
+		FD72C902555C7738AE0D8BCE /* FS_KC25.cube */ = {isa = PBXFileReference; path = FS_KC25.cube; sourceTree = "<group>"; };
 		FD762DD38BFEE29B06287806 /* CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CREDITS.md; sourceTree = "<group>"; };
+		FF6FEEFAD7324BDEA8FB4BAD /* FS_PC35.cube */ = {isa = PBXFileReference; path = FS_PC35.cube; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,19 +383,107 @@
 			isa = PBXGroup;
 			children = (
 				1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */,
+				20FB8E4B65E46E4A81EE4C58 /* FS_AP100.cube */,
+				35D23AAB06F406BE71A9D491 /* FS_APX25.cube */,
+				F609748FA3A8B7FE5FC475BC /* FS_APX100.cube */,
+				476EEF99D87977383B9E4673 /* FS_AS100.cube */,
 				B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */,
+				3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */,
 				5F1F68DD59817F2629702B2B /* FS_CP2383.cube */,
+				D815AF71877366D60E429A6F /* FS_CP2393.cube */,
+				222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */,
 				8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */,
+				9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */,
+				BE8EA353524205957ACA01CD /* FS_DL400.cube */,
+				7F298D108110F6DD3E095A95 /* FS_DL3200.cube */,
+				396331E331CF8435E978C3C7 /* FS_EC100G.cube */,
+				9E8F2A13BBEAE025610F8313 /* FS_EC100V.cube */,
 				48B3A573684BF7B15A188E7D /* FS_EK100.cube */,
+				400A15E9F4B13EC5E84CCCEE /* FS_EL100X.cube */,
+				9F87D838065AE54E0D455078 /* FS_EL200.cube */,
+				B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */,
+				7E1AF5A705895B01F7D17A52 /* FS_FN160.cube */,
+				65114680C08ADE0365D4F133 /* FS_FN400.cube */,
+				8B0D225A84F898394B902E73 /* FS_FN800.cube */,
+				B04A5030E4C98B0AC8663228 /* FS_FP100.cube */,
+				96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */,
+				0D060D290293885AE500BC04 /* FS_FP100N.cube */,
+				71A6E32214C9321C7379CCC6 /* FS_FP125.cube */,
+				9AF262175592322441A7BEE4 /* FS_FP3000.cube */,
+				FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */,
 				B38478EF2EEA2A8135980EED /* FS_HP400.cube */,
+				02C6D5846347C786254AC84E /* FS_HPS800.cube */,
 				2259E3CB086EC2E8E52929EB /* FS_IN669.cube */,
+				8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */,
+				944D03FD177DCA04583DC882 /* FS_IR840.cube */,
+				FD72C902555C7738AE0D8BCE /* FS_KC25.cube */,
 				3481F9BB808BEE8D58CED37F /* FS_KC64.cube */,
+				AE6F396DED2949332902CD15 /* FS_KC200.cube */,
+				E2E440096EDED38FA0B90A53 /* FS_MS1.cube */,
+				94E131FFACC1D76FA27CDC79 /* FS_MS2.cube */,
+				BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */,
+				9AB35F2AD0526EF4380F835E /* FS_MS4.cube */,
+				D7804F266F5E284C813A5347 /* FS_MS5.cube */,
+				BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */,
+				C6D8B84208BCDA1900855A3E /* FS_MS7.cube */,
+				891A0BF1C013405CA3F546AF /* FS_MS8.cube */,
+				A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */,
+				53841C670501E1F71C5CA8F5 /* FS_MS10.cube */,
+				51847FFB61D4C591A507AF23 /* FS_MS11.cube */,
+				D4DE7A157110C99E2B346F44 /* FS_MS12.cube */,
+				4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */,
+				45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */,
+				4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */,
+				1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */,
+				A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */,
+				FF6FEEFAD7324BDEA8FB4BAD /* FS_PC35.cube */,
+				17D87D9EC09C9235D29B2913 /* FS_PF50.cube */,
+				A43A5E47275D318BFCB0C555 /* FS_PL664.cube */,
+				15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */,
+				F2F63CA8389113D35C675EEE /* FS_PL667.cube */,
+				1A04F1F9F823E1A52448E291 /* FS_PL672.cube */,
+				73DAA7F9A11628B31666692E /* FS_PL690.cube */,
+				287AE756E62DCB0452572E82 /* FS_PL690W.cube */,
 				DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */,
+				0AB79D07DD8C1021B30F192D /* FS_PR400.cube */,
+				2502776385F3CECA843CFFB0 /* FS_PR400X.cube */,
 				9E69B51B414C8DCD348D61D8 /* FS_PT160.cube */,
+				58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */,
+				3481632CC4B70ABB890BC517 /* FS_PT160V.cube */,
+				03F736AA8559132E21CD652A /* FS_PT400.cube */,
+				4663C3D90BD5F02587298D57 /* FS_PT400N.cube */,
+				061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */,
+				63190B53784A9183F103288A /* FS_PT400V.cube */,
+				7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */,
+				EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */,
+				FC3D739E7CFC0E1DC1CE0ADD /* FS_PX70.cube */,
+				9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */,
+				0286A2B6DDAEAFC8A4B5C316 /* FS_PX70W.cube */,
+				4DA7C8BD45757B0C5EBF05F8 /* FS_PX100C.cube */,
+				987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */,
+				4D02621852558286323E1667 /* FS_PX680.cube */,
+				87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */,
+				991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */,
+				3DD911A59C44434B989660EB /* FS_RIR400.cube */,
+				6B8727A81A0DEF252195C4BD /* FS_RO25.cube */,
+				C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */,
 				F58E6ECD1EA58596156C36BD /* FS_RS100.cube */,
+				0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */,
+				41753F4EEB74CF332AB8096D /* FS_SP100.cube */,
 				E22A35DFADB72BF4DB87151D /* FS_SP200.cube */,
+				55A66FB773AEE510A8E14555 /* FS_SP400.cube */,
+				CF404D1CD17AE20761886DF1 /* FS_SP800.cube */,
+				41FBDDA8C50CE4E77289F3ED /* FS_SP1600.cube */,
+				EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */,
+				96693A53A846C4E953596A7B /* FS_TM100.cube */,
+				2A5A3DAE1AA84F1E210C0EB2 /* FS_TM400.cube */,
+				CE43932D10683135B309ABE7 /* FS_TM3200.cube */,
 				85F7604D70414A0B449CAADF /* FS_TX400.cube */,
+				87F176B33481AA29E661CF5E /* FS_TZ0.cube */,
+				CBD94C74B308262B83000612 /* FS_TZ0C.cube */,
 				BD7E1B207E2D488AAA08E3AB /* FS_VV50.cube */,
+				BC7A950FA2B975BBA5B6B694 /* FS_VV100.cube */,
+				2B8592E7EACC01C8A94112A6 /* FS_XP2.cube */,
 				EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */,
 			);
 			path = FilmLUTs;
@@ -403,19 +667,107 @@
 				D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */,
 				948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */,
 				43B6BBEA0F03D814152B4832 /* FILM_LUTS_CREDITS.md in Resources */,
+				68875AAF217C2B56E82B5614 /* FS_AP100.cube in Resources */,
+				3849E449A879062F20389775 /* FS_APX100.cube in Resources */,
+				377D8EABD3C369AD9AF8DF3D /* FS_APX25.cube in Resources */,
+				D66F2C7AA85159A9B633E0F9 /* FS_AS100.cube in Resources */,
 				0E17EE8AB98876B6CD3CA10C /* FS_AV200.cube in Resources */,
+				84820D410D62E5B492BD031A /* FS_BW400.cube in Resources */,
 				3027C848F4DB05F3BE35BB8D /* FS_CP2383.cube in Resources */,
+				D33CDA48E36671A1DF745435 /* FS_CP2393.cube in Resources */,
+				27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */,
 				89FD0992EDFC25BD86AB9B66 /* FS_CP3513.cube in Resources */,
+				8FD065863BAA8A76266B9602 /* FS_DL100.cube in Resources */,
+				EE5F14B85BDABDCC7E000EF1 /* FS_DL3200.cube in Resources */,
+				1C1A4D8D9504B11FFBD650BE /* FS_DL400.cube in Resources */,
+				6C90EB412D90607F0AB2A85A /* FS_EC100G.cube in Resources */,
+				549DC8B77628BCE22C6CFCC2 /* FS_EC100V.cube in Resources */,
 				2BF4BFEE36116C1A8F0B3013 /* FS_EK100.cube in Resources */,
+				3ABFF863D994FAA7A25652AD /* FS_EL100X.cube in Resources */,
+				E30EB6BE9128883888A3F8BE /* FS_EL200.cube in Resources */,
+				1C6901E0A436E9ADAE380311 /* FS_EL400.cube in Resources */,
+				A7479CAE99F5EE8EC57C43A9 /* FS_FN160.cube in Resources */,
+				0C21A2716659C5C2D3B6CA49 /* FS_FN400.cube in Resources */,
+				05EA0E2E6674569C1D8496A2 /* FS_FN800.cube in Resources */,
+				066ED006DB07EE0B6F0AE6A0 /* FS_FP100.cube in Resources */,
+				CC2B75F8447C61F9064E9596 /* FS_FP100C.cube in Resources */,
+				E3A8651B6919B7E16BA13277 /* FS_FP100N.cube in Resources */,
+				CD11513E989BF30CC434E279 /* FS_FP125.cube in Resources */,
+				44256AF26387DA5DB6878E5C /* FS_FP3000.cube in Resources */,
+				1EE1835791BA9C9AE4AD4A33 /* FS_FP3000N.cube in Resources */,
 				895EDCA479BE52D0053E8389 /* FS_HP400.cube in Resources */,
+				BBB3750CC2EC3B5E8F4DEBCD /* FS_HPS800.cube in Resources */,
 				B16D7C5940E83006267251B2 /* FS_IN669.cube in Resources */,
+				73CBA4F60D83B1049F47B146 /* FS_IN669C.cube in Resources */,
+				5821266F087CD85D9C64A385 /* FS_IR840.cube in Resources */,
+				D7DF8C2282C38ADF59368389 /* FS_KC200.cube in Resources */,
+				E3D32EFCC5FD15CA910F181B /* FS_KC25.cube in Resources */,
 				53C37CA44870DB5CFEB9397D /* FS_KC64.cube in Resources */,
+				819C69108B953E1736A91C32 /* FS_MS1.cube in Resources */,
+				B809BB3A60F4ACD00A533573 /* FS_MS10.cube in Resources */,
+				7C6CC7EC14EE46B845684B11 /* FS_MS11.cube in Resources */,
+				731C9C361762A468317EB7ED /* FS_MS12.cube in Resources */,
+				AF0A84720B2F4F5E8DA3C012 /* FS_MS13.cube in Resources */,
+				18C1DF236A3E5618431BA1DD /* FS_MS14.cube in Resources */,
+				EA12744C42B2C5D1F18FF067 /* FS_MS15.cube in Resources */,
+				57113952AAA6A575445CBD3E /* FS_MS2.cube in Resources */,
+				CAC199F8B3352305B306C8A5 /* FS_MS3.cube in Resources */,
+				A0576CA334B7E390B01D9BBE /* FS_MS4.cube in Resources */,
+				38D736390A592C07ECC22731 /* FS_MS5.cube in Resources */,
+				BAED802D59A26776874421CB /* FS_MS6.cube in Resources */,
+				FDCF6C03A26097C6598C089E /* FS_MS7.cube in Resources */,
+				D4EE3E54D3C31485223F4D49 /* FS_MS8.cube in Resources */,
+				696C5A655EC29A85E4009B3F /* FS_MS9.cube in Resources */,
+				E08F788FB3FEFC7B757B88D8 /* FS_NP100.cube in Resources */,
+				0A20B65141FA9DF7CBEA1362 /* FS_NP1600.cube in Resources */,
+				755C49E8853CD2477DBAA9ED /* FS_PC35.cube in Resources */,
+				CC96F7992C81799F1D971606 /* FS_PF50.cube in Resources */,
+				614C52B9245B43AD8FDA4143 /* FS_PL664.cube in Resources */,
+				3B48606084DF05935B94FD79 /* FS_PL665.cube in Resources */,
+				D09DE830CF50582B4F392811 /* FS_PL667.cube in Resources */,
+				ECED4E0B9CD06827B3E0C4AA /* FS_PL672.cube in Resources */,
+				3A31749B53F8176168AEA445 /* FS_PL690.cube in Resources */,
+				5B401415AFACCFB8252231E6 /* FS_PL690W.cube in Resources */,
 				5EF9717C3647997978CD7D63 /* FS_PR100.cube in Resources */,
+				735513DF21933A64978E1BAF /* FS_PR400.cube in Resources */,
+				F5FF40F29D92772033824046 /* FS_PR400X.cube in Resources */,
 				D87ECA92A8A07C3ABC0608D3 /* FS_PT160.cube in Resources */,
+				AAD4D25FE4DBB06F69BD1359 /* FS_PT160N.cube in Resources */,
+				03B330DD7722E9A08F27B121 /* FS_PT160V.cube in Resources */,
+				4035653A6A2ADFF691411433 /* FS_PT400.cube in Resources */,
+				69ED995FA51B0BCC607C1E63 /* FS_PT400N.cube in Resources */,
+				7B0F90A1E94C763D028DBDC5 /* FS_PT400U.cube in Resources */,
+				F16A4058B43C136764ABF0A8 /* FS_PT400V.cube in Resources */,
+				C16B1359066E085945BF3413 /* FS_PT800.cube in Resources */,
+				123409A8B9084A6F751FEC62 /* FS_PT800H.cube in Resources */,
+				FE277A40D2B2BFFB99B02B43 /* FS_PX100C.cube in Resources */,
+				4F6D8FC03BE24FB090B7629F /* FS_PX100W.cube in Resources */,
+				63FB5D8E520E9849ECEF1313 /* FS_PX680.cube in Resources */,
+				5115DD16558EADCE8A2A408D /* FS_PX680C.cube in Resources */,
+				43A18BFFCF9F57D78D79CF71 /* FS_PX680W.cube in Resources */,
+				A78D91357631EF59B2AC1445 /* FS_PX70.cube in Resources */,
+				C07E9021B8EACADFCB81E9DA /* FS_PX70C.cube in Resources */,
+				A4652A4EB2393C7AB0D4FCDC /* FS_PX70W.cube in Resources */,
+				7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */,
+				83CB756F656B59A651F25695 /* FS_RO25.cube in Resources */,
+				FE4BDA0FC9925E8CC913532D /* FS_RR80.cube in Resources */,
 				92D8AA2EF28C67C5693F8207 /* FS_RS100.cube in Resources */,
+				DB410DD336810EA3BA24A68D /* FS_SN100.cube in Resources */,
+				85259369029BD2B8C7645CF7 /* FS_SP100.cube in Resources */,
+				4DEBB0FD5E3D6006B3759EC7 /* FS_SP1600.cube in Resources */,
 				D20F0AAE5FC1E0307AE1F2DD /* FS_SP200.cube in Resources */,
+				25D91202BA6C2E9F0CDD6D9C /* FS_SP400.cube in Resources */,
+				F97B0E5AEE62FCDBD5F87A55 /* FS_SP800.cube in Resources */,
+				00DB64A93DB7EF3EADE7BA57 /* FS_SX200.cube in Resources */,
+				E66A752A5BDB9723BCBA72AF /* FS_TM100.cube in Resources */,
+				E7F24CDC9DCE6379B075F31C /* FS_TM3200.cube in Resources */,
+				D8109274404403032FAB300A /* FS_TM400.cube in Resources */,
 				D8533508636292B9BAA88A63 /* FS_TX400.cube in Resources */,
+				77B60E49F5729D3C56895B6B /* FS_TZ0.cube in Resources */,
+				3769715A54DA8D00C7C43F29 /* FS_TZ0C.cube in Resources */,
+				02D068F0678DC92F743732EA /* FS_VV100.cube in Resources */,
 				3934AA68236DAAE15D0C78CD /* FS_VV50.cube in Resources */,
+				75F812E8CA2261FE7EFE9D7B /* FS_XP2.cube in Resources */,
 				C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */,
 				6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */,
 				6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */,
