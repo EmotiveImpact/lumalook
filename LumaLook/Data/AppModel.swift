@@ -269,6 +269,27 @@ final class AppModel: ObservableObject {
     private func applyDebugRoute() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+        // Pro-colour cells (verify the cube math headlessly).
+        if env["LUMA_SEED_CURVE"] == "1" {
+            // Strong contrast S-curve on master: lift blacks down, push whites.
+            settings.curves = CurveSet(master: [
+                CurvePoint(x: 0, y: 0), CurvePoint(x: 0.25, y: 0.12),
+                CurvePoint(x: 0.5, y: 0.5), CurvePoint(x: 0.75, y: 0.88),
+                CurvePoint(x: 1, y: 1)])
+        }
+        if env["LUMA_SEED_WHEEL"] == "1" {
+            // Teal shadows, warm highlights (the cinematic move).
+            settings.wheels = ColorWheels(liftR: -0.06, liftG: 0.02, liftB: 0.10,
+                                          gammaR: 1, gammaG: 1, gammaB: 1,
+                                          gainR: 1.10, gainG: 1.0, gainB: 0.90)
+        }
+        if env["LUMA_SEED_HSL"] == "1" {
+            // Push blues toward cyan and desaturate greens.
+            var b = HSLBands()
+            b.hue[5] = -0.6; b.sat[5] = 0.5; b.sat[3] = -0.8
+            settings.hsl = b
+        }
+        if env["LUMA_SEED_CURVE"]=="1" || env["LUMA_SEED_WHEEL"]=="1" || env["LUMA_SEED_HSL"]=="1" { syncLookState() }
         // Lens cells: LUMA_SEED_LENS=anamorphic|vintage|diffusion|fisheye|tiltShift.
         // Explicit sync: property observers don't fire during init, so the
         // shared LookState would otherwise miss the seeded value.

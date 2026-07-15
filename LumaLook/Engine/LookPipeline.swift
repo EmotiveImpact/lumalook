@@ -388,6 +388,18 @@ final class LookPipeline: @unchecked Sendable {
             output = temp.outputImage ?? output
         }
 
+        // Pro colour surfaces (Grade Room): curves + wheels fold into one
+        // separable cube; HSL is its own hue-aware cube. Both are pure colour,
+        // so they bake cleanly into exported LUTs.
+        if let transfer = ColorMath.transferCube(curves: settings.curves, wheels: settings.wheels) {
+            transfer.setValue(output, forKey: kCIInputImageKey)
+            output = transfer.outputImage?.cropped(to: image.extent) ?? output
+        }
+        if let hslCube = ColorMath.hslCube(settings.hsl) {
+            hslCube.setValue(output, forKey: kCIInputImageKey)
+            output = hslCube.outputImage?.cropped(to: image.extent) ?? output
+        }
+
         if settings.bloom > 0 {
             let bloom = CIFilter.bloom()
             bloom.inputImage = output.clampedToExtent()

@@ -87,6 +87,58 @@ enum LensKind: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Pro color model (Grade Room: curves, wheels, HSL)
+
+/// A tone-curve control point in normalised 0…1 input/output space.
+struct CurvePoint: Codable, Equatable {
+    var x: Double
+    var y: Double
+}
+
+/// Per-channel tone curves. An empty channel means identity (no remap).
+/// Applied as a single separable CIColorCube: channel(master(v)).
+struct CurveSet: Codable, Equatable {
+    var master: [CurvePoint] = []
+    var red: [CurvePoint] = []
+    var green: [CurvePoint] = []
+    var blue: [CurvePoint] = []
+
+    var isIdentity: Bool {
+        master.isEmpty && red.isEmpty && green.isEmpty && blue.isEmpty
+    }
+}
+
+/// Lift / Gamma / Gain 3-way colour wheels. Each wheel is an RGB triple;
+/// identity = lift 0, gamma 1, gain 1. Separable per channel, so it folds
+/// into the same transfer LUT as the curves.
+struct ColorWheels: Codable, Equatable {
+    var liftR = 0.0, liftG = 0.0, liftB = 0.0
+    var gammaR = 1.0, gammaG = 1.0, gammaB = 1.0
+    var gainR = 1.0, gainG = 1.0, gainB = 1.0
+
+    var isIdentity: Bool {
+        liftR == 0 && liftG == 0 && liftB == 0 &&
+        gammaR == 1 && gammaG == 1 && gammaB == 1 &&
+        gainR == 1 && gainG == 1 && gainB == 1
+    }
+}
+
+/// Eight-band HSL secondary (Lightroom-style): per band a hue shift,
+/// saturation and luminance offset in −1…1. Identity = all zero. Hue-
+/// dependent, so it bakes a small 3-D CIColorCube of its own.
+struct HSLBands: Codable, Equatable {
+    /// red, orange, yellow, green, aqua, blue, purple, magenta.
+    static let names = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
+    /// Band hue centres in degrees (non-uniform, matching the colour wheel).
+    static let centers: [Double] = [0, 30, 60, 120, 180, 240, 270, 300]
+
+    var hue: [Double] = Array(repeating: 0, count: 8)
+    var sat: [Double] = Array(repeating: 0, count: 8)
+    var lum: [Double] = Array(repeating: 0, count: 8)
+
+    var isIdentity: Bool { (hue + sat + lum).allSatisfy { $0 == 0 } }
+}
+
 struct LookSettings: Codable, Equatable {
     var intensity: Double = 75
     var exposure: Double = 0
@@ -106,6 +158,11 @@ struct LookSettings: Codable, Equatable {
     /// grain/bloom: stripped from cube bakes, applied after the grade.
     var lensKind: String = LensKind.none.rawValue
     var lensAmount: Double = 75
+    /// Pro colour surfaces (Grade Room). nil = identity, so legacy looks and
+    /// sessions decode unchanged and cost nothing until the user touches them.
+    var curves: CurveSet? = nil
+    var wheels: ColorWheels? = nil
+    var hsl: HSLBands? = nil
 
     init() {}
 
@@ -129,6 +186,9 @@ struct LookSettings: Codable, Equatable {
         fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
         lensKind = try c.decodeIfPresent(String.self, forKey: .lensKind) ?? LensKind.none.rawValue
         lensAmount = try c.decodeIfPresent(Double.self, forKey: .lensAmount) ?? 75
+        curves = try c.decodeIfPresent(CurveSet.self, forKey: .curves)
+        wheels = try c.decodeIfPresent(ColorWheels.self, forKey: .wheels)
+        hsl = try c.decodeIfPresent(HSLBands.self, forKey: .hsl)
     }
 }
 
