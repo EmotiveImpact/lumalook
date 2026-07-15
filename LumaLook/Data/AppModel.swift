@@ -269,6 +269,11 @@ final class AppModel: ObservableObject {
     private func applyDebugRoute() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+        // Scope cells: LUMA_SEED_SCOPE=waveform|parade|vectorscope|histogram.
+        if let sm = env["LUMA_SEED_SCOPE"] {
+            UserDefaults.standard.set(true, forKey: "lumalook.showScope")
+            UserDefaults.standard.set(sm, forKey: "lumalook.scopeMode")
+        }
         // Pro-colour cells (verify the cube math headlessly).
         if env["LUMA_SEED_CURVE"] == "1" {
             // Strong contrast S-curve on master: lift blacks down, push whites.

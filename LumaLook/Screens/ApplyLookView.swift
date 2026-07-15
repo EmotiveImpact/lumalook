@@ -88,7 +88,9 @@ struct ApplyLookView: View {
     @State private var stashedLookIntensity: Double?
     @State private var showConversionPicker = false
     @AppStorage("lumalook.showScope") private var showScope = false
+    @AppStorage("lumalook.scopeMode") private var scopeModeRaw = ScopeMode.waveform.rawValue
     @State private var scopeImage: CGImage?
+    private var scopeMode: ScopeMode { ScopeMode(rawValue: scopeModeRaw) ?? .waveform }
     @State private var compareMode = false
     @State private var wipeFraction: Double = 0.5
     @State private var showExportSheet = false
@@ -573,28 +575,39 @@ extension ApplyLookView {
     }
 
     fileprivate var scopeOverlay: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            TechReadout("LUMA HISTOGRAM", size: 6.5, color: LumaTheme.textMuted)
+        let scopeW: CGFloat = scopeMode == .vectorscope ? 92 : 130
+        let scopeH: CGFloat = scopeMode == .vectorscope ? 92 : 76
+        return VStack(alignment: .leading, spacing: 3) {
+            TechReadout(scopeMode.title, size: 6.5, color: LumaTheme.textMuted)
             Group {
                 if let scopeImage {
                     Image(decorative: scopeImage, scale: 1)
                         .resizable()
-                        .frame(width: 108, height: 44)
+                        .frame(width: scopeW, height: scopeH)
                 } else {
-                    Color.black.frame(width: 108, height: 44)
+                    Color.black.frame(width: scopeW, height: scopeH)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 5))
+            Text("tap to switch scope")
+                .font(.system(size: 6.5, weight: .medium))
+                .foregroundStyle(LumaTheme.textMuted)
         }
         .padding(7)
         .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(.white.opacity(0.16), lineWidth: 1))
-        .allowsHitTesting(false)
-        .task(id: scopeStamp) {
+        // Tap the scope itself to cycle waveform → parade → vectorscope → histogram.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            scopeModeRaw = scopeMode.next.rawValue
+            LumaHaptics.shared.tap()
+        }
+        .task(id: "\(scopeStamp)|\(scopeModeRaw)|\(Int(scopeW))x\(Int(scopeH))") {
             guard showScope else { return }
-            scopeImage = await Self.renderHistogram(frame: app.previewFrame ?? LookThumbs.fallbackFrame,
-                                                    state: app.lookState)
+            scopeImage = await Scopes.render(frame: app.previewFrame ?? LookThumbs.fallbackFrame,
+                                             state: app.lookState, mode: scopeMode,
+                                             size: CGSize(width: scopeW, height: scopeH))
         }
     }
 

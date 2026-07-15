@@ -78,6 +78,7 @@
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
 		7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3DD911A59C44434B989660EB /* FS_RIR400.cube */; };
+		7191972FF427F33077859C6F /* Scopes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8699231347E8D7AACDACC31 /* Scopes.swift */; };
 		731C9C361762A468317EB7ED /* FS_MS12.cube in Resources */ = {isa = PBXBuildFile; fileRef = D4DE7A157110C99E2B346F44 /* FS_MS12.cube */; };
 		735513DF21933A64978E1BAF /* FS_PR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0AB79D07DD8C1021B30F192D /* FS_PR400.cube */; };
 		73CBA4F60D83B1049F47B146 /* FS_IN669C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */; };
@@ -317,6 +318,7 @@
 		F2F63CA8389113D35C675EEE /* FS_PL667.cube */ = {isa = PBXFileReference; path = FS_PL667.cube; sourceTree = "<group>"; };
 		F58E6ECD1EA58596156C36BD /* FS_RS100.cube */ = {isa = PBXFileReference; path = FS_RS100.cube; sourceTree = "<group>"; };
 		F609748FA3A8B7FE5FC475BC /* FS_APX100.cube */ = {isa = PBXFileReference; path = FS_APX100.cube; sourceTree = "<group>"; };
+		F8699231347E8D7AACDACC31 /* Scopes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scopes.swift; sourceTree = "<group>"; };
 		FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */ = {isa = PBXFileReference; path = Warm_Cinematic_17.cube; sourceTree = "<group>"; };
 		FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */ = {isa = PBXFileReference; path = FS_FP3000N.cube; sourceTree = "<group>"; };
 		FC3D739E7CFC0E1DC1CE0ADD /* FS_PX70.cube */ = {isa = PBXFileReference; path = FS_PX70.cube; sourceTree = "<group>"; };
@@ -586,6 +588,7 @@
 				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
+				F8699231347E8D7AACDACC31 /* Scopes.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
 				2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */,
 				89F752262798C945F44F00B2 /* ZipReader.swift */,
@@ -828,6 +831,7 @@
 				9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */,
 				842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */,
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
+				7191972FF427F33077859C6F /* Scopes.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
