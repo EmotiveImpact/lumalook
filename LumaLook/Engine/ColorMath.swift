@@ -169,6 +169,15 @@ enum ColorMath {
         return d < 0
     }
 
+    /// Public: sample a channel's curve to `count` points for the editor's
+    /// on-screen path. Empty/short → identity diagonal.
+    static func curveSamples(_ points: [CurvePoint], count: Int = 128) -> [Double] {
+        guard let lut = spline(points) else {
+            return (0..<count).map { Double($0) / Double(count - 1) }
+        }
+        return (0..<count).map { sampleCurve(lut, Double($0) / Double(count - 1)) }
+    }
+
     // MARK: Spline (monotone cubic, Fritsch–Carlson — no overshoot)
 
     /// Returns a 256-sample identity-or-curve LUT for later sampling, or nil

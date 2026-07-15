@@ -320,7 +320,8 @@ final class AppModel: ObservableObject {
             "filterPack": [.filterStore, .filterPack],
             "savedLooks": [.savedLooks],
             "projectLibrary": [.projectLibrary],
-            "settings": [.settings]
+            "settings": [.settings],
+            "customLook": [.selectClip, .applyLook, .customLook]
         ]
         if let target = map[route] {
             path = target

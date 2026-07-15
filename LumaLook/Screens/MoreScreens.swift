@@ -492,7 +492,8 @@ struct CustomLookBuilderView: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
     @State private var showLensPaywall = false
-    @State private var tab = "ADJUST"
+    @State private var tab =
+        ProcessInfo.processInfo.environment["LUMA_SEED_COLORTAB"] ?? "ADJUST"
     @State private var showSaveDialog = false
     @State private var lookName = ""
     @State private var savedConfirmation = false
@@ -508,19 +509,21 @@ struct CustomLookBuilderView: View {
             LookPreviewSurface(radius: 18)
                 .frame(height: 210)
 
-            HStack(spacing: 8) {
-                ForEach(["ADJUST", "HSL", "COLOR WHEELS", "EFFECTS"], id: \.self) { segment in
-                    Button { tab = segment } label: {
-                        Text(segment)
-                            .font(.system(size: 12, weight: .bold))
-                            .tracking(0.8)
-                            .foregroundStyle(tab == segment ? .white : LumaTheme.textSecondary)
-                            .padding(.horizontal, 14)
-                            .frame(height: 42)
-                            .background(tab == segment ? LumaTheme.accent : LumaTheme.surface,
-                                        in: RoundedRectangle(cornerRadius: 12))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(["ADJUST", "CURVES", "WHEELS", "HSL", "EFFECTS"], id: \.self) { segment in
+                        Button { tab = segment } label: {
+                            Text(segment)
+                                .font(.system(size: 12, weight: .bold))
+                                .tracking(0.8)
+                                .foregroundStyle(tab == segment ? .white : LumaTheme.textSecondary)
+                                .padding(.horizontal, 16)
+                                .frame(height: 42)
+                                .background(tab == segment ? LumaTheme.accent : LumaTheme.surface,
+                                            in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -543,6 +546,15 @@ struct CustomLookBuilderView: View {
                         set: { app.settings.fade = max(0, $0) }))
                 }
                 .padding(.top, 6)
+            } else if tab == "CURVES" {
+                CurveEditorPanel(curves: $app.settings.curves)
+                    .padding(.top, 8)
+            } else if tab == "WHEELS" {
+                ColorWheelsPanel(wheels: $app.settings.wheels)
+                    .padding(.top, 8)
+            } else if tab == "HSL" {
+                HSLPanel(hsl: $app.settings.hsl)
+                    .padding(.top, 8)
             } else if tab == "EFFECTS" {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Lens")
