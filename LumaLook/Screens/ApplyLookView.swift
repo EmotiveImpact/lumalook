@@ -427,9 +427,8 @@ struct ApplyLookView: View {
         .padding(.top, 14)
         .background {
             ZStack(alignment: .top) {
-                Rectangle().fill(.ultraThinMaterial)
-                LumaTheme.background.opacity(0.45)
-                LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)],
+                Rectangle().fill(LumaTheme.bar)
+                LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.03)],
                                startPoint: .leading, endPoint: .trailing)
                     .frame(height: 1)
             }

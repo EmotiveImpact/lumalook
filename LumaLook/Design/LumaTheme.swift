@@ -3,6 +3,10 @@ import SwiftUI
 enum LumaTheme {
     // Deep blue-black canvas, per latest reference screens.
     static let background = Color(red: 0.039, green: 0.051, blue: 0.078)   // #0A0D14
+    /// Solid near-black for bottom bars, docks, the tab bar and tool sheets.
+    /// Replaces `.ultraThinMaterial` on nav surfaces, which frosted content
+    /// through as grey — bars stay dark regardless of what scrolls under them.
+    static let bar = Color(red: 0.016, green: 0.02, blue: 0.032)           // #04050A
     static let surface = Color.white.opacity(0.055)
     static let surfaceStrong = Color.white.opacity(0.10)
     static let hairline = Color.white.opacity(0.08)

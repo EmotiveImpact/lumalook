@@ -135,13 +135,12 @@ private struct LumaToolSheetModifier<SheetContent: View>: ViewModifier {
                 .presentationBackgroundInteraction(
                     style.undimmedUpThrough.map { .enabled(upThrough: $0) } ?? .disabled
                 )
-                // Dark glass: material blur with the app canvas color washed
-                // through it, plus the same top-lit hairline as lumaCard.
+                // Solid dark sheet: the tool panels read as part of the same
+                // black bar system, not frosted grey glass over content.
                 .presentationBackground {
                     ZStack(alignment: .top) {
-                        Rectangle().fill(.ultraThinMaterial)
-                        LumaTheme.background.opacity(0.55)
-                        LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.0)],
+                        Rectangle().fill(LumaTheme.bar)
+                        LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.0)],
                                        startPoint: .top, endPoint: .bottom)
                             .frame(height: 1)
                     }

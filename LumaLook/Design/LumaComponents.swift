@@ -524,8 +524,7 @@ struct LumaTabBar: View {
         // Solid near-black bar (reference mock) — content fades out above it
         // instead of tinting through it.
         .background {
-            Color(red: 0.02, green: 0.025, blue: 0.04).opacity(0.98)
-                .ignoresSafeArea(edges: .bottom)
+            LumaTheme.bar.ignoresSafeArea(edges: .bottom)
         }
         .sensoryFeedback(.selection, trigger: app.tab)
     }
