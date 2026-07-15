@@ -511,7 +511,7 @@ struct CustomLookBuilderView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(["ADJUST", "CURVES", "WHEELS", "HSL", "EFFECTS"], id: \.self) { segment in
+                    ForEach(["ADJUST", "CURVES", "WHEELS", "HSL", "SPLIT", "EFFECTS"], id: \.self) { segment in
                         Button { tab = segment } label: {
                             Text(segment)
                                 .font(.system(size: 12, weight: .bold))
@@ -554,6 +554,9 @@ struct CustomLookBuilderView: View {
                     .padding(.top, 8)
             } else if tab == "HSL" {
                 HSLPanel(hsl: $app.settings.hsl)
+                    .padding(.top, 8)
+            } else if tab == "SPLIT" {
+                SplitTonePanel(tone: $app.settings.splitTone)
                     .padding(.top, 8)
             } else if tab == "EFFECTS" {
                 VStack(alignment: .leading, spacing: 18) {

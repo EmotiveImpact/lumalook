@@ -139,6 +139,18 @@ struct HSLBands: Codable, Equatable {
     var isIdentity: Bool { (hue + sat + lum).allSatisfy { $0 == 0 } }
 }
 
+/// Split toning: tint shadows one hue and highlights another, weighted by
+/// luma and a balance pivot. Identity = both saturations 0.
+struct SplitTone: Codable, Equatable {
+    var shadowHue = 210.0      // degrees; teal by default
+    var shadowSat = 0.0        // 0…1
+    var highlightHue = 40.0    // orange
+    var highlightSat = 0.0
+    var balance = 0.0          // −1 (favour shadows) … 1 (favour highlights)
+
+    var isIdentity: Bool { shadowSat == 0 && highlightSat == 0 }
+}
+
 struct LookSettings: Codable, Equatable {
     var intensity: Double = 75
     var exposure: Double = 0
@@ -163,6 +175,7 @@ struct LookSettings: Codable, Equatable {
     var curves: CurveSet? = nil
     var wheels: ColorWheels? = nil
     var hsl: HSLBands? = nil
+    var splitTone: SplitTone? = nil
 
     init() {}
 
@@ -189,6 +202,7 @@ struct LookSettings: Codable, Equatable {
         curves = try c.decodeIfPresent(CurveSet.self, forKey: .curves)
         wheels = try c.decodeIfPresent(ColorWheels.self, forKey: .wheels)
         hsl = try c.decodeIfPresent(HSLBands.self, forKey: .hsl)
+        splitTone = try c.decodeIfPresent(SplitTone.self, forKey: .splitTone)
     }
 }
 

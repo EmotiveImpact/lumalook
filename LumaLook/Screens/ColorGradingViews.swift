@@ -354,6 +354,62 @@ private struct ColorWheelPad: View {
     }
 }
 
+// MARK: - Split toning
+
+struct SplitTonePanel: View {
+    @Binding var tone: SplitTone?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            toneZone("Shadows", hue: hueBinding(\.shadowHue), sat: satBinding(\.shadowSat))
+            toneZone("Highlights", hue: hueBinding(\.highlightHue), sat: satBinding(\.highlightSat))
+            InlineSlider(title: "Balance", value: balanceBinding, range: -1...1) {
+                $0 < -0.05 ? "Shadows" : $0 > 0.05 ? "Highlights" : "Even"
+            }
+            Button("Reset Split Tone") { tone = nil }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(LumaTheme.accentBright)
+                .disabled(tone?.isIdentity ?? true)
+        }
+    }
+
+    private func toneZone(_ label: String, hue: Binding<Double>, sat: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Spacer()
+                Circle().fill(Color(hue: hue.wrappedValue / 360, saturation: 0.9, brightness: 0.95))
+                    .frame(width: 20, height: 20)
+                    .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
+                    .opacity(0.35 + sat.wrappedValue * 0.65)
+            }
+            // Hue slider over a rainbow track.
+            Slider(value: hue, in: 0...360)
+                .tint(Color(hue: hue.wrappedValue / 360, saturation: 0.9, brightness: 0.95))
+                .background(
+                    LinearGradient(colors: (0...12).map { Color(hue: Double($0) / 12, saturation: 0.85, brightness: 0.9) },
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(height: 4).clipShape(Capsule()).padding(.horizontal, 2)
+                        .allowsHitTesting(false))
+            InlineSlider(title: "Strength", value: Binding(get: { sat.wrappedValue * 100 },
+                                                           set: { sat.wrappedValue = $0 / 100 })) { "\(Int($0))" }
+        }
+    }
+
+    private func hueBinding(_ key: WritableKeyPath<SplitTone, Double>) -> Binding<Double> {
+        Binding(get: { (tone ?? SplitTone())[keyPath: key] },
+                set: { var t = tone ?? SplitTone(); t[keyPath: key] = $0; tone = t.isIdentity ? nil : t })
+    }
+    private func satBinding(_ key: WritableKeyPath<SplitTone, Double>) -> Binding<Double> {
+        Binding(get: { (tone ?? SplitTone())[keyPath: key] },
+                set: { var t = tone ?? SplitTone(); t[keyPath: key] = max(0, min(1, $0)); tone = t.isIdentity ? nil : t })
+    }
+    private var balanceBinding: Binding<Double> {
+        Binding(get: { (tone ?? SplitTone()).balance },
+                set: { var t = tone ?? SplitTone(); t.balance = $0; tone = t.isIdentity ? nil : t })
+    }
+}
+
 // MARK: - 8-band HSL secondary
 
 struct HSLPanel: View {

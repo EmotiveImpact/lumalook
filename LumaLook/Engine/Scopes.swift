@@ -7,13 +7,14 @@ import CoreGraphics
 /// they're actually shipping. Computed on a tiny downscaled bitmap on a
 /// background task — cheap enough to refresh as sliders move.
 enum ScopeMode: String, CaseIterable {
-    case waveform, parade, vectorscope, histogram
+    case waveform, parade, vectorscope, histogram, falseColor
     var title: String {
         switch self {
         case .waveform: return "RGB WAVEFORM"
         case .parade: return "RGB PARADE"
         case .vectorscope: return "VECTORSCOPE"
         case .histogram: return "RGB HISTOGRAM"
+        case .falseColor: return "FALSE COLOR"
         }
     }
     var next: ScopeMode {
@@ -31,11 +32,15 @@ enum Scopes {
             guard let pixels = sampleBitmap(graded) else { return nil }
             let w = max(32, Int(size.width)), h = max(24, Int(size.height))
             var acc = [Float](repeating: 0, count: w * h * 3)   // R,G,B additive
+            if mode == .falseColor {
+                return falseColorImage(pixels, w: w, h: h)
+            }
             switch mode {
             case .waveform:   drawWaveform(pixels, into: &acc, w: w, h: h, parade: false)
             case .parade:     drawWaveform(pixels, into: &acc, w: w, h: h, parade: true)
             case .vectorscope: drawVectorscope(pixels, into: &acc, w: w, h: h)
             case .histogram:  drawHistogram(pixels, into: &acc, w: w, h: h)
+            case .falseColor: break
             }
             return bitmap(from: acc, w: w, h: h,
                           graticule: mode == .vectorscope ? .vector : .grid)
@@ -139,6 +144,44 @@ enum Scopes {
     private static func fillColumn(_ acc: inout [Float], w: Int, h: Int, x: Int, height: Float, chan: Int) {
         let top = Int((1 - min(1, height)) * Float(h - 1))
         for y in top..<h { acc[(y * w + x) * 3 + chan] += 0.5 }
+    }
+
+    // MARK: false colour (IRE exposure heat map)
+
+    /// Recolours the frame by luma into an exposure ramp: blue (crushed) →
+    /// green (mid/skin) → yellow → red (clipping). The fastest read on
+    /// whether an exposure is safe.
+    private static func falseColorImage(_ s: Sampled, w: Int, h: Int) -> CGImage? {
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        for y in 0..<h {
+            let sy = y * s.h / h
+            for x in 0..<w {
+                let sx = x * s.w / w
+                let si = (sy * s.w + sx) * 4
+                let luma = 0.2126 * Float(s.px[si]) / 255 + 0.7152 * Float(s.px[si + 1]) / 255 + 0.0722 * Float(s.px[si + 2]) / 255
+                let (r, g, b) = ireColor(luma)
+                let o = (y * w + x) * 4
+                out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = 255
+            }
+        }
+        return imageFromRGBA(out, w: w, h: h)
+    }
+
+    private static func ireColor(_ l: Float) -> (UInt8, UInt8, UInt8) {
+        // Stops: 0 purple, .1 blue, .4 green, .5 grey, .7 pink, .9 yellow, 1 red.
+        let stops: [(Float, (UInt8, UInt8, UInt8))] = [
+            (0.00, (40, 0, 60)), (0.06, (0, 0, 200)), (0.20, (0, 160, 200)),
+            (0.42, (0, 200, 0)), (0.50, (150, 150, 150)), (0.70, (230, 120, 160)),
+            (0.90, (240, 220, 0)), (1.00, (255, 0, 0))]
+        for i in 0..<(stops.count - 1) where l <= stops[i + 1].0 {
+            let (l0, c0) = stops[i], (l1, c1) = stops[i + 1]
+            let t = (l - l0) / max(1e-4, l1 - l0)
+            return (lerp(c0.0, c1.0, t), lerp(c0.1, c1.1, t), lerp(c0.2, c1.2, t))
+        }
+        return stops.last!.1
+    }
+    private static func lerp(_ a: UInt8, _ b: UInt8, _ t: Float) -> UInt8 {
+        UInt8(max(0, min(255, Float(a) + (Float(b) - Float(a)) * t)))
     }
 
     // MARK: rasterise

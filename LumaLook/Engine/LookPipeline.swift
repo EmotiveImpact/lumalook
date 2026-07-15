@@ -399,6 +399,10 @@ final class LookPipeline: @unchecked Sendable {
             hslCube.setValue(output, forKey: kCIInputImageKey)
             output = hslCube.outputImage?.cropped(to: image.extent) ?? output
         }
+        if let splitCube = ColorMath.splitToneCube(settings.splitTone) {
+            splitCube.setValue(output, forKey: kCIInputImageKey)
+            output = splitCube.outputImage?.cropped(to: image.extent) ?? output
+        }
 
         if settings.bloom > 0 {
             let bloom = CIFilter.bloom()

@@ -12,6 +12,7 @@ enum ColorMath {
     private static let lock = NSLock()
     private static var transferCache: [Int: CIFilter] = [:]
     private static var hslCache: [Int: CIFilter] = [:]
+    private static var splitCache: [Int: CIFilter] = [:]
 
     // MARK: Curves + wheels → one separable per-channel cube
 
@@ -176,6 +177,55 @@ enum ColorMath {
             return (0..<count).map { Double($0) / Double(count - 1) }
         }
         return (0..<count).map { sampleCurve(lut, Double($0) / Double(count - 1)) }
+    }
+
+    // MARK: Split toning → luma-weighted tint cube
+
+    static func splitToneCube(_ tone: SplitTone?) -> CIFilter? {
+        guard let tone, !tone.isIdentity else { return nil }
+        let key = hashSplit(tone)
+        lock.lock(); if let c = splitCache[key] { lock.unlock(); return c }; lock.unlock()
+
+        let (shR, shG, shB) = hslToRGB(tone.shadowHue / 360, 1, 0.5)
+        let (hiR, hiG, hiB) = hslToRGB(tone.highlightHue / 360, 1, 0.5)
+        let n = 24
+        var data = [Float](repeating: 0, count: n * n * n * 4)
+        var i = 0
+        for bi in 0..<n {
+            let b = Double(bi) / Double(n - 1)
+            for gi in 0..<n {
+                let g = Double(gi) / Double(n - 1)
+                for ri in 0..<n {
+                    let r = Double(ri) / Double(n - 1)
+                    let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                    // Balance pivots the crossover between shadow and highlight.
+                    let pivot = 0.5 + tone.balance * 0.4
+                    let wHi = smoothstep(pivot - 0.35, pivot + 0.35, luma)
+                    let wLo = 1 - wHi
+                    // Soft-light-ish tint: pull toward the tint colour.
+                    let sr = r + wLo * tone.shadowSat * (shR - 0.5) + wHi * tone.highlightSat * (hiR - 0.5)
+                    let sg = g + wLo * tone.shadowSat * (shG - 0.5) + wHi * tone.highlightSat * (hiG - 0.5)
+                    let sb = b + wLo * tone.shadowSat * (shB - 0.5) + wHi * tone.highlightSat * (hiB - 0.5)
+                    data[i + 0] = Float(clamp01(sr)); data[i + 1] = Float(clamp01(sg))
+                    data[i + 2] = Float(clamp01(sb)); data[i + 3] = 1
+                    i += 4
+                }
+            }
+        }
+        let filter = cubeFilter(data: data, dimension: n)
+        lock.lock(); splitCache[key] = filter; if splitCache.count > 16 { splitCache.removeAll() }; lock.unlock()
+        return filter
+    }
+
+    private static func smoothstep(_ e0: Double, _ e1: Double, _ x: Double) -> Double {
+        let t = clamp01((x - e0) / max(1e-5, e1 - e0))
+        return t * t * (3 - 2 * t)
+    }
+
+    private static func hashSplit(_ t: SplitTone) -> Int {
+        var h = Hasher()
+        for v in [t.shadowHue, t.shadowSat, t.highlightHue, t.highlightSat, t.balance] { h.combine(Int(v * 100)) }
+        return h.finalize()
     }
 
     // MARK: Spline (monotone cubic, Fritsch–Carlson — no overshoot)

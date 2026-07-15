@@ -288,13 +288,17 @@ final class AppModel: ObservableObject {
                                           gammaR: 1, gammaG: 1, gammaB: 1,
                                           gainR: 1.10, gainG: 1.0, gainB: 0.90)
         }
+        if env["LUMA_SEED_SPLIT"] == "1" {
+            settings.splitTone = SplitTone(shadowHue: 200, shadowSat: 0.6,
+                                           highlightHue: 40, highlightSat: 0.5, balance: 0)
+        }
         if env["LUMA_SEED_HSL"] == "1" {
             // Push blues toward cyan and desaturate greens.
             var b = HSLBands()
             b.hue[5] = -0.6; b.sat[5] = 0.5; b.sat[3] = -0.8
             settings.hsl = b
         }
-        if env["LUMA_SEED_CURVE"]=="1" || env["LUMA_SEED_WHEEL"]=="1" || env["LUMA_SEED_HSL"]=="1" { syncLookState() }
+        if env["LUMA_SEED_CURVE"]=="1" || env["LUMA_SEED_WHEEL"]=="1" || env["LUMA_SEED_HSL"]=="1" || env["LUMA_SEED_SPLIT"]=="1" { syncLookState() }
         // Lens cells: LUMA_SEED_LENS=anamorphic|vintage|diffusion|fisheye|tiltShift.
         // Explicit sync: property observers don't fire during init, so the
         // shared LookState would otherwise miss the seeded value.
