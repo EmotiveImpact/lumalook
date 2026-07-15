@@ -76,6 +76,15 @@ _Below: the original Next-10 run, complete._
       1x/2x/3x zoom with live HUD) + graded still capture + library routing
 - [x] Overlay trim handles (media window honored by buildComposition)
 
+## SHIPPED — Pro Color Room (2026-07-13, flagship expansion tranche 1)
+- [x] RGB + per-channel tone **curves** (draggable editor, monotone spline)
+- [x] Lift/Gamma/Gain 3-way **colour wheels** (balance pads + master sliders)
+- [x] 8-band **HSL** secondary (band chips + H/S/L)
+- [x] Video **scopes**: RGB waveform / parade / vectorscope+skin-line / histogram
+- Engine: ColorMath.swift (curves+wheels → one separable cube; HSL 3D cube),
+  Scopes.swift. All on LookSettings → preview/export/per-clip/camera/bake.
+- Full 118-item flagship backlog: research/BUILD_BACKLOG.md.
+
 ## SHIPPED — Apple-native tranche 2
 - [x] Settings / My LUTs / Projects as native inset-grouped Lists (swipe
       delete/favourite, native section headers, project thumbnails)
