@@ -1,9 +1,34 @@
 # LumaLook Roadmap
 
-_Last updated 2026-07-12. The "Recommended Next 10" run (research/MASTER_BACKLOG.md)
-is COMPLETE: every item below shipped build-green with seeded simulator
-verification (screenshots or export analysis) and pushed to master
+_Last updated 2026-07-13. The "Recommended Next 10" run is COMPLETE, plus a
+follow-on wave (lenses, film archive, monetization, portrait, polish). All
+shipped build-green with seeded sim verification and pushed to master
 (auto-TestFlight via Xcode Cloud)._
+
+## SHIPPED — follow-on wave (2026-07-12/13)
+- [x] **7 lens effects** (Anamorphic, Vintage Prime, Diffusion, Fisheye,
+      Tilt-Shift, Swirl 58, Toy Cam) — procedural glass in LookPipeline,
+      rides everywhere, stripped from cube bakes. Also fixed a latent bug:
+      all apply() call sites fed infinite-extent images, silently breaking
+      spatial ops (halation radius was ∞).
+- [x] **102 measured film emulations** from the open G'MIC / Pat David
+      collection (CC BY-SA) as 6 Store packs — Film Stocks 01 + Negative /
+      Slide / Mono / Instant / Mirrorless archives.
+- [x] **Monetization split** — free: Negative Set + Film Stocks 01 (19
+      looks), Diffusion + Fisheye. Pro: the 5 archives (88 stocks) +
+      5 cinematic lenses. Crown badges + soft paywall, everything
+      previewable, no watermark.
+- [x] **Portrait-first editor** (first clip decides canvas) + TikTok-style
+      fullscreen preview.
+- [x] **Photos-access fix** — exports never dead-end on denied/limited
+      permission; success screen explains + deep-links to the exact toggle.
+- [x] **UI polish** — sticky home header, PRO badge on profile tab, dark
+      nav surfaces app-wide (LumaTheme.bar), header material only on scroll,
+      tab-bar hairline removed, home wordmark placement.
+
+---
+
+_Below: the original Next-10 run, complete._
 
 ## SHIPPED — Next-10 run (2026-07-12)
 - [x] **#1 Per-clip looks + copy grade** — ClipGrade per clip, compositor
@@ -64,22 +89,32 @@ sessions, per-clip volume, export spec sheet, custom compositor (PIP overlays,
 photo clips, multi-audio), Apple-native tranche 1, grain/halation.
 
 ## NEXT (recommended order)
-- [ ] **Real-device QA session (D7/TS3)** — the one thing the sim can't do:
-      camera flip/zoom/still on hardware, filtered recording, export
-      thermals, haptics feel, voiceover mic quality.
-- [ ] **Camera-profile normalization + Apple Log capture (#42/#70)** — the
-      calendar-locked September-iPhone-cycle item.
-- [ ] App Store submission kit (D9): screenshots (per-clip looks, dissolve,
-      text, paywall), preview video, ASO strings from OPPORTUNITY_MAP §5,
-      privacy labels. Products must be recreated in App Store Connect to
-      match LumaLook.storekit IDs before release.
-- [ ] Slot-in delights (each ≤2 days): freeze frame, duplicate clip, contact
-      sheet, grain size per pack, letterbox guides, first-frame gate,
-      confirm-discard.
-- [ ] #94 writer pipeline (bitrate slider, ProRes) — unlocks parity cells
-      for 10-bit/HDR.
-- [ ] Premium-look gating pass: `isPremium` looks + pack looks check
-      StoreService entitlements at export/save (preview stays free).
+### Ship-blockers (do before App Store)
+- [ ] **App Store Connect products** — recreate the `LumaLook.storekit` IDs
+      (pro.yearly, pro.lifetime, 3 pack IDs) as real products in ASC, or
+      NOTHING can be purchased on a real build. The single hard revenue gate.
+- [ ] **Real-device QA session** — the one thing the sim can't do: camera
+      flip/zoom/still on hardware, filtered recording, export thermals,
+      haptics feel, voiceover mic quality.
+- [ ] **Close the premium-look leak** — one `isPremium: true` built-in look
+      (Afrobeats Glow) is still exportable free. Everything else gates at
+      acquisition (can't install Pro packs / select Pro lenses), but this
+      one look needs an export/save entitlement check. Small but real.
+- [ ] App Store submission kit (D9): screenshots (film packs, lenses,
+      dissolve, paywall), preview video, ASO strings from OPPORTUNITY_MAP §5,
+      privacy labels, age rating.
+
+### High-value next
+- [ ] **Camera-profile normalization + Apple Log capture** — the
+      calendar-locked September-iPhone-cycle item; the community's #1 gripe.
+- [ ] #94 writer pipeline (bitrate slider, ProRes) — unlocks 10-bit/HDR
+      parity cells.
+- [ ] Film Stocks Vol. 2 — generate NEW stocks from datasheets
+      (spectral_film_lut) as original, fully-owned content.
+
+### Slot-in delights (each ≤2 days, high delight-per-effort)
+- [ ] Freeze frame, duplicate clip, contact sheet, per-pack grain size,
+      letterbox guides, first-frame gate, confirm-before-discard.
 
 ## PARKED (do not lose)
 - Codex audit leftovers: camera manual controls/waveform/peaking;
