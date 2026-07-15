@@ -269,6 +269,14 @@ final class AppModel: ObservableObject {
     private func applyDebugRoute() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+        // Auto-grade cell: load a cast image, run autoGrade, print result.
+        if let path = env["LUMA_SEED_AUTOGRADE"], FileManager.default.fileExists(atPath: path) {
+            selectedImage = CIImage(contentsOf: URL(fileURLWithPath: path))
+            Task {
+                await autoGrade()
+                print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
+            }
+        }
         // Scope cells: LUMA_SEED_SCOPE=waveform|parade|vectorscope|histogram.
         if let sm = env["LUMA_SEED_SCOPE"] {
             UserDefaults.standard.set(true, forKey: "lumalook.showScope")
@@ -367,6 +375,43 @@ final class AppModel: ObservableObject {
     /// Public variant used by the Before/After wipe.
     func refreshPreviewFrame() {
         refreshPausedFrame()
+    }
+
+    // MARK: - AI Auto-Grade (one-tap correction)
+
+    @Published var isAutoGrading = false
+
+    /// Gray-world auto white-balance + auto-exposure: analyses the current
+    /// frame (UNGRADED) and dials exposure/warmth/tint to neutralise a colour
+    /// cast and centre the midtones. The "magic button".
+    func autoGrade() async {
+        guard !isAutoGrading else { return }
+        isAutoGrading = true
+        defer { isAutoGrading = false }
+        guard let frame = previewFrame else { return }
+        let mean: (r: Double, g: Double, b: Double)? = await Task.detached {
+            let avg = CIFilter.areaAverage()
+            avg.inputImage = frame
+            avg.extent = frame.extent
+            guard let out = avg.outputImage else { return nil }
+            var px = [UInt8](repeating: 0, count: 4)
+            LookPipeline.shared.context.render(
+                out, toBitmap: &px, rowBytes: 4,
+                bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return (Double(px[0]) / 255, Double(px[1]) / 255, Double(px[2]) / 255)
+        }.value
+        guard let m = mean else { return }
+        let luma = 0.2126 * m.r + 0.7152 * m.g + 0.0722 * m.b
+        var s = settings
+        // Centre midtones near 0.45.
+        s.exposure = (max(-0.6, min(0.6, (0.45 - luma) * 2.2))) * 100
+        // Neutralise cast: warm image (R>B) → cool it; green cast → magenta.
+        s.warmth = max(-70, min(70, (m.b - m.r) * 320))
+        s.tint = max(-70, min(70, ((m.r + m.b) / 2 - m.g) * 320))
+        // A touch of contrast if the frame is flat (mean far from extremes).
+        s.contrast = max(s.contrast, 14)
+        settings = s
     }
 
     private var loopObserver: NSObjectProtocol?

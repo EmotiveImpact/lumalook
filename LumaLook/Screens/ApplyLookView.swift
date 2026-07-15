@@ -389,6 +389,13 @@ struct ApplyLookView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
+                    FlatTool(title: app.isAutoGrading ? "…" : "Auto",
+                             icon: "wand.and.stars", selected: false) {
+                        Task { await app.autoGrade() }
+                        LumaHaptics.shared.tap()
+                    }
+                    .frame(width: 62)
+                    .disabled(app.isAutoGrading)
                     FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
                         activeTool = "Adjust"
                     }
