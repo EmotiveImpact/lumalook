@@ -389,19 +389,7 @@ final class AppModel: ObservableObject {
         isAutoGrading = true
         defer { isAutoGrading = false }
         guard let frame = previewFrame else { return }
-        let mean: (r: Double, g: Double, b: Double)? = await Task.detached {
-            let avg = CIFilter.areaAverage()
-            avg.inputImage = frame
-            avg.extent = frame.extent
-            guard let out = avg.outputImage else { return nil }
-            var px = [UInt8](repeating: 0, count: 4)
-            LookPipeline.shared.context.render(
-                out, toBitmap: &px, rowBytes: 4,
-                bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-            return (Double(px[0]) / 255, Double(px[1]) / 255, Double(px[2]) / 255)
-        }.value
-        guard let m = mean else { return }
+        guard let m = await Self.meanRGB(of: frame) else { return }
         let luma = 0.2126 * m.r + 0.7152 * m.g + 0.0722 * m.b
         var s = settings
         // Centre midtones near 0.45.
@@ -412,6 +400,39 @@ final class AppModel: ObservableObject {
         // A touch of contrast if the frame is flat (mean far from extremes).
         s.contrast = max(s.contrast, 14)
         settings = s
+    }
+
+    /// White-balance eyedropper: sample a point the user says is neutral and
+    /// set warmth/tint so it becomes grey. `point` is normalised (0…1, y down).
+    func whiteBalance(atNormalized point: CGPoint) async {
+        guard let frame = previewFrame else { return }
+        let ext = frame.extent
+        let px = point.x * ext.width
+        let py = (1 - point.y) * ext.height   // CIImage y is bottom-up
+        let region = CGRect(x: px - 6, y: py - 6, width: 12, height: 12).intersection(ext)
+        let sampleImage = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
+        guard let m = await Self.meanRGB(of: sampleImage) else { return }
+        var s = settings
+        s.warmth = max(-80, min(80, (m.b - m.r) * 340))
+        s.tint = max(-80, min(80, ((m.r + m.b) / 2 - m.g) * 340))
+        settings = s
+        LumaHaptics.shared.tap()
+    }
+
+    /// Mean RGB (0…1) of an image via CIAreaAverage.
+    static func meanRGB(of image: CIImage) async -> (r: Double, g: Double, b: Double)? {
+        await Task.detached {
+            let avg = CIFilter.areaAverage()
+            avg.inputImage = image
+            avg.extent = image.extent
+            guard let out = avg.outputImage else { return nil }
+            var px = [UInt8](repeating: 0, count: 4)
+            LookPipeline.shared.context.render(
+                out, toBitmap: &px, rowBytes: 4,
+                bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return (Double(px[0]) / 255, Double(px[1]) / 255, Double(px[2]) / 255)
+        }.value
     }
 
     private var loopObserver: NSObjectProtocol?

@@ -231,6 +231,7 @@ struct ApplyLookView: View {
     // MARK: Media surface
 
     @State private var holdingOriginal = false
+    @State private var eyedropping = false
     @State private var stashedIntensity: Double?
 
     private var mediaSurface: some View {
@@ -259,6 +260,30 @@ struct ApplyLookView: View {
                 }
             }
             .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
+            // WB eyedropper: tap a neutral in the frame to balance to it.
+            .overlay {
+                if eyedropping {
+                    GeometryReader { geo in
+                        ZStack(alignment: .top) {
+                            Color.white.opacity(0.001)
+                            Text("Tap something that should be neutral grey/white")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(.black.opacity(0.6), in: Capsule())
+                                .padding(.top, 12)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { loc in
+                            let n = CGPoint(x: min(max(0, loc.x / geo.size.width), 1),
+                                            y: min(max(0, loc.y / geo.size.height), 1))
+                            Task { await app.whiteBalance(atNormalized: n) }
+                            eyedropping = false
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
             .overlay {
                 if compareMode {
                     compareOverlay
@@ -396,6 +421,11 @@ struct ApplyLookView: View {
                     }
                     .frame(width: 62)
                     .disabled(app.isAutoGrading)
+                    FlatTool(title: "WB", icon: "eyedropper.halffull", selected: eyedropping) {
+                        withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
+                        LumaHaptics.shared.tap()
+                    }
+                    .frame(width: 62)
                     FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
                         activeTool = "Adjust"
                     }
