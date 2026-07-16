@@ -9,11 +9,24 @@ enum GradeCubeBaker {
     /// Spatial passes (grain, halation, bloom, vignette) can't live in a
     /// lattice and are stripped — the cube carries the color, the app
     /// carries the physics.
-    @MainActor
-    static func bakeCurrentGrade(from state: LookState, title: String) -> URL? {
+    /// Cube sizes offered to the user. 33 is the interchange default; 65 is
+    /// broadcast-grade; 17 is small/fast.
+    static let sizes = [17, 33, 65]
+
+    /// Off the main actor (a 65³ bake is 274,625 lines) — snapshot the state's
+    /// values first so the detached work touches no reference.
+    static func bakeCurrentGrade(from state: LookState, title: String,
+                                 size: Int = PackInstaller.cubeSize) async -> URL? {
+        // Snapshot everything from the live LookState up front.
         let clean = LookState()
         clean.recipe = state.recipe
         clean.lut = state.lut
+        // The conversion slot + BOTH opacities drive the real preview — they
+        // were dropped here, so an exported cube didn't match what the user
+        // saw. Carry them so cube == preview.
+        clean.conversionLUT = state.conversionLUT
+        clean.conversionOpacity = state.conversionOpacity
+        clean.lutOpacity = state.lutOpacity
         var settings = state.settings
         settings.grain = 0
         settings.halation = 0
@@ -23,7 +36,10 @@ enum GradeCubeBaker {
         clean.settings = settings
         clean.splitFraction = nil
 
-        let n = PackInstaller.cubeSize
+        return await Task.detached { bakeCube(clean: clean, title: title, n: size) }.value
+    }
+
+    private static func bakeCube(clean: LookState, title: String, n: Int) -> URL? {
         let width = n * n
         let height = n
         var pixels = [Float32](repeating: 0, count: width * height * 4)
@@ -53,25 +69,27 @@ enum GradeCubeBaker {
                 format: .RGBAf, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         }
 
-        var text = """
-        TITLE "\(title)"
-        # Exported from LumaLook — the app's exact grade, colour only.
-        LUT_3D_SIZE \(n)
-        DOMAIN_MIN 0.0 0.0 0.0
-        DOMAIN_MAX 1.0 1.0 1.0
-
-        """
+        // Buffered lines joined once — a 65³ += loop is O(n²) on the string.
+        var lines = [String]()
+        lines.reserveCapacity(n * n * n + 6)
+        lines.append("TITLE \"\(title)\"")
+        lines.append("# Exported from LumaLook — the app's exact grade, colour only.")
+        lines.append("LUT_3D_SIZE \(n)")
+        lines.append("DOMAIN_MIN 0.0 0.0 0.0")
+        lines.append("DOMAIN_MAX 1.0 1.0 1.0")
+        lines.append("")
         for b in 0..<n {
             for g in 0..<n {
                 for r in 0..<n {
                     let i = (g * width + (b * n + r)) * 4
-                    text += String(format: "%.6f %.6f %.6f\n",
-                                   max(0, min(1, out[i])),
-                                   max(0, min(1, out[i + 1])),
-                                   max(0, min(1, out[i + 2])))
+                    lines.append(String(format: "%.6f %.6f %.6f",
+                                        max(0, min(1, out[i])),
+                                        max(0, min(1, out[i + 1])),
+                                        max(0, min(1, out[i + 2]))))
                 }
             }
         }
+        let text = lines.joined(separator: "\n")
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(title.replacingOccurrences(of: " ", with: "_")).cube")
@@ -91,8 +109,10 @@ struct ExportSpecSheet: View {
     let onExport: (ExportSpec) -> Void
 
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
+    @AppStorage("lumalook.cubeSize") private var cubeSize = 33
     @State private var spec = ExportSpec()
     @State private var cubeURL: URL?
+    @State private var isBaking = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -184,39 +204,61 @@ struct ExportSpecSheet: View {
 
     @ViewBuilder
     private var cubeRow: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "square.grid.3x3.square")
-                .font(.system(size: 18))
-                .foregroundStyle(LumaTheme.accentBright)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Save this grade as .cube")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("Opens in Resolve, Premiere, FCP")
-                    .font(.system(size: 11))
-                    .foregroundStyle(LumaTheme.textMuted)
-            }
-            Spacer()
-            if let cubeURL {
-                ShareLink(item: cubeURL) {
-                    TechReadout("SHARE 33³", size: 9, color: LumaTheme.accentBright)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(LumaTheme.accent.opacity(0.2), in: Capsule())
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "square.grid.3x3.square")
+                    .font(.system(size: 18))
+                    .foregroundStyle(LumaTheme.accentBright)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save this grade as .cube")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("The full grade — LUT, curves, wheels, HSL, split")
+                        .font(.system(size: 11))
+                        .foregroundStyle(LumaTheme.textMuted)
                 }
-            } else {
-                Button {
-                    if let state = lookState, let title = gradeCubeTitle {
-                        cubeURL = GradeCubeBaker.bakeCurrentGrade(from: state, title: title)
-                        LumaHaptics.shared.tap()
+                Spacer()
+                if let cubeURL {
+                    ShareLink(item: cubeURL) {
+                        TechReadout("SHARE \(cubeSize)³", size: 9, color: LumaTheme.accentBright)
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(LumaTheme.accent.opacity(0.2), in: Capsule())
                     }
-                } label: {
-                    TechReadout("BAKE", size: 9, color: .white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(.white.opacity(0.08), in: Capsule())
+                } else {
+                    Button {
+                        Task {
+                            guard let state = lookState, let title = gradeCubeTitle else { return }
+                            isBaking = true
+                            cubeURL = await GradeCubeBaker.bakeCurrentGrade(
+                                from: state, title: title, size: cubeSize)
+                            isBaking = false
+                            LumaHaptics.shared.tap()
+                        }
+                    } label: {
+                        TechReadout(isBaking ? "…" : "BAKE", size: 9, color: .white)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(.white.opacity(0.08), in: Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .disabled(isBaking)
                 }
-                .buttonStyle(.lumaPress)
+            }
+            // Cube size — re-bake on change.
+            HStack(spacing: 6) {
+                ForEach(GradeCubeBaker.sizes, id: \.self) { size in
+                    Button {
+                        cubeSize = size
+                        cubeURL = nil   // stale for the new size
+                    } label: {
+                        Text("\(size)³")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(cubeSize == size ? .white : LumaTheme.textSecondary)
+                            .frame(maxWidth: .infinity).frame(height: 30)
+                            .background(cubeSize == size ? LumaTheme.accent : LumaTheme.surface,
+                                        in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(12)
