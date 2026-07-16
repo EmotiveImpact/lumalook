@@ -39,7 +39,7 @@ enum MockData {
 
     // RNI-style process taxonomy (research §4.2): grouping by process reads
     // as expertise; "Trending" reads as commodity.
-    static let categories = ["All", "Negative", "Cine", "Slide", "B&W", "Original"]
+    static let categories = ["All", "Skin", "Negative", "Cine", "Slide", "B&W", "Original"]
     /// Nominative-use disclaimer shown in the Store and look details.
     static let namingDisclaimer = "Look names and codes are original LumaLook creations inspired by classic photographic processes. No affiliation with or endorsement by any film manufacturer."
 

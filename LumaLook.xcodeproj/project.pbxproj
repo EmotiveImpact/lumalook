@@ -10,6 +10,7 @@
 		00DB64A93DB7EF3EADE7BA57 /* FS_SX200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */; };
 		028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B846D621E4F274EC907E0EC /* LumaDial.swift */; };
 		02D068F0678DC92F743732EA /* FS_VV100.cube in Resources */ = {isa = PBXBuildFile; fileRef = BC7A950FA2B975BBA5B6B694 /* FS_VV100.cube */; };
+		0360C6C2F8A6E390528707AF /* SkinFirstPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */; };
 		03B330DD7722E9A08F27B121 /* FS_PT160V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3481632CC4B70ABB890BC517 /* FS_PT160V.cube */; };
 		05EA0E2E6674569C1D8496A2 /* FS_FN800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8B0D225A84F898394B902E73 /* FS_FN800.cube */; };
 		066ED006DB07EE0B6F0AE6A0 /* FS_FP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = B04A5030E4C98B0AC8663228 /* FS_FP100.cube */; };
@@ -239,6 +240,7 @@
 		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
 		71A6E32214C9321C7379CCC6 /* FS_FP125.cube */ = {isa = PBXFileReference; path = FS_FP125.cube; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
+		73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinFirstPresets.swift; sourceTree = "<group>"; };
 		73DAA7F9A11628B31666692E /* FS_PL690.cube */ = {isa = PBXFileReference; path = FS_PL690.cube; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */ = {isa = PBXFileReference; path = FS_PT800.cube; sourceTree = "<group>"; };
@@ -589,6 +591,7 @@
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				F8699231347E8D7AACDACC31 /* Scopes.swift */,
+				73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
 				2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */,
 				89F752262798C945F44F00B2 /* ZipReader.swift */,
@@ -833,6 +836,7 @@
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				7191972FF427F33077859C6F /* Scopes.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,
+				0360C6C2F8A6E390528707AF /* SkinFirstPresets.swift in Sources */,
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
 				17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */,

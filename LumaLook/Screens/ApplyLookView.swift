@@ -76,7 +76,8 @@ struct ApplyLookView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
-    @State private var category = "All"
+    @State private var category =
+        ProcessInfo.processInfo.environment["LUMA_SEED_GRADECAT"] ?? "All"
     @State private var activeTool =
         ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Adjust"
     @State private var showLensPaywall = false
@@ -557,6 +558,27 @@ struct ApplyLookView: View {
                             }
                         }
                     }
+                    if category == "Skin" {
+                        // Skin First: research-tuned presets for Black & deep
+                        // skin (LookSettings, no LUT — bakes cleanly).
+                        ForEach(SkinFirstPreset.allCases) { preset in
+                            LookThumbCell(
+                                title: preset.name,
+                                grade: Color(hex: preset.tintHex),
+                                selected: app.selectedLUT == nil && app.settings == preset.settings,
+                                image: nil
+                            ) {
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                    app.selectedLUT = nil
+                                    app.settings = preset.settings
+                                }
+                            }
+                            .scrollTransition(.interactive) { content, phase in
+                                content.scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                    .opacity(phase.isIdentity ? 1 : 0.6)
+                            }
+                        }
+                    } else {
                     ForEach(filteredLooks) { look in
                         LookThumbCell(
                             title: look.name,
@@ -594,6 +616,7 @@ struct ApplyLookView: View {
                         }
                     }
                     AddLUTTile { showLUTImporter = true }
+                    }
                 }
                 .padding(.vertical, 2)
                 .padding(.horizontal, 22)

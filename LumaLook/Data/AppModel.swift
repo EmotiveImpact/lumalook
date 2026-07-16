@@ -277,6 +277,12 @@ final class AppModel: ObservableObject {
                 print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
             }
         }
+        // Skin-preset cell: apply a Skin First preset for verification.
+        if let name = env["LUMA_SEED_SKINPRESET"],
+           let preset = SkinFirstPreset(rawValue: name) {
+            settings = preset.settings
+            syncLookState()
+        }
         // Scope cells: LUMA_SEED_SCOPE=waveform|parade|vectorscope|histogram.
         if let sm = env["LUMA_SEED_SCOPE"] {
             UserDefaults.standard.set(true, forKey: "lumalook.showScope")
