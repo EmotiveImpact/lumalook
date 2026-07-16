@@ -27,6 +27,7 @@ enum GradeCubeBaker {
         clean.conversionLUT = state.conversionLUT
         clean.conversionOpacity = state.conversionOpacity
         clean.lutOpacity = state.lutOpacity
+        clean.lutBlend = state.lutBlend
         var settings = state.settings
         settings.grain = 0
         settings.halation = 0

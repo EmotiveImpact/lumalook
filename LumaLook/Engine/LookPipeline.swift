@@ -12,6 +12,7 @@ final class LookState: @unchecked Sendable {
     private var _settings: LookSettings = LookSettings()
     private var _lut: ParsedLUT?
     private var _lutOpacity: Double = 1.0
+    private var _lutBlend: LUTBlendMode = .normal
     private var _conversionLUT: ParsedLUT?
     private var _conversionOpacity: Double = 1.0
     private var _splitFraction: Double?
@@ -35,6 +36,12 @@ final class LookState: @unchecked Sendable {
     var lutOpacity: Double {
         get { lock.lock(); defer { lock.unlock() }; return _lutOpacity }
         set { lock.lock(); _lutOpacity = newValue; lock.unlock() }
+    }
+
+    /// Creative slot blend mode (Normal/Soft Light/Overlay/Screen).
+    var lutBlend: LUTBlendMode {
+        get { lock.lock(); defer { lock.unlock() }; return _lutBlend }
+        set { lock.lock(); _lutBlend = newValue; lock.unlock() }
     }
 
     /// Slot 1 — technical/conversion LUT (e.g. AppleLog → Rec.709), applied
@@ -98,7 +105,7 @@ final class LookPipeline: @unchecked Sendable {
 
         // Slot 2 — creative: imported LUT or built-in recipe.
         if let lut = state.lut {
-            graded = applyLUT(lut, to: graded, opacity: state.lutOpacity)
+            graded = applyLUT(lut, to: graded, opacity: state.lutOpacity, blend: state.lutBlend)
         } else {
             graded = applyRecipe(state.recipe, to: graded)
         }
@@ -307,13 +314,20 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - LUT application
 
-    func applyLUT(_ lut: ParsedLUT, to image: CIImage, opacity: Double = 1.0) -> CIImage {
+    func applyLUT(_ lut: ParsedLUT, to image: CIImage,
+                  opacity: Double = 1.0, blend: LUTBlendMode = .normal) -> CIImage {
         let filter = CIFilter.colorCubeWithColorSpace()
         filter.inputImage = image
         filter.cubeDimension = Float(lut.size)
         filter.cubeData = lut.rgbaFloatData
         filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
-        let out = filter.outputImage ?? image
+        var out = filter.outputImage ?? image
+        // Blend the LUT result over the slot's INPUT (so the original
+        // luminance drives Overlay/Soft-Light) — the "adjustment layer" model.
+        if let blendName = blend.ciName {
+            out = out.applyingFilter(blendName, parameters: [kCIInputBackgroundImageKey: image])
+                .cropped(to: image.extent)
+        }
         let mix = min(max(opacity, 0), 1)
         guard mix < 0.999 else { return out }
         // Per-slot opacity: dissolve the slot's output with its own input.

@@ -114,6 +114,7 @@ struct GradeSession: Codable, Identifiable {
     var conversionLUTID: UUID?
     var conversionOpacity: Double?
     var creativeOpacity: Double?
+    var creativeBlend: String?
 }
 
 struct SavedLook: Codable, Identifiable {

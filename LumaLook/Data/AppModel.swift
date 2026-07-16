@@ -101,7 +101,8 @@ final class AppModel: ObservableObject {
             lutID: selectedLUT?.id,
             conversionLUTID: conversionLUT?.id,
             conversionOpacity: conversionOpacity,
-            creativeOpacity: creativeOpacity))
+            creativeOpacity: creativeOpacity,
+            creativeBlend: creativeBlend.rawValue))
     }
 
     /// Reopens a saved grade session exactly where it was left.
@@ -119,6 +120,7 @@ final class AppModel: ObservableObject {
         conversionLUT = session.conversionLUTID.flatMap { id in lutRepository.luts.first { $0.id == id } }
         conversionOpacity = session.conversionOpacity ?? 100
         creativeOpacity = session.creativeOpacity ?? 100
+        creativeBlend = session.creativeBlend.flatMap(LUTBlendMode.init) ?? .normal
         settings = session.settings
         if session.isVideo {
             selectedVideoURL = url
@@ -173,6 +175,10 @@ final class AppModel: ObservableObject {
     }
     /// Slot 2 opacity — creative LUT blended against its input.
     @Published var creativeOpacity: Double = 100 {
+        didSet { syncLookState() }
+    }
+    /// Slot 2 blend mode (Normal/Soft Light/Overlay/Screen).
+    @Published var creativeBlend: LUTBlendMode = .normal {
         didSet { syncLookState() }
     }
     @Published var settings = LookSettings() {
@@ -277,6 +283,12 @@ final class AppModel: ObservableObject {
                 print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
             }
         }
+        // Blend-mode cell: select a LUT + blend for export verification.
+        if let bl = env["LUMA_SEED_BLEND"], let mode = LUTBlendMode(rawValue: bl) {
+            if let first = lutRepository.luts.first { selectedLUT = first }
+            creativeBlend = mode
+            syncLookState()
+        }
         // Skin-preset cell: apply a Skin First preset for verification.
         if let name = env["LUMA_SEED_SKINPRESET"],
            let preset = SkinFirstPreset(rawValue: name) {
@@ -367,6 +379,7 @@ final class AppModel: ObservableObject {
         }
         lookState.conversionOpacity = conversionOpacity / 100.0
         lookState.lutOpacity = creativeOpacity / 100.0
+        lookState.lutBlend = creativeBlend
         refreshPausedFrame()
     }
 

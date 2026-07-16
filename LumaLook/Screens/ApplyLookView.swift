@@ -826,21 +826,44 @@ extension ApplyLookView {
     /// Conversion x Creative slot chain — the PeekLut/Lutter stacking model.
     /// Drag horizontally on a slot to set its opacity.
     private var slotChain: some View {
-        HStack(spacing: 8) {
-            SlotCard(kind: "SLOT 1 · CONVERSION",
-                     name: app.conversionLUT?.displayName ?? "None",
-                     opacity: $app.conversionOpacity,
-                     isActive: app.conversionLUT != nil,
-                     accented: false) {
-                showConversionPicker = true
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                SlotCard(kind: "SLOT 1 · CONVERSION",
+                         name: app.conversionLUT?.displayName ?? "None",
+                         opacity: $app.conversionOpacity,
+                         isActive: app.conversionLUT != nil,
+                         accented: false) {
+                    showConversionPicker = true
+                }
+                SlotCard(kind: "SLOT 2 · CREATIVE",
+                         name: app.selectedLUT?.displayName ?? app.selectedLook.name,
+                         opacity: $app.creativeOpacity,
+                         isActive: true,
+                         accented: true) { }
             }
-            SlotCard(kind: "SLOT 2 · CREATIVE",
-                     name: app.selectedLUT?.displayName ?? app.selectedLook.name,
-                     opacity: $app.creativeOpacity,
-                     isActive: true,
-                     accented: true) { }
+            // Blend mode for the creative LUT slot (only when a LUT is loaded).
+            if app.selectedLUT != nil {
+                HStack(spacing: 6) {
+                    ForEach(LUTBlendMode.allCases, id: \.self) { mode in
+                        Button {
+                            app.creativeBlend = mode
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Text(mode.label)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(app.creativeBlend == mode ? .white : LumaTheme.textSecondary)
+                                .frame(maxWidth: .infinity).frame(height: 30)
+                                .background(app.creativeBlend == mode ? LumaTheme.accent : LumaTheme.surface,
+                                            in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .transition(.opacity)
+            }
         }
         .padding(.horizontal, 22)
+        .animation(.easeOut(duration: 0.15), value: app.selectedLUT?.id)
     }
 
     private var conversionPicker: some View {

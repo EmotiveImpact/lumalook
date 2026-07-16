@@ -151,6 +151,29 @@ struct SplitTone: Codable, Equatable {
     var isIdentity: Bool { shadowSat == 0 && highlightSat == 0 }
 }
 
+/// Blend mode for the creative LUT slot: `Blend(base, LUT(base))` then the
+/// slot opacity. Both operands are pure functions of input RGB, so the result
+/// still bakes into a cube. Conversion slot stays Normal.
+enum LUTBlendMode: String, Codable, CaseIterable {
+    case normal, softLight, overlay, screen
+    var label: String {
+        switch self {
+        case .normal: return "Normal"
+        case .softLight: return "Soft Light"
+        case .overlay: return "Overlay"
+        case .screen: return "Screen"
+        }
+    }
+    var ciName: String? {
+        switch self {
+        case .normal: return nil
+        case .softLight: return "CISoftLightBlendMode"
+        case .overlay: return "CIOverlayBlendMode"
+        case .screen: return "CIScreenBlendMode"
+        }
+    }
+}
+
 struct LookSettings: Codable, Equatable {
     var intensity: Double = 75
     var exposure: Double = 0
