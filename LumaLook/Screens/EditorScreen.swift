@@ -596,6 +596,16 @@ struct EditorTimelineView: View {
                     for _ in 0..<30 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
                 }
             }
+            // Audio-reactive: LUMA_SEED_REACTIVE="glow|1.0" on the first lane.
+            if let spec = env["LUMA_SEED_REACTIVE"], let m = editor.audioTracks.first {
+                let parts = spec.split(separator: "|")
+                if let style = AudioReactiveStyle(rawValue: String(parts[0])) {
+                    let strength = parts.count > 1 ? (Double(parts[1]) ?? 1) : 1
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    editor.setAudioReactive(.init(style: style, strength: strength, sourceTrackID: m.id))
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                }
+            }
             // Auto-cut to beats: detect on the first music lane, split the video.
             if env["LUMA_SEED_BEATCUT"] == "1", let m = editor.audioTracks.first {
                 for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
@@ -1133,6 +1143,10 @@ private struct EditorContent: View {
                             .frame(width: 58)
                             .opacity(editor.isEmpty ? 0.35 : 1)
                             .disabled(editor.isEmpty)
+                        audioReactiveMenu
+                            .frame(width: 58)
+                            .opacity(editor.audioTracks.isEmpty ? 0.35 : 1)
+                            .disabled(editor.audioTracks.isEmpty)
                         FlatTool(title: editor.isRecordingVoiceover ? "Stop" : "Record",
                                  icon: editor.isRecordingVoiceover ? "stop.circle.fill" : "mic.fill",
                                  selected: editor.isRecordingVoiceover) {
@@ -1428,6 +1442,35 @@ private struct EditorContent: View {
                 Text("Adj Layer").font(.system(size: 13))
             }
             .foregroundStyle(editor.adjustmentLayers.isEmpty ? LumaTheme.textSecondary : LumaTheme.accentBright)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Audio-reactive visual style (pulse/glow/shake) driven by a lane's level.
+    private var audioReactiveMenu: some View {
+        Menu {
+            Button {
+                editor.setAudioReactive(nil); LumaHaptics.shared.tap()
+            } label: {
+                Label("Off", systemImage: editor.audioReactive == nil ? "checkmark" : "circle.slash")
+            }
+            ForEach(AudioReactiveStyle.allCases, id: \.self) { style in
+                Button {
+                    let src = editor.audioTracks.first?.id
+                    editor.setAudioReactive(.init(style: style, strength: 1.0, sourceTrackID: src))
+                    LumaHaptics.shared.tap()
+                } label: {
+                    if editor.audioReactive?.style == style {
+                        Label(style.label, systemImage: "checkmark")
+                    } else { Text(style.label) }
+                }
+            }
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "waveform.circle").font(.system(size: 19, weight: .medium))
+                Text("Audio FX").font(.system(size: 13))
+            }
+            .foregroundStyle(editor.audioReactive == nil ? LumaTheme.textSecondary : LumaTheme.accentBright)
             .frame(maxWidth: .infinity)
         }
     }

@@ -141,6 +141,15 @@ struct StoredProject: Codable, Identifiable {
     var canvasGradientBottomHex: String? = nil
     /// Adjustment layers (full-frame grades over time). Optional-at-end.
     var adjustmentLayers: [AdjustmentLayer]? = nil
+    /// Audio-reactive visual config (D1). Optional-at-end.
+    var audioReactive: StoredAudioReactive? = nil
+}
+
+/// Persisted audio-reactive config.
+struct StoredAudioReactive: Codable {
+    var style: String
+    var strength: Double
+    var sourceTrackID: UUID?
 }
 
 /// An Apply-a-Look session: the media + the exact grade, restorable from

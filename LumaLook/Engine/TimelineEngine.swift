@@ -407,6 +407,22 @@ final class EditorState: ObservableObject {
     @Published private(set) var overlays: [OverlayItem] = []
     /// Full-frame adjustment grades floating over the clips (adjustment layers).
     @Published private(set) var adjustmentLayers: [AdjustmentLayer] = []
+    /// Audio-reactive visual config (D1); nil = off.
+    @Published var audioReactive: AudioReactiveConfig?
+
+    struct AudioReactiveConfig: Equatable {
+        var style: AudioReactiveStyle
+        var strength: Double
+        var sourceTrackID: UUID?
+    }
+
+    /// Sets/clears the audio-reactive config (needs a rebuild — levels are
+    /// precomputed into the instruction payload).
+    func setAudioReactive(_ config: AudioReactiveConfig?) {
+        pushUndoSnapshot()
+        audioReactive = config
+        rebuild()
+    }
 
     // Canvas
     @Published var format: EditorFormat = .widescreen
@@ -581,7 +597,11 @@ final class EditorState: ObservableObject {
             canvasSolidHex: canvasSolidHex,
             canvasGradientTopHex: canvasGradientTopHex,
             canvasGradientBottomHex: canvasGradientBottomHex,
-            adjustmentLayers: adjustmentLayers.isEmpty ? nil : adjustmentLayers
+            adjustmentLayers: adjustmentLayers.isEmpty ? nil : adjustmentLayers,
+            audioReactive: audioReactive.map {
+                StoredAudioReactive(style: $0.style.rawValue, strength: $0.strength,
+                                    sourceTrackID: $0.sourceTrackID)
+            }
         )
         store.upsert(project: stored)
     }
@@ -593,6 +613,11 @@ final class EditorState: ObservableObject {
         format = EditorFormat(rawValue: project.format) ?? .widescreen
         zoom = project.zoom
         adjustmentLayers = project.adjustmentLayers ?? []
+        audioReactive = project.audioReactive.flatMap { s in
+            AudioReactiveStyle(rawValue: s.style).map {
+                AudioReactiveConfig(style: $0, strength: s.strength, sourceTrackID: s.sourceTrackID)
+            }
+        }
         canvasMode = project.canvasMode.flatMap(CanvasBackgroundMode.init) ?? .fill
         canvasSolidHex = project.canvasSolidHex ?? "#101014"
         canvasGradientTopHex = project.canvasGradientTopHex ?? "#2A2A38"
@@ -2746,6 +2771,24 @@ final class EditorState: ObservableObject {
             .map { AdjustmentSpan(start: max(0, $0.timelineOffset),
                                   end: min($0.timelineEnd, cursor.seconds),
                                   state: makeLookState(from: $0.grade)) }
+
+        // Audio-reactive level envelope (D1): 30 Hz loudness of the source lane.
+        var reactiveSpec: AudioReactiveSpec?
+        if let cfg = audioReactive,
+           let src = audioTracks.first(where: { $0.id == cfg.sourceTrackID }) ?? audioTracks.first {
+            let frames = max(1, Int(cursor.seconds * 30) + 1)
+            var levels = [Float](repeating: 0, count: frames)
+            let srcBuckets = Self.waveformSamples(url: src.renderedFileURL ?? src.url,
+                                                  buckets: max(2, Int(src.timelineDuration * 30)))
+            let maxV = srcBuckets.max() ?? 1
+            let startFrame = Int(src.timelineOffset * 30)
+            for (i, v) in srcBuckets.enumerated() {
+                let f = startFrame + i
+                if f >= 0, f < frames { levels[f] = maxV > 0 ? v / maxV : 0 }
+            }
+            reactiveSpec = AudioReactiveSpec(style: cfg.style, strength: cfg.strength,
+                                             levels: levels, sampleRate: 30)
+        }
         videoComposition.instructions = makeInstructions(
             totalDuration: cursor,
             mainTrackID: videoTrack.trackID,
@@ -2753,6 +2796,7 @@ final class EditorState: ObservableObject {
             transitionSpans: spans,
             overlaySpecs: overlaySpecs,
             adjustmentSpans: adjustmentSpans,
+            audioReactive: reactiveSpec,
             renderSize: renderSize)
         videoComposition.applySDRColorPolicy()
 
@@ -2782,6 +2826,7 @@ final class EditorState: ObservableObject {
                                   transitionSpans: [TransitionSpanSpec],
                                   overlaySpecs: [OverlaySpec],
                                   adjustmentSpans: [AdjustmentSpan] = [],
+                                  audioReactive: AudioReactiveSpec? = nil,
                                   renderSize: CGSize) -> [LumaCompositionInstruction] {
         let total = totalDuration.seconds
         var cuts: Set<Double> = [0, total]
@@ -2857,7 +2902,8 @@ final class EditorState: ObservableObject {
                 transformLayout: clipTransformLayout,
                 adjustments: adjustmentSpans.filter {
                     mid >= $0.start - 0.001 && mid < $0.end + 0.001
-                }))
+                },
+                audioReactive: audioReactive))
         }
         return instructions
     }

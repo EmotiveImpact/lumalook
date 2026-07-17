@@ -163,6 +163,33 @@ final class OverlayLayout: @unchecked Sendable {
     }
 }
 
+/// Audio-reactive visual style modulated by a per-frame level envelope.
+enum AudioReactiveStyle: String, Codable, CaseIterable {
+    case pulse, glow, shake
+    var label: String {
+        switch self {
+        case .pulse: return "Pulse"
+        case .glow: return "Glow"
+        case .shake: return "Shake"
+        }
+    }
+}
+
+/// Precomputed 30 Hz loudness envelope + style — deterministic so preview and
+/// export match.
+struct AudioReactiveSpec {
+    let style: AudioReactiveStyle
+    let strength: Double
+    let levels: [Float]      // 0…1, one per 1/30 s
+    let sampleRate: Double   // 30
+
+    func level(at seconds: Double) -> Double {
+        guard !levels.isEmpty else { return 0 }
+        let idx = min(levels.count - 1, max(0, Int(seconds * sampleRate)))
+        return Double(levels[idx])
+    }
+}
+
 /// A full-frame adjustment grade active over a time span (adjustment layer).
 struct AdjustmentSpan {
     let start: Double
@@ -297,6 +324,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let transformLayout: ClipTransformLayout?
     /// Full-frame adjustment grades active in this segment.
     let adjustments: [AdjustmentSpan]
+    /// Audio-reactive modulation (pulse/glow/shake), nil = off.
+    let audioReactive: AudioReactiveSpec?
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -311,7 +340,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          zoomFactor: CGFloat,
          canvas: CanvasSpec = .fill,
          transformLayout: ClipTransformLayout? = nil,
-         adjustments: [AdjustmentSpan] = []) {
+         adjustments: [AdjustmentSpan] = [],
+         audioReactive: AudioReactiveSpec? = nil) {
         self.timeRange = timeRange
         // An empty ID list means "call the compositor with no source frames"
         // (photo-clip segments) — exactly what T7 needs.
@@ -328,6 +358,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.canvas = canvas
         self.transformLayout = transformLayout
         self.adjustments = adjustments
+        self.audioReactive = audioReactive
         super.init()
     }
 }
@@ -484,6 +515,36 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                     to: graded.cropped(to: renderRect),
                                     includeSplit: false)
                 .cropped(to: renderRect)
+        }
+
+        // --- Audio-reactive modulation (D1): pulse/glow/shake by loudness ----
+        if let reactive = instruction.audioReactive {
+            let level = reactive.level(at: seconds)
+            if level > 0.001 {
+                let s = reactive.strength
+                switch reactive.style {
+                case .pulse:
+                    let zoom = 1 + level * 0.10 * s
+                    graded = graded
+                        .transformed(by: CGAffineTransform(translationX: -renderRect.midX, y: -renderRect.midY)
+                            .concatenating(CGAffineTransform(scaleX: zoom, y: zoom))
+                            .concatenating(CGAffineTransform(translationX: renderRect.midX, y: renderRect.midY)))
+                        .cropped(to: renderRect)
+                case .glow:
+                    let bloom = CIFilter.bloom()
+                    bloom.inputImage = graded.clampedToExtent()
+                    bloom.intensity = Float(level * s)
+                    bloom.radius = Float(10 + level * s * 25)
+                    graded = (bloom.outputImage ?? graded).cropped(to: renderRect)
+                case .shake:
+                    let amt = level * 14 * s
+                    let dx = CGFloat(sin(seconds * 73)) * amt
+                    let dy = CGFloat(cos(seconds * 61)) * amt
+                    graded = graded.clampedToExtent()
+                        .transformed(by: CGAffineTransform(translationX: dx, y: dy))
+                        .cropped(to: renderRect)
+                }
+            }
         }
 
         // --- Overlays: graded PIP layers composited over the base ----------
