@@ -62,6 +62,35 @@ final class TimelineReorderState: ObservableObject {
 
 /// Center-fixed-playhead multitrack timeline: content scrolls under a fixed
 /// centre line; scrubbing drags the content, playback drives the scroll.
+/// Live snap indicator state: the timeline time a dragged bar is currently
+/// snapped to, shared so a single accent guide-line renders in content space.
+final class SnapState: ObservableObject {
+    @Published var snappedTime: Double?
+}
+
+/// Shared snap-target maths for the timeline: t = 0, every clip boundary, and
+/// the current playhead. Used by the overlay + music bars (magnet drag).
+enum TimelineSnap {
+    @MainActor static func targets(editor: EditorState) -> [Double] {
+        var result: [Double] = [0]
+        var cursor = 0.0
+        for clip in editor.clips {
+            cursor += clip.timelineDuration
+            result.append(cursor)
+        }
+        result.append(editor.currentTime)
+        return result
+    }
+
+    /// The nearest snap target to `time` within `window` seconds, or nil.
+    @MainActor static func nearest(to time: Double, editor: EditorState, within window: Double) -> Double? {
+        guard let target = targets(editor: editor).min(by: {
+            abs($0 - time) < abs($1 - time)
+        }), abs(target - time) < window else { return nil }
+        return target
+    }
+}
+
 struct TimelineV2View: View {
     @ObservedObject var editor: EditorState
     let onAddMusic: () -> Void
@@ -72,9 +101,11 @@ struct TimelineV2View: View {
 
     @State private var metrics = TimelineMetrics()
     @StateObject private var reorder = TimelineReorderState()
+    @StateObject private var snap = SnapState()
+    @AppStorage("timelineMagnet") private var magnetOn = true
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             if editor.isEmpty {
                 emptyPlaceholder
             } else {
@@ -82,15 +113,36 @@ struct TimelineV2View: View {
                                  reorder: reorder,
                                  contentHeight: LaneMetrics.total(audioLanes: editor.audioTracks.count)) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
+                                        snap: snap, magnetOn: magnetOn,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic,
                                         onTapTransition: onTapTransition,
                                         onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 }
                 playhead
+                magnetButton
             }
         }
         .frame(height: LaneMetrics.total(audioLanes: editor.audioTracks.count))
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
+    }
+
+    /// Magnet toggle: when on, dragged bars snap to clip boundaries + playhead.
+    private var magnetButton: some View {
+        Button {
+            magnetOn.toggle()
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: "dot.squareshape.split.2x2")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(magnetOn ? .black : LumaTheme.textSecondary)
+                .frame(width: 30, height: 30)
+                .background(magnetOn ? AnyShapeStyle(LumaTheme.accentBright)
+                                     : AnyShapeStyle(.ultraThinMaterial),
+                            in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
+        .padding(.trailing, 8)
     }
 
     /// Fixed centre playhead: triangle cap over a full-height line.
@@ -137,6 +189,8 @@ struct TimelineContentView: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
     @ObservedObject var reorder: TimelineReorderState
+    @ObservedObject var snap: SnapState
+    let magnetOn: Bool
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
     let onTapTransition: (UUID) -> Void
@@ -149,19 +203,29 @@ struct TimelineContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 VideoLane(editor: editor, metrics: metrics, reorder: reorder,
                           onTapTransition: onTapTransition)
-                OverlayLane(editor: editor, metrics: metrics,
+                OverlayLane(editor: editor, metrics: metrics, snap: snap, magnetOn: magnetOn,
                             onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 ClipAudioLane(editor: editor, metrics: metrics)
             }
             ForEach(editor.audioTracks) { track in
                 MusicLane(editor: editor, metrics: metrics, track: track,
-                          onTapMusic: onTapMusic)
+                          snap: snap, magnetOn: magnetOn, onTapMusic: onTapMusic)
             }
             AddAudioRow(action: onAddMusic)
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
                height: LaneMetrics.total(audioLanes: editor.audioTracks.count),
                alignment: .leading)
+        // Snap guide-line: a full-height accent rule at the snapped time.
+        .overlay(alignment: .topLeading) {
+            if let t = snap.snappedTime {
+                Rectangle()
+                    .fill(LumaTheme.accentBright)
+                    .frame(width: 2, height: LaneMetrics.total(audioLanes: editor.audioTracks.count))
+                    .offset(x: metrics.x(for: t) - 1)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 }
 
@@ -608,6 +672,8 @@ struct TimelineClipCell: View {
 struct OverlayLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
+    @ObservedObject var snap: SnapState
+    let magnetOn: Bool
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
 
@@ -633,7 +699,7 @@ struct OverlayLane: View {
             } else {
                 ForEach(editor.overlays) { item in
                     OverlayBar(editor: editor, metrics: metrics, item: item,
-                               onTapOverlay: onTapOverlay)
+                               snap: snap, magnetOn: magnetOn, onTapOverlay: onTapOverlay)
                 }
             }
         }
@@ -647,10 +713,13 @@ private struct OverlayBar: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
     let item: EditorState.OverlayItem
+    @ObservedObject var snap: SnapState
+    let magnetOn: Bool
     let onTapOverlay: (UUID) -> Void
 
     @State private var dragTranslation: CGFloat = 0
     @State private var isDraggingBar = false
+    @State private var lastSnappedTime: Double?
 
     var body: some View {
         let barWidth = max(metrics.x(for: item.duration), 28)
@@ -727,7 +796,25 @@ private struct OverlayBar: View {
                 .onChanged { value in
                     guard case .second(true, let drag) = value else { return }
                     isDraggingBar = true
-                    dragTranslation = clampTranslation(drag?.translation.width ?? 0)
+                    var t = clampTranslation(drag?.translation.width ?? 0)
+                    // Live magnet snap: pull the bar's LEADING edge onto the
+                    // nearest boundary within ~8pt and show the guide-line.
+                    if magnetOn {
+                        let offset = item.timelineOffset + metrics.time(for: t)
+                        if let target = TimelineSnap.nearest(to: offset, editor: editor,
+                                                             within: metrics.time(for: 8)) {
+                            t = clampTranslation(metrics.x(for: target - item.timelineOffset))
+                            snap.snappedTime = target
+                            if lastSnappedTime != target {
+                                LumaHaptics.shared.timelineSnap()
+                                lastSnappedTime = target
+                            }
+                        } else {
+                            snap.snappedTime = nil
+                            lastSnappedTime = nil
+                        }
+                    }
+                    dragTranslation = t
                 }
                 .onEnded { value in
                     if case .second(true, let drag) = value {
@@ -735,6 +822,8 @@ private struct OverlayBar: View {
                     }
                     isDraggingBar = false
                     dragTranslation = 0
+                    snap.snappedTime = nil
+                    lastSnappedTime = nil
                 }
         )
         .sensoryFeedback(.impact(weight: .light), trigger: isDraggingBar)
@@ -778,10 +867,13 @@ struct MusicLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
     let track: EditorState.MusicTrack
+    @ObservedObject var snap: SnapState
+    let magnetOn: Bool
     let onTapMusic: (UUID) -> Void
 
     @State private var dragTranslation: CGFloat = 0
     @State private var isDraggingBar = false
+    @State private var lastSnappedTime: Double?
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -857,7 +949,23 @@ struct MusicLane: View {
                 .onChanged { value in
                     guard case .second(true, let drag) = value else { return }
                     isDraggingBar = true
-                    dragTranslation = clampTranslation(drag?.translation.width ?? 0, music: music)
+                    var t = clampTranslation(drag?.translation.width ?? 0, music: music)
+                    if magnetOn {
+                        let offset = music.timelineOffset + metrics.time(for: t)
+                        if let target = TimelineSnap.nearest(to: offset, editor: editor,
+                                                             within: metrics.time(for: 8)) {
+                            t = clampTranslation(metrics.x(for: target - music.timelineOffset), music: music)
+                            snap.snappedTime = target
+                            if lastSnappedTime != target {
+                                LumaHaptics.shared.timelineSnap()
+                                lastSnappedTime = target
+                            }
+                        } else {
+                            snap.snappedTime = nil
+                            lastSnappedTime = nil
+                        }
+                    }
+                    dragTranslation = t
                 }
                 .onEnded { value in
                     if case .second(true, let drag) = value {
@@ -866,6 +974,8 @@ struct MusicLane: View {
                     }
                     isDraggingBar = false
                     dragTranslation = 0
+                    snap.snappedTime = nil
+                    lastSnappedTime = nil
                 }
         )
     }
