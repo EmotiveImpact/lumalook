@@ -552,6 +552,50 @@ final class EditorState: ObservableObject {
         }
     }
 
+    /// True while a clip is being reversed (offline bake) — drives a spinner.
+    @Published private(set) var isBaking = false
+
+    /// Reverses the selected clip's trimmed range offline, then swaps the
+    /// clip's media to the baked reversed file. Speed/grade/transition/display
+    /// carry over; the baked file IS the reversed window, so trim resets to
+    /// full. Photo clips have nothing to reverse and are skipped.
+    func reverseSelectedClip() async {
+        guard let id = selectedClipID,
+              let clip = clips.first(where: { $0.id == id }),
+              !clip.isImage else { return }
+        let sourceURL = clip.url
+        let trimStart = clip.trimStart
+        let trimEnd = clip.trimEnd
+        let outputURL = store.clipsFolder
+            .appendingPathComponent("reversed_\(UUID().uuidString).mov")
+
+        isBaking = true
+        let baked: URL? = await Task.detached(priority: .userInitiated) {
+            try? await ClipBaker.reverse(url: sourceURL, trimStart: trimStart,
+                                         trimEnd: trimEnd, outputURL: outputURL)
+        }.value
+        isBaking = false
+
+        guard let baked else { return }
+        let asset = AVURLAsset(url: baked)
+        guard let duration = try? await asset.load(.duration).seconds,
+              duration > 0.05,
+              let i = clips.firstIndex(where: { $0.id == id }) else {
+            try? FileManager.default.removeItem(at: baked)
+            return
+        }
+        pushUndoSnapshot()
+        clips[i].url = baked
+        clips[i].assetDuration = duration
+        clips[i].trimStart = 0
+        clips[i].trimEnd = duration
+        clips[i].hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
+        clips[i].thumbnail = await Self.thumbnail(for: asset, at: 0.03)
+        clips[i].filmstrip = []
+        rebuild()
+        refreshFilmstrip(clipID: id)
+    }
+
     /// Default and maximum display durations for photo clips (T7). Trim
     /// edits the display duration; `assetDuration` carries the cap.
     static let photoDefaultDuration = 3.0

@@ -348,6 +348,16 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            if env["LUMA_SEED_REVERSE"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                await editor.reverseSelectedClip()
+                for _ in 0..<60 where editor.isRebuilding || editor.isBaking {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if let path = env["LUMA_SEED_REPLACE"], FileManager.default.fileExists(atPath: path),
                !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -644,6 +654,14 @@ private struct EditorContent: View {
                         onReplace()
                     }
                     .frame(width: 58)
+                    FlatTool(title: editor.isBaking ? "Reversing" : "Reverse",
+                             icon: "backward.fill") {
+                        guard !editor.isBaking, editor.selectedClip?.isImage == false else { return }
+                        LumaHaptics.shared.tap()
+                        Task { await editor.reverseSelectedClip() }
+                    }
+                    .frame(width: 58)
+                    .opacity((editor.selectedClip?.isImage ?? true) ? 0.35 : 1)
                     FlatTool(title: "Delete", icon: "trash") {
                         editor.deleteSelected()
                     }

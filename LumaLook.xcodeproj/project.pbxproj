@@ -124,6 +124,7 @@
 		C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */; };
 		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
 		C16B1359066E085945BF3413 /* FS_PT800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */; };
+		C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B147754600B3B5803C3E0583 /* ClipBaker.swift */; };
 		C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */; };
 		CAC199F8B3352305B306C8A5 /* FS_MS3.cube in Resources */ = {isa = PBXBuildFile; fileRef = BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */; };
 		CC2B75F8447C61F9064E9596 /* FS_FP100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */; };
@@ -285,6 +286,7 @@
 		AE6F396DED2949332902CD15 /* FS_KC200.cube */ = {isa = PBXFileReference; path = FS_KC200.cube; sourceTree = "<group>"; };
 		B04A5030E4C98B0AC8663228 /* FS_FP100.cube */ = {isa = PBXFileReference; path = FS_FP100.cube; sourceTree = "<group>"; };
 		B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */ = {isa = PBXFileReference; path = FS_EL400.cube; sourceTree = "<group>"; };
+		B147754600B3B5803C3E0583 /* ClipBaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipBaker.swift; sourceTree = "<group>"; };
 		B38478EF2EEA2A8135980EED /* FS_HP400.cube */ = {isa = PBXFileReference; path = FS_HP400.cube; sourceTree = "<group>"; };
 		B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */ = {isa = PBXFileReference; path = FS_AV200.cube; sourceTree = "<group>"; };
 		BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */ = {isa = PBXFileReference; path = FS_MS6.cube; sourceTree = "<group>"; };
@@ -583,6 +585,7 @@
 			isa = PBXGroup;
 			children = (
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
+				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
 				05BB58FB882FE612A9E05282 /* ColorMath.swift */,
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
@@ -806,6 +809,7 @@
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,
+				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
 				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
