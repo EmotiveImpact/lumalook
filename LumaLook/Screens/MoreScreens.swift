@@ -291,6 +291,9 @@ struct FilterPackDetailView: View {
             if count > 0 {
                 app.packStore.markInstalled(pack)
                 installedFlash += 1
+                // Post-install confirmation — tells the user where the looks
+                // landed instead of leaving them to hunt.
+                app.importToast = "\(pack.name) installed — \(count) looks in your library"
             }
         }
     }
@@ -329,10 +332,13 @@ struct FilterPackDetailView: View {
         VStack(spacing: 10) {
             Button {
                 if app.packStore.isInstalled(pack) {
-                    // Use now: open the grade room, where this pack's looks now
-                    // live in the strip. Straight in if media is already
-                    // chosen, else via Select Clip so there's something to grade.
-                    if app.selectedVideoURL != nil || app.selectedImage != nil {
+                    // Use now — context aware: if a project is already open,
+                    // jump to the editor (the looks are live in its strip);
+                    // else open the grade room, straight in when media is
+                    // chosen, otherwise via Select Clip.
+                    if !app.editor.clips.isEmpty {
+                        app.path = [.editor]
+                    } else if app.selectedVideoURL != nil || app.selectedImage != nil {
                         app.path.append(.applyLook)
                     } else {
                         app.path.append(.selectClip)

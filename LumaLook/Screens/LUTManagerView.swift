@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// screen becomes a list of records, it should feel like Settings does.
 struct LUTManagerView: View {
     @EnvironmentObject private var app: AppModel
-    @State private var filter = "Imported"
+    @State private var filter = "All"
     @State private var showImporter = false
     @State private var importError: String?
     @State private var importedName: String?
@@ -21,11 +21,50 @@ struct LUTManagerView: View {
         }
     }
 
+    /// The default view groups installed looks by the pack they came from
+    /// (preserving the purchased-pack identity) with a "Your Imports" section
+    /// for user `.cube` files; the other filters are one flat group.
+    private var lutGroups: [(id: String, title: String, luts: [LUTFile])] {
+        switch filter {
+        case "Favorites": return [("fav", "Favorites", visibleLUTs)]
+        case "Recents":   return [("rec", "Recents", visibleLUTs)]
+        default:
+            var groups: [(String, String, [LUTFile])] = []
+            let all = app.lutRepository.luts
+            let installed = all.filter { $0.packID != nil }
+            for (pid, luts) in Dictionary(grouping: installed, by: { $0.packID! })
+                .sorted(by: { $0.key < $1.key }) {
+                groups.append((pid, PackCatalog.pack(id: pid)?.name ?? "Installed Pack", luts))
+            }
+            let imports = all.filter { $0.packID == nil }
+            if !imports.isEmpty { groups.append(("imports", "Your Imports", imports)) }
+            return groups.map { ($0.0, $0.1, $0.2) }
+        }
+    }
+
+    @ViewBuilder
+    private func lutRow(_ lut: LUTFile, _ index: Int) -> some View {
+        LUTRow(lut: lut, scene: MockScene.allCases[index % MockScene.allCases.count])
+            .listRowBackground(LumaTheme.surface)
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive) { app.lutRepository.delete(lut) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button { app.lutRepository.toggleFavourite(lut) } label: {
+                    Label(lut.isFavourite ? "Unfavorite" : "Favorite",
+                          systemImage: lut.isFavourite ? "star.slash" : "star")
+                }
+                .tint(LumaTheme.gold)
+            }
+    }
+
     var body: some View {
         LumaScreen(title: "My LUTs", trailingIcon: "plus",
                    trailingAction: { showImporter = true }, showBack: true,
                    scrollable: false) {
-            SegmentPills(options: ["Imported", "Favorites", "Recents"], selection: $filter)
+            SegmentPills(options: ["All", "Favorites", "Recents"], selection: $filter)
 
             listBody
                 .padding(.horizontal, -22)   // the List brings its own insets
@@ -100,29 +139,14 @@ struct LUTManagerView: View {
                     .listRowBackground(Color.clear)
                 }
             } else {
-                Section {
-                    ForEach(Array(visibleLUTs.enumerated()), id: \.element.id) { index, lut in
-                        LUTRow(lut: lut, scene: MockScene.allCases[index % MockScene.allCases.count])
-                            .listRowBackground(LumaTheme.surface)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    app.lutRepository.delete(lut)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    app.lutRepository.toggleFavourite(lut)
-                                } label: {
-                                    Label(lut.isFavourite ? "Unfavorite" : "Favorite",
-                                          systemImage: lut.isFavourite ? "star.slash" : "star")
-                                }
-                                .tint(LumaTheme.gold)
-                            }
+                ForEach(lutGroups, id: \.id) { group in
+                    Section {
+                        ForEach(Array(group.luts.enumerated()), id: \.element.id) { index, lut in
+                            lutRow(lut, index)
+                        }
+                    } header: {
+                        Text("\(group.title) · \(group.luts.count)")
                     }
-                } header: {
-                    Text("\(visibleLUTs.count) LUT\(visibleLUTs.count == 1 ? "" : "s")")
                 }
             }
         }
@@ -167,7 +191,13 @@ private struct LUTRow: View {
             Menu {
                 Button("Apply to Current Clip") {
                     app.selectedLUT = lut
-                    app.path.append(.applyLook)
+                    // If nothing's loaded, pick media first (LUT stays selected)
+                    // instead of landing on an empty grade room.
+                    if app.selectedVideoURL != nil || app.selectedImage != nil {
+                        app.path.append(.applyLook)
+                    } else {
+                        app.path.append(.selectClip)
+                    }
                 }
                 Button(lut.isFavourite ? "Remove Favorite" : "Favorite") {
                     app.lutRepository.toggleFavourite(lut)

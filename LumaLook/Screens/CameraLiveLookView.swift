@@ -90,9 +90,18 @@ struct CameraLiveLookView: View {
                             onEdit: {
                                 camera.lastRecordingURL = nil
                                 let editor = app.editor
+                                // Carry the shot's look into the clip so the
+                                // grade you framed with survives into editing.
+                                let shotGrade = ClipGrade(
+                                    baseLookName: app.selectedLUT == nil ? app.selectedLook.name : "",
+                                    lutID: app.selectedLUT?.id,
+                                    settings: app.settings)
                                 Task {
                                     await editor.addClip(from: recording)
-                                    editor.selectedClipID = editor.clips.last?.id
+                                    if let id = editor.clips.last?.id {
+                                        editor.selectedClipID = id
+                                        editor.setClipGrade(id: id, shotGrade)
+                                    }
                                 }
                                 app.path = [.editor]
                             })

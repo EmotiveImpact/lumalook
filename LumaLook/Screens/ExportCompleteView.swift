@@ -140,6 +140,31 @@ struct ExportCompleteView: View {
                     }
                     .padding(.top, 22)
 
+                    // Grade → Edit bridge: carry the just-graded clip into the
+                    // editor (with its look baked into the clip's grade) so the
+                    // grade room isn't a dead end before the timeline.
+                    if app.lastExportImage == nil,
+                       app.selectedVideoURL != nil || !app.editor.clips.isEmpty {
+                        GhostCTA(title: "Continue in Editor") {
+                            let editor = app.editor
+                            if editor.clips.isEmpty, let url = app.selectedVideoURL {
+                                let grade = ClipGrade(
+                                    baseLookName: app.selectedLUT == nil ? app.selectedLook.name : "",
+                                    lutID: app.selectedLUT?.id,
+                                    settings: app.settings)
+                                Task {
+                                    await editor.addClip(from: url)
+                                    if let id = editor.clips.last?.id {
+                                        editor.selectedClipID = id
+                                        editor.setClipGrade(id: id, grade)
+                                    }
+                                }
+                            }
+                            app.path = [.editor]
+                        }
+                        .padding(.top, 24)
+                    }
+
                     GhostCTA(title: "New Project") {
                         app.resetToHome()
                     }
