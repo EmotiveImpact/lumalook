@@ -164,7 +164,36 @@ final class AppModel: ObservableObject {
         didSet { syncLookState() }
     }
     @Published var selectedLUT: LUTFile? {
-        didSet { syncLookState() }
+        didSet {
+            syncLookState()
+            applyRememberedStrength()
+        }
+    }
+    /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
+    /// value (so restoring 62% doesn't immediately re-save 62%).
+    private var isApplyingRemembered = false
+    private var strengthSaveTask: Task<Void, Never>?
+
+    /// When a LUT is picked, restore its remembered opacity/blend (unless a
+    /// GradeSession restore is driving, which sets its own values).
+    private func applyRememberedStrength() {
+        guard !isRestoringSession, let lut = selectedLUT else { return }
+        isApplyingRemembered = true
+        creativeOpacity = lut.defaultOpacity ?? 100
+        creativeBlend = lut.defaultBlend.flatMap(LUTBlendMode.init) ?? .normal
+        isApplyingRemembered = false
+    }
+
+    /// Debounced write-back of the current opacity/blend onto the selected LUT.
+    private func rememberStrength() {
+        guard !isApplyingRemembered, !isRestoringSession, let lut = selectedLUT else { return }
+        strengthSaveTask?.cancel()
+        let id = lut.id, op = creativeOpacity, bl = creativeBlend.rawValue
+        strengthSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            self?.lutRepository.setDefaults(for: id, opacity: op, blend: bl)
+        }
     }
     /// Slot 1 — conversion/log-normalisation LUT applied before the look.
     @Published var conversionLUT: LUTFile? {
@@ -175,11 +204,11 @@ final class AppModel: ObservableObject {
     }
     /// Slot 2 opacity — creative LUT blended against its input.
     @Published var creativeOpacity: Double = 100 {
-        didSet { syncLookState() }
+        didSet { syncLookState(); rememberStrength() }
     }
     /// Slot 2 blend mode (Normal/Soft Light/Overlay/Screen).
     @Published var creativeBlend: LUTBlendMode = .normal {
-        didSet { syncLookState() }
+        didSet { syncLookState(); rememberStrength() }
     }
     @Published var settings = LookSettings() {
         didSet { syncLookState() }
@@ -282,6 +311,11 @@ final class AppModel: ObservableObject {
                 await autoGrade()
                 print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
             }
+        }
+        // Per-LUT strength round-trip: set 62%, wait debounce, read back.
+        if env["LUMA_SEED_LUTSTRENGTH"] == "1", let lut = lutRepository.luts.first {
+            selectedLUT = lut
+            creativeOpacity = 62   // debounced write-back onto the LUT
         }
         // Blend-mode cell: select a LUT + blend for export verification.
         if let bl = env["LUMA_SEED_BLEND"], let mode = LUTBlendMode(rawValue: bl) {

@@ -253,6 +253,11 @@ struct LUTFile: Identifiable, Codable, Hashable {
     var fileSizeBytes: Int?
     var importedAt: Date
     var isFavourite: Bool
+    /// Remembered creative-slot opacity (0…100) + blend for this LUT, so
+    /// switching subtle↔strong LUTs doesn't re-blow the level. Optional →
+    /// synthesized Codable decodes old indexes unchanged.
+    var defaultOpacity: Double? = nil
+    var defaultBlend: String? = nil
 
     /// The #1 user mistake in the LUT ecosystem is applying a Log-input LUT
     /// to normal footage ("everything looks washed out / too harsh").

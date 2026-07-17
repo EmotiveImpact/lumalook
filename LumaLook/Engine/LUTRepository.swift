@@ -68,6 +68,14 @@ final class LUTRepository: ObservableObject {
         save()
     }
 
+    /// Remembers this LUT's creative-slot opacity + blend (per-LUT strength).
+    func setDefaults(for id: UUID, opacity: Double, blend: String) {
+        guard let index = luts.firstIndex(where: { $0.id == id }) else { return }
+        luts[index].defaultOpacity = opacity
+        luts[index].defaultBlend = blend
+        save()
+    }
+
     // MARK: - Persistence
 
     private func load() {
