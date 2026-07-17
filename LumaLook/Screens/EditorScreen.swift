@@ -30,6 +30,7 @@ struct EditorTimelineView: View {
     @State private var showAudioSourceChooser = false
     @State private var showAudioLibrary = false
     @State private var showStickerLibrary = false
+    @State private var showMaskPanel = false
     @State private var isExporting = false
     @State private var showExportSheet = false
     @State private var showFullscreenPreview = false
@@ -59,6 +60,7 @@ struct EditorTimelineView: View {
                 onAdd: { showAddPicker = true },
                 onAddOverlay: { showOverlayPicker = true },
                 onAddSticker: { showStickerLibrary = true },
+                onOpenMask: { showMaskPanel = true },
                 onAddMusic: { showAudioSourceChooser = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
@@ -90,6 +92,14 @@ struct EditorTimelineView: View {
         }
         .sheet(isPresented: $showStickerLibrary) {
             StickerLibraryView()
+        }
+        .sheet(isPresented: $showMaskPanel) {
+            if let id = editor.selectedClipID ?? editor.clips.first?.id {
+                MaskPanel(editor: editor, clipID: id) { showMaskPanel = false }
+                    .padding(.horizontal, 16)
+                    .presentationDetents([.medium])
+                    .presentationBackground(LumaTheme.background)
+            }
         }
         .sheet(isPresented: $showAudioLibrary) {
             AudioLibrarySheet(editor: editor) { showAudioLibrary = false }
@@ -379,6 +389,24 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F8: a spot tool on the first clip. Format "shape|effect|amount".
+            if let m = env["LUMA_SEED_CLIPMASK"], !editor.isEmpty {
+                let f = m.split(separator: "|").map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let clip = editor.clips.first, let shape = ClipMaskShape(rawValue: f[0]) {
+                    editor.setClipMask(id: clip.id,
+                                       shape: shape,
+                                       effect: f.count > 1 ? ClipMaskEffect(rawValue: f[1]) : nil,
+                                       center: CGPoint(x: 0.5, y: 0.5),
+                                       size: CGSize(width: 0.4, height: 0.4),
+                                       amount: f.count > 2 ? Double(f[2]) : nil)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let c = editor.clips.first
+                print("[LUMA] CLIPMASK shape=\(c?.maskShape ?? "nil") effect=\(c?.maskEffect ?? "nil") amount=\(c?.maskAmount ?? -1)")
+            }
             // F6: a full-frame effect over the whole clip. Format "kind|intensity".
             if let fx = env["LUMA_SEED_EFFECT"], !editor.isEmpty {
                 let f = fx.split(separator: "|").map(String.init)
@@ -979,6 +1007,7 @@ private struct EditorContent: View {
     let onAdd: () -> Void
     let onAddOverlay: () -> Void
     let onAddSticker: () -> Void
+    let onOpenMask: () -> Void
     let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
@@ -1317,6 +1346,10 @@ private struct EditorContent: View {
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
                             .frame(width: 58)
+                        FlatTool(title: "Spot", icon: "circle.dashed.inset.filled", action: onOpenMask)
+                            .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
                             .frame(width: 58)
                     }

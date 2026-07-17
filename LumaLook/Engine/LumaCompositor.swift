@@ -56,11 +56,13 @@ struct FrameMeta {
     let clipLookState: LookState?
     /// Clip identity, so the compositor can look up live Ken Burns keyframes.
     var clipID: UUID? = nil
+    /// F8 — spot tool (blur/mosaic/fill) over a shaped region of this clip.
+    var mask: ClipMaskSpec? = nil
 
     init(start: Double, end: Double, transform: CGAffineTransform,
          imageURL: URL? = nil, hasAnchorFrames: Bool = false,
          clipLookState: LookState? = nil, display: ClipDisplayOps = .identity,
-         clipID: UUID? = nil) {
+         clipID: UUID? = nil, mask: ClipMaskSpec? = nil) {
         self.start = start
         self.end = end
         self.transform = transform
@@ -69,6 +71,7 @@ struct FrameMeta {
         self.clipLookState = clipLookState
         self.display = display
         self.clipID = clipID
+        self.mask = mask
     }
 }
 
@@ -513,6 +516,13 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         } else {
             // No source and no still (e.g. race right at a boundary): black.
             canvas = CIImage(color: .black)
+        }
+
+        // --- F8 spot tool: blur/mosaic/fill a shaped region of the clip.
+        // On the composed canvas and BEFORE the grade, so the look treats the
+        // masked pixels like any others (a graded blur, not a blurred grade).
+        if let mask = meta?.mask {
+            canvas = MaskRenderer.apply(mask, to: canvas.cropped(to: renderRect), rect: renderRect)
         }
 
         // --- Grade (same pipeline, split-wipe never baked in) --------------

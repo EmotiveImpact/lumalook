@@ -70,11 +70,21 @@ enum TextRasterizer {
         // the measured box (round up to full width — cheap, and safe for the
         // stroke joins on sharp glyph corners, which overshoot the half-width).
         let pad = max(0, style.boxPadding) + max(0, style.strokeWidth)
+        // Settle the canvas in WHOLE PIXELS here, and use that one value for the
+        // allocation, the box rect and the y-flip alike. `pad` is caller-supplied
+        // and routinely fractional, so `textSize + pad * 2` usually isn't integral:
+        // rounding it only at the allocation left the bitmap up to a pixel taller
+        // and wider than the geometry everything else was drawn in, and the box
+        // rect — sized from the fractional canvas — fell short of the bitmap it was
+        // painted into. That left a partially-transparent seam along the top and
+        // right edges of the background box (measured: alpha 127 instead of 255 at
+        // boxPadding 20.25). Ceil rather than round so the canvas can only ever
+        // grow into padding, never crop a glyph.
         let canvas = CGSize(
-            width: min(textSize.width + pad * 2, maxCanvas),
-            height: min(textSize.height + pad * 2, maxCanvas))
-        let pixelWidth = Int(canvas.width.rounded())
-        let pixelHeight = Int(canvas.height.rounded())
+            width: min((textSize.width + pad * 2).rounded(.up), maxCanvas),
+            height: min((textSize.height + pad * 2).rounded(.up), maxCanvas))
+        let pixelWidth = Int(canvas.width)
+        let pixelHeight = Int(canvas.height)
         guard pixelWidth > 0, pixelHeight > 0 else { return nil }
 
         guard let ctx = CGContext(

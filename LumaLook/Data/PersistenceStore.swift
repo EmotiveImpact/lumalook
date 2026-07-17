@@ -41,6 +41,17 @@ struct StoredClip: Codable, Identifiable {
     var fadeIn: Double? = nil
     var fadeOut: Double? = nil
     var fadeCurve: String? = nil
+    /// F8 spot tool (blur/mosaic/fill over a region). Optional-at-end; nil shape = no mask.
+    var maskShape: String? = nil
+    var maskEffect: String? = nil
+    var maskCenterX: Double? = nil
+    var maskCenterY: Double? = nil
+    var maskWidth: Double? = nil
+    var maskHeight: Double? = nil
+    var maskFeather: Double? = nil
+    var maskAmount: Double? = nil
+    var maskFillHex: String? = nil
+    var maskInverted: Bool? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).

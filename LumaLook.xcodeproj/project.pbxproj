@@ -65,6 +65,7 @@
 		4F6D8FC03BE24FB090B7629F /* FS_PX100W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */; };
 		5115DD16558EADCE8A2A408D /* FS_PX680C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */; };
 		52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */; };
+		537EFD60A2E4D87BCF893229 /* MaskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DBC4F6939DD535E66444EAD /* MaskPanel.swift */; };
 		53C37CA44870DB5CFEB9397D /* FS_KC64.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3481F9BB808BEE8D58CED37F /* FS_KC64.cube */; };
 		549DC8B77628BCE22C6CFCC2 /* FS_EC100V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9E8F2A13BBEAE025610F8313 /* FS_EC100V.cube */; };
 		5689040618691FF213182252 /* LumaCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CA07F33B727EC523266C623 /* LumaCompositor.swift */; };
@@ -251,6 +252,7 @@
 		396331E331CF8435E978C3C7 /* FS_EC100G.cube */ = {isa = PBXFileReference; path = FS_EC100G.cube; sourceTree = "<group>"; };
 		3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookThumbs.swift; sourceTree = "<group>"; };
 		3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */ = {isa = PBXFileReference; path = FS_BW400.cube; sourceTree = "<group>"; };
+		3DBC4F6939DD535E66444EAD /* MaskPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaskPanel.swift; sourceTree = "<group>"; };
 		3DD911A59C44434B989660EB /* FS_RIR400.cube */ = {isa = PBXFileReference; path = FS_RIR400.cube; sourceTree = "<group>"; };
 		400A15E9F4B13EC5E84CCCEE /* FS_EL100X.cube */ = {isa = PBXFileReference; path = FS_EL100X.cube; sourceTree = "<group>"; };
 		41753F4EEB74CF332AB8096D /* FS_SP100.cube */ = {isa = PBXFileReference; path = FS_SP100.cube; sourceTree = "<group>"; };
@@ -480,6 +482,7 @@
 				D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */,
 				64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */,
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
+				3DBC4F6939DD535E66444EAD /* MaskPanel.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
 				A25EF472896C678306B040FD /* StickerLibraryView.swift */,
@@ -977,6 +980,7 @@
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,
 				300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */,
 				AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */,
+				537EFD60A2E4D87BCF893229 /* MaskPanel.swift in Sources */,
 				C5CD14F371ED4259C2147F3E /* MaskRenderer.swift in Sources */,
 				22149D2B572771131F02C893 /* MockData.swift in Sources */,
 				EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */,

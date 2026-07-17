@@ -106,8 +106,12 @@ enum ShapeRenderer {
     private static func render(_ spec: ShapeSpec, w: Int, h: Int,
                                fill: CGColor?, stroke: CGColor?,
                                strokeWidth: CGFloat) -> CIImage? {
-        let space = CGColorSpaceCreateDeviceRGB()
-        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+        // sRGB explicitly, matching the space the fill/stroke colours are built
+        // in, so CoreGraphics has no conversion to do and the hex the user typed
+        // is the byte that lands in the bitmap. (DeviceRGB happens to be sRGB on
+        // iOS, but it is device-dependent by name — do not rely on it here.)
+        guard let space = srgb,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
                                   bytesPerRow: 0, space: space,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
             return nil
@@ -290,21 +294,34 @@ enum ShapeRenderer {
         + "\(spec.strokeWidth)|\(spec.cornerRadius)|\(spec.rotationDegrees)|\(w)x\(h)"
     }
 
+    /// A hex string is sRGB by definition — that is what every colour picker,
+    /// CSS value and design spec means by "#FF0000". Colours MUST be built in
+    /// this space explicitly: `CGColor(red:green:blue:alpha:)` builds in
+    /// *Generic RGB* (gamma 1.8, different primaries), and CoreGraphics then
+    /// colour-matches that into the sRGB bitmap context on the way to the
+    /// pixels — #FF0000 lands as (255, 38, 0) and #808080 as (146, 146, 146).
+    /// It compiles, it looks right, and every colour is wrong.
+    private static let srgb = CGColorSpace(name: CGColorSpace.sRGB)
+
     /// #RGB / #RRGGBB / #RRGGBBAA → CGColor. nil on anything unparseable, which
     /// the caller reads as "don't paint this".
     private static func cgColor(from hex: String) -> CGColor? {
         var s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
-        guard s.count == 6 || s.count == 8, let v = UInt32(s, radix: 16) else { return nil }
+        guard s.count == 6 || s.count == 8, let v = UInt32(s, radix: 16),
+              let space = srgb else { return nil }
+        let comps: [CGFloat]
         if s.count == 8 {
-            return CGColor(red: CGFloat((v >> 24) & 0xFF) / 255,
-                           green: CGFloat((v >> 16) & 0xFF) / 255,
-                           blue: CGFloat((v >> 8) & 0xFF) / 255,
-                           alpha: CGFloat(v & 0xFF) / 255)
+            comps = [CGFloat((v >> 24) & 0xFF) / 255,
+                     CGFloat((v >> 16) & 0xFF) / 255,
+                     CGFloat((v >> 8) & 0xFF) / 255,
+                     CGFloat(v & 0xFF) / 255]
+        } else {
+            comps = [CGFloat((v >> 16) & 0xFF) / 255,
+                     CGFloat((v >> 8) & 0xFF) / 255,
+                     CGFloat(v & 0xFF) / 255,
+                     1]
         }
-        return CGColor(red: CGFloat((v >> 16) & 0xFF) / 255,
-                       green: CGFloat((v >> 8) & 0xFF) / 255,
-                       blue: CGFloat(v & 0xFF) / 255,
-                       alpha: 1)
+        return CGColor(colorSpace: space, components: comps)
     }
 }

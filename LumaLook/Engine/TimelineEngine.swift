@@ -269,6 +269,31 @@ final class EditorState: ObservableObject {
         var fadeIn: Double = 0
         var fadeOut: Double = 0
         var fadeCurve: FadeCurve = .linear
+        /// F8 — spot tool. Flat fields so StoredClip needs no Codable on
+        /// ClipMaskSpec (that type lives in the renderer, which stays pure).
+        var maskShape: String? = nil        // ClipMaskShape rawValue; nil = no mask
+        var maskEffect: String = ClipMaskEffect.blur.rawValue
+        var maskCenterX: Double = 0.5
+        var maskCenterY: Double = 0.5
+        var maskWidth: Double = 0.3
+        var maskHeight: Double = 0.3
+        var maskFeather: Double = 0.05
+        var maskAmount: Double = 0.6
+        var maskFillHex: String = "#000000"
+        var maskInverted: Bool = false
+
+        /// The renderer payload, or nil when this clip has no spot tool.
+        var maskSpec: ClipMaskSpec? {
+            guard let shape = maskShape.flatMap({ ClipMaskShape(rawValue: $0) }) else { return nil }
+            return ClipMaskSpec(shape: shape,
+                                effect: ClipMaskEffect(rawValue: maskEffect) ?? .blur,
+                                center: CGPoint(x: maskCenterX, y: maskCenterY),
+                                size: CGSize(width: maskWidth, height: maskHeight),
+                                feather: maskFeather,
+                                amount: maskAmount,
+                                fillHex: maskFillHex,
+                                inverted: maskInverted)
+        }
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
@@ -612,7 +637,17 @@ final class EditorState: ObservableObject {
                            speedRamp: $0.speedRamp == SpeedRamp.none.rawValue ? nil : $0.speedRamp,
                            fadeIn: $0.fadeIn == 0 ? nil : $0.fadeIn,
                            fadeOut: $0.fadeOut == 0 ? nil : $0.fadeOut,
-                           fadeCurve: $0.fadeCurve == .linear ? nil : $0.fadeCurve.rawValue)
+                           fadeCurve: $0.fadeCurve == .linear ? nil : $0.fadeCurve.rawValue,
+                           maskShape: $0.maskShape,
+                           maskEffect: $0.maskShape == nil ? nil : $0.maskEffect,
+                           maskCenterX: $0.maskShape == nil ? nil : $0.maskCenterX,
+                           maskCenterY: $0.maskShape == nil ? nil : $0.maskCenterY,
+                           maskWidth: $0.maskShape == nil ? nil : $0.maskWidth,
+                           maskHeight: $0.maskShape == nil ? nil : $0.maskHeight,
+                           maskFeather: $0.maskShape == nil ? nil : $0.maskFeather,
+                           maskAmount: $0.maskShape == nil ? nil : $0.maskAmount,
+                           maskFillHex: $0.maskShape == nil ? nil : $0.maskFillHex,
+                           maskInverted: $0.maskInverted ? true : nil)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -722,6 +757,19 @@ final class EditorState: ObservableObject {
                         speedRamp: stored.speedRamp ?? SpeedRamp.none.rawValue,
                         fadeIn: stored.fadeIn ?? 0, fadeOut: stored.fadeOut ?? 0,
                         fadeCurve: stored.fadeCurve.flatMap(FadeCurve.init) ?? .linear)
+        }
+        for i in clips.indices {
+            guard let stored = project.clips.first(where: { $0.id == clips[i].id }) else { continue }
+            clips[i].maskShape = stored.maskShape
+            clips[i].maskEffect = stored.maskEffect ?? ClipMaskEffect.blur.rawValue
+            clips[i].maskCenterX = stored.maskCenterX ?? 0.5
+            clips[i].maskCenterY = stored.maskCenterY ?? 0.5
+            clips[i].maskWidth = stored.maskWidth ?? 0.3
+            clips[i].maskHeight = stored.maskHeight ?? 0.3
+            clips[i].maskFeather = stored.maskFeather ?? 0.05
+            clips[i].maskAmount = stored.maskAmount ?? 0.6
+            clips[i].maskFillHex = stored.maskFillHex ?? "#000000"
+            clips[i].maskInverted = stored.maskInverted ?? false
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -1864,6 +1912,27 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F8 — sets (or clears, with shape nil) the clip's spot tool.
+    func setClipMask(id: UUID,
+                     shape: ClipMaskShape?,
+                     effect: ClipMaskEffect? = nil,
+                     center: CGPoint? = nil,
+                     size: CGSize? = nil,
+                     feather: Double? = nil,
+                     amount: Double? = nil,
+                     inverted: Bool? = nil) {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        clips[i].maskShape = shape?.rawValue
+        if let effect { clips[i].maskEffect = effect.rawValue }
+        if let center { clips[i].maskCenterX = center.x; clips[i].maskCenterY = center.y }
+        if let size { clips[i].maskWidth = size.width; clips[i].maskHeight = size.height }
+        if let feather { clips[i].maskFeather = feather }
+        if let amount { clips[i].maskAmount = amount }
+        if let inverted { clips[i].maskInverted = inverted }
+        rebuild()
+    }
+
     /// F6 — drops an effect layer at the playhead.
     @discardableResult
     func addEffectLayer(kind: EffectKind, duration: Double = 2.0) -> UUID? {
@@ -2697,7 +2766,8 @@ final class EditorState: ObservableObject {
                                        hasAnchorFrames: anchored,
                                        clipLookState: clip.grade.map(makeLookState),
                                        display: clip.displayOps,
-                                       clipID: clip.id))
+                                       clipID: clip.id,
+                                       mask: clip.maskSpec))
                 cursor = cursor + stillDuration
                 continue
             }
@@ -2763,7 +2833,8 @@ final class EditorState: ObservableObject {
                                    transform: transform,
                                    clipLookState: clip.grade.map(makeLookState),
                                    display: clip.displayOps,
-                                   clipID: clip.id))
+                                   clipID: clip.id,
+                                   mask: clip.maskSpec))
             cursor = cursor + insertedDuration
         }
 
