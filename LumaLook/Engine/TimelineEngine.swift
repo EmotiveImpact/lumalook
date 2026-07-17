@@ -122,13 +122,17 @@ final class EditorState: ObservableObject {
         /// User display transforms applied over the source orientation.
         var rotationQuarterTurns: Int = 0   // 90° steps, mod 4
         var isMirrored: Bool = false        // horizontal flip
+        /// Free crop in unit space (y-down); straighten in degrees.
+        var cropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+        var straightenDegrees: Double = 0
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
 
         /// Bundle for the compositor's FrameMeta.display.
         var displayOps: ClipDisplayOps {
-            ClipDisplayOps(rotationQuarterTurns: rotationQuarterTurns, isMirrored: isMirrored)
+            ClipDisplayOps(rotationQuarterTurns: rotationQuarterTurns, isMirrored: isMirrored,
+                           cropRect: cropRect, straightenDegrees: straightenDegrees)
         }
     }
 
@@ -352,7 +356,10 @@ final class EditorState: ObservableObject {
                            grade: $0.grade,
                            transitionDuration: $0.transitionDuration,
                            rotationQuarterTurns: $0.rotationQuarterTurns,
-                           isMirrored: $0.isMirrored)
+                           isMirrored: $0.isMirrored,
+                           cropX: $0.cropRect.minX, cropY: $0.cropRect.minY,
+                           cropW: $0.cropRect.width, cropH: $0.cropRect.height,
+                           straightenDegrees: $0.straightenDegrees)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -417,7 +424,10 @@ final class EditorState: ObservableObject {
                         grade: stored.grade,
                         transitionDuration: stored.transitionDuration,
                         rotationQuarterTurns: stored.rotationQuarterTurns ?? 0,
-                        isMirrored: stored.isMirrored ?? false)
+                        isMirrored: stored.isMirrored ?? false,
+                        cropRect: CGRect(x: stored.cropX ?? 0, y: stored.cropY ?? 0,
+                                         width: stored.cropW ?? 1, height: stored.cropH ?? 1),
+                        straightenDegrees: stored.straightenDegrees ?? 0)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -804,6 +814,16 @@ final class EditorState: ObservableObject {
     /// Double; this just clamps for the slider.
     func setClipSpeed(_ speed: Double) {
         setSpeed(min(4, max(0.1, speed)))
+    }
+
+    /// Applies a free crop (unit rect) + straighten to the selected clip.
+    func setCropStraighten(id: UUID, cropRect: CGRect, straightenDegrees: Double) {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        clips[i].cropRect = cropRect
+        clips[i].straightenDegrees = max(-15, min(15, straightenDegrees))
+        rebuild()
+        refreshFilmstrip(clipID: id)
     }
 
     /// Rotates the selected clip 90° clockwise (wraps at 4).

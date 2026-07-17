@@ -19,9 +19,20 @@ import CoreImage.CIFilterBuiltins
 struct ClipDisplayOps: Equatable {
     var rotationQuarterTurns: Int = 0   // user 90° steps, mod 4
     var isMirrored: Bool = false        // horizontal flip
+    /// Free crop in unit space (y-down UI convention); full frame = identity.
+    var cropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// Fine straighten in degrees (−15…15); auto-fills to hide empty corners.
+    var straightenDegrees: Double = 0
 
     static let identity = ClipDisplayOps()
-    var isIdentity: Bool { rotationQuarterTurns % 4 == 0 && !isMirrored }
+    var isCropIdentity: Bool {
+        abs(cropRect.minX) < 0.001 && abs(cropRect.minY) < 0.001 &&
+        abs(cropRect.width - 1) < 0.001 && abs(cropRect.height - 1) < 0.001
+    }
+    var isIdentity: Bool {
+        rotationQuarterTurns % 4 == 0 && !isMirrored &&
+        isCropIdentity && abs(straightenDegrees) < 0.01
+    }
 }
 
 struct FrameMeta {
@@ -572,6 +583,36 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         if turns != 0 {
             img = img.transformed(by: CGAffineTransform(rotationAngle: -CGFloat(turns) * .pi / 2))
         }
+        // Re-origin before crop/straighten so unit maths use a clean extent.
+        img = img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
+                                                    y: -img.extent.minY))
+
+        // Straighten: rotate a small angle about the centre and over-scale so
+        // the empty corners never show, then crop back to the original frame.
+        if abs(ops.straightenDegrees) > 0.01 {
+            let box = img.extent
+            let a = CGFloat(ops.straightenDegrees) * .pi / 180
+            let cx = box.midX, cy = box.midY
+            let r = box.width / max(box.height, 1)
+            let fill = cos(abs(a)) + sin(abs(a)) * max(r, 1 / r)
+            let t = CGAffineTransform(translationX: -cx, y: -cy)
+                .concatenating(CGAffineTransform(rotationAngle: -a))
+                .concatenating(CGAffineTransform(scaleX: fill, y: fill))
+                .concatenating(CGAffineTransform(translationX: cx, y: cy))
+            img = img.transformed(by: t).cropped(to: box)
+        }
+
+        // Free crop (unit rect, y measured from the TOP in UI space).
+        if !ops.isCropIdentity {
+            let e = img.extent
+            let c = ops.cropRect
+            let rect = CGRect(x: e.minX + c.minX * e.width,
+                              y: e.minY + (1 - c.maxY) * e.height,
+                              width: c.width * e.width,
+                              height: c.height * e.height)
+            img = img.cropped(to: rect)
+        }
+
         return img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
                                                      y: -img.extent.minY))
     }

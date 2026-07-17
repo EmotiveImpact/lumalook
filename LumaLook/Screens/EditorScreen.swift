@@ -14,6 +14,7 @@ struct EditorTimelineView: View {
     @State private var showOverlayPicker = false
     @State private var replacePickerItem: PhotosPickerItem?
     @State private var showReplacePicker = false
+    @State private var showCropPanel = false
     @State private var showOverlayPanel = false
     @State private var selectedOverlayID: UUID?
     @State private var isLoadingClip = false
@@ -59,7 +60,8 @@ struct EditorTimelineView: View {
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
                 onOpenAdjust: { app.path.append(.customLook) },
-                onReplace: { showReplacePicker = true }
+                onReplace: { showReplacePicker = true },
+                onCropClip: { if editor.selectedClipID != nil { showCropPanel = true } }
             )
         }
         .navigationBarBackButtonHidden()
@@ -134,6 +136,17 @@ struct EditorTimelineView: View {
                 Task { await editor.addClip(from: url) }
             }
             applyDebugSeed()
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LUMA_SEED_CROPUI"] == "1" {
+                Task {
+                    for _ in 0..<40 where editor.clips.isEmpty || editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                    editor.selectedClipID = editor.clips.first?.id
+                    showCropPanel = true
+                }
+            }
+            #endif
         }
         .onDisappear {
             editor.saveProject()
@@ -155,6 +168,21 @@ struct EditorTimelineView: View {
         // display; one tap minimises back into the editor.
         .fullScreenCover(isPresented: $showFullscreenPreview) {
             FullscreenPreview(editor: editor)
+        }
+        .sheet(isPresented: $showCropPanel) {
+            if let clip = editor.selectedClip {
+                CropStraightenView(
+                    thumbnail: clip.thumbnail,
+                    aspect: CGFloat(editor.format.aspect),
+                    initialCrop: clip.cropRect,
+                    initialStraighten: clip.straightenDegrees,
+                    onApply: { rect, deg in
+                        editor.setCropStraighten(id: clip.id, cropRect: rect, straightenDegrees: deg)
+                        showCropPanel = false
+                    },
+                    onCancel: { showCropPanel = false })
+                    .presentationDetents([.large])
+            }
         }
     }
 
@@ -370,6 +398,22 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if let cropStr = env["LUMA_SEED_CROP"], !editor.isEmpty {
+                let parts = cropStr.split(separator: ",").compactMap { Double($0) }
+                if parts.count >= 4, let id = editor.clips.first?.id {
+                    for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                    editor.selectedClipID = id
+                    editor.setCropStraighten(
+                        id: id,
+                        cropRect: CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]),
+                        straightenDegrees: parts.count > 4 ? parts[4] : 0)
+                    for _ in 0..<40 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             if let raw = env["LUMA_SEED_CANVAS"], let mode = CanvasBackgroundMode(rawValue: raw),
                !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -509,6 +553,7 @@ private struct EditorContent: View {
     let onOpenCrop: () -> Void
     let onOpenAdjust: () -> Void
     let onReplace: () -> Void
+    let onCropClip: () -> Void
     /// When set, the looks strip grades THIS clip instead of the timeline.
     @State private var looksTargetClipID: UUID?
     /// Transport readout mode: MM:SS:FF timecode vs plain MM:SS (long-press).
@@ -645,6 +690,10 @@ private struct EditorContent: View {
                     .frame(width: 58)
                     FlatTool(title: "Split", icon: "square.split.2x1") {
                         editor.splitAtPlayhead()
+                    }
+                    .frame(width: 58)
+                    FlatTool(title: "Crop", icon: "crop") {
+                        onCropClip()
                     }
                     .frame(width: 58)
                     FlatTool(title: "Rotate", icon: "rotate.right") {

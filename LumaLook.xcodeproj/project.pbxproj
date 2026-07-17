@@ -35,6 +35,7 @@
 		27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */ = {isa = PBXBuildFile; fileRef = 222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */; };
 		2BF4BFEE36116C1A8F0B3013 /* FS_EK100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 48B3A573684BF7B15A188E7D /* FS_EK100.cube */; };
 		300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */; };
+		30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */; };
 		3027C848F4DB05F3BE35BB8D /* FS_CP2383.cube in Resources */ = {isa = PBXBuildFile; fileRef = 5F1F68DD59817F2629702B2B /* FS_CP2383.cube */; };
 		369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */; };
 		3769715A54DA8D00C7C43F29 /* FS_TZ0C.cube in Resources */ = {isa = PBXBuildFile; fileRef = CBD94C74B308262B83000612 /* FS_TZ0C.cube */; };
@@ -211,6 +212,7 @@
 		41FBDDA8C50CE4E77289F3ED /* FS_SP1600.cube */ = {isa = PBXFileReference; path = FS_SP1600.cube; sourceTree = "<group>"; };
 		43EEB129DF4E76FC1523F268 /* hero_coast.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_coast.jpg; sourceTree = "<group>"; };
 		45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */ = {isa = PBXFileReference; path = FS_MS14.cube; sourceTree = "<group>"; };
+		460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropStraightenView.swift; sourceTree = "<group>"; };
 		4663C3D90BD5F02587298D57 /* FS_PT400N.cube */ = {isa = PBXFileReference; path = FS_PT400N.cube; sourceTree = "<group>"; };
 		476EEF99D87977383B9E4673 /* FS_AS100.cube */ = {isa = PBXFileReference; path = FS_AS100.cube; sourceTree = "<group>"; };
 		48B3A573684BF7B15A188E7D /* FS_EK100.cube */ = {isa = PBXFileReference; path = FS_EK100.cube; sourceTree = "<group>"; };
@@ -385,6 +387,7 @@
 		6179EBD36201DBA3960BCD66 /* Editor */ = {
 			isa = PBXGroup;
 			children = (
+				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				71565855D4F4F92716382C0A /* TimelineV2.swift */,
 			);
 			path = Editor;
@@ -812,6 +815,7 @@
 				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
+				30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */,
 				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
 				E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */,
 				6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */,

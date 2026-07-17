@@ -27,6 +27,12 @@ struct StoredClip: Codable, Identifiable {
     /// projects decode; nil = no user orientation.
     var rotationQuarterTurns: Int? = nil
     var isMirrored: Bool? = nil
+    /// Free crop (unit rect) + straighten degrees. Optional-at-end; nil = full.
+    var cropX: Double? = nil
+    var cropY: Double? = nil
+    var cropW: Double? = nil
+    var cropH: Double? = nil
+    var straightenDegrees: Double? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).
