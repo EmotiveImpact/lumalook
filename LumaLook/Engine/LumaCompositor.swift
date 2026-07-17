@@ -614,7 +614,10 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 overlayImage = ShapeRenderer.image(shape, size: CGSize(width: 512, height: 512))
                 isVector = true
             } else if let imageURL = spec.imageURL {
-                overlayImage = stillImage(at: imageURL)
+                // F5: animated sources (GIF/APNG) advance with time; ordinary
+                // stills fall through unchanged.
+                overlayImage = animatedStill(at: imageURL, localTime: seconds - spec.start)
+                    ?? stillImage(at: imageURL)
             } else if spec.trackID != kCMPersistentTrackID_Invalid,
                       let buffer = request.sourceFrame(byTrackID: spec.trackID) {
                 var frame = CIImage(cvPixelBuffer: buffer)
@@ -949,6 +952,54 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
     /// CIImage cache for photo clips + image overlays. EXIF orientation is
     /// applied on load so stills behave like `appliesPreferredTrackTransform`.
+    /// Animated-still cache (F5): GIF / APNG / animated WebP decoded once into
+    /// frames + cumulative times. The frame is picked by a pure function of
+    /// time, so preview and export agree and looping is intrinsic.
+    private var animatedCache: [URL: (frames: [CIImage], cumTimes: [Double], total: Double)?] = [:]
+
+    /// Frame of an animated source at `localTime` seconds into the overlay's
+    /// run. Returns nil for ordinary single-frame stills (the caller falls back
+    /// to `stillImage`). A nil ENTRY is cached too, so a still is probed once.
+    private func animatedStill(at url: URL, localTime: Double) -> CIImage? {
+        stateLock.lock()
+        let hit = animatedCache[url]
+        stateLock.unlock()
+
+        let entry: (frames: [CIImage], cumTimes: [Double], total: Double)?
+        if let hit {
+            entry = hit
+        } else {
+            entry = decodeAnimated(url)
+            stateLock.lock()
+            animatedCache[url] = entry
+            stateLock.unlock()
+        }
+        guard let entry, entry.total > 0.001, !entry.frames.isEmpty else { return nil }
+
+        // Wrap: the sticker loops for as long as the overlay lives.
+        var t = localTime.truncatingRemainder(dividingBy: entry.total)
+        if t < 0 { t += entry.total }
+        let i = entry.cumTimes.firstIndex(where: { t < $0 }) ?? (entry.frames.count - 1)
+        return entry.frames[min(i, entry.frames.count - 1)]
+    }
+
+    private func decodeAnimated(_ url: URL) -> (frames: [CIImage], cumTimes: [Double], total: Double)? {
+        guard let decoded = GIFExporter.decodeFrames(at: url), decoded.frames.count > 1 else { return nil }
+        var frames: [CIImage] = []
+        var cum: [Double] = []
+        var running = 0.0
+        // Cap the cache: a long GIF must not pin hundreds of full frames.
+        for (i, cg) in decoded.frames.prefix(60).enumerated() {
+            let img = CIImage(cgImage: cg)
+            frames.append(img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
+                                                                y: -img.extent.minY)))
+            running += max(decoded.delays[safeIndex: i] ?? 0.05, 0.02)
+            cum.append(running)
+        }
+        guard !frames.isEmpty else { return nil }
+        return (frames, cum, running)
+    }
+
     private func stillImage(at url: URL) -> CIImage? {
         stateLock.lock()
         if let cached = stillCache[url] {
@@ -967,4 +1018,10 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         stateLock.unlock()
         return normalised
     }
+}
+
+
+private extension Array {
+    /// Bounds-safe read: a malformed GIF can report fewer delays than frames.
+    subscript(safeIndex i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }

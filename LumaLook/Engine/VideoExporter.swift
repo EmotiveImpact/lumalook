@@ -34,6 +34,8 @@ struct ExportSpec: Equatable {
     var fps: Int = 30
     /// Audio-only M4A export (C7).
     var audioOnly: Bool = false
+    /// F5 — also transcode the finished mov to an animated GIF.
+    var alsoGIF: Bool = false
 
     var presetName: String {
         switch (resolution, codec) {
@@ -62,6 +64,7 @@ struct ExportSpec: Equatable {
     static func from(rawValue: String) -> ExportSpec {
         var spec = ExportSpec()
         if rawValue.uppercased().contains("AUDIO") { spec.audioOnly = true; return spec }
+        if rawValue.uppercased().contains("GIF") { spec.alsoGIF = true }
         let parts = rawValue.split(separator: "|").map(String.init)
         if parts.count >= 3 {
             spec.resolution = Resolution(rawValue: parts[0]) ?? .hd1080

@@ -219,6 +219,8 @@ final class AppModel: ObservableObject {
     /// success screen shows the Settings banner instead of a scary error.
     @Published var lastExportSavedToPhotos = true
     @Published var lastExportURL: URL?
+    /// F5 — the GIF alongside the last export, when "Also save GIF" was on.
+    @Published var lastExportGIFURL: URL?
     @Published var lastExportImage: CGImage?
     @Published var exportError: String?
     /// Transient confirmation banner for open-in-place imports (#117).

@@ -141,6 +141,19 @@ struct ExportSpecSheet: View {
             .tint(LumaTheme.accentBright)
             .padding(.vertical, 6)
 
+            if !spec.audioOnly {
+                Toggle(isOn: $spec.alsoGIF) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Also save GIF")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        Text("Looping, 12 fps, 480 px wide")
+                            .font(.system(size: 11)).foregroundStyle(LumaTheme.textMuted)
+                    }
+                }
+                .tint(LumaTheme.accentBright)
+                .padding(.vertical, 6)
+            }
+
             HStack {
                 TechReadout(estimateLine, size: 9, color: LumaTheme.textMuted)
                 Spacer()

@@ -971,6 +971,14 @@ struct EditorTimelineView: View {
                                                         spec: spec)
                     app.lastExportSavedToPhotos = await app.exporter.saveToPhotos(url: url)
                 }
+                // F5: transcode the FINISHED mov — everything (grade, overlays,
+                // frame) is already burnt in, so the GIF needs no composition.
+                if spec.alsoGIF, !spec.audioOnly {
+                    app.lastExportGIFURL = await GIFExporter.makeGIF(from: url)
+                    print("[LUMA] GIF url=\(app.lastExportGIFURL?.lastPathComponent ?? "nil")")
+                } else {
+                    app.lastExportGIFURL = nil
+                }
                 app.lastExportURL = url
                 isExporting = false
                 LumaHaptics.shared.exportSuccess()
