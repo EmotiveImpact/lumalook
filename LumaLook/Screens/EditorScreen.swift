@@ -406,6 +406,46 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // Overlay effects: e.g. LUMA_SEED_OVERLAY_FX="blend=screen" or
+            // "chroma=#00FF00;mask=ellipse;adjust=exposure:1.0;border=0.04,#FFFFFF,0.1".
+            if let fxStr = env["LUMA_SEED_OVERLAY_FX"], let ov = editor.overlays.first {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                for part in fxStr.split(separator: ";") {
+                    let kv = part.split(separator: "=", maxSplits: 1)
+                    guard kv.count == 2 else { continue }
+                    let key = String(kv[0]), val = String(kv[1])
+                    switch key {
+                    case "blend":
+                        if let m = OverlayBlendMode(rawValue: val) { editor.setOverlayBlendMode(id: ov.id, m) }
+                    case "chroma":
+                        editor.setOverlayChroma(id: ov.id, ChromaKeySettings(colorHex: val))
+                    case "mask":
+                        editor.setOverlayMask(id: ov.id, OverlayMaskSettings(shape: val))
+                    case "adjust":
+                        let f = val.split(separator: ":")
+                        var a = OverlayAdjustments()
+                        if f.count == 2, let v = Double(f[1]) {
+                            switch f[0] {
+                            case "exposure": a.exposure = v
+                            case "contrast": a.contrast = v
+                            case "saturation": a.saturation = v
+                            case "warmth": a.warmth = v
+                            default: break
+                            }
+                        }
+                        editor.setOverlayAdjustments(id: ov.id, a)
+                    case "border":
+                        let f = val.split(separator: ",")
+                        var b = OverlayBorderSettings()
+                        if let w = f.first.flatMap({ Double($0) }) { b.widthFraction = w }
+                        if f.count > 1 { b.colorHex = String(f[1]) }
+                        if f.count > 2, let r = Double(f[2]) { b.cornerRadiusFraction = r }
+                        editor.setOverlayBorder(id: ov.id, b)
+                    default: break
+                    }
+                }
+                for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -1685,6 +1725,9 @@ private struct OverlayPanel: View {
 
             if overlay?.text != nil {
                 textControls
+            } else {
+                // Media overlays: blend / chroma / mask / adjust / border.
+                OverlayEffectsPanel(editor: editor, overlayID: overlayID)
             }
 
             InlineSlider(title: "Opacity", value: Binding(

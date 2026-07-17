@@ -264,6 +264,8 @@ final class EditorState: ObservableObject {
         var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
         /// Stacking lane (z-order): higher lanes render on top.
         var lane: Int = 0
+        /// Non-placement effect stack (blend/chroma/mask/adjust/border).
+        var effects: OverlayEffects = OverlayEffects()
 
         var timelineEnd: Double { timelineOffset + duration }
     }
@@ -369,6 +371,9 @@ final class EditorState: ObservableObject {
     /// Live overlay size/position/opacity read by the compositor per frame —
     /// sliders update it without composition rebuilds (the LookState trick).
     let overlayLayout = OverlayLayout()
+    /// Live per-overlay effects (blend/chroma/mask/adjust/border) the
+    /// compositor reads per frame — same live-reference trick as overlayLayout.
+    let overlayEffects = OverlayEffectsBox()
     /// Live per-clip Ken Burns pan/zoom, same live-reference trick.
     let clipTransformLayout = ClipTransformLayout()
     private let store: PersistenceStore
@@ -476,7 +481,8 @@ final class EditorState: ObservableObject {
                               text: $0.text,
                               textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
                               textColorHex: $0.text == nil ? nil : $0.textColorHex,
-                              lane: $0.lane == 0 ? nil : $0.lane)
+                              lane: $0.lane == 0 ? nil : $0.lane,
+                              effects: $0.effects.isIdentity ? nil : $0.effects)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -554,6 +560,7 @@ final class EditorState: ObservableObject {
             item.textStyle = stored.textStyle.flatMap(TextLayerStyle.init) ?? .title
             item.textColorHex = stored.textColorHex ?? "#FFFFFF"
             item.lane = stored.lane ?? 0
+            item.effects = stored.effects ?? OverlayEffects()
             return item
         }
         rebuild(keepPosition: false)
@@ -1652,6 +1659,51 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    // MARK: - Overlay effects (blend / chroma / mask / adjust / border)
+
+    /// Discrete change → snapshot; all live (no rebuild) via overlayEffects box.
+    func setOverlayBlendMode(id: UUID, _ mode: OverlayBlendMode) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].effects.blendMode != mode else { return }
+        pushUndoSnapshot()
+        overlays[i].effects.blendMode = mode
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Toggling on/off snapshots; slider drags (passing snapshot:false) don't.
+    func setOverlayChroma(id: UUID, _ chroma: ChromaKeySettings?, snapshot: Bool = true) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        if snapshot { pushUndoSnapshot() }
+        overlays[i].effects.chroma = chroma
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    func setOverlayMask(id: UUID, _ mask: OverlayMaskSettings?, snapshot: Bool = true) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        if snapshot { pushUndoSnapshot() }
+        overlays[i].effects.mask = mask
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    func setOverlayBorder(id: UUID, _ border: OverlayBorderSettings?, snapshot: Bool = true) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        if snapshot { pushUndoSnapshot() }
+        overlays[i].effects.border = border
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Live tone sliders — no snapshot.
+    func setOverlayAdjustments(id: UUID, _ adjust: OverlayAdjustments?) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].effects.adjust = (adjust?.isIdentity ?? true) ? nil : adjust
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
     /// Highest lane currently in use (for placing new overlays / UI bounds).
     var maxOverlayLane: Int { overlays.map(\.lane).max() ?? 0 }
 
@@ -1805,6 +1857,8 @@ final class EditorState: ObservableObject {
             map[overlay.id] = (base, frames)
         }
         overlayLayout.replaceAll(map)
+        overlayEffects.replaceAll(Dictionary(uniqueKeysWithValues:
+            overlays.map { ($0.id, $0.effects) }))
         if refreshFrame, let player, player.timeControlStatus != .playing {
             let time = player.currentTime()
             player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -2499,6 +2553,7 @@ final class EditorState: ObservableObject {
                 transitionSpans: transitionSpans,
                 overlays: overlaySpecs,
                 overlayLayout: overlayLayout,
+                overlayEffects: overlayEffects,
                 lookState: lookState,
                 renderSize: renderSize,
                 zoomFactor: max(1.0, zoom / 100.0),

@@ -78,6 +78,8 @@ struct StoredOverlay: Codable {
     var textColorHex: String? = nil
     /// Stacking lane / z-order. Optional-at-end; nil = lane 0.
     var lane: Int? = nil
+    /// Effect stack (blend/chroma/mask/adjust/border). Optional-at-end.
+    var effects: OverlayEffects? = nil
 }
 
 /// Background-music track attached to a project.

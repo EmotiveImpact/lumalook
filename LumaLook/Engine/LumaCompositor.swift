@@ -285,6 +285,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let transitionSpans: [TransitionSpanSpec]
     let overlays: [OverlaySpec]
     let overlayLayout: OverlayLayout
+    /// Live per-overlay effect stack (blend/chroma/mask/adjust/border).
+    let overlayEffects: OverlayEffectsBox
     /// Reference type — live-updates the running preview, same trick as the
     /// old CI-handler closure capturing it.
     let lookState: LookState
@@ -303,6 +305,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          transitionSpans: [TransitionSpanSpec],
          overlays: [OverlaySpec],
          overlayLayout: OverlayLayout,
+         overlayEffects: OverlayEffectsBox,
          lookState: LookState,
          renderSize: CGSize,
          zoomFactor: CGFloat,
@@ -318,6 +321,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.transitionSpans = transitionSpans
         self.overlays = overlays
         self.overlayLayout = overlayLayout
+        self.overlayEffects = overlayEffects
         self.lookState = lookState
         self.renderSize = renderSize
         self.zoomFactor = zoomFactor
@@ -494,6 +498,9 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             guard let placement = instruction.overlayLayout.placement(
                 for: spec.id, at: seconds - spec.start) else { continue }
 
+            // Live effect stack for this overlay (blend/chroma/mask/adjust/border).
+            let fx = instruction.overlayEffects.effects(for: spec.id) ?? OverlayEffects()
+
             var overlayImage: CIImage?
             var isText = false
             if let text = spec.text {
@@ -513,6 +520,10 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 overlayImage = frame
             }
             guard var overlay = overlayImage, overlay.extent.width > 0 else { continue }
+
+            // ---- Overlay effect hook chain (F4–F7 add stages here) ----
+            // Order: chroma (raw) → grade → adjust → scale → mask → border →
+            //        rotate/position/opacity → blend composite.
 
             // Same look on the PIP as the base — one grade across the frame.
             // Text stays ungraded: titles must hold their exact colour.
@@ -560,7 +571,16 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 overlay = matrix.outputImage ?? overlay
             }
 
-            graded = overlay.composited(over: graded).cropped(to: renderRect)
+            // Blend-mode composite (F3): Blend(overlay, base) then source-over.
+            // Text overlays always use normal so titles hold their colour.
+            if !isText, let filterName = fx.blendMode.ciFilterName {
+                let blended = overlay.applyingFilter(
+                    filterName, parameters: [kCIInputBackgroundImageKey: graded])
+                    .cropped(to: overlay.extent.intersection(renderRect))
+                graded = blended.composited(over: graded).cropped(to: renderRect)
+            } else {
+                graded = overlay.composited(over: graded).cropped(to: renderRect)
+            }
         }
 
         // --- Transitions, applied last so they take the PIP with them ------
