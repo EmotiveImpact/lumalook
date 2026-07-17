@@ -32,6 +32,8 @@ struct ExportSpec: Equatable {
     var resolution: Resolution = .hd1080
     var codec: Codec = .hevc
     var fps: Int = 30
+    /// Audio-only M4A export (C7).
+    var audioOnly: Bool = false
 
     var presetName: String {
         switch (resolution, codec) {
@@ -58,9 +60,10 @@ struct ExportSpec: Equatable {
     /// AppStorage-friendly encoding.
     var rawValue: String { "\(resolution.rawValue)|\(codec.rawValue)|\(fps)" }
     static func from(rawValue: String) -> ExportSpec {
-        let parts = rawValue.split(separator: "|").map(String.init)
         var spec = ExportSpec()
-        if parts.count == 3 {
+        if rawValue.uppercased().contains("AUDIO") { spec.audioOnly = true; return spec }
+        let parts = rawValue.split(separator: "|").map(String.init)
+        if parts.count >= 3 {
             spec.resolution = Resolution(rawValue: parts[0]) ?? .hd1080
             spec.codec = Codec(rawValue: parts[1]) ?? .hevc
             spec.fps = Int(parts[2]) ?? 30
@@ -197,6 +200,38 @@ final class VideoExporter: ObservableObject {
         if session.status == .cancelled {
             throw CancellationError()
         }
+        throw session.error ?? VideoExportError.exportFailed
+    }
+
+    /// Audio-only export (C7): an M4A of the mixed audio, no video.
+    func exportAudioOnly(asset: AVAsset, audioMix: AVAudioMix?) async throws -> URL {
+        isExporting = true
+        progress = 0
+        defer { isExporting = false; progressTask?.cancel() }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumaLook_Export_\(UUID().uuidString).m4a")
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            throw VideoExportError.exportSessionCreationFailed
+        }
+        self.session = session
+        session.outputURL = outputURL
+        session.outputFileType = .m4a
+        session.audioMix = audioMix
+        session.audioTimePitchAlgorithm = .spectral
+
+        progressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let session = self.session else { return }
+                self.progress = Double(session.progress)
+                if session.status == .completed || session.status == .failed { return }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+        await session.export()
+        if session.status == .completed { progress = 1; return outputURL }
+        try? FileManager.default.removeItem(at: outputURL)
+        if session.status == .cancelled { throw CancellationError() }
         throw session.error ?? VideoExportError.exportFailed
     }
 

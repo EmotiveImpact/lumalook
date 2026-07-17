@@ -806,11 +806,19 @@ struct EditorTimelineView: View {
                 // 4K spec needs a 4K canvas — renderSize caps the preset.
                 let built = try await editor.buildComposition(
                     renderScale: spec.resolution == .uhd4K ? 2 : 1)
-                let url = try await app.exporter.export(asset: built.composition,
+                let url: URL
+                if spec.audioOnly {
+                    // M4A: no video, share-only (Photos rejects audio).
+                    url = try await app.exporter.exportAudioOnly(asset: built.composition,
+                                                                 audioMix: built.audioMix)
+                    app.lastExportSavedToPhotos = false
+                } else {
+                    url = try await app.exporter.export(asset: built.composition,
                                                         videoComposition: built.videoComposition,
                                                         audioMix: built.audioMix,
                                                         spec: spec)
-                app.lastExportSavedToPhotos = await app.exporter.saveToPhotos(url: url)
+                    app.lastExportSavedToPhotos = await app.exporter.saveToPhotos(url: url)
+                }
                 app.lastExportURL = url
                 isExporting = false
                 LumaHaptics.shared.exportSuccess()

@@ -133,6 +133,14 @@ struct ExportSpecSheet: View {
                     selection: Binding(get: { "\(spec.fps)" },
                                        set: { spec.fps = Int($0) ?? 30 }))
 
+            Hairline()
+            Toggle(isOn: $spec.audioOnly) {
+                Text("Audio only (M4A)")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+            }
+            .tint(LumaTheme.accentBright)
+            .padding(.vertical, 6)
+
             HStack {
                 TechReadout(estimateLine, size: 9, color: LumaTheme.textMuted)
                 Spacer()
@@ -140,12 +148,12 @@ struct ExportSpecSheet: View {
             }
             .padding(.top, 10)
 
-            if gradeCubeTitle != nil {
+            if gradeCubeTitle != nil, !spec.audioOnly {
                 cubeRow
                     .padding(.top, 10)
             }
 
-            SolidCTA(title: "Export Video", height: 52) {
+            SolidCTA(title: spec.audioOnly ? "Export Audio" : "Export Video", height: 52) {
                 storedSpec = spec.rawValue
                 onExport(spec)
             }
