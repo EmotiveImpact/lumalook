@@ -346,6 +346,10 @@ final class EditorState: ObservableObject {
         var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
         /// Stacking lane (z-order): higher lanes render on top.
         var lane: Int = 0
+        /// Content kind ("sticker" | "shape" | "caption" | nil).
+        var kind: String? = nil
+        /// Loops its media to fill the overlay's duration (particles/GIF).
+        var loopsMedia: Bool = false
         /// Non-placement effect stack (blend/chroma/mask/adjust/border).
         var effects: OverlayEffects = OverlayEffects()
 
@@ -591,7 +595,9 @@ final class EditorState: ObservableObject {
                               textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
                               textColorHex: $0.text == nil ? nil : $0.textColorHex,
                               lane: $0.lane == 0 ? nil : $0.lane,
-                              effects: $0.effects.isIdentity ? nil : $0.effects)
+                              effects: $0.effects.isIdentity ? nil : $0.effects,
+                              kind: $0.kind,
+                              loopsMedia: $0.loopsMedia ? true : nil)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -688,6 +694,8 @@ final class EditorState: ObservableObject {
             item.textColorHex = stored.textColorHex ?? "#FFFFFF"
             item.lane = stored.lane ?? 0
             item.effects = stored.effects ?? OverlayEffects()
+            item.kind = stored.kind
+            item.loopsMedia = stored.loopsMedia ?? false
             return item
         }
         rebuild(keepPosition: false)
@@ -1711,27 +1719,20 @@ final class EditorState: ObservableObject {
             guard Self.imageThumbnail(at: durableURL, maxDimension: 32) != nil else { return }
         }
 
-        // First free slot at/after the playhead on the single lane.
-        var offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
-        for existing in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
-            if offset < existing.timelineOffset - 0.05 { break }
-            if offset < existing.timelineEnd { offset = existing.timelineEnd }
-        }
+        // F0: land at the playhead and auto-stack onto the first free LANE
+        // (captions + a sticker + a title can share a moment).
+        let offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
         guard offset < totalDuration - 0.2 else { return }
-        var maxEnd = totalDuration
-        if let next = overlays
-            .filter({ $0.timelineOffset > offset + 0.05 })
-            .min(by: { $0.timelineOffset < $1.timelineOffset }) {
-            maxEnd = min(maxEnd, next.timelineOffset)
-        }
-        let duration = min(mediaDuration, maxEnd - offset)
+        let duration = min(mediaDuration, totalDuration - offset)
         guard duration > 0.2 else { return }
+        let lane = firstFreeLane(at: offset, duration: duration)
 
         pushUndoSnapshot()
         var item = OverlayItem(id: UUID(), url: durableURL, isImage: isImage,
                                timelineOffset: offset, duration: duration,
                                title: url.deletingPathExtension().lastPathComponent)
         if !isImage { item.mediaDuration = mediaDuration }
+        item.lane = lane
         overlays.append(item)
         overlays.sort { $0.timelineOffset < $1.timelineOffset }
         rebuild()
@@ -1742,20 +1743,12 @@ final class EditorState: ObservableObject {
     /// whole overlay machinery: placement, keyframes, opacity, trim.
     func addTextOverlay() {
         guard totalDuration > 0.4 else { return }
-        var offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
-        for existing in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
-            if offset < existing.timelineOffset - 0.05 { break }
-            if offset < existing.timelineEnd { offset = existing.timelineEnd }
-        }
+        // F0: land at the playhead, auto-stack onto the first free lane.
+        let offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
         guard offset < totalDuration - 0.2 else { return }
-        var maxEnd = totalDuration
-        if let next = overlays
-            .filter({ $0.timelineOffset > offset + 0.05 })
-            .min(by: { $0.timelineOffset < $1.timelineOffset }) {
-            maxEnd = min(maxEnd, next.timelineOffset)
-        }
-        let duration = min(3.0, maxEnd - offset)
+        let duration = min(3.0, totalDuration - offset)
         guard duration > 0.2 else { return }
+        let lane = firstFreeLane(at: offset, duration: duration)
 
         pushUndoSnapshot()
         var item = OverlayItem(id: UUID(),
@@ -1766,6 +1759,7 @@ final class EditorState: ObservableObject {
         item.text = "Your Title"
         item.sizeFraction = 0.6
         item.center = CGPoint(x: 0.5, y: 0.5)
+        item.lane = lane
         overlays.append(item)
         overlays.sort { $0.timelineOffset < $1.timelineOffset }
         rebuild()
@@ -2019,6 +2013,26 @@ final class EditorState: ObservableObject {
 
     /// Highest lane currently in use (for placing new overlays / UI bounds).
     var maxOverlayLane: Int { overlays.map(\.lane).max() ?? 0 }
+
+    /// Lowest lane with no overlay overlapping [offset, offset+duration] — new
+    /// items auto-stack instead of being refused.
+    func firstFreeLane(at offset: Double, duration: Double) -> Int {
+        let end = offset + duration
+        var lane = 0
+        while overlays.contains(where: { $0.lane == lane
+            && $0.timelineOffset < end - 0.01 && $0.timelineEnd > offset + 0.01 }) {
+            lane += 1
+            if lane > 8 { break }
+        }
+        return lane
+    }
+
+    /// Tags an overlay's content kind (sticker/shape/caption) — no rebuild.
+    func markOverlay(id: UUID, kind: String?) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].kind = kind
+        scheduleAutosave()
+    }
 
     /// Nudges an overlay's z-order lane up (forward) or down (back). A lane
     /// change moves the overlay to a different composition video track, so it
@@ -2602,7 +2616,9 @@ final class EditorState: ObservableObject {
         for overlay in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
             let start = min(max(0, overlay.timelineOffset), cursor.seconds)
             var playable = min(overlay.duration, cursor.seconds - start)
-            if !overlay.isImage, overlay.text == nil {
+            // A looping overlay repeats its media, so the media length never
+            // caps its on-screen duration (particles / GIF loops).
+            if !overlay.isImage, overlay.text == nil, !overlay.loopsMedia {
                 playable = min(playable, max(0, overlay.mediaDuration - overlay.mediaStart))
             }
             guard playable > 0.05 else { continue }
@@ -2644,11 +2660,26 @@ final class EditorState: ObservableObject {
             if at > laneEntry.cursor {
                 track.insertEmptyTimeRange(CMTimeRange(start: laneEntry.cursor, end: at))
             }
-            let range = CMTimeRange(start: CMTime(seconds: overlay.mediaStart, preferredTimescale: 600),
-                                    duration: CMTime(seconds: playable, preferredTimescale: 600))
+            // Looping overlays repeat their media to fill `playable`; the last
+            // insert is truncated. Non-looping insert once (F0).
+            let mediaLen = overlay.loopsMedia
+                ? max(0.05, min(overlay.mediaDuration - overlay.mediaStart,
+                                (try? await overlayAsset.load(.duration).seconds) ?? playable))
+                : playable
             do {
-                try track.insertTimeRange(range, of: sourceVideo, at: at)
-                overlayLaneTracks[overlay.lane] = (track, at + range.duration)
+                var filled = 0.0
+                var insertAt = at
+                repeat {
+                    let chunk = min(mediaLen, playable - filled)
+                    guard chunk > 0.02 else { break }
+                    let range = CMTimeRange(
+                        start: CMTime(seconds: overlay.mediaStart, preferredTimescale: 600),
+                        duration: CMTime(seconds: chunk, preferredTimescale: 600))
+                    try track.insertTimeRange(range, of: sourceVideo, at: insertAt)
+                    filled += chunk
+                    insertAt = insertAt + range.duration
+                } while overlay.loopsMedia && filled < playable - 0.02
+                overlayLaneTracks[overlay.lane] = (track, insertAt)
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: track.trackID,
                                                 imageURL: nil,
@@ -2661,8 +2692,20 @@ final class EditorState: ObservableObject {
                 if let sourceAudio = try? await overlayAsset.loadTracks(withMediaType: .audio).first,
                    let audioTrack = composition.addMutableTrack(withMediaType: .audio,
                                                                 preferredTrackID: kCMPersistentTrackID_Invalid) {
+                    // Mirror the (possibly looped) video fill for the audio.
                     do {
-                        try audioTrack.insertTimeRange(range, of: sourceAudio, at: at)
+                        var aFilled = 0.0
+                        var aAt = at
+                        repeat {
+                            let chunk = min(mediaLen, playable - aFilled)
+                            guard chunk > 0.02 else { break }
+                            let aRange = CMTimeRange(
+                                start: CMTime(seconds: overlay.mediaStart, preferredTimescale: 600),
+                                duration: CMTime(seconds: chunk, preferredTimescale: 600))
+                            try audioTrack.insertTimeRange(aRange, of: sourceAudio, at: aAt)
+                            aFilled += chunk
+                            aAt = aAt + aRange.duration
+                        } while overlay.loopsMedia && aFilled < playable - 0.02
                         overlayAudioTracks.append((overlay.id, audioTrack))
                     } catch {
                         composition.removeTrack(audioTrack)

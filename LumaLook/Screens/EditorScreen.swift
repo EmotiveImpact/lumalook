@@ -372,6 +372,28 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // F0 auto-stack test: two overlays added at the same playhead must
+            // land on lanes 0/1 (not be pushed later) and both render.
+            if let s2 = env["LUMA_SEED_STACK2"], !editor.isEmpty {
+                let paths = s2.split(separator: ",").map(String.init)
+                if paths.count >= 2 {
+                    for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                    editor.seek(to: 0)
+                    await editor.addOverlay(from: URL(fileURLWithPath: paths[0]), isImage: true)
+                    await editor.addOverlay(from: URL(fileURLWithPath: paths[1]), isImage: true)
+                    // Distinct centres so both are separately samplable.
+                    if editor.overlays.count >= 2 {
+                        editor.setOverlayCenter(id: editor.overlays[0].id, CGPoint(x: 0.3, y: 0.3))
+                        editor.setOverlayCenter(id: editor.overlays[1].id, CGPoint(x: 0.7, y: 0.7))
+                        editor.setOverlaySize(id: editor.overlays[0].id, 0.3)
+                        editor.setOverlaySize(id: editor.overlays[1].id, 0.3)
+                    }
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    print("[LUMA] STACK2 lanes=\(editor.overlays.map { "\($0.lane)@\(String(format: "%.1f", $0.timelineOffset))" })")
+                }
+            }
             // Z-order test: overlay A (paths[0]) and B (paths[1]) overlap at
             // one centre. B rides lane 1 (on top by default → B visible). With
             // LUMA_SEED_ZORDER_LANE=1, A jumps to lane 2 so A wins instead.

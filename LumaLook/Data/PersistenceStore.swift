@@ -84,6 +84,9 @@ struct StoredOverlay: Codable {
     var lane: Int? = nil
     /// Effect stack (blend/chroma/mask/adjust/border). Optional-at-end.
     var effects: OverlayEffects? = nil
+    /// Content kind (sticker/shape/caption) + media looping. Optional-at-end.
+    var kind: String? = nil
+    var loopsMedia: Bool? = nil
 }
 
 /// Background-music track attached to a project.

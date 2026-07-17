@@ -22,12 +22,13 @@ enum LaneMetrics {
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
 
-    /// Total stack height for N audio lanes (+1 row for the add button).
-    /// The overlay lane is always present: bars when overlays exist, a slim
-    /// "+ Overlay" affordance when none do.
-    static func total(audioLanes: Int) -> CGFloat {
+    /// Total stack height for N audio lanes (+1 row for the add button) and N
+    /// overlay lanes. The overlay lane is always present: bars when overlays
+    /// exist, a slim "+ Overlay" affordance when none do.
+    static func total(audioLanes: Int, overlayLanes: Int = 1) -> CGFloat {
         let lanes = CGFloat(audioLanes + 1)   // + "Add audio" row
-        return ruler + spacing + video + 4 + overlay + 4 + clipAudio
+        let overlayRows = CGFloat(max(1, overlayLanes))
+        return ruler + spacing + video + 4 + overlayRows * (overlay + 4) + clipAudio
              + lanes * (music + spacing)
     }
 }
@@ -104,6 +105,14 @@ struct TimelineV2View: View {
     @StateObject private var snap = SnapState()
     @AppStorage("timelineMagnet") private var magnetOn = true
 
+    /// One row per stacking lane in use (F0); always at least one.
+    private var overlayLaneCount: Int {
+        (editor.overlays.map(\.lane).max() ?? 0) + 1
+    }
+    private var stackHeight: CGFloat {
+        LaneMetrics.total(audioLanes: editor.audioTracks.count, overlayLanes: overlayLaneCount)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             if editor.isEmpty {
@@ -111,7 +120,7 @@ struct TimelineV2View: View {
             } else {
                 TimelineScroller(editor: editor, metrics: $metrics,
                                  reorder: reorder,
-                                 contentHeight: LaneMetrics.total(audioLanes: editor.audioTracks.count)) { m in
+                                 contentHeight: stackHeight) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         snap: snap, magnetOn: magnetOn,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic,
@@ -122,8 +131,9 @@ struct TimelineV2View: View {
                 magnetButton
             }
         }
-        .frame(height: LaneMetrics.total(audioLanes: editor.audioTracks.count))
+        .frame(height: stackHeight)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
     }
 
     /// Magnet toggle: when on, dragged bars snap to clip boundaries + playhead.
@@ -197,14 +207,23 @@ struct TimelineContentView: View {
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
 
+    /// One row per stacking lane in use (F0); always at least one.
+    private var overlayLaneCount: Int {
+        (editor.overlays.map(\.lane).max() ?? 0) + 1
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
             RulerLane(duration: editor.totalDuration, metrics: metrics)
             VStack(alignment: .leading, spacing: 4) {
                 VideoLane(editor: editor, metrics: metrics, reorder: reorder,
                           onTapTransition: onTapTransition)
-                OverlayLane(editor: editor, metrics: metrics, snap: snap, magnetOn: magnetOn,
-                            onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
+                // Highest lane on top, matching the compositor's z-order.
+                ForEach((0..<overlayLaneCount).reversed(), id: \.self) { lane in
+                    OverlayLane(editor: editor, metrics: metrics, snap: snap, magnetOn: magnetOn,
+                                lane: lane,
+                                onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
+                }
                 ClipAudioLane(editor: editor, metrics: metrics)
             }
             ForEach(editor.audioTracks) { track in
@@ -214,14 +233,16 @@ struct TimelineContentView: View {
             AddAudioRow(action: onAddMusic)
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
-               height: LaneMetrics.total(audioLanes: editor.audioTracks.count),
+               height: LaneMetrics.total(audioLanes: editor.audioTracks.count,
+                                         overlayLanes: overlayLaneCount),
                alignment: .leading)
         // Snap guide-line: a full-height accent rule at the snapped time.
         .overlay(alignment: .topLeading) {
             if let t = snap.snappedTime {
                 Rectangle()
                     .fill(LumaTheme.accentBright)
-                    .frame(width: 2, height: LaneMetrics.total(audioLanes: editor.audioTracks.count))
+                    .frame(width: 2, height: LaneMetrics.total(audioLanes: editor.audioTracks.count,
+                                                               overlayLanes: overlayLaneCount))
                     .offset(x: metrics.x(for: t) - 1)
                     .allowsHitTesting(false)
             }
@@ -674,8 +695,14 @@ struct OverlayLane: View {
     let metrics: TimelineMetrics
     @ObservedObject var snap: SnapState
     let magnetOn: Bool
+    /// Which stacking lane this row renders (F0).
+    var lane: Int = 0
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
+
+    private var laneItems: [EditorState.OverlayItem] {
+        editor.overlays.filter { $0.lane == lane }
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -697,7 +724,7 @@ struct OverlayLane: View {
                 }
                 .buttonStyle(.lumaPress)
             } else {
-                ForEach(editor.overlays) { item in
+                ForEach(laneItems) { item in
                     OverlayBar(editor: editor, metrics: metrics, item: item,
                                snap: snap, magnetOn: magnetOn, onTapOverlay: onTapOverlay)
                 }
