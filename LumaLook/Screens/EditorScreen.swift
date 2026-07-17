@@ -517,6 +517,28 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            // Standalone renderer test: LUMA_SEED_FXRENDER="<path>|gain:-20"
+            // renders the file and copies the output next to the source.
+            if let spec = env["LUMA_SEED_FXRENDER"] {
+                let parts = spec.split(separator: "|")
+                if let path = parts.first.map(String.init), FileManager.default.fileExists(atPath: path) {
+                    var settings = AudioEffectSettings()
+                    for token in parts.dropFirst() {
+                        let kv = token.split(separator: ":")
+                        if kv.count == 2, kv[0] == "gain", let g = Double(kv[1]) { settings.gainDB = g }
+                        if kv.count == 2, kv[0] == "pitch", let p = Double(kv[1]) { settings.pitchSemitones = p }
+                        if kv.count == 2, kv[0] == "reverb" { settings.reverbPreset = String(kv[1]); settings.reverbMix = 60 }
+                    }
+                    if let out = try? await AudioEffectsRenderer.shared.renderedURL(
+                        source: URL(fileURLWithPath: path), settings: settings) {
+                        let dest = URL(fileURLWithPath: path).deletingLastPathComponent()
+                            .appendingPathComponent("fxrender_out.m4a")
+                        try? FileManager.default.removeItem(at: dest)
+                        try? FileManager.default.copyItem(at: out, to: dest)
+                        print("[LUMA] FXRENDER done -> \(dest.path)")
+                    }
+                }
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)

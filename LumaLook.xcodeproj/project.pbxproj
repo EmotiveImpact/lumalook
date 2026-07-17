@@ -124,6 +124,7 @@
 		AF0A84720B2F4F5E8DA3C012 /* FS_MS13.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */; };
 		B16D7C5940E83006267251B2 /* FS_IN669.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2259E3CB086EC2E8E52929EB /* FS_IN669.cube */; };
 		B809BB3A60F4ACD00A533573 /* FS_MS10.cube in Resources */ = {isa = PBXBuildFile; fileRef = 53841C670501E1F71C5CA8F5 /* FS_MS10.cube */; };
+		B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */; };
 		BAED802D59A26776874421CB /* FS_MS6.cube in Resources */ = {isa = PBXBuildFile; fileRef = BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */; };
 		BBB3750CC2EC3B5E8F4DEBCD /* FS_HPS800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 02C6D5846347C786254AC84E /* FS_HPS800.cube */; };
 		C07E9021B8EACADFCB81E9DA /* FS_PX70C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */; };
@@ -226,6 +227,7 @@
 		4663C3D90BD5F02587298D57 /* FS_PT400N.cube */ = {isa = PBXFileReference; path = FS_PT400N.cube; sourceTree = "<group>"; };
 		476EEF99D87977383B9E4673 /* FS_AS100.cube */ = {isa = PBXFileReference; path = FS_AS100.cube; sourceTree = "<group>"; };
 		48B3A573684BF7B15A188E7D /* FS_EK100.cube */ = {isa = PBXFileReference; path = FS_EK100.cube; sourceTree = "<group>"; };
+		4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsRenderer.swift; sourceTree = "<group>"; };
 		4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */ = {isa = PBXFileReference; path = FS_MS13.cube; sourceTree = "<group>"; };
 		4D02621852558286323E1667 /* FS_PX680.cube */ = {isa = PBXFileReference; path = FS_PX680.cube; sourceTree = "<group>"; };
 		4D43F2BD3901B8346CB884BF /* LumaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaTheme.swift; sourceTree = "<group>"; };
@@ -606,6 +608,7 @@
 		EBA35D57CEB8092D3D7281BF /* Engine */ = {
 			isa = PBXGroup;
 			children = (
+				4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */,
 				F3C4D37A2D4D680648CCEA50 /* AudioExtractor.swift */,
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
 				64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */,
@@ -832,6 +835,7 @@
 			files = (
 				49EC96A150DB992461300428 /* AppModel.swift in Sources */,
 				6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */,
+				B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */,
 				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
 				4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */,
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
