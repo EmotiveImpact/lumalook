@@ -122,6 +122,7 @@
 		8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */; };
 		8FD065863BAA8A76266B9602 /* FS_DL100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */; };
 		916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */; };
+		92C112D6751A162C6FFCBF7F /* StickerLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25EF472896C678306B040FD /* StickerLibraryView.swift */; };
 		92D8AA2EF28C67C5693F8207 /* FS_RS100.cube in Resources */ = {isa = PBXBuildFile; fileRef = F58E6ECD1EA58596156C36BD /* FS_RS100.cube */; };
 		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
 		951ED3C908AFE99C2BBD7E51 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2AADF6FACE440408D32E9797 /* manifest.json */; };
@@ -342,6 +343,7 @@
 		9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */ = {isa = PBXFileReference; path = FS_DL100.cube; sourceTree = "<group>"; };
 		9F87D838065AE54E0D455078 /* FS_EL200.cube */ = {isa = PBXFileReference; path = FS_EL200.cube; sourceTree = "<group>"; };
 		A186114236DC1077C85C76CC /* pad_warm.m4a */ = {isa = PBXFileReference; path = pad_warm.m4a; sourceTree = "<group>"; };
+		A25EF472896C678306B040FD /* StickerLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerLibraryView.swift; sourceTree = "<group>"; };
 		A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */ = {isa = PBXFileReference; path = FS_MS9.cube; sourceTree = "<group>"; };
 		A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */ = {isa = PBXFileReference; path = FS_NP1600.cube; sourceTree = "<group>"; };
 		A43A5E47275D318BFCB0C555 /* FS_PL664.cube */ = {isa = PBXFileReference; path = FS_PL664.cube; sourceTree = "<group>"; };
@@ -480,6 +482,7 @@
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
+				A25EF472896C678306B040FD /* StickerLibraryView.swift */,
 				71565855D4F4F92716382C0A /* TimelineV2.swift */,
 			);
 			path = Editor;
@@ -990,6 +993,7 @@
 				E5201804C48E20F8255CAED5 /* ShapeRenderer.swift in Sources */,
 				0360C6C2F8A6E390528707AF /* SkinFirstPresets.swift in Sources */,
 				EA898050E6980825658B5299 /* StickerBaker.swift in Sources */,
+				92C112D6751A162C6FFCBF7F /* StickerLibraryView.swift in Sources */,
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
 				DF455A8B10DE80D6A9E9EBAF /* TemplateModels.swift in Sources */,
 				13083AA5046042ADC0C08E57 /* TextRasterizer.swift in Sources */,

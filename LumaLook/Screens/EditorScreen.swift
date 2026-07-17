@@ -29,6 +29,7 @@ struct EditorTimelineView: View {
     @State private var showMusicImporter = false
     @State private var showAudioSourceChooser = false
     @State private var showAudioLibrary = false
+    @State private var showStickerLibrary = false
     @State private var isExporting = false
     @State private var showExportSheet = false
     @State private var showFullscreenPreview = false
@@ -57,6 +58,7 @@ struct EditorTimelineView: View {
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
                 onAddOverlay: { showOverlayPicker = true },
+                onAddSticker: { showStickerLibrary = true },
                 onAddMusic: { showAudioSourceChooser = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
@@ -85,6 +87,9 @@ struct EditorTimelineView: View {
             Button("Sound Library") { showAudioLibrary = true }
             Button("From Files") { showMusicImporter = true }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showStickerLibrary) {
+            StickerLibraryView()
         }
         .sheet(isPresented: $showAudioLibrary) {
             AudioLibrarySheet(editor: editor) { showAudioLibrary = false }
@@ -374,6 +379,20 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F1: bake an emoji sticker and centre it for pixel sampling.
+            if let emoji = env["LUMA_SEED_STICKER"], !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                let ok = await editor.addSticker(emoji: emoji)
+                if let s = editor.overlays.last {
+                    editor.setOverlayCenter(id: s.id, CGPoint(x: 0.5, y: 0.5))
+                    editor.setOverlaySize(id: s.id, 0.6)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                print("[LUMA] STICKER ok=\(ok) count=\(editor.overlays.count) kind=\(editor.overlays.last?.kind ?? "nil")")
+            }
             // F9: project frame preset (rawValue), e.g. thinWhite / letterbox.
             if let fp = env["LUMA_SEED_FRAME"], !editor.isEmpty,
                let preset = FramePreset(rawValue: fp) {
@@ -905,6 +924,7 @@ private struct EditorContent: View {
     let onBack: () -> Void
     let onAdd: () -> Void
     let onAddOverlay: () -> Void
+    let onAddSticker: () -> Void
     let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
@@ -1161,6 +1181,10 @@ private struct EditorContent: View {
                                 withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = true }
                             }
                         }
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
+                        FlatTool(title: "Sticker", icon: "face.smiling", action: onAddSticker)
                         .frame(width: 58)
                         .opacity(editor.isEmpty ? 0.35 : 1)
                         .disabled(editor.isEmpty)

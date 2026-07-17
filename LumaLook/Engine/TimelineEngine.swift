@@ -1752,6 +1752,24 @@ final class EditorState: ObservableObject {
         refreshOverlayThumbnails()
     }
 
+    /// F1: bakes an emoji to a transparent PNG and lands it as an image
+    /// overlay — stickers ride the whole existing overlay machinery
+    /// (placement, keyframes, opacity, blend, trim) for free.
+    ///
+    /// Bakes straight into `clipsFolder` so `addOverlay` adopts the file
+    /// as-is and `cleanUpMedia` reference-counts it.
+    @discardableResult
+    func addSticker(emoji: String) async -> Bool {
+        guard let url = StickerBaker.bakePNG(emoji: emoji, into: store.clipsFolder)
+        else { return false }
+        let before = overlays.count
+        await addOverlay(from: url, isImage: true)
+        guard overlays.count > before, let added = overlays.last(where: { $0.url == url })
+        else { return false }
+        markOverlay(id: added.id, kind: "sticker")
+        return true
+    }
+
     /// Adds a TEXT layer (T6) on the overlay lane at the playhead. Rides the
     /// whole overlay machinery: placement, keyframes, opacity, trim.
     func addTextOverlay() {
