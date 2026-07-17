@@ -369,6 +369,8 @@ final class EditorState: ObservableObject {
         var textBoxHex: String? = nil
         /// F2 — "left" | "center" | "right".
         var textAlignment: String = "center"
+        /// F3 — animated-text preset (TextAnimation rawValue).
+        var textAnimation: String = TextAnimation.none.rawValue
         /// F4 — vector shape layer (ShapeKind rawValue). nil = not a shape.
         var shapeKind: String? = nil
         var shapeFillHex: String? = "#FFFFFF"
@@ -695,6 +697,7 @@ final class EditorState: ObservableObject {
                               textStrokeWidth: $0.textStrokeWidth == 0 ? nil : $0.textStrokeWidth,
                               textBoxHex: $0.textBoxHex,
                               textAlignment: $0.textAlignment == "center" ? nil : $0.textAlignment,
+                              textAnimation: $0.textAnimation == TextAnimation.none.rawValue ? nil : $0.textAnimation,
                               shapeKind: $0.shapeKind,
                               shapeFillHex: $0.shapeFillHex,
                               shapeStrokeHex: $0.shapeStrokeHex,
@@ -821,6 +824,7 @@ final class EditorState: ObservableObject {
             item.textStrokeWidth = stored.textStrokeWidth ?? 0
             item.textBoxHex = stored.textBoxHex
             item.textAlignment = stored.textAlignment ?? "center"
+            item.textAnimation = stored.textAnimation ?? TextAnimation.none.rawValue
             item.shapeKind = stored.shapeKind
             item.shapeFillHex = stored.shapeFillHex
             item.shapeStrokeHex = stored.shapeStrokeHex
@@ -2007,6 +2011,15 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F3 — sets the animated-text preset (with undo).
+    func setTextAnimation(id: UUID, _ preset: TextAnimation) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].text != nil, overlays[i].textAnimation != preset.rawValue else { return }
+        pushUndoSnapshot()
+        overlays[i].textAnimation = preset.rawValue
+        rebuild()
+    }
+
     /// F4 — adds a vector shape layer at the playhead. Shapes ride the same
     /// synthetic path as text: rendered live by the compositor (so fill and
     /// stroke stay editable), ungraded, on the first free lane.
@@ -2954,6 +2967,7 @@ final class EditorState: ObservableObject {
                                                 start: start, end: start + playable,
                                                 text: text,
                                                 textSpec: overlay.textSpec,
+                                                textAnimation: overlay.textAnimation,
                                                 lane: overlay.lane))
                 continue
             }

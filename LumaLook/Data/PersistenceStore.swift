@@ -104,6 +104,8 @@ struct StoredOverlay: Codable {
     var textStrokeWidth: Double? = nil
     var textBoxHex: String? = nil
     var textAlignment: String? = nil
+    /// F3 animated-text preset. Optional-at-end; nil = none.
+    var textAnimation: String? = nil
     /// F4 vector shape layer. Optional-at-end; nil = not a shape.
     var shapeKind: String? = nil
     var shapeFillHex: String? = nil

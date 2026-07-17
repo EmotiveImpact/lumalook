@@ -389,6 +389,26 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F3: an animated title. Format "TEXT|preset".
+            if let ta = env["LUMA_SEED_TEXTANIM"], !editor.isEmpty {
+                let f = ta.split(separator: "|").map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                editor.addTextOverlay()
+                if let o = editor.overlays.last {
+                    editor.setOverlayText(id: o.id, f[0])
+                    if f.count > 1, let p = TextAnimation(rawValue: f[1]) {
+                        editor.setTextAnimation(id: o.id, p)
+                    }
+                    editor.setOverlayCenter(id: o.id, CGPoint(x: 0.5, y: 0.5))
+                    editor.setOverlaySize(id: o.id, 0.7)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let o = editor.overlays.last
+                print("[LUMA] TEXTANIM text=\(o?.text ?? "nil") anim=\(o?.textAnimation ?? "nil")")
+            }
             // F7: a particle layer over the whole clip. Format "kind|intensity".
             if let pt = env["LUMA_SEED_PARTICLES"], !editor.isEmpty {
                 let f = pt.split(separator: "|").map(String.init)
@@ -2298,6 +2318,26 @@ private struct OverlayPanel: View {
                                                      lineWidth: selected ? 2 : 1))
                     }
                     .buttonStyle(.lumaPress)
+                }
+            }
+
+            // F3 — animated-text preset.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(TextAnimation.allCases, id: \.self) { preset in
+                        let on = (overlay?.textAnimation ?? "none") == preset.rawValue
+                        Button {
+                            editor.setTextAnimation(id: overlayID, preset)
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Label(preset.label, systemImage: preset.icon)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
                 }
             }
 

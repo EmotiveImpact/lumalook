@@ -276,6 +276,8 @@ struct OverlaySpec {
     var textSpec = TextStyleSpec()
     /// F4 — vector shape layer; nil unless this overlay is a shape.
     var shape: ShapeSpec? = nil
+    /// F3 — animated-text preset (TextAnimation rawValue). nil = none.
+    var textAnimation: String? = nil
     /// Stacking lane: higher lanes composite last (on top).
     var lane: Int = 0
 }
@@ -619,8 +621,24 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             .map(\.element)
         for spec in orderedOverlays
         where seconds >= spec.start - 0.001 && seconds < spec.end + 0.001 {
-            guard let placement = instruction.overlayLayout.placement(
+            guard var placement = instruction.overlayLayout.placement(
                 for: spec.id, at: seconds - spec.start) else { continue }
+
+            // F3: fold the text animation INTO the placement, so scale/offset/
+            // opacity ride the existing sizing, centring and fade steps rather
+            // than duplicating them. `reveal` is handled at rasterise time.
+            var reveal = 1.0
+            if let raw = spec.textAnimation,
+               let preset = TextAnimation(rawValue: raw), preset != .none {
+                let st = TextAnimator.state(preset,
+                                            localTime: seconds - spec.start,
+                                            duration: spec.end - spec.start)
+                placement.opacity *= st.opacity
+                placement.sizeFraction *= st.scale
+                placement.center.x += st.offset.x
+                placement.center.y += st.offset.y
+                reveal = st.reveal
+            }
 
             // Live effect stack for this overlay (blend/chroma/mask/adjust/border).
             let fx = instruction.overlayEffects.effects(for: spec.id) ?? OverlayEffects()
@@ -630,7 +648,29 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             // colour: no grade, no chroma/mask/border passes.
             var isVector = false
             if let text = spec.text {
+                // Typewriter: rasterise the WHOLE string and reveal it with a
+                // horizontal wipe, keeping the extent constant.
+                //
+                // Rasterising a growing prefix instead looks wrong: the
+                // overlay's width is normalised to `sizeFraction` downstream,
+                // so a one-letter image gets blown up to fill the frame and the
+                // title visibly SHRINKS as it types (measured: 391k glyph px at
+                // t=0.1 falling to 83k by t=1.5). A stable extent keeps the
+                // glyphs one size and grows the line, which is what a
+                // typewriter actually does.
                 overlayImage = TextRasterizer.image(text, style: spec.textSpec)
+                if reveal < 0.999, let full = overlayImage {
+                    let e = full.extent
+                    let cut = CGRect(x: e.minX, y: e.minY,
+                                     width: max(0, e.width * CGFloat(reveal)), height: e.height)
+                    // Composite over a transparent plate of the FULL extent so
+                    // the un-typed remainder still occupies its space.
+                    let clear = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                        .cropped(to: e)
+                    overlayImage = cut.width < 1
+                        ? clear
+                        : full.cropped(to: cut).composited(over: clear)
+                }
                 isVector = true
             } else if let shape = spec.shape {
                 // Square authoring canvas; sizeFraction normalises width below.
