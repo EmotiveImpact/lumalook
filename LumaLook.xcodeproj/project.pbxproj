@@ -15,6 +15,7 @@
 		05EA0E2E6674569C1D8496A2 /* FS_FN800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8B0D225A84F898394B902E73 /* FS_FN800.cube */; };
 		066ED006DB07EE0B6F0AE6A0 /* FS_FP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = B04A5030E4C98B0AC8663228 /* FS_FP100.cube */; };
 		08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D4758690F5507F42704B9E3 /* TimelineEngine.swift */; };
+		09A8D95B5FC3253500239DC3 /* AudioLibrarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */; };
 		0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01A0C1280A23592103B3574 /* CameraController.swift */; };
 		0A20B65141FA9DF7CBEA1362 /* FS_NP1600.cube in Resources */ = {isa = PBXBuildFile; fileRef = A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */; };
 		0C21A2716659C5C2D3B6CA49 /* FS_FN400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 65114680C08ADE0365D4F133 /* FS_FN400.cube */; };
@@ -66,6 +67,7 @@
 		5821266F087CD85D9C64A385 /* FS_IR840.cube in Resources */ = {isa = PBXBuildFile; fileRef = 944D03FD177DCA04583DC882 /* FS_IR840.cube */; };
 		5B401415AFACCFB8252231E6 /* FS_PL690W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 287AE756E62DCB0452572E82 /* FS_PL690W.cube */; };
 		5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5C594D043EBDE22175C914E7 /* Assets.xcassets */; };
+		5E5AA2388B0F7858C6336223 /* pad_bright.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BE2F266B07C38851CEAA751F /* pad_bright.m4a */; };
 		5EF9717C3647997978CD7D63 /* FS_PR100.cube in Resources */ = {isa = PBXBuildFile; fileRef = DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */; };
 		5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */; };
 		614C52B9245B43AD8FDA4143 /* FS_PL664.cube in Resources */ = {isa = PBXBuildFile; fileRef = A43A5E47275D318BFCB0C555 /* FS_PL664.cube */; };
@@ -83,12 +85,14 @@
 		6C92A115EA77837121CD8C1E /* hero_coast.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 43EEB129DF4E76FC1523F268 /* hero_coast.jpg */; };
 		6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1C28E748C160529C0841DB /* ApplyLookView.swift */; };
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
+		6D256DE46137863C52EA8993 /* click.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1769959689A6A4FB63FB2B2F /* click.m4a */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
 		7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3DD911A59C44434B989660EB /* FS_RIR400.cube */; };
 		7191972FF427F33077859C6F /* Scopes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8699231347E8D7AACDACC31 /* Scopes.swift */; };
 		731C9C361762A468317EB7ED /* FS_MS12.cube in Resources */ = {isa = PBXBuildFile; fileRef = D4DE7A157110C99E2B346F44 /* FS_MS12.cube */; };
 		735513DF21933A64978E1BAF /* FS_PR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0AB79D07DD8C1021B30F192D /* FS_PR400.cube */; };
 		73CBA4F60D83B1049F47B146 /* FS_IN669C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */; };
+		747808BC766732C06D30E348 /* glitch.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A93AEA55586BC502C0732E2 /* glitch.m4a */; };
 		755C49E8853CD2477DBAA9ED /* FS_PC35.cube in Resources */ = {isa = PBXBuildFile; fileRef = FF6FEEFAD7324BDEA8FB4BAD /* FS_PC35.cube */; };
 		75F812E8CA2261FE7EFE9D7B /* FS_XP2.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2B8592E7EACC01C8A94112A6 /* FS_XP2.cube */; };
 		76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */; };
@@ -99,9 +103,11 @@
 		7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */; };
 		7C6CC7EC14EE46B845684B11 /* FS_MS11.cube in Resources */ = {isa = PBXBuildFile; fileRef = 51847FFB61D4C591A507AF23 /* FS_MS11.cube */; };
 		7E736E0D019FC99EABA35E38 /* OverlayMaskRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D865130564F1DCF5BD588FA /* OverlayMaskRenderer.swift */; };
+		8109C03DBA5C939837678385 /* impact.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1799850205B123CA13E4FB2A /* impact.m4a */; };
 		819C69108B953E1736A91C32 /* FS_MS1.cube in Resources */ = {isa = PBXBuildFile; fileRef = E2E440096EDED38FA0B90A53 /* FS_MS1.cube */; };
 		83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */; };
 		83CB756F656B59A651F25695 /* FS_RO25.cube in Resources */ = {isa = PBXBuildFile; fileRef = 6B8727A81A0DEF252195C4BD /* FS_RO25.cube */; };
+		83D15C7631AF00A808DCD5AB /* pad_warm.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A186114236DC1077C85C76CC /* pad_warm.m4a */; };
 		842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */; };
 		84820D410D62E5B492BD031A /* FS_BW400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */; };
 		85259369029BD2B8C7645CF7 /* FS_SP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 41753F4EEB74CF332AB8096D /* FS_SP100.cube */; };
@@ -112,6 +118,7 @@
 		916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */ = {isa = PBXBuildFile; fileRef = CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */; };
 		92D8AA2EF28C67C5693F8207 /* FS_RS100.cube in Resources */ = {isa = PBXBuildFile; fileRef = F58E6ECD1EA58596156C36BD /* FS_RS100.cube */; };
 		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
+		951ED3C908AFE99C2BBD7E51 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2AADF6FACE440408D32E9797 /* manifest.json */; };
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
 		9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */; };
 		9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */; };
@@ -135,12 +142,16 @@
 		C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */; };
 		C16B1359066E085945BF3413 /* FS_PT800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */; };
 		C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B147754600B3B5803C3E0583 /* ClipBaker.swift */; };
+		C3C80CDA64D4DA86BA105B79 /* whoosh.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4950B9DA4886DBBE75F7C3EA /* whoosh.m4a */; };
 		C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */; };
+		C8C8FA0E35440005949F470D /* swipe.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2806788285790CD5D637B65B /* swipe.m4a */; };
 		CAC199F8B3352305B306C8A5 /* FS_MS3.cube in Resources */ = {isa = PBXBuildFile; fileRef = BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */; };
 		CC2B75F8447C61F9064E9596 /* FS_FP100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */; };
 		CC96F7992C81799F1D971606 /* FS_PF50.cube in Resources */ = {isa = PBXBuildFile; fileRef = 17D87D9EC09C9235D29B2913 /* FS_PF50.cube */; };
 		CD11513E989BF30CC434E279 /* FS_FP125.cube in Resources */ = {isa = PBXBuildFile; fileRef = 71A6E32214C9321C7379CCC6 /* FS_FP125.cube */; };
 		CE80855BE2146D1F066D1268 /* PipPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D85C68EA6204E1F8006C6F /* PipPresets.swift */; };
+		CEC11B6C97D1320B32AADFBF /* ding.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 729205E4A69C86566E25EEC5 /* ding.m4a */; };
+		D07041195B830006997EEAD4 /* pop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 988124A7F3073B64E06E4E1E /* pop.m4a */; };
 		D09DE830CF50582B4F392811 /* FS_PL667.cube in Resources */ = {isa = PBXBuildFile; fileRef = F2F63CA8389113D35C675EEE /* FS_PL667.cube */; };
 		D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */; };
 		D20F0AAE5FC1E0307AE1F2DD /* FS_SP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = E22A35DFADB72BF4DB87151D /* FS_SP200.cube */; };
@@ -155,6 +166,7 @@
 		D8109274404403032FAB300A /* FS_TM400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2A5A3DAE1AA84F1E210C0EB2 /* FS_TM400.cube */; };
 		D8533508636292B9BAA88A63 /* FS_TX400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 85F7604D70414A0B449CAADF /* FS_TX400.cube */; };
 		D87ECA92A8A07C3ABC0608D3 /* FS_PT160.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9E69B51B414C8DCD348D61D8 /* FS_PT160.cube */; };
+		DA34F9E110A6CF1E3D09BDB4 /* BundledAudioLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780BEB7818D41814F6F0703F /* BundledAudioLibrary.swift */; };
 		DB410DD336810EA3BA24A68D /* FS_SN100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */; };
 		DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */; };
 		DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0DEA4AC5F988804E0BFE7243 /* Teal_Orange_17.cube */; };
@@ -196,6 +208,8 @@
 		14D131E42DD31D663F90B81B /* EditorScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorScreen.swift; sourceTree = "<group>"; };
 		158CFCA17750E771F995959B /* hero_desert.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_desert.jpg; sourceTree = "<group>"; };
 		15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */ = {isa = PBXFileReference; path = FS_PL665.cube; sourceTree = "<group>"; };
+		1769959689A6A4FB63FB2B2F /* click.m4a */ = {isa = PBXFileReference; path = click.m4a; sourceTree = "<group>"; };
+		1799850205B123CA13E4FB2A /* impact.m4a */ = {isa = PBXFileReference; path = impact.m4a; sourceTree = "<group>"; };
 		17D87D9EC09C9235D29B2913 /* FS_PF50.cube */ = {isa = PBXFileReference; path = FS_PF50.cube; sourceTree = "<group>"; };
 		1A04F1F9F823E1A52448E291 /* FS_PL672.cube */ = {isa = PBXFileReference; path = FS_PL672.cube; sourceTree = "<group>"; };
 		1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */ = {isa = PBXFileReference; path = FS_NP100.cube; sourceTree = "<group>"; };
@@ -208,8 +222,10 @@
 		2502776385F3CECA843CFFB0 /* FS_PR400X.cube */ = {isa = PBXFileReference; path = FS_PR400X.cube; sourceTree = "<group>"; };
 		26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaComponents.swift; sourceTree = "<group>"; };
 		27BDCC75439CF538EEC13FFC /* OverlayEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayEffects.swift; sourceTree = "<group>"; };
+		2806788285790CD5D637B65B /* swipe.m4a */ = {isa = PBXFileReference; path = swipe.m4a; sourceTree = "<group>"; };
 		287AE756E62DCB0452572E82 /* FS_PL690W.cube */ = {isa = PBXFileReference; path = FS_PL690W.cube; sourceTree = "<group>"; };
 		2A5A3DAE1AA84F1E210C0EB2 /* FS_TM400.cube */ = {isa = PBXFileReference; path = FS_TM400.cube; sourceTree = "<group>"; };
+		2AADF6FACE440408D32E9797 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2B8592E7EACC01C8A94112A6 /* FS_XP2.cube */ = {isa = PBXFileReference; path = FS_XP2.cube; sourceTree = "<group>"; };
 		2D4758690F5507F42704B9E3 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneArt.swift; sourceTree = "<group>"; };
@@ -231,6 +247,7 @@
 		476EEF99D87977383B9E4673 /* FS_AS100.cube */ = {isa = PBXFileReference; path = FS_AS100.cube; sourceTree = "<group>"; };
 		48B3A573684BF7B15A188E7D /* FS_EK100.cube */ = {isa = PBXFileReference; path = FS_EK100.cube; sourceTree = "<group>"; };
 		4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsRenderer.swift; sourceTree = "<group>"; };
+		4950B9DA4886DBBE75F7C3EA /* whoosh.m4a */ = {isa = PBXFileReference; path = whoosh.m4a; sourceTree = "<group>"; };
 		4A23FFC5AFACBE4E1F746105 /* FS_MS13.cube */ = {isa = PBXFileReference; path = FS_MS13.cube; sourceTree = "<group>"; };
 		4D02621852558286323E1667 /* FS_PX680.cube */ = {isa = PBXFileReference; path = FS_PX680.cube; sourceTree = "<group>"; };
 		4D43F2BD3901B8346CB884BF /* LumaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaTheme.swift; sourceTree = "<group>"; };
@@ -254,18 +271,22 @@
 		5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaLookApp.swift; sourceTree = "<group>"; };
 		61A5624E7651D005E2DA05C1 /* CameraChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraChrome.swift; sourceTree = "<group>"; };
 		63190B53784A9183F103288A /* FS_PT400V.cube */ = {isa = PBXFileReference; path = FS_PT400V.cube; sourceTree = "<group>"; };
+		64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioLibrarySheet.swift; sourceTree = "<group>"; };
 		64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromaKeyFilter.swift; sourceTree = "<group>"; };
 		65114680C08ADE0365D4F133 /* FS_FN400.cube */ = {isa = PBXFileReference; path = FS_FN400.cube; sourceTree = "<group>"; };
+		6A93AEA55586BC502C0732E2 /* glitch.m4a */ = {isa = PBXFileReference; path = glitch.m4a; sourceTree = "<group>"; };
 		6B846D621E4F274EC907E0EC /* LumaDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaDial.swift; sourceTree = "<group>"; };
 		6B8727A81A0DEF252195C4BD /* FS_RO25.cube */ = {isa = PBXFileReference; path = FS_RO25.cube; sourceTree = "<group>"; };
 		71565855D4F4F92716382C0A /* TimelineV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineV2.swift; sourceTree = "<group>"; };
 		71A6E32214C9321C7379CCC6 /* FS_FP125.cube */ = {isa = PBXFileReference; path = FS_FP125.cube; sourceTree = "<group>"; };
+		729205E4A69C86566E25EEC5 /* ding.m4a */ = {isa = PBXFileReference; path = ding.m4a; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
 		73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinFirstPresets.swift; sourceTree = "<group>"; };
 		73DAA7F9A11628B31666692E /* FS_PL690.cube */ = {isa = PBXFileReference; path = FS_PL690.cube; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */ = {isa = PBXFileReference; path = FS_PT800.cube; sourceTree = "<group>"; };
 		7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionRenderer.swift; sourceTree = "<group>"; };
+		780BEB7818D41814F6F0703F /* BundledAudioLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledAudioLibrary.swift; sourceTree = "<group>"; };
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
 		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
@@ -291,6 +312,7 @@
 		9822ECA6F64920F625730286 /* hero_night.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_night.jpg; sourceTree = "<group>"; };
 		982FBAAA5098559374D20381 /* LUTManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTManagerView.swift; sourceTree = "<group>"; };
 		987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */ = {isa = PBXFileReference; path = FS_PX100W.cube; sourceTree = "<group>"; };
+		988124A7F3073B64E06E4E1E /* pop.m4a */ = {isa = PBXFileReference; path = pop.m4a; sourceTree = "<group>"; };
 		991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */ = {isa = PBXFileReference; path = FS_PX680W.cube; sourceTree = "<group>"; };
 		9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */ = {isa = PBXFileReference; path = FS_PX70C.cube; sourceTree = "<group>"; };
 		9AB35F2AD0526EF4380F835E /* FS_MS4.cube */ = {isa = PBXFileReference; path = FS_MS4.cube; sourceTree = "<group>"; };
@@ -300,6 +322,7 @@
 		9E8F2A13BBEAE025610F8313 /* FS_EC100V.cube */ = {isa = PBXFileReference; path = FS_EC100V.cube; sourceTree = "<group>"; };
 		9F15E0EFD88431814B2FC8AB /* FS_DL100.cube */ = {isa = PBXFileReference; path = FS_DL100.cube; sourceTree = "<group>"; };
 		9F87D838065AE54E0D455078 /* FS_EL200.cube */ = {isa = PBXFileReference; path = FS_EL200.cube; sourceTree = "<group>"; };
+		A186114236DC1077C85C76CC /* pad_warm.m4a */ = {isa = PBXFileReference; path = pad_warm.m4a; sourceTree = "<group>"; };
 		A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */ = {isa = PBXFileReference; path = FS_MS9.cube; sourceTree = "<group>"; };
 		A3C911155589EB3CBE7A1660 /* FS_NP1600.cube */ = {isa = PBXFileReference; path = FS_NP1600.cube; sourceTree = "<group>"; };
 		A43A5E47275D318BFCB0C555 /* FS_PL664.cube */ = {isa = PBXFileReference; path = FS_PL664.cube; sourceTree = "<group>"; };
@@ -317,6 +340,7 @@
 		BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */ = {isa = PBXFileReference; path = FS_MS3.cube; sourceTree = "<group>"; };
 		BD7E1B207E2D488AAA08E3AB /* FS_VV50.cube */ = {isa = PBXFileReference; path = FS_VV50.cube; sourceTree = "<group>"; };
 		BE1C28E748C160529C0841DB /* ApplyLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplyLookView.swift; sourceTree = "<group>"; };
+		BE2F266B07C38851CEAA751F /* pad_bright.m4a */ = {isa = PBXFileReference; path = pad_bright.m4a; sourceTree = "<group>"; };
 		BE8EA353524205957ACA01CD /* FS_DL400.cube */ = {isa = PBXFileReference; path = FS_DL400.cube; sourceTree = "<group>"; };
 		C01A0C1280A23592103B3574 /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPipeline.swift; sourceTree = "<group>"; };
@@ -389,6 +413,23 @@
 			path = Screens;
 			sourceTree = "<group>";
 		};
+		2612D9983A53F020F0DEFAFF /* AudioLibrary */ = {
+			isa = PBXGroup;
+			children = (
+				1769959689A6A4FB63FB2B2F /* click.m4a */,
+				729205E4A69C86566E25EEC5 /* ding.m4a */,
+				6A93AEA55586BC502C0732E2 /* glitch.m4a */,
+				1799850205B123CA13E4FB2A /* impact.m4a */,
+				2AADF6FACE440408D32E9797 /* manifest.json */,
+				BE2F266B07C38851CEAA751F /* pad_bright.m4a */,
+				A186114236DC1077C85C76CC /* pad_warm.m4a */,
+				988124A7F3073B64E06E4E1E /* pop.m4a */,
+				2806788285790CD5D637B65B /* swipe.m4a */,
+				4950B9DA4886DBBE75F7C3EA /* whoosh.m4a */,
+			);
+			path = AudioLibrary;
+			sourceTree = "<group>";
+		};
 		41DAC1C8B04ED078777B1180 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -412,6 +453,7 @@
 			isa = PBXGroup;
 			children = (
 				D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */,
+				64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */,
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
@@ -534,6 +576,7 @@
 			isa = PBXGroup;
 			children = (
 				8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */,
+				2612D9983A53F020F0DEFAFF /* AudioLibrary */,
 				6EC71ABFE9EB7CF4B5BDE3A6 /* FilmLUTs */,
 				A70BF1FE09932FEDB170F061 /* HeroPhotos */,
 				4954251587B54116361ABC7F /* SampleLUTs */,
@@ -618,6 +661,7 @@
 				4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */,
 				F3C4D37A2D4D680648CCEA50 /* AudioExtractor.swift */,
 				E44A412ED9618EA99F079244 /* BeatDetector.swift */,
+				780BEB7818D41814F6F0703F /* BundledAudioLibrary.swift */,
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
 				64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */,
 				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
@@ -827,11 +871,21 @@
 				6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */,
 				DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */,
 				A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */,
+				6D256DE46137863C52EA8993 /* click.m4a in Resources */,
+				CEC11B6C97D1320B32AADFBF /* ding.m4a in Resources */,
+				747808BC766732C06D30E348 /* glitch.m4a in Resources */,
 				6C92A115EA77837121CD8C1E /* hero_coast.jpg in Resources */,
 				D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */,
 				260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */,
 				916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */,
 				7B0B4B2AFFAD2E51FB985BDD /* hero_night.jpg in Resources */,
+				8109C03DBA5C939837678385 /* impact.m4a in Resources */,
+				951ED3C908AFE99C2BBD7E51 /* manifest.json in Resources */,
+				5E5AA2388B0F7858C6336223 /* pad_bright.m4a in Resources */,
+				83D15C7631AF00A808DCD5AB /* pad_warm.m4a in Resources */,
+				D07041195B830006997EEAD4 /* pop.m4a in Resources */,
+				C8C8FA0E35440005949F470D /* swipe.m4a in Resources */,
+				C3C80CDA64D4DA86BA105B79 /* whoosh.m4a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -847,8 +901,10 @@
 				B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */,
 				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
 				4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */,
+				09A8D95B5FC3253500239DC3 /* AudioLibrarySheet.swift in Sources */,
 				3E1F818945AB3954E411BB70 /* BeatDetector.swift in Sources */,
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
+				DA34F9E110A6CF1E3D09BDB4 /* BundledAudioLibrary.swift in Sources */,
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,

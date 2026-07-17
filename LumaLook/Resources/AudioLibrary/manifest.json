@@ -1,0 +1,11 @@
+[
+  { "id": "whoosh", "title": "Whoosh", "category": "sfx", "fileName": "whoosh.m4a", "duration": 0.7 },
+  { "id": "swipe", "title": "Swipe", "category": "sfx", "fileName": "swipe.m4a", "duration": 0.4 },
+  { "id": "click", "title": "Click", "category": "sfx", "fileName": "click.m4a", "duration": 0.05 },
+  { "id": "pop", "title": "Pop", "category": "sfx", "fileName": "pop.m4a", "duration": 0.15 },
+  { "id": "impact", "title": "Impact", "category": "sfx", "fileName": "impact.m4a", "duration": 0.5 },
+  { "id": "ding", "title": "Ding", "category": "sfx", "fileName": "ding.m4a", "duration": 1.0 },
+  { "id": "glitch", "title": "Glitch", "category": "sfx", "fileName": "glitch.m4a", "duration": 0.3 },
+  { "id": "pad_warm", "title": "Warm Pad", "category": "music", "fileName": "pad_warm.m4a", "duration": 8.0 },
+  { "id": "pad_bright", "title": "Bright Pad", "category": "music", "fileName": "pad_bright.m4a", "duration": 8.0 }
+]

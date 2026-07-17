@@ -27,6 +27,8 @@ struct EditorTimelineView: View {
     @State private var selectedAudioID: UUID?
     @State private var transitionClipID: UUID?
     @State private var showMusicImporter = false
+    @State private var showAudioSourceChooser = false
+    @State private var showAudioLibrary = false
     @State private var isExporting = false
     @State private var showExportSheet = false
     @State private var showFullscreenPreview = false
@@ -55,7 +57,7 @@ struct EditorTimelineView: View {
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
                 onAddOverlay: { showOverlayPicker = true },
-                onAddMusic: { showMusicImporter = true },
+                onAddMusic: { showAudioSourceChooser = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
@@ -78,6 +80,15 @@ struct EditorTimelineView: View {
                       allowedContentTypes: [.audio],
                       allowsMultipleSelection: false) { result in
             handleMusicImport(result)
+        }
+        .confirmationDialog("Add audio", isPresented: $showAudioSourceChooser, titleVisibility: .visible) {
+            Button("Sound Library") { showAudioLibrary = true }
+            Button("From Files") { showMusicImporter = true }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showAudioLibrary) {
+            AudioLibrarySheet(editor: editor) { showAudioLibrary = false }
+                .presentationDetents([.medium, .large])
         }
         .onChange(of: addPickerItem) { _, newItem in
             guard let newItem else { return }
@@ -537,6 +548,18 @@ struct EditorTimelineView: View {
                         try? FileManager.default.copyItem(at: out, to: dest)
                         print("[LUMA] FXRENDER done -> \(dest.path)")
                     }
+                }
+            }
+            // Bundled-library test: add entry <id> from the library at t=0.
+            if let libID = env["LUMA_SEED_LIBADD"], !editor.isEmpty {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                print("[LUMA] LIBRARY count=\(BundledAudioLibrary.all.count)")
+                if let entry = BundledAudioLibrary.all.first(where: { $0.id == libID }),
+                   let url = BundledAudioLibrary.url(for: entry),
+                   let imported = editor.importMusicFile(from: url) {
+                    await editor.addAudioTrack(importedURL: imported, title: entry.title,
+                                               at: 0, kind: entry.category == "sfx" ? .sfx : .music)
+                    for _ in 0..<30 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
                 }
             }
             // Beat-detector test: prints detected beats + bpm.
