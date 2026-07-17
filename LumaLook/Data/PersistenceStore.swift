@@ -23,6 +23,10 @@ struct StoredClip: Codable, Identifiable {
     var grade: ClipGrade? = nil
     /// Custom transition duration at this clip's out-point (nil = style default).
     var transitionDuration: Double? = nil
+    /// User display transforms (rotate/mirror). Optional-at-end so older
+    /// projects decode; nil = no user orientation.
+    var rotationQuarterTurns: Int? = nil
+    var isMirrored: Bool? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).

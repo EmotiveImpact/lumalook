@@ -327,6 +327,26 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            if let rotStr = env["LUMA_SEED_ROTATE"], let turns = Int(rotStr), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                for _ in 0..<turns { editor.rotateSelectedClip() }
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+            if env["LUMA_SEED_MIRROR"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                editor.mirrorSelectedClip()
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if let nudgeStr = env["LUMA_SEED_NUDGE"], let n = Int(nudgeStr), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -557,32 +577,54 @@ private struct EditorContent: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.lumaPress)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 2) {
                     FlatTool(title: "Trim", icon: "scissors", selected: showTrimPanel) {
                         guard let clip = editor.selectedClip else { return }
                         trimStart = clip.trimStart
                         trimEnd = clip.trimEnd
                         showTrimPanel.toggle()
                     }
+                    .frame(width: 58)
                     FlatTool(title: "Split", icon: "square.split.2x1") {
                         editor.splitAtPlayhead()
                     }
+                    .frame(width: 58)
+                    FlatTool(title: "Rotate", icon: "rotate.right") {
+                        editor.rotateSelectedClip()
+                        LumaHaptics.shared.tap()
+                    }
+                    .frame(width: 58)
+                    FlatTool(title: "Mirror", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                             selected: editor.selectedClip?.isMirrored == true) {
+                        editor.mirrorSelectedClip()
+                        LumaHaptics.shared.tap()
+                    }
+                    .frame(width: 58)
                     FlatTool(title: "Duplicate", icon: "plus.square.on.square") {
                         editor.duplicateSelected()
                         LumaHaptics.shared.tap()
                     }
+                    .frame(width: 58)
                     FlatTool(title: "Delete", icon: "trash") {
                         editor.deleteSelected()
                     }
+                    .frame(width: 58)
                     FlatTool(title: "Volume", icon: "speaker.wave.2",
                              selected: showClipAudioPanel) {
                         showClipAudioPanel.toggle()
                     }
+                    .frame(width: 58)
                     FlatTool(title: "Look", icon: "camera.filters",
                              selected: showLooksStrip && looksTargetClipID != nil) {
                         looksTargetClipID = editor.selectedClipID
                         showLooksStrip.toggle()
                     }
+                    .frame(width: 58)
                     speedMenu
+                        .frame(width: 58)
+                        }
+                    }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {

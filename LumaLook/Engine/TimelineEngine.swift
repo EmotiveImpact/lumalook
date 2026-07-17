@@ -119,9 +119,17 @@ final class EditorState: ObservableObject {
         /// Per-second frames across the trimmed range for the timeline
         /// filmstrip (capped; regenerated on trim/split).
         var filmstrip: [CGImage] = []
+        /// User display transforms applied over the source orientation.
+        var rotationQuarterTurns: Int = 0   // 90° steps, mod 4
+        var isMirrored: Bool = false        // horizontal flip
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
+
+        /// Bundle for the compositor's FrameMeta.display.
+        var displayOps: ClipDisplayOps {
+            ClipDisplayOps(rotationQuarterTurns: rotationQuarterTurns, isMirrored: isMirrored)
+        }
     }
 
     /// A single background-music track laid under the video clips.
@@ -318,7 +326,9 @@ final class EditorState: ObservableObject {
                            transitionAfter: $0.transitionAfter.rawValue,
                            isImage: $0.isImage,
                            grade: $0.grade,
-                           transitionDuration: $0.transitionDuration)
+                           transitionDuration: $0.transitionDuration,
+                           rotationQuarterTurns: $0.rotationQuarterTurns,
+                           isMirrored: $0.isMirrored)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -373,7 +383,9 @@ final class EditorState: ObservableObject {
                         volume: stored.volume ?? 100, isMuted: stored.isMuted ?? false,
                         transitionAfter: stored.transitionAfter.flatMap(TransitionStyle.init) ?? .none,
                         grade: stored.grade,
-                        transitionDuration: stored.transitionDuration)
+                        transitionDuration: stored.transitionDuration,
+                        rotationQuarterTurns: stored.rotationQuarterTurns ?? 0,
+                        isMirrored: stored.isMirrored ?? false)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -658,6 +670,24 @@ final class EditorState: ObservableObject {
     /// Double; this just clamps for the slider.
     func setClipSpeed(_ speed: Double) {
         setSpeed(min(4, max(0.1, speed)))
+    }
+
+    /// Rotates the selected clip 90° clockwise (wraps at 4).
+    func rotateSelectedClip() {
+        guard let id = selectedClipID,
+              let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        clips[i].rotationQuarterTurns = (clips[i].rotationQuarterTurns + 1) % 4
+        rebuild()
+    }
+
+    /// Toggles a horizontal mirror on the selected clip.
+    func mirrorSelectedClip() {
+        guard let id = selectedClipID,
+              let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        clips[i].isMirrored.toggle()
+        rebuild()
     }
 
     /// Splits the clip under the playhead at the current time.
@@ -1595,7 +1625,8 @@ final class EditorState: ObservableObject {
                                        transform: .identity,
                                        imageURL: clip.url,
                                        hasAnchorFrames: anchored,
-                                       clipLookState: clip.grade.map(makeLookState)))
+                                       clipLookState: clip.grade.map(makeLookState),
+                                       display: clip.displayOps))
                 cursor = cursor + stillDuration
                 continue
             }
@@ -1639,7 +1670,8 @@ final class EditorState: ObservableObject {
             metas.append(FrameMeta(start: cursor.seconds,
                                    end: (cursor + insertedDuration).seconds,
                                    transform: transform,
-                                   clipLookState: clip.grade.map(makeLookState)))
+                                   clipLookState: clip.grade.map(makeLookState),
+                                   display: clip.displayOps))
             cursor = cursor + insertedDuration
         }
 
@@ -1784,6 +1816,8 @@ final class EditorState: ObservableObject {
                 if clip.isImage { span.tailImageURL = clip.url }
                 span.headLookState = next.grade.map(makeLookState)
                 span.tailLookState = clip.grade.map(makeLookState)
+                span.headDisplay = next.displayOps   // incoming clip (first half)
+                span.tailDisplay = clip.displayOps   // outgoing clip (second half)
 
                 if !next.isImage || !clip.isImage {
                     if auxTrack == nil {

@@ -11,11 +11,26 @@ import CoreImage.CIFilterBuiltins
 
 /// Per-clip data the compositor needs, precomputed on rebuild.
 /// `start`/`end` are composition seconds (post speed-scaling).
+/// Per-clip display transforms the *user* applied (distinct from the source
+/// `preferredTransform` orientation normalisation). One struct so waves 2.1
+/// (rotate/mirror) → 2.2 (crop/straighten) → 3.1 (Ken Burns) extend a single
+/// field on FrameMeta instead of piling on parameters. Identity default keeps
+/// every existing call site unchanged.
+struct ClipDisplayOps: Equatable {
+    var rotationQuarterTurns: Int = 0   // user 90° steps, mod 4
+    var isMirrored: Bool = false        // horizontal flip
+
+    static let identity = ClipDisplayOps()
+    var isIdentity: Bool { rotationQuarterTurns % 4 == 0 && !isMirrored }
+}
+
 struct FrameMeta {
     let start: Double
     let end: Double
     /// Source preferredTransform (orientation normalisation).
     let transform: CGAffineTransform
+    /// User display transforms (rotate/mirror; crop/Ken Burns later).
+    var display: ClipDisplayOps = .identity
     /// Photo clips on the main track (T7): the compositor renders this still
     /// instead of pulling a source frame.
     let imageURL: URL?
@@ -31,13 +46,14 @@ struct FrameMeta {
 
     init(start: Double, end: Double, transform: CGAffineTransform,
          imageURL: URL? = nil, hasAnchorFrames: Bool = false,
-         clipLookState: LookState? = nil) {
+         clipLookState: LookState? = nil, display: ClipDisplayOps = .identity) {
         self.start = start
         self.end = end
         self.transform = transform
         self.imageURL = imageURL
         self.hasAnchorFrames = hasAnchorFrames
         self.clipLookState = clipLookState
+        self.display = display
     }
 }
 
@@ -61,6 +77,10 @@ struct TransitionSpanSpec {
     /// Per-clip grades for the aux side (nil = global).
     var headLookState: LookState? = nil
     var tailLookState: LookState? = nil
+    /// User display transforms for the aux side (rotate/mirror) so a rotated
+    /// clip stays rotated through a dissolve/wipe.
+    var headDisplay: ClipDisplayOps = .identity
+    var tailDisplay: ClipDisplayOps = .identity
 }
 
 /// Live overlay placement values (size/position/opacity). Reference type for
@@ -302,7 +322,8 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
         var canvas: CIImage
         if let meta, let imageURL = meta.imageURL, let still = stillImage(at: imageURL) {
-            canvas = aspectFill(still, into: renderSize, zoom: instruction.zoomFactor)
+            let oriented = applyUserOrientation(still, meta.display)
+            canvas = aspectFill(oriented, into: renderSize, zoom: instruction.zoomFactor)
         } else if let sourceBuffer = request.sourceFrame(byTrackID: instruction.mainTrackID) {
             var image = CIImage(cvPixelBuffer: sourceBuffer)
             if let meta, !meta.transform.isIdentity {
@@ -310,6 +331,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 image = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
                                                                 y: -image.extent.minY))
             }
+            if let meta { image = applyUserOrientation(image, meta.display) }
             canvas = aspectFill(image, into: renderSize, zoom: instruction.zoomFactor)
         } else {
             // No source and no still (e.g. race right at a boundary): black.
@@ -409,9 +431,11 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 // clip's frame (aux A/B-roll track, or a photo clip's still).
                 let firstHalf = seconds < span.center
                 var aux: CIImage?
+                let auxDisplay = firstHalf ? span.headDisplay : span.tailDisplay
                 if let url = firstHalf ? span.headImageURL : span.tailImageURL,
                    let still = stillImage(at: url) {
-                    aux = aspectFill(still, into: renderSize, zoom: instruction.zoomFactor)
+                    aux = aspectFill(applyUserOrientation(still, auxDisplay),
+                                     into: renderSize, zoom: instruction.zoomFactor)
                 } else if span.auxTrackID != kCMPersistentTrackID_Invalid,
                           let buffer = request.sourceFrame(byTrackID: span.auxTrackID) {
                     var frame = CIImage(cvPixelBuffer: buffer)
@@ -421,6 +445,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                         frame = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX,
                                                                         y: -frame.extent.minY))
                     }
+                    frame = applyUserOrientation(frame, auxDisplay)
                     aux = aspectFill(frame, into: renderSize, zoom: instruction.zoomFactor)
                 }
                 if var auxImage = aux {
@@ -490,6 +515,24 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             dissolve.time = Float(p)
             return (dissolve.outputImage ?? incoming).cropped(to: rect)
         }
+    }
+
+    /// User display transforms (mirror then rotate), applied after source
+    /// orientation and before canvas placement. Re-normalises the extent
+    /// origin to (0,0) so `aspectFill` reframes the swapped dimensions. Both
+    /// operands are pure geometry, so preview and export match exactly.
+    private func applyUserOrientation(_ image: CIImage, _ ops: ClipDisplayOps) -> CIImage {
+        guard !ops.isIdentity else { return image }
+        var img = image
+        if ops.isMirrored {
+            img = img.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+        }
+        let turns = ((ops.rotationQuarterTurns % 4) + 4) % 4
+        if turns != 0 {
+            img = img.transformed(by: CGAffineTransform(rotationAngle: -CGFloat(turns) * .pi / 2))
+        }
+        return img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
+                                                     y: -img.extent.minY))
     }
 
     /// Aspect-fill into the render canvas honouring zoom — verbatim port of
