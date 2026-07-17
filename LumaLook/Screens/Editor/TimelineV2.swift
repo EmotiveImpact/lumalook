@@ -114,7 +114,12 @@ struct TimelineV2View: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        // `.top` centres the playhead horizontally over the scroller (whose
+        // contentInset = viewport/2 puts the current frame at screen-centre).
+        // The magnet button rides a SEPARATE top-trailing overlay — sharing a
+        // `.topTrailing` ZStack with the playhead is what jammed the playhead
+        // to the right edge instead of the centre.
+        ZStack(alignment: .top) {
             if editor.isEmpty {
                 emptyPlaceholder
             } else {
@@ -128,10 +133,12 @@ struct TimelineV2View: View {
                                         onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 }
                 playhead
-                magnetButton
             }
         }
         .frame(height: stackHeight)
+        .overlay(alignment: .topTrailing) {
+            if !editor.isEmpty { magnetButton }
+        }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
     }
