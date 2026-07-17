@@ -163,6 +163,13 @@ final class OverlayLayout: @unchecked Sendable {
     }
 }
 
+/// A full-frame adjustment grade active over a time span (adjustment layer).
+struct AdjustmentSpan {
+    let start: Double
+    let end: Double
+    let state: LookState
+}
+
 /// Live per-clip pan/zoom (Ken Burns). Same live-reference trick as
 /// `OverlayLayout`: the editor mutates it and the running compositor reads the
 /// latest keyframes without a composition rebuild. Applied to the base frame
@@ -286,6 +293,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let canvas: CanvasSpec
     /// Live per-clip Ken Burns keyframes (nil = no clip animates).
     let transformLayout: ClipTransformLayout?
+    /// Full-frame adjustment grades active in this segment.
+    let adjustments: [AdjustmentSpan]
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -298,7 +307,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          renderSize: CGSize,
          zoomFactor: CGFloat,
          canvas: CanvasSpec = .fill,
-         transformLayout: ClipTransformLayout? = nil) {
+         transformLayout: ClipTransformLayout? = nil,
+         adjustments: [AdjustmentSpan] = []) {
         self.timeRange = timeRange
         // An empty ID list means "call the compositor with no source frames"
         // (photo-clip segments) — exactly what T7 needs.
@@ -313,6 +323,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.zoomFactor = zoomFactor
         self.canvas = canvas
         self.transformLayout = transformLayout
+        self.adjustments = adjustments
         super.init()
     }
 }
@@ -460,6 +471,16 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                     to: canvas.cropped(to: renderRect),
                                     includeSplit: false)
             .cropped(to: renderRect)
+
+        // --- Adjustment layers: full-frame grades over the base video, below
+        // the overlays (overlays composite on top, unaffected). ------------
+        for adj in instruction.adjustments
+        where seconds >= adj.start - 0.001 && seconds < adj.end + 0.001 {
+            graded = pipeline.apply(state: adj.state,
+                                    to: graded.cropped(to: renderRect),
+                                    includeSplit: false)
+                .cropped(to: renderRect)
+        }
 
         // --- Overlays: graded PIP layers composited over the base ----------
         // Lane order = z-order: lower lanes first, higher lanes composited last

@@ -373,6 +373,22 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            // Adjustment-layer test: a strong warm grade over the FIRST half
+            // of the timeline; frames inside should read warmer than outside.
+            if env["LUMA_SEED_ADJUST"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                var settings = LookSettings()
+                settings.saturation = env["LUMA_SEED_ADJUST_DESAT"] == "1" ? -100 : 90
+                if env["LUMA_SEED_ADJUST_DESAT"] != "1" { settings.warmth = 90 }
+                let grade = ClipGrade(baseLookName: "", lutID: nil, settings: settings)
+                let id = editor.addAdjustmentLayer(grade: grade)
+                editor.setAdjustmentSpan(id: id, offset: 0, duration: editor.totalDuration / 2)
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -849,6 +865,10 @@ private struct EditorContent: View {
                         .frame(width: 58)
                         FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
                             .frame(width: 58)
+                        adjustLayerMenu
+                            .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: editor.isRecordingVoiceover ? "Stop" : "Record",
                                  icon: editor.isRecordingVoiceover ? "stop.circle.fill" : "mic.fill",
                                  selected: editor.isRecordingVoiceover) {
@@ -1115,6 +1135,37 @@ private struct EditorContent: View {
 
     private func speedLabel(_ speed: Double) -> String {
         speed == 1 ? "Speed" : String(format: "%g×", speed)
+    }
+
+    /// Adds a full-frame adjustment layer at the playhead, graded by a chosen
+    /// look preset. Existing layers can be cleared.
+    private var adjustLayerMenu: some View {
+        Menu {
+            Section("Add adjustment layer") {
+                ForEach(MockData.looks.prefix(10)) { look in
+                    Button {
+                        let grade = ClipGrade(baseLookName: look.name, lutID: nil,
+                                              settings: LookSettings())
+                        editor.addAdjustmentLayer(grade: grade)
+                        LumaHaptics.shared.tap()
+                    } label: { Text(look.name) }
+                }
+            }
+            if !editor.adjustmentLayers.isEmpty {
+                Button(role: .destructive) {
+                    for layer in editor.adjustmentLayers { editor.removeAdjustmentLayer(id: layer.id) }
+                    LumaHaptics.shared.tap()
+                } label: { Label("Clear \(editor.adjustmentLayers.count) layer(s)", systemImage: "trash") }
+            }
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up.badge.a.fill")
+                    .font(.system(size: 19, weight: .medium))
+                Text("Adj Layer").font(.system(size: 13))
+            }
+            .foregroundStyle(editor.adjustmentLayers.isEmpty ? LumaTheme.textSecondary : LumaTheme.accentBright)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     /// Ken Burns pan/zoom presets for the selected clip.

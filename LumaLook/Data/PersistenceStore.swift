@@ -122,6 +122,8 @@ struct StoredProject: Codable, Identifiable {
     var canvasSolidHex: String? = nil
     var canvasGradientTopHex: String? = nil
     var canvasGradientBottomHex: String? = nil
+    /// Adjustment layers (full-frame grades over time). Optional-at-end.
+    var adjustmentLayers: [AdjustmentLayer]? = nil
 }
 
 /// An Apply-a-Look session: the media + the exact grade, restorable from

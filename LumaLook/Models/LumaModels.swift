@@ -274,6 +274,17 @@ struct ClipGrade: Codable, Equatable {
     var settings: LookSettings
 }
 
+/// An adjustment layer: a full-frame grade applied to the video over a time
+/// span (like a colour-correction track floating above the clips). Carries a
+/// ClipGrade, applied to the base canvas before overlays composite on top.
+struct AdjustmentLayer: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var timelineOffset: Double
+    var duration: Double
+    var grade: ClipGrade
+    var timelineEnd: Double { timelineOffset + duration }
+}
+
 struct MockClip: Identifiable, Hashable {
     let id = UUID()
     let title: String

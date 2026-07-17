@@ -263,6 +263,7 @@ final class EditorState: ObservableObject {
         var zoom: Double
         var audioTracks: [MusicTrack]
         var overlays: [OverlayItem]
+        var adjustmentLayers: [AdjustmentLayer]
         var canvasMode: CanvasBackgroundMode
         var canvasSolidHex: String
         var canvasGradientTopHex: String
@@ -274,6 +275,8 @@ final class EditorState: ObservableObject {
     @Published var selectedClipID: UUID?
     @Published private(set) var audioTracks: [MusicTrack] = []
     @Published private(set) var overlays: [OverlayItem] = []
+    /// Full-frame adjustment grades floating over the clips (adjustment layers).
+    @Published private(set) var adjustmentLayers: [AdjustmentLayer] = []
 
     // Canvas
     @Published var format: EditorFormat = .widescreen
@@ -432,7 +435,8 @@ final class EditorState: ObservableObject {
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
             canvasGradientTopHex: canvasGradientTopHex,
-            canvasGradientBottomHex: canvasGradientBottomHex
+            canvasGradientBottomHex: canvasGradientBottomHex,
+            adjustmentLayers: adjustmentLayers.isEmpty ? nil : adjustmentLayers
         )
         store.upsert(project: stored)
     }
@@ -443,6 +447,7 @@ final class EditorState: ObservableObject {
         projectTitle = project.title
         format = EditorFormat(rawValue: project.format) ?? .widescreen
         zoom = project.zoom
+        adjustmentLayers = project.adjustmentLayers ?? []
         canvasMode = project.canvasMode.flatMap(CanvasBackgroundMode.init) ?? .fill
         canvasSolidHex = project.canvasSolidHex ?? "#101014"
         canvasGradientTopHex = project.canvasGradientTopHex ?? "#2A2A38"
@@ -1600,6 +1605,45 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    // MARK: - Adjustment layers
+
+    static let adjustmentDefaultDuration = 3.0
+
+    /// Adds a full-frame adjustment layer at the playhead. Returns its id so
+    /// the UI can open it for editing.
+    @discardableResult
+    func addAdjustmentLayer(grade: ClipGrade) -> UUID {
+        pushUndoSnapshot()
+        let start = min(max(0, currentTime), max(0, totalDuration - 0.4))
+        let duration = min(Self.adjustmentDefaultDuration, max(0.5, totalDuration - start))
+        let layer = AdjustmentLayer(timelineOffset: start, duration: duration, grade: grade)
+        adjustmentLayers.append(layer)
+        rebuild()
+        return layer.id
+    }
+
+    func removeAdjustmentLayer(id: UUID) {
+        guard adjustmentLayers.contains(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        adjustmentLayers.removeAll { $0.id == id }
+        rebuild()
+    }
+
+    func setAdjustmentGrade(id: UUID, grade: ClipGrade) {
+        guard let i = adjustmentLayers.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        adjustmentLayers[i].grade = grade
+        rebuild()
+    }
+
+    func setAdjustmentSpan(id: UUID, offset: Double, duration: Double) {
+        guard let i = adjustmentLayers.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        adjustmentLayers[i].timelineOffset = max(0, min(offset, max(0, totalDuration - 0.2)))
+        adjustmentLayers[i].duration = max(0.2, min(duration, totalDuration - adjustmentLayers[i].timelineOffset))
+        rebuild()
+    }
+
     // MARK: - Ken Burns (per-clip pan/zoom)
 
     /// Ken Burns direction presets — each lays down a start + end keyframe
@@ -1734,6 +1778,7 @@ final class EditorState: ObservableObject {
     private func currentSnapshot() -> Snapshot {
         Snapshot(clips: clips, format: format, zoom: zoom,
                  audioTracks: audioTracks, overlays: overlays,
+                 adjustmentLayers: adjustmentLayers,
                  canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
                  canvasGradientTopHex: canvasGradientTopHex,
                  canvasGradientBottomHex: canvasGradientBottomHex)
@@ -1763,6 +1808,7 @@ final class EditorState: ObservableObject {
         zoom = snapshot.zoom
         audioTracks = snapshot.audioTracks
         overlays = snapshot.overlays
+        adjustmentLayers = snapshot.adjustmentLayers
         canvasMode = snapshot.canvasMode
         canvasSolidHex = snapshot.canvasSolidHex
         canvasGradientTopHex = snapshot.canvasGradientTopHex
@@ -2283,12 +2329,18 @@ final class EditorState: ObservableObject {
         videoComposition.customVideoCompositorClass = LumaVideoCompositor.self
         videoComposition.renderSize = renderSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        let adjustmentSpans = adjustmentLayers
+            .filter { $0.duration > 0.05 && $0.timelineOffset < cursor.seconds }
+            .map { AdjustmentSpan(start: max(0, $0.timelineOffset),
+                                  end: min($0.timelineEnd, cursor.seconds),
+                                  state: makeLookState(from: $0.grade)) }
         videoComposition.instructions = makeInstructions(
             totalDuration: cursor,
             mainTrackID: videoTrack.trackID,
             frameMetas: metas,
             transitionSpans: spans,
             overlaySpecs: overlaySpecs,
+            adjustmentSpans: adjustmentSpans,
             renderSize: renderSize)
         videoComposition.applySDRColorPolicy()
 
@@ -2317,6 +2369,7 @@ final class EditorState: ObservableObject {
                                   frameMetas: [FrameMeta],
                                   transitionSpans: [TransitionSpanSpec],
                                   overlaySpecs: [OverlaySpec],
+                                  adjustmentSpans: [AdjustmentSpan] = [],
                                   renderSize: CGSize) -> [LumaCompositionInstruction] {
         let total = totalDuration.seconds
         var cuts: Set<Double> = [0, total]
@@ -2327,6 +2380,11 @@ final class EditorState: ObservableObject {
         for spec in overlaySpecs {
             cuts.insert(min(max(0, spec.start), total))
             cuts.insert(min(max(0, spec.end), total))
+        }
+        // Adjustment-layer edges bound their own segments.
+        for adj in adjustmentSpans {
+            cuts.insert(min(max(0, adj.start), total))
+            cuts.insert(min(max(0, adj.end), total))
         }
         // Cross-transition windows need their own segments: the aux track is
         // only required (and only exists) inside them.
@@ -2383,7 +2441,10 @@ final class EditorState: ObservableObject {
                 renderSize: renderSize,
                 zoomFactor: max(1.0, zoom / 100.0),
                 canvas: canvasSpec,
-                transformLayout: clipTransformLayout))
+                transformLayout: clipTransformLayout,
+                adjustments: adjustmentSpans.filter {
+                    mid >= $0.start - 0.001 && mid < $0.end + 0.001
+                }))
         }
         return instructions
     }
