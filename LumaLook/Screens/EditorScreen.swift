@@ -223,6 +223,10 @@ struct EditorTimelineView: View {
             if let path = env["LUMA_SEED_CLIP2"], FileManager.default.fileExists(atPath: path) {
                 await editor.addClip(from: URL(fileURLWithPath: path))
             }
+            // Third distinct clip (apply-to-all-cuts tests need 2 real cuts).
+            if let path = env["LUMA_SEED_CLIP3"], FileManager.default.fileExists(atPath: path) {
+                await editor.addClip(from: URL(fileURLWithPath: path))
+            }
             // Photo clip on the MAIN track (T7).
             if let path = env["LUMA_SEED_PHOTO"], FileManager.default.fileExists(atPath: path) {
                 await editor.addPhotoClip(from: URL(fileURLWithPath: path))
@@ -318,8 +322,21 @@ struct EditorTimelineView: View {
                         try? await Task.sleep(nanoseconds: 100_000_000)
                     }
                 }
-                if let first = editor.clips.first {
+                if env["LUMA_SEED_TRANSITION_ALL"] == "1" {
+                    // Need ≥3 clips for 2 cuts: split the last clip once.
+                    if editor.clips.count < 3 {
+                        editor.seek(to: editor.totalDuration * 0.75)
+                        editor.splitAtPlayhead()
+                        for _ in 0..<40 where editor.isRebuilding {
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                        }
+                    }
+                    editor.setTransitionForAllCuts(style: style)
+                } else if let first = editor.clips.first {
                     editor.setTransition(afterClipID: first.id, style: style)
+                }
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
             // Parity-matrix cells (#93): drive format + export spec headlessly,
@@ -1316,6 +1333,22 @@ private struct EditorContent: View {
                     }
                 }
                 .padding(.horizontal, 22)
+            }
+
+            // Apply the current style at every cut in one step.
+            if currentTransition != .none, editor.clips.count > 2 {
+                Button {
+                    editor.setTransitionForAllCuts(style: currentTransition,
+                                                   duration: currentTransitionClip?.transitionDuration)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Apply to All Cuts", systemImage: "square.stack.3d.down.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(LumaTheme.accent, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
             }
 
             // Editable duration (gap fix): nil = the style default.

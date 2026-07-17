@@ -1309,6 +1309,22 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// Sets the same transition at EVERY cut (all clips except the last). One
+    /// undo snapshot + one rebuild, mirroring applyGradeToAllClips.
+    func setTransitionForAllCuts(style: TransitionStyle, duration: Double? = nil) {
+        guard clips.count > 1 else { return }
+        let cutIndices = 0..<(clips.count - 1)
+        guard cutIndices.contains(where: {
+            clips[$0].transitionAfter != style || clips[$0].transitionDuration != duration
+        }) else { return }
+        pushUndoSnapshot()
+        for i in cutIndices {
+            clips[i].transitionAfter = style
+            clips[i].transitionDuration = duration
+        }
+        rebuild()
+    }
+
     /// Materialises a clip's grade override into the LookState the
     /// compositor reads. LUT parsing is cached in LookPipeline, so building
     /// fresh states per rebuild stays cheap.
