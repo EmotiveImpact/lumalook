@@ -379,6 +379,29 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F2: a stroked/boxed title, centred, for pixel sampling.
+            // Format: "TEXT|strokeHex|strokeWidth|boxHex|align"
+            if let t = env["LUMA_SEED_TEXTDECOR"], !editor.isEmpty {
+                let f = t.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                editor.addTextOverlay()
+                if let o = editor.overlays.last {
+                    editor.setOverlayText(id: o.id, f.first ?? "AB")
+                    editor.setTextDecor(id: o.id,
+                                        strokeHex: f.count > 1 && !f[1].isEmpty ? .some(f[1]) : nil,
+                                        strokeWidth: f.count > 2 ? Double(f[2]) : nil,
+                                        boxHex: f.count > 3 && !f[3].isEmpty ? .some(f[3]) : nil,
+                                        alignment: f.count > 4 && !f[4].isEmpty ? f[4] : nil)
+                    editor.setOverlayCenter(id: o.id, CGPoint(x: 0.5, y: 0.5))
+                    editor.setOverlaySize(id: o.id, 0.7)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let o = editor.overlays.last
+                print("[LUMA] TEXTDECOR text=\(o?.text ?? "nil") stroke=\(o?.textStrokeHex ?? "nil")@\(o?.textStrokeWidth ?? 0) box=\(o?.textBoxHex ?? "nil") align=\(o?.textAlignment ?? "nil")")
+            }
             // F1: bake an emoji sticker and centre it for pixel sampling.
             if let emoji = env["LUMA_SEED_STICKER"], !editor.isEmpty {
                 for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
@@ -2108,6 +2131,78 @@ private struct OverlayPanel: View {
                     }
                     .buttonStyle(.lumaPress)
                 }
+            }
+
+            // F2 — font, outline, box, alignment.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Menu {
+                        Button("Preset font") { editor.setTextDecor(id: overlayID, fontName: .some(nil)) }
+                        ForEach(FontLibrary.builtInFontNames, id: \.self) { name in
+                            Button(name) { editor.setTextDecor(id: overlayID, fontName: .some(name)) }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "character.cursor.ibeam").font(.system(size: 12))
+                            Text(overlay?.textFontName ?? "Preset font")
+                                .font(.footnote.weight(.semibold)).lineLimit(1)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(LumaTheme.surface, in: Capsule())
+                    }
+
+                    ForEach(["left", "center", "right"], id: \.self) { align in
+                        let on = (overlay?.textAlignment ?? "center") == align
+                        Button {
+                            editor.setTextDecor(id: overlayID, alignment: align)
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Image(systemName: "text.align\(align.capitalized)")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                                .frame(width: 34, height: 30)
+                                .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+
+                    let stroked = (overlay?.textStrokeHex != nil)
+                    Button {
+                        editor.setTextDecor(id: overlayID,
+                                            strokeHex: stroked ? .some(nil) : .some("#000000"),
+                                            strokeWidth: stroked ? 0 : 6)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text("Outline")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(stroked ? .white : LumaTheme.textSecondary)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(stroked ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+
+                    let boxed = (overlay?.textBoxHex != nil)
+                    Button {
+                        editor.setTextDecor(id: overlayID, boxHex: boxed ? .some(nil) : .some("#000000"))
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text("Box")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(boxed ? .white : LumaTheme.textSecondary)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(boxed ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+            }
+
+            if overlay?.textStrokeHex != nil {
+                InlineSlider(title: "Outline width",
+                             value: Binding(
+                                get: { overlay?.textStrokeWidth ?? 6 },
+                                set: { editor.setTextDecor(id: overlayID, strokeWidth: $0) }),
+                             range: 1...20) { String(format: "%.0f", $0) }
             }
         }
     }

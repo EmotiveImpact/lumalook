@@ -335,6 +335,30 @@ final class EditorState: ObservableObject {
         var text: String? = nil
         var textStyle: TextLayerStyle = .title
         var textColorHex: String = "#FFFFFF"
+        /// F2 — custom font (PostScript name). nil = the preset's own font.
+        var textFontName: String? = nil
+        /// F2 — outline. nil hex = no stroke.
+        var textStrokeHex: String? = nil
+        var textStrokeWidth: Double = 0
+        /// F2 — background box behind the glyphs. nil hex = no box.
+        var textBoxHex: String? = nil
+        /// F2 — "left" | "center" | "right".
+        var textAlignment: String = "center"
+
+        /// The rasteriser payload for this layer.
+        ///
+        /// 240pt matches the old CITextImageGenerator's effective size
+        /// (fontSize 120 x scaleFactor 2) — the compositor normalises width to
+        /// `sizeFraction` afterwards, so this only buys glyph crispness at 4K.
+        var textSpec: TextStyleSpec {
+            TextStyleSpec(fontName: textFontName ?? textStyle.fontName,
+                          pointSize: 240,
+                          colorHex: textColorHex,
+                          strokeColorHex: textStrokeHex,
+                          strokeWidth: CGFloat(textStrokeWidth),
+                          boxColorHex: textBoxHex,
+                          alignment: textAlignment)
+        }
         var rotationDegrees: Double = 0
         /// Keyframed placement (T5): offsets within the overlay's run.
         /// Empty = static placement from the fields above.
@@ -608,7 +632,12 @@ final class EditorState: ObservableObject {
                               lane: $0.lane == 0 ? nil : $0.lane,
                               effects: $0.effects.isIdentity ? nil : $0.effects,
                               kind: $0.kind,
-                              loopsMedia: $0.loopsMedia ? true : nil)
+                              loopsMedia: $0.loopsMedia ? true : nil,
+                              textFontName: $0.textFontName,
+                              textStrokeHex: $0.textStrokeHex,
+                              textStrokeWidth: $0.textStrokeWidth == 0 ? nil : $0.textStrokeWidth,
+                              textBoxHex: $0.textBoxHex,
+                              textAlignment: $0.textAlignment == "center" ? nil : $0.textAlignment)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -705,6 +734,11 @@ final class EditorState: ObservableObject {
             item.text = stored.text
             item.textStyle = stored.textStyle.flatMap(TextLayerStyle.init) ?? .title
             item.textColorHex = stored.textColorHex ?? "#FFFFFF"
+            item.textFontName = stored.textFontName
+            item.textStrokeHex = stored.textStrokeHex
+            item.textStrokeWidth = stored.textStrokeWidth ?? 0
+            item.textBoxHex = stored.textBoxHex
+            item.textAlignment = stored.textAlignment ?? "center"
             item.lane = stored.lane ?? 0
             item.effects = stored.effects ?? OverlayEffects()
             item.kind = stored.kind
@@ -1796,6 +1830,26 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F2 — text decoration: font / stroke / box / alignment. One setter so
+    /// the panel's five controls share a single undo entry shape; every field
+    /// is optional, nil meaning "leave it alone".
+    func setTextDecor(id: UUID,
+                      fontName: String?? = nil,
+                      strokeHex: String?? = nil,
+                      strokeWidth: Double? = nil,
+                      boxHex: String?? = nil,
+                      alignment: String? = nil) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].text != nil else { return }
+        pushUndoSnapshot()
+        if let fontName { overlays[i].textFontName = fontName }
+        if let strokeHex { overlays[i].textStrokeHex = strokeHex }
+        if let strokeWidth { overlays[i].textStrokeWidth = strokeWidth }
+        if let boxHex { overlays[i].textBoxHex = boxHex }
+        if let alignment { overlays[i].textAlignment = alignment }
+        rebuild()
+    }
+
     /// Text content/style edits are live (the compositor's text cache keys
     /// on the content) — but the SPECS carry the string, so rebuild.
     func setOverlayText(id: UUID, _ text: String) {
@@ -2663,8 +2717,7 @@ final class EditorState: ObservableObject {
                                                 transform: .identity,
                                                 start: start, end: start + playable,
                                                 text: text,
-                                                textFontName: overlay.textStyle.fontName,
-                                                textColorHex: overlay.textColorHex,
+                                                textSpec: overlay.textSpec,
                                                 lane: overlay.lane))
                 continue
             }

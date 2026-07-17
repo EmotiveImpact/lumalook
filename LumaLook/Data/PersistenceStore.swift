@@ -87,6 +87,12 @@ struct StoredOverlay: Codable {
     /// Content kind (sticker/shape/caption) + media looping. Optional-at-end.
     var kind: String? = nil
     var loopsMedia: Bool? = nil
+    /// F2 text decoration: custom font, stroke, box, alignment. Optional-at-end.
+    var textFontName: String? = nil
+    var textStrokeHex: String? = nil
+    var textStrokeWidth: Double? = nil
+    var textBoxHex: String? = nil
+    var textAlignment: String? = nil
 }
 
 /// Background-music track attached to a project.
