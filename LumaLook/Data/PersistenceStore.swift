@@ -37,6 +37,10 @@ struct StoredClip: Codable, Identifiable {
     var transformKeyframes: [ClipTransformKeyframe]? = nil
     /// Speed-ramp preset rawValue. Optional-at-end; nil = none.
     var speedRamp: String? = nil
+    /// Per-clip audio fades (A3). Optional-at-end.
+    var fadeIn: Double? = nil
+    var fadeOut: Double? = nil
+    var fadeCurve: String? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).
@@ -95,6 +99,13 @@ struct StoredMusic: Codable {
     var isMuted: Bool
     /// Lane kind (music/voice/sfx/extracted). Optional-at-end; nil = music.
     var kind: String? = nil
+    /// Fades (A3), volume envelope (A4), ducking (A5), looping (A6).
+    var fadeIn: Double? = nil
+    var fadeOut: Double? = nil
+    var fadeCurve: String? = nil
+    var volumePoints: [AudioVolumePoint]? = nil
+    var duckingEnabled: Bool? = nil
+    var isLooping: Bool? = nil
 }
 
 struct StoredProject: Codable, Identifiable {

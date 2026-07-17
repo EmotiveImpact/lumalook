@@ -406,6 +406,39 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // Music fade: LUMA_SEED_FADE="1.5|1.5|sCurve" on the first lane.
+            if let fadeStr = env["LUMA_SEED_FADE"], let m = editor.audioTracks.first {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let parts = fadeStr.split(separator: "|")
+                let fin = parts.count > 0 ? Double(parts[0]) : nil
+                let fout = parts.count > 1 ? Double(parts[1]) : nil
+                let curve = parts.count > 2 ? FadeCurve(rawValue: String(parts[2])) : nil
+                editor.setMusicFade(id: m.id, fadeIn: fin, fadeOut: fout, curve: curve)
+                for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
+            // Music envelope dip: LUMA_SEED_ENVELOPE="t,v;t,v" on the first lane.
+            if let envStr = env["LUMA_SEED_ENVELOPE"], let m = editor.audioTracks.first {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let pts = envStr.split(separator: ";").compactMap { seg -> AudioVolumePoint? in
+                    let xy = seg.split(separator: ",")
+                    guard xy.count == 2, let t = Double(xy[0]), let v = Double(xy[1]) else { return nil }
+                    return AudioVolumePoint(time: t, volume: v)
+                }
+                editor.setMusicEnvelope(id: m.id, pts)
+                for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
+            // Auto-duck: LUMA_SEED_DUCK=1 enables ducking on the first music lane.
+            if env["LUMA_SEED_DUCK"] == "1", let m = editor.audioTracks.first(where: { $0.kind == .music }) {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                editor.setMusicDucking(id: m.id, true)
+                for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
+            // Loop-to-fill: LUMA_SEED_LOOP=1 on the first music lane.
+            if env["LUMA_SEED_LOOP"] == "1", let m = editor.audioTracks.first {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                editor.setMusicLooping(id: m.id, true)
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
             // Assign audio-lane kinds in order, e.g. LUMA_SEED_AUDIO_KINDS="voice,sfx".
             if let kinds = env["LUMA_SEED_AUDIO_KINDS"], !editor.audioTracks.isEmpty {
                 for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
@@ -1374,6 +1407,44 @@ private struct EditorContent: View {
                 get: { editor.audioTracks.first(where: { $0.id == music.id })?.volume ?? 100 },
                 set: { editor.setMusicVolume(id: music.id, $0) }
             )) { "\(Int($0))%" }
+
+            // Fades (A3) + curve shape.
+            let live = { editor.audioTracks.first(where: { $0.id == music.id }) }
+            InlineSlider(title: "Fade In", value: Binding(
+                get: { live()?.fadeIn ?? 0 },
+                set: { editor.setMusicFade(id: music.id, fadeIn: $0) }
+            ), range: 0...5) { String(format: "%.1fs", $0) }
+            InlineSlider(title: "Fade Out", value: Binding(
+                get: { live()?.fadeOut ?? 0 },
+                set: { editor.setMusicFade(id: music.id, fadeOut: $0) }
+            ), range: 0...5) { String(format: "%.1fs", $0) }
+            HStack(spacing: 8) {
+                ForEach(FadeCurve.allCases, id: \.self) { curve in
+                    let on = (live()?.fadeCurve ?? .linear) == curve
+                    Button {
+                        editor.setMusicFade(id: music.id, curve: curve)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text(curve.label).font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+            }
+            // Auto-duck (A5) + loop (A6) toggles.
+            HStack(spacing: 14) {
+                Toggle("Duck under voice", isOn: Binding(
+                    get: { live()?.duckingEnabled ?? false },
+                    set: { editor.setMusicDucking(id: music.id, $0) }))
+                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
+                Toggle("Loop", isOn: Binding(
+                    get: { live()?.isLooping ?? false },
+                    set: { editor.setMusicLooping(id: music.id, $0) }))
+                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
+                    .fixedSize()
+            }
             HStack(spacing: 12) {
                 Button {
                     editor.setMusicMuted(id: music.id, !music.isMuted)

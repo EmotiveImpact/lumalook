@@ -47,6 +47,36 @@ enum EditorFormat: String, CaseIterable {
 /// Phase-A transitions: single-source effects rendered in the CI handler
 /// around a cut (no second frame needed). Real cross-dissolves arrive with
 /// the custom compositor (T1).
+/// Fade shape sampled into piecewise volume ramps.
+enum FadeCurve: String, Codable, CaseIterable {
+    case linear, easeIn, easeOut, sCurve
+    var label: String {
+        switch self {
+        case .linear: return "Linear"
+        case .easeIn: return "Ease In"
+        case .easeOut: return "Ease Out"
+        case .sCurve: return "S-Curve"
+        }
+    }
+    /// Maps normalised fade progress 0…1 to a gain multiplier 0…1.
+    func value(_ t: Double) -> Double {
+        let x = min(max(0, t), 1)
+        switch self {
+        case .linear: return x
+        case .easeIn: return x * x
+        case .easeOut: return 1 - (1 - x) * (1 - x)
+        case .sCurve: return x < 0.5 ? 2 * x * x : 1 - pow(-2 * x + 2, 2) / 2
+        }
+    }
+}
+
+/// A volume automation point on an audio lane: `time` seconds into the lane's
+/// timeline span, `volume` a 0…1 gain multiplier.
+struct AudioVolumePoint: Codable, Equatable {
+    var time: Double
+    var volume: Double
+}
+
 /// The role of an audio lane, driving its timeline colour + icon.
 enum AudioLaneKind: String, Codable, CaseIterable {
     case music, voice, sfx, extracted
@@ -235,6 +265,10 @@ final class EditorState: ObservableObject {
         var transformKeyframes: [ClipTransformKeyframe] = []
         /// Speed ramp preset (rawValue); "none" = constant `speed`.
         var speedRamp: String = SpeedRamp.none.rawValue
+        /// Per-clip audio fade in/out (seconds) + shape (A3).
+        var fadeIn: Double = 0
+        var fadeOut: Double = 0
+        var fadeCurve: FadeCurve = .linear
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
@@ -259,6 +293,16 @@ final class EditorState: ObservableObject {
         var isMuted: Bool = false
         /// Lane kind (music/voice/sfx/extracted) — drives the lane colour+icon.
         var kind: AudioLaneKind = .music
+        /// Fade in/out (seconds) + shape (A3).
+        var fadeIn: Double = 0
+        var fadeOut: Double = 0
+        var fadeCurve: FadeCurve = .linear
+        /// Volume automation envelope (A4); empty = flat at `volume`.
+        var volumePoints: [AudioVolumePoint] = []
+        /// Auto-duck under voice lanes (A5).
+        var duckingEnabled: Bool = false
+        /// Loop to fill the timeline (A6).
+        var isLooping: Bool = false
         /// Whole-file RMS buckets for the lane waveform (regenerated, not persisted).
         var waveform: [Float] = []
 
@@ -485,7 +529,10 @@ final class EditorState: ObservableObject {
                            cropW: $0.cropRect.width, cropH: $0.cropRect.height,
                            straightenDegrees: $0.straightenDegrees,
                            transformKeyframes: $0.transformKeyframes.isEmpty ? nil : $0.transformKeyframes,
-                           speedRamp: $0.speedRamp == SpeedRamp.none.rawValue ? nil : $0.speedRamp)
+                           speedRamp: $0.speedRamp == SpeedRamp.none.rawValue ? nil : $0.speedRamp,
+                           fadeIn: $0.fadeIn == 0 ? nil : $0.fadeIn,
+                           fadeOut: $0.fadeOut == 0 ? nil : $0.fadeOut,
+                           fadeCurve: $0.fadeCurve == .linear ? nil : $0.fadeCurve.rawValue)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -497,7 +544,13 @@ final class EditorState: ObservableObject {
                             trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                             timelineOffset: $0.timelineOffset,
                             volume: $0.volume, isMuted: $0.isMuted,
-                            kind: $0.kind == .music ? nil : $0.kind.rawValue)
+                            kind: $0.kind == .music ? nil : $0.kind.rawValue,
+                            fadeIn: $0.fadeIn == 0 ? nil : $0.fadeIn,
+                            fadeOut: $0.fadeOut == 0 ? nil : $0.fadeOut,
+                            fadeCurve: $0.fadeCurve == .linear ? nil : $0.fadeCurve.rawValue,
+                            volumePoints: $0.volumePoints.isEmpty ? nil : $0.volumePoints,
+                            duckingEnabled: $0.duckingEnabled ? true : nil,
+                            isLooping: $0.isLooping ? true : nil)
             },
             overlays: overlays.map {
                 StoredOverlay(id: $0.id, fileName: $0.url.lastPathComponent,
@@ -560,7 +613,9 @@ final class EditorState: ObservableObject {
                                          width: stored.cropW ?? 1, height: stored.cropH ?? 1),
                         straightenDegrees: stored.straightenDegrees ?? 0,
                         transformKeyframes: stored.transformKeyframes ?? [],
-                        speedRamp: stored.speedRamp ?? SpeedRamp.none.rawValue)
+                        speedRamp: stored.speedRamp ?? SpeedRamp.none.rawValue,
+                        fadeIn: stored.fadeIn ?? 0, fadeOut: stored.fadeOut ?? 0,
+                        fadeCurve: stored.fadeCurve.flatMap(FadeCurve.init) ?? .linear)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -572,7 +627,12 @@ final class EditorState: ObservableObject {
                               trimStart: stored.trimStart, trimEnd: stored.trimEnd,
                               timelineOffset: stored.timelineOffset,
                               volume: stored.volume, isMuted: stored.isMuted,
-                              kind: stored.kind.flatMap(AudioLaneKind.init) ?? .music)
+                              kind: stored.kind.flatMap(AudioLaneKind.init) ?? .music,
+                              fadeIn: stored.fadeIn ?? 0, fadeOut: stored.fadeOut ?? 0,
+                              fadeCurve: stored.fadeCurve.flatMap(FadeCurve.init) ?? .linear,
+                              volumePoints: stored.volumePoints ?? [],
+                              duckingEnabled: stored.duckingEnabled ?? false,
+                              isLooping: stored.isLooping ?? false)
         }
         overlays = (project.overlays ?? []).compactMap { stored in
             let url = store.clipsFolder.appendingPathComponent(stored.fileName)
@@ -1445,6 +1505,42 @@ final class EditorState: ObservableObject {
         audioTracks[i].volume = min(max(0, volume), 100)
         applyAudioSettings()
         scheduleAutosave()
+    }
+
+    /// Fade in/out (seconds) — mix-only, live, no rebuild (A3).
+    func setMusicFade(id: UUID, fadeIn: Double? = nil, fadeOut: Double? = nil, curve: FadeCurve? = nil) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        let maxFade = audioTracks[i].timelineDuration
+        if let fadeIn { audioTracks[i].fadeIn = min(max(0, fadeIn), maxFade) }
+        if let fadeOut { audioTracks[i].fadeOut = min(max(0, fadeOut), maxFade) }
+        if let curve { audioTracks[i].fadeCurve = curve }
+        applyAudioSettings()
+        scheduleAutosave()
+    }
+
+    /// Volume automation envelope (A4) — mix-only, live.
+    func setMusicEnvelope(id: UUID, _ points: [AudioVolumePoint]) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        audioTracks[i].volumePoints = points
+        applyAudioSettings()
+        scheduleAutosave()
+    }
+
+    /// Auto-duck toggle (A5) — mix-only, live.
+    func setMusicDucking(id: UUID, _ enabled: Bool) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        audioTracks[i].duckingEnabled = enabled
+        applyAudioSettings()
+        scheduleAutosave()
+    }
+
+    /// Loop-to-fill toggle (A6) — needs a rebuild (re-inserts audio).
+    func setMusicLooping(id: UUID, _ looping: Bool) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }),
+              audioTracks[i].isLooping != looping else { return }
+        pushUndoSnapshot()
+        audioTracks[i].isLooping = looping
+        rebuild()
     }
 
     /// Mute keeps the track in the composition and zeroes the mix volume,
@@ -2694,10 +2790,22 @@ final class EditorState: ObservableObject {
             inputs.append(parameters)
         }
 
+        // Voice-lane spans (A5): music tracks that opt into ducking dip under
+        // these. Computed once, live.
+        let voiceSpans: [ClosedRange<Double>] = audioTracks
+            .filter { $0.kind == .voice && !$0.isMuted && $0.timelineDuration > 0.05 }
+            .map { $0.timelineOffset...($0.timelineOffset + $0.timelineDuration) }
+
         for entry in musicTracks {
             guard let music = audioTracks.first(where: { $0.id == entry.id }) else { continue }
             let parameters = AVMutableAudioMixInputParameters(track: entry.track)
-            parameters.setVolume(Float(music.isMuted ? 0 : music.volume / 100.0), at: .zero)
+            let base = Float(music.isMuted ? 0 : music.volume / 100.0)
+            let end = min(music.timelineOffset + music.timelineDuration, duration)
+            applyVolumeAutomation(parameters, base: base,
+                                  span: music.timelineOffset...max(music.timelineOffset + 0.05, end),
+                                  fadeIn: music.fadeIn, fadeOut: music.fadeOut, curve: music.fadeCurve,
+                                  envelope: music.volumePoints,
+                                  duckSpans: music.duckingEnabled ? voiceSpans : [])
             inputs.append(parameters)
         }
 
@@ -2712,6 +2820,68 @@ final class EditorState: ObservableObject {
         let mix = AVMutableAudioMix()
         mix.inputParameters = inputs
         return mix
+    }
+
+    /// Emits a piecewise gain envelope for one lane: base × automation points ×
+    /// fade shape × ducking, sampled at ~0.1 s and written as setVolume/ramps.
+    /// Shared by fades (A3), volume envelope (A4) and auto-ducking (A5).
+    private func applyVolumeAutomation(_ p: AVMutableAudioMixInputParameters,
+                                       base: Float, span: ClosedRange<Double>,
+                                       fadeIn: Double, fadeOut: Double, curve: FadeCurve,
+                                       envelope: [AudioVolumePoint], duckSpans: [ClosedRange<Double>]) {
+        let start = span.lowerBound
+        let dur = max(0.001, span.upperBound - start)
+        let duckGain = 0.25   // −12 dB
+        let duckRamp = 0.3
+
+        func gain(atLocal lt: Double) -> Float {
+            var g = Double(base)
+            if !envelope.isEmpty { g *= Self.envelopeValue(envelope, at: lt, duration: dur) }
+            if fadeIn > 0.01, lt < fadeIn { g *= curve.value(lt / fadeIn) }
+            if fadeOut > 0.01, lt > dur - fadeOut { g *= curve.value(max(0, dur - lt) / fadeOut) }
+            // Duck: full inside a voice span, ramped 0.3 s at the edges.
+            let abs = start + lt
+            for d in duckSpans {
+                let inner = (d.lowerBound - 0.001)...(d.upperBound + 0.001)
+                if inner.contains(abs) {
+                    g *= duckGain
+                } else if abs > d.lowerBound - duckRamp, abs < d.lowerBound {
+                    g *= 1 - (1 - duckGain) * ((abs - (d.lowerBound - duckRamp)) / duckRamp)
+                } else if abs > d.upperBound, abs < d.upperBound + duckRamp {
+                    g *= duckGain + (1 - duckGain) * ((abs - d.upperBound) / duckRamp)
+                }
+            }
+            return Float(min(max(g, 0), 1))
+        }
+
+        let steps = min(200, max(12, Int(dur / 0.1)))
+        var lastT = 0.0
+        var lastG = gain(atLocal: 0)
+        p.setVolume(lastG, at: CMTime(seconds: start, preferredTimescale: 600))
+        for i in 1...steps {
+            let lt = dur * Double(i) / Double(steps)
+            let g = gain(atLocal: lt)
+            p.setVolumeRamp(fromStartVolume: lastG, toEndVolume: g,
+                            timeRange: CMTimeRange(
+                                start: CMTime(seconds: start + lastT, preferredTimescale: 600),
+                                duration: CMTime(seconds: lt - lastT, preferredTimescale: 600)))
+            lastT = lt; lastG = g
+        }
+    }
+
+    /// Piecewise-linear envelope value at local time `lt` (0…dur). Points are
+    /// sorted by time; endpoints hold. Empty envelope → 1.
+    private static func envelopeValue(_ points: [AudioVolumePoint], at lt: Double, duration: Double) -> Double {
+        guard !points.isEmpty else { return 1 }
+        let sorted = points.sorted { $0.time < $1.time }
+        if lt <= sorted[0].time { return sorted[0].volume }
+        if let last = sorted.last, lt >= last.time { return last.volume }
+        for i in 0..<(sorted.count - 1) where lt >= sorted[i].time && lt < sorted[i + 1].time {
+            let a = sorted[i], b = sorted[i + 1]
+            let f = (lt - a.time) / max(0.001, b.time - a.time)
+            return a.volume + (b.volume - a.volume) * f
+        }
+        return sorted.last?.volume ?? 1
     }
 
     // MARK: - Observers
