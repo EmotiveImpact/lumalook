@@ -220,6 +220,8 @@ struct OverlaySpec {
     var text: String? = nil
     var textFontName: String = "HelveticaNeue-Bold"
     var textColorHex: String = "#FFFFFF"
+    /// Stacking lane: higher lanes composite last (on top).
+    var lane: Int = 0
 }
 
 // MARK: - Instruction
@@ -460,7 +462,13 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             .cropped(to: renderRect)
 
         // --- Overlays: graded PIP layers composited over the base ----------
-        for spec in instruction.overlays
+        // Lane order = z-order: lower lanes first, higher lanes composited last
+        // (on top). Stable within a lane by insertion order.
+        let orderedOverlays = instruction.overlays
+            .enumerated()
+            .sorted { ($0.element.lane, $0.offset) < ($1.element.lane, $1.offset) }
+            .map(\.element)
+        for spec in orderedOverlays
         where seconds >= spec.start - 0.001 && seconds < spec.end + 0.001 {
             guard let placement = instruction.overlayLayout.placement(
                 for: spec.id, at: seconds - spec.start) else { continue }

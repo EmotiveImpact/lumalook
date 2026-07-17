@@ -216,6 +216,8 @@ final class EditorState: ObservableObject {
         var isMuted: Bool = false
         var title: String = ""
         var thumbnail: CGImage?       // lane bar art (regenerated, not persisted)
+        /// Stacking lane (z-order): higher lanes render on top.
+        var lane: Int = 0
 
         var timelineEnd: Double { timelineOffset + duration }
     }
@@ -424,7 +426,8 @@ final class EditorState: ObservableObject {
                               mediaDuration: $0.mediaDuration.isFinite ? $0.mediaDuration : nil,
                               text: $0.text,
                               textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
-                              textColorHex: $0.text == nil ? nil : $0.textColorHex)
+                              textColorHex: $0.text == nil ? nil : $0.textColorHex,
+                              lane: $0.lane == 0 ? nil : $0.lane)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -499,6 +502,7 @@ final class EditorState: ObservableObject {
             item.text = stored.text
             item.textStyle = stored.textStyle.flatMap(TextLayerStyle.init) ?? .title
             item.textColorHex = stored.textColorHex ?? "#FFFFFF"
+            item.lane = stored.lane ?? 0
             return item
         }
         rebuild(keepPosition: false)
@@ -1430,7 +1434,8 @@ final class EditorState: ObservableObject {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
         let item = overlays[i]
         var clamped = min(max(0, offset), max(0, totalDuration - 0.2))
-        for other in overlays where other.id != id {
+        // Only overlays on the SAME lane collide; different lanes may overlap.
+        for other in overlays where other.id != id && other.lane == item.lane {
             if other.timelineEnd <= item.timelineOffset + 0.001 {
                 clamped = max(clamped, other.timelineEnd)
             } else if other.timelineOffset >= item.timelineEnd - 0.001 {
@@ -1578,6 +1583,21 @@ final class EditorState: ObservableObject {
         overlayKeyframeAutoUpsert(index: i)
         syncOverlayLayout(refreshFrame: true)
         scheduleAutosave()
+    }
+
+    /// Highest lane currently in use (for placing new overlays / UI bounds).
+    var maxOverlayLane: Int { overlays.map(\.lane).max() ?? 0 }
+
+    /// Nudges an overlay's z-order lane up (forward) or down (back). A lane
+    /// change moves the overlay to a different composition video track, so it
+    /// needs a rebuild (unlike the live size/position setters).
+    func nudgeOverlayLane(id: UUID, by delta: Int) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let newLane = max(0, min(4, overlays[i].lane + delta))
+        guard newLane != overlays[i].lane else { return }
+        pushUndoSnapshot()
+        overlays[i].lane = newLane
+        rebuild()
     }
 
     // MARK: - Ken Burns (per-clip pan/zoom)
@@ -2092,9 +2112,10 @@ final class EditorState: ObservableObject {
         // inserts. Gaps between items are explicit empty ranges so segment
         // targeting stays exact.
         var overlaySpecs: [OverlaySpec] = []
-        var overlayTrack: AVMutableCompositionTrack?
+        // Video overlays ride per-lane composition tracks so overlapping
+        // overlays on different lanes never collide on one sequential track.
+        var overlayLaneTracks: [Int: (track: AVMutableCompositionTrack, cursor: CMTime)] = [:]
         var overlayAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)] = []
-        var overlayCursor = CMTime.zero
         for overlay in overlays.sorted(by: { $0.timelineOffset < $1.timelineOffset }) {
             let start = min(max(0, overlay.timelineOffset), cursor.seconds)
             var playable = min(overlay.duration, cursor.seconds - start)
@@ -2111,7 +2132,8 @@ final class EditorState: ObservableObject {
                                                 start: start, end: start + playable,
                                                 text: text,
                                                 textFontName: overlay.textStyle.fontName,
-                                                textColorHex: overlay.textColorHex))
+                                                textColorHex: overlay.textColorHex,
+                                                lane: overlay.lane))
                 continue
             }
             if overlay.isImage {
@@ -2119,7 +2141,8 @@ final class EditorState: ObservableObject {
                                                 trackID: kCMPersistentTrackID_Invalid,
                                                 imageURL: overlay.url,
                                                 transform: .identity,
-                                                start: start, end: start + playable))
+                                                start: start, end: start + playable,
+                                                lane: overlay.lane))
                 continue
             }
 
@@ -2127,25 +2150,28 @@ final class EditorState: ObservableObject {
             guard let sourceVideo = try? await overlayAsset.loadTracks(withMediaType: .video).first
             else { continue }
             let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
-            if overlayTrack == nil {
-                overlayTrack = composition.addMutableTrack(withMediaType: .video,
-                                                           preferredTrackID: kCMPersistentTrackID_Invalid)
+            if overlayLaneTracks[overlay.lane] == nil,
+               let t = composition.addMutableTrack(withMediaType: .video,
+                                                   preferredTrackID: kCMPersistentTrackID_Invalid) {
+                overlayLaneTracks[overlay.lane] = (t, .zero)
             }
-            guard let track = overlayTrack else { continue }
+            guard let laneEntry = overlayLaneTracks[overlay.lane] else { continue }
+            let track = laneEntry.track
             let at = CMTime(seconds: start, preferredTimescale: 600)
-            if at > overlayCursor {
-                track.insertEmptyTimeRange(CMTimeRange(start: overlayCursor, end: at))
+            if at > laneEntry.cursor {
+                track.insertEmptyTimeRange(CMTimeRange(start: laneEntry.cursor, end: at))
             }
             let range = CMTimeRange(start: CMTime(seconds: overlay.mediaStart, preferredTimescale: 600),
                                     duration: CMTime(seconds: playable, preferredTimescale: 600))
             do {
                 try track.insertTimeRange(range, of: sourceVideo, at: at)
-                overlayCursor = at + range.duration
+                overlayLaneTracks[overlay.lane] = (track, at + range.duration)
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: track.trackID,
                                                 imageURL: nil,
                                                 transform: transform,
-                                                start: start, end: start + playable))
+                                                start: start, end: start + playable,
+                                                lane: overlay.lane))
                 // Overlay AUDIO rides its own lazy track (was silently
                 // dropped in v1). Same rule as everywhere: never leave an
                 // empty audio track behind — export dies on it.
@@ -2164,8 +2190,7 @@ final class EditorState: ObservableObject {
                 // it so no media-less video track breaks the export session.
                 if track.segments.allSatisfy({ $0.isEmpty }) {
                     composition.removeTrack(track)
-                    overlayTrack = nil
-                    overlayCursor = .zero
+                    overlayLaneTracks[overlay.lane] = nil
                 }
             }
         }

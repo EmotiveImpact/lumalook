@@ -76,6 +76,8 @@ struct StoredOverlay: Codable {
     var text: String? = nil
     var textStyle: String? = nil
     var textColorHex: String? = nil
+    /// Stacking lane / z-order. Optional-at-end; nil = lane 0.
+    var lane: Int? = nil
 }
 
 /// Background-music track attached to a project.

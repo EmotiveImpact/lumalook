@@ -344,6 +344,35 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // Z-order test: overlay A (paths[0]) and B (paths[1]) overlap at
+            // one centre. B rides lane 1 (on top by default → B visible). With
+            // LUMA_SEED_ZORDER_LANE=1, A jumps to lane 2 so A wins instead.
+            if let z = env["LUMA_SEED_ZORDER"], !editor.isEmpty {
+                let paths = z.split(separator: ",").map(String.init)
+                if paths.count >= 2 {
+                    for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                    await editor.addOverlay(from: URL(fileURLWithPath: paths[0]), isImage: true)
+                    await editor.addOverlay(from: URL(fileURLWithPath: paths[1]), isImage: true)
+                    let a = editor.overlays.first?.id
+                    let b = editor.overlays.dropFirst().first?.id
+                    if let a, let b {
+                        editor.nudgeOverlayLane(id: b, by: 1)        // B → lane 1
+                        editor.setOverlayOffset(id: b, 0)            // overlap A
+                        editor.setOverlayCenter(id: a, CGPoint(x: 0.5, y: 0.5))
+                        editor.setOverlayCenter(id: b, CGPoint(x: 0.5, y: 0.5))
+                        editor.setOverlaySize(id: a, 0.6)
+                        editor.setOverlaySize(id: b, 0.6)
+                        if env["LUMA_SEED_ZORDER_LANE"] == "1" {
+                            editor.nudgeOverlayLane(id: a, by: 2)    // A → lane 2 (wins)
+                        }
+                    }
+                    for _ in 0..<40 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -1578,6 +1607,35 @@ private struct OverlayPanel: View {
                 get: { overlay?.rotationDegrees ?? 0 },
                 set: { editor.setOverlayRotation(id: overlayID, $0) }
             ), range: -180...180) { "\(Int($0))°" }
+
+            // Z-order: move the overlay between stacking lanes.
+            HStack(spacing: 12) {
+                Text("Layer \((overlay?.lane ?? 0) + 1)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button {
+                    editor.nudgeOverlayLane(id: overlayID, by: -1)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Back", systemImage: "square.2.layers.3d.bottom.filled")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(LumaTheme.surface, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .disabled((overlay?.lane ?? 0) <= 0)
+                Button {
+                    editor.nudgeOverlayLane(id: overlayID, by: 1)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Forward", systemImage: "square.2.layers.3d.top.filled")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(LumaTheme.surface, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+            }
 
             // Keyframes (T5): pin the current placement at the playhead;
             // sliders then animate between pins.
