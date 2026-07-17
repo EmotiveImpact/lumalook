@@ -891,6 +891,9 @@ struct MusicLane: View {
         return HStack(spacing: 6) {
             Image(systemName: music.isMuted ? "speaker.slash.fill" : music.kind.icon)
                 .font(.system(size: 11, weight: .bold))
+            if music.isLooping {
+                Image(systemName: "repeat").font(.system(size: 9, weight: .heavy)).opacity(0.85)
+            }
             if barWidth > 90 {
                 Text(music.title)
                     .font(.system(size: 12, weight: .semibold))

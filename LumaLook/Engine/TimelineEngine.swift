@@ -2430,23 +2430,31 @@ final class EditorState: ObservableObject {
         for music in audioTracks
         where music.timelineDuration > 0.05 && music.timelineOffset < cursor.seconds - 0.01 {
             let musicAsset = AVURLAsset(url: music.url)
-            if let sourceAudio = try? await musicAsset.loadTracks(withMediaType: .audio).first {
-                // v1 policy: audio is hard-clipped at the video's end.
-                let playable = min(music.timelineDuration, cursor.seconds - music.timelineOffset)
-                if playable > 0.05,
-                   let track = composition.addMutableTrack(withMediaType: .audio,
-                                                           preferredTrackID: kCMPersistentTrackID_Invalid) {
+            if let sourceAudio = try? await musicAsset.loadTracks(withMediaType: .audio).first,
+               let track = composition.addMutableTrack(withMediaType: .audio,
+                                                       preferredTrackID: kCMPersistentTrackID_Invalid) {
+                // Loop-to-fill (A6): repeat the trimmed clip from its offset up
+                // to the video end; otherwise a single hard-clipped copy.
+                let loopLen = music.timelineDuration
+                var at = music.timelineOffset
+                var insertedAny = false
+                repeat {
+                    let playable = min(loopLen, cursor.seconds - at)
+                    guard playable > 0.05 else { break }
                     let range = CMTimeRange(
                         start: CMTime(seconds: music.trimStart, preferredTimescale: 600),
-                        duration: CMTime(seconds: playable, preferredTimescale: 600)
-                    )
+                        duration: CMTime(seconds: playable, preferredTimescale: 600))
                     do {
                         try track.insertTimeRange(range, of: sourceAudio,
-                                                  at: CMTime(seconds: music.timelineOffset, preferredTimescale: 600))
-                        musicTracks.append((music.id, track))
-                    } catch {
-                        composition.removeTrack(track)   // never leave an empty track behind
-                    }
+                                                  at: CMTime(seconds: at, preferredTimescale: 600))
+                        insertedAny = true
+                    } catch { break }
+                    at += loopLen
+                } while music.isLooping && at < cursor.seconds - 0.05
+                if insertedAny {
+                    musicTracks.append((music.id, track))
+                } else {
+                    composition.removeTrack(track)   // never leave an empty track behind
                 }
             }
         }
@@ -2800,7 +2808,8 @@ final class EditorState: ObservableObject {
             guard let music = audioTracks.first(where: { $0.id == entry.id }) else { continue }
             let parameters = AVMutableAudioMixInputParameters(track: entry.track)
             let base = Float(music.isMuted ? 0 : music.volume / 100.0)
-            let end = min(music.timelineOffset + music.timelineDuration, duration)
+            let laneLen = music.isLooping ? (duration - music.timelineOffset) : music.timelineDuration
+            let end = min(music.timelineOffset + laneLen, duration)
             applyVolumeAutomation(parameters, base: base,
                                   span: music.timelineOffset...max(music.timelineOffset + 0.05, end),
                                   fadeIn: music.fadeIn, fadeOut: music.fadeOut, curve: music.fadeCurve,
