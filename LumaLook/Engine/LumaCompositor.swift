@@ -54,10 +54,13 @@ struct FrameMeta {
     /// Per-clip grade (queue: per-clip looks). Live reference like the global
     /// LookState; nil = the clip follows the timeline's global grade.
     let clipLookState: LookState?
+    /// Clip identity, so the compositor can look up live Ken Burns keyframes.
+    var clipID: UUID? = nil
 
     init(start: Double, end: Double, transform: CGAffineTransform,
          imageURL: URL? = nil, hasAnchorFrames: Bool = false,
-         clipLookState: LookState? = nil, display: ClipDisplayOps = .identity) {
+         clipLookState: LookState? = nil, display: ClipDisplayOps = .identity,
+         clipID: UUID? = nil) {
         self.start = start
         self.end = end
         self.transform = transform
@@ -65,6 +68,7 @@ struct FrameMeta {
         self.hasAnchorFrames = hasAnchorFrames
         self.clipLookState = clipLookState
         self.display = display
+        self.clipID = clipID
     }
 }
 
@@ -158,6 +162,46 @@ final class OverlayLayout: @unchecked Sendable {
     }
 }
 
+/// Live per-clip pan/zoom (Ken Burns). Same live-reference trick as
+/// `OverlayLayout`: the editor mutates it and the running compositor reads the
+/// latest keyframes without a composition rebuild. Applied to the base frame
+/// (videos AND stills) as an animated crop before canvas placement.
+final class ClipTransformLayout: @unchecked Sendable {
+    struct Transform: Equatable {
+        var zoom: Double = 1              // ≥1; the visible window is 1/zoom
+        var center = CGPoint(x: 0.5, y: 0.5)   // unit, y-down (UI)
+    }
+    struct Keyframe { let time: Double; var transform: Transform }
+
+    private let lock = NSLock()
+    private var entries: [UUID: [Keyframe]] = [:]
+
+    func replaceAll(_ new: [UUID: [Keyframe]]) {
+        lock.lock()
+        entries = new.mapValues { $0.sorted { $0.time < $1.time } }
+        lock.unlock()
+    }
+
+    /// Interpolated transform `offset` seconds into the clip; nil = static.
+    func transform(for id: UUID, at offset: Double) -> Transform? {
+        lock.lock(); defer { lock.unlock() }
+        guard let frames = entries[id], !frames.isEmpty else { return nil }
+        if offset <= frames[0].time { return frames[0].transform }
+        guard let last = frames.last, offset < last.time else { return frames.last?.transform }
+        for i in 0..<(frames.count - 1) where offset >= frames[i].time && offset < frames[i + 1].time {
+            let a = frames[i], b = frames[i + 1]
+            let span = max(b.time - a.time, 0.001)
+            let t = (offset - a.time) / span
+            return Transform(
+                zoom: a.transform.zoom + (b.transform.zoom - a.transform.zoom) * t,
+                center: CGPoint(
+                    x: a.transform.center.x + (b.transform.center.x - a.transform.center.x) * t,
+                    y: a.transform.center.y + (b.transform.center.y - a.transform.center.y) * t))
+        }
+        return frames.last?.transform
+    }
+}
+
 /// One overlay item as the compositor sees it: where its frames come from
 /// (a second source track, or a still image) and when it is on screen.
 struct OverlaySpec {
@@ -237,6 +281,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let renderSize: CGSize
     let zoomFactor: CGFloat
     let canvas: CanvasSpec
+    /// Live per-clip Ken Burns keyframes (nil = no clip animates).
+    let transformLayout: ClipTransformLayout?
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -248,7 +294,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          lookState: LookState,
          renderSize: CGSize,
          zoomFactor: CGFloat,
-         canvas: CanvasSpec = .fill) {
+         canvas: CanvasSpec = .fill,
+         transformLayout: ClipTransformLayout? = nil) {
         self.timeRange = timeRange
         // An empty ID list means "call the compositor with no source frames"
         // (photo-clip segments) — exactly what T7 needs.
@@ -262,6 +309,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.renderSize = renderSize
         self.zoomFactor = zoomFactor
         self.canvas = canvas
+        self.transformLayout = transformLayout
         super.init()
     }
 }
@@ -370,9 +418,17 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             seconds >= $0.start - 0.001 && seconds < $0.end + 0.001
         }) ?? instruction.frameMetas.first
 
+        // Live Ken Burns transform for this clip at this instant, if any.
+        func kenBurns(_ img: CIImage) -> CIImage {
+            guard let meta, let id = meta.clipID,
+                  let kb = instruction.transformLayout?.transform(for: id, at: seconds - meta.start)
+            else { return img }
+            return applyKenBurns(img, zoom: CGFloat(kb.zoom), center: kb.center)
+        }
+
         var canvas: CIImage
         if let meta, let imageURL = meta.imageURL, let still = stillImage(at: imageURL) {
-            let oriented = applyUserOrientation(still, meta.display)
+            let oriented = kenBurns(applyUserOrientation(still, meta.display))
             canvas = composeCanvas(oriented, into: renderSize, zoom: instruction.zoomFactor,
                                    spec: instruction.canvas)
         } else if let sourceBuffer = request.sourceFrame(byTrackID: instruction.mainTrackID) {
@@ -383,6 +439,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                                                 y: -image.extent.minY))
             }
             if let meta { image = applyUserOrientation(image, meta.display) }
+            image = kenBurns(image)
             canvas = composeCanvas(image, into: renderSize, zoom: instruction.zoomFactor,
                                    spec: instruction.canvas)
         } else {
@@ -615,6 +672,26 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
         return img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
                                                      y: -img.extent.minY))
+    }
+
+    /// Ken Burns: crops a `1/zoom` window centred on the unit point `center`
+    /// (clamped to stay in frame), re-origined to (0,0). composeCanvas then
+    /// fills the canvas with it — a smaller window reads as a zoom-in, moving
+    /// the centre pans. `zoom == 1` is a no-op.
+    private func applyKenBurns(_ image: CIImage, zoom: CGFloat, center: CGPoint) -> CIImage {
+        guard zoom > 1.001 else { return image }
+        let e = image.extent
+        let w = e.width / zoom, h = e.height / zoom
+        // Clamp the window centre so the crop rect stays inside the frame.
+        let halfWFrac = (w / e.width) / 2, halfHFrac = (h / e.height) / 2
+        let cxUnit = min(max(center.x, halfWFrac), 1 - halfWFrac)
+        let cyUnit = min(max(center.y, halfHFrac), 1 - halfHFrac)   // y-down UI
+        let cx = e.minX + cxUnit * e.width
+        let cyTopDown = cyUnit * e.height
+        let originY = e.minY + (e.height - cyTopDown - h / 2)         // flip to y-up
+        let rect = CGRect(x: cx - w / 2, y: originY, width: w, height: h)
+        return image.cropped(to: rect)
+            .transformed(by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
     }
 
     /// Places the framed clip on the chosen canvas background. `.fill` is the

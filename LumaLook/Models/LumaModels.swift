@@ -229,6 +229,15 @@ struct LookSettings: Codable, Equatable {
     }
 }
 
+/// A Ken Burns pan/zoom keyframe: at `time` seconds into the clip, show a
+/// `1/zoom` window centred on (`centerX`,`centerY`) in unit space (y-down).
+struct ClipTransformKeyframe: Codable, Equatable {
+    var time: Double
+    var zoom: Double = 1
+    var centerX: Double = 0.5
+    var centerY: Double = 0.5
+}
+
 /// A clip-level grade override in the editor (per-clip looks): the timeline
 /// keeps a global grade; a clip with a ClipGrade wears its own.
 struct ClipGrade: Codable, Equatable {

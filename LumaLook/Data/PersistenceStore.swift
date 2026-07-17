@@ -33,6 +33,8 @@ struct StoredClip: Codable, Identifiable {
     var cropW: Double? = nil
     var cropH: Double? = nil
     var straightenDegrees: Double? = nil
+    /// Ken Burns pan/zoom keyframes. Optional-at-end; nil = static.
+    var transformKeyframes: [ClipTransformKeyframe]? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).

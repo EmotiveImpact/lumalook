@@ -398,6 +398,19 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if let kbRaw = env["LUMA_SEED_KENBURNS"],
+               let preset = EditorState.KenBurnsPreset(rawValue: kbRaw), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let id = editor.clips.first?.id {
+                    editor.selectedClipID = id
+                    editor.setKenBurns(id: id, preset: preset)
+                    for _ in 0..<20 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             if let cropStr = env["LUMA_SEED_CROP"], !editor.isEmpty {
                 let parts = cropStr.split(separator: ",").compactMap { Double($0) }
                 if parts.count >= 4, let id = editor.clips.first?.id {
@@ -739,6 +752,8 @@ private struct EditorContent: View {
                         showLooksStrip.toggle()
                     }
                     .frame(width: 58)
+                    kenBurnsMenu
+                        .frame(width: 58)
                     speedMenu
                         .frame(width: 58)
                         }
@@ -1029,6 +1044,29 @@ private struct EditorContent: View {
 
     private func speedLabel(_ speed: Double) -> String {
         speed == 1 ? "Speed" : String(format: "%g×", speed)
+    }
+
+    /// Ken Burns pan/zoom presets for the selected clip.
+    private var kenBurnsMenu: some View {
+        Menu {
+            ForEach(EditorState.KenBurnsPreset.allCases, id: \.self) { preset in
+                Button {
+                    if let id = editor.selectedClipID {
+                        editor.setKenBurns(id: id, preset: preset)
+                        LumaHaptics.shared.tap()
+                    }
+                } label: { Text(preset.label) }
+            }
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                    .font(.system(size: 19, weight: .medium))
+                Text("Motion").font(.system(size: 13))
+            }
+            .foregroundStyle((editor.selectedClip?.transformKeyframes.isEmpty ?? true)
+                             ? LumaTheme.textSecondary : LumaTheme.accentBright)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     // MARK: Timeline

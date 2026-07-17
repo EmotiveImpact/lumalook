@@ -125,6 +125,9 @@ final class EditorState: ObservableObject {
         /// Free crop in unit space (y-down); straighten in degrees.
         var cropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
         var straightenDegrees: Double = 0
+        /// Ken Burns pan/zoom keyframes (offsets within the clip's run);
+        /// empty = static.
+        var transformKeyframes: [ClipTransformKeyframe] = []
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
@@ -284,6 +287,8 @@ final class EditorState: ObservableObject {
     /// Live overlay size/position/opacity read by the compositor per frame —
     /// sliders update it without composition rebuilds (the LookState trick).
     let overlayLayout = OverlayLayout()
+    /// Live per-clip Ken Burns pan/zoom, same live-reference trick.
+    let clipTransformLayout = ClipTransformLayout()
     private let store: PersistenceStore
     private(set) var projectID = UUID()
     private var projectCreatedAt = Date()
@@ -359,7 +364,8 @@ final class EditorState: ObservableObject {
                            isMirrored: $0.isMirrored,
                            cropX: $0.cropRect.minX, cropY: $0.cropRect.minY,
                            cropW: $0.cropRect.width, cropH: $0.cropRect.height,
-                           straightenDegrees: $0.straightenDegrees)
+                           straightenDegrees: $0.straightenDegrees,
+                           transformKeyframes: $0.transformKeyframes.isEmpty ? nil : $0.transformKeyframes)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -427,7 +433,8 @@ final class EditorState: ObservableObject {
                         isMirrored: stored.isMirrored ?? false,
                         cropRect: CGRect(x: stored.cropX ?? 0, y: stored.cropY ?? 0,
                                          width: stored.cropW ?? 1, height: stored.cropH ?? 1),
-                        straightenDegrees: stored.straightenDegrees ?? 0)
+                        straightenDegrees: stored.straightenDegrees ?? 0,
+                        transformKeyframes: stored.transformKeyframes ?? [])
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -1464,6 +1471,70 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    // MARK: - Ken Burns (per-clip pan/zoom)
+
+    /// Ken Burns direction presets — each lays down a start + end keyframe
+    /// spanning the clip's trimmed duration.
+    enum KenBurnsPreset: String, CaseIterable {
+        case none, zoomIn, zoomOut, panLeft, panRight, panUp, panDown
+
+        var label: String {
+            switch self {
+            case .none: return "None"
+            case .zoomIn: return "Zoom In"
+            case .zoomOut: return "Zoom Out"
+            case .panLeft: return "Pan Left"
+            case .panRight: return "Pan Right"
+            case .panUp: return "Pan Up"
+            case .panDown: return "Pan Down"
+            }
+        }
+    }
+
+    /// Applies a Ken Burns preset to the selected clip (2 keyframes across its
+    /// trimmed run). Live: only the layout + paused frame refresh, no rebuild.
+    func setKenBurns(id: UUID, preset: KenBurnsPreset) {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        let dur = clips[i].timelineDuration
+        let z = 1.3
+        let lo = 0.28, hi = 0.72   // pan extremes (keep the window in-frame)
+        let c = 0.5
+        func kf(_ t: Double, _ zoom: Double, _ x: Double, _ y: Double) -> ClipTransformKeyframe {
+            ClipTransformKeyframe(time: t, zoom: zoom, centerX: x, centerY: y)
+        }
+        switch preset {
+        case .none:     clips[i].transformKeyframes = []
+        case .zoomIn:   clips[i].transformKeyframes = [kf(0, 1, c, c), kf(dur, z, c, c)]
+        case .zoomOut:  clips[i].transformKeyframes = [kf(0, z, c, c), kf(dur, 1.001, c, c)]
+        case .panLeft:  clips[i].transformKeyframes = [kf(0, z, hi, c), kf(dur, z, lo, c)]
+        case .panRight: clips[i].transformKeyframes = [kf(0, z, lo, c), kf(dur, z, hi, c)]
+        case .panUp:    clips[i].transformKeyframes = [kf(0, z, c, hi), kf(dur, z, c, lo)]
+        case .panDown:  clips[i].transformKeyframes = [kf(0, z, c, lo), kf(dur, z, c, hi)]
+        }
+        syncClipTransformLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Mirrors clips' Ken Burns keyframes into the live layout the compositor
+    /// reads. Times are stored as offsets within each clip's run.
+    func syncClipTransformLayout(refreshFrame: Bool = false) {
+        var map: [UUID: [ClipTransformLayout.Keyframe]] = [:]
+        for clip in clips where !clip.transformKeyframes.isEmpty {
+            map[clip.id] = clip.transformKeyframes.map {
+                ClipTransformLayout.Keyframe(
+                    time: $0.time,
+                    transform: ClipTransformLayout.Transform(
+                        zoom: $0.zoom, center: CGPoint(x: $0.centerX, y: $0.centerY)))
+            }
+        }
+        clipTransformLayout.replaceAll(map)
+        if refreshFrame, let player, player.timeControlStatus != .playing {
+            let time = player.currentTime()
+            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+    }
+
     /// Mirrors the overlays' placement values into the live layout box the
     /// compositor reads, and re-renders the paused frame so edits show
     /// immediately (a paused player never re-runs the compositor on its own).
@@ -1787,7 +1858,8 @@ final class EditorState: ObservableObject {
                                        imageURL: clip.url,
                                        hasAnchorFrames: anchored,
                                        clipLookState: clip.grade.map(makeLookState),
-                                       display: clip.displayOps))
+                                       display: clip.displayOps,
+                                       clipID: clip.id))
                 cursor = cursor + stillDuration
                 continue
             }
@@ -1832,7 +1904,8 @@ final class EditorState: ObservableObject {
                                    end: (cursor + insertedDuration).seconds,
                                    transform: transform,
                                    clipLookState: clip.grade.map(makeLookState),
-                                   display: clip.displayOps))
+                                   display: clip.displayOps,
+                                   clipID: clip.id))
             cursor = cursor + insertedDuration
         }
 
@@ -1953,6 +2026,7 @@ final class EditorState: ObservableObject {
             }
         }
         syncOverlayLayout()
+        syncClipTransformLayout()
 
         // Transition boundaries: cut time + style, sampled by the compositor.
         // Cross-transitions (dissolve/wipe) get REAL second frames via an aux
@@ -2139,7 +2213,8 @@ final class EditorState: ObservableObject {
                 lookState: lookState,
                 renderSize: renderSize,
                 zoomFactor: max(1.0, zoom / 100.0),
-                canvas: canvasSpec))
+                canvas: canvasSpec,
+                transformLayout: clipTransformLayout))
         }
         return instructions
     }
