@@ -106,6 +106,8 @@ struct StoredMusic: Codable {
     var volumePoints: [AudioVolumePoint]? = nil
     var duckingEnabled: Bool? = nil
     var isLooping: Bool? = nil
+    /// Audio effect stack (EQ/pitch/voice/reverb/gain). Optional-at-end.
+    var effects: AudioEffectSettings? = nil
 }
 
 struct StoredProject: Codable, Identifiable {

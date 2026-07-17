@@ -173,6 +173,8 @@ final class VideoExporter: ObservableObject {
         session.outputFileType = .mov
         session.videoComposition = videoComposition
         session.audioMix = audioMix
+        // Pitch parity with the preview player item (C2): sped clips keep pitch.
+        session.audioTimePitchAlgorithm = .spectral
         session.shouldOptimizeForNetworkUse = true
 
         progressTask = Task { [weak self] in

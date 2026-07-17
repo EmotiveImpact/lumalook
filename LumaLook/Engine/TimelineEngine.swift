@@ -303,6 +303,12 @@ final class EditorState: ObservableObject {
         var duckingEnabled: Bool = false
         /// Loop to fill the timeline (A6).
         var isLooping: Bool = false
+        /// Audio effect stack (EQ/pitch/voice/reverb/gain) — baked offline (C1-C5).
+        var effects: AudioEffectSettings = AudioEffectSettings()
+        /// Cached rendered file (transient; nil = use `url` directly).
+        var renderedFileURL: URL? = nil
+        /// Detected beat times (seconds into the source), transient (C6).
+        var beatMarkers: [Double] = []
         /// Whole-file RMS buckets for the lane waveform (regenerated, not persisted).
         var waveform: [Float] = []
 
@@ -550,7 +556,8 @@ final class EditorState: ObservableObject {
                             fadeCurve: $0.fadeCurve == .linear ? nil : $0.fadeCurve.rawValue,
                             volumePoints: $0.volumePoints.isEmpty ? nil : $0.volumePoints,
                             duckingEnabled: $0.duckingEnabled ? true : nil,
-                            isLooping: $0.isLooping ? true : nil)
+                            isLooping: $0.isLooping ? true : nil,
+                            effects: $0.effects.isNeutral ? nil : $0.effects)
             },
             overlays: overlays.map {
                 StoredOverlay(id: $0.id, fileName: $0.url.lastPathComponent,
@@ -632,7 +639,8 @@ final class EditorState: ObservableObject {
                               fadeCurve: stored.fadeCurve.flatMap(FadeCurve.init) ?? .linear,
                               volumePoints: stored.volumePoints ?? [],
                               duckingEnabled: stored.duckingEnabled ?? false,
-                              isLooping: stored.isLooping ?? false)
+                              isLooping: stored.isLooping ?? false,
+                              effects: stored.effects ?? AudioEffectSettings())
         }
         overlays = (project.overlays ?? []).compactMap { stored in
             let url = store.clipsFolder.appendingPathComponent(stored.fileName)
@@ -1553,6 +1561,44 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// True while an audio effect bake is running.
+    @Published private(set) var isRenderingEffects = false
+
+    /// Applies the effect stack to a lane: bakes the source offline (B1) and
+    /// swaps the composition to the rendered file. One undo covers the change.
+    func applyTrackEffects(id: UUID, _ settings: AudioEffectSettings) async {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        audioTracks[i].effects = settings
+        if settings.isNeutral {
+            audioTracks[i].renderedFileURL = nil
+            rebuild()
+            return
+        }
+        isRenderingEffects = true
+        let sourceURL = audioTracks[i].url
+        let rendered = await Task.detached(priority: .userInitiated) {
+            try? await AudioEffectsRenderer.shared.renderedURL(source: sourceURL, settings: settings)
+        }.value
+        isRenderingEffects = false
+        guard let j = audioTracks.firstIndex(where: { $0.id == id }) else { return }
+        audioTracks[j].renderedFileURL = rendered
+        rebuild()
+    }
+
+    /// Normalizes a lane to `targetLUFS` by measuring its loudness and setting
+    /// the bake gain (C5).
+    func normalizeTrack(id: UUID, targetLUFS: Double = -14) async {
+        guard let track = audioTracks.first(where: { $0.id == id }) else { return }
+        isRenderingEffects = true
+        let measured = await LoudnessAnalyzer.integratedLUFS(url: track.url)
+        isRenderingEffects = false
+        guard let measured, measured > -70 else { return }
+        var settings = track.effects
+        settings.gainDB = min(20, max(-20, targetLUFS - measured))
+        await applyTrackEffects(id: id, settings)
+    }
+
     /// Loop-to-fill toggle (A6) — needs a rebuild (re-inserts audio).
     func setMusicLooping(id: UUID, _ looping: Bool) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }),
@@ -2448,7 +2494,7 @@ final class EditorState: ObservableObject {
         var musicTracks: [(id: UUID, track: AVMutableCompositionTrack)] = []
         for music in audioTracks
         where music.timelineDuration > 0.05 && music.timelineOffset < cursor.seconds - 0.01 {
-            let musicAsset = AVURLAsset(url: music.url)
+            let musicAsset = AVURLAsset(url: music.renderedFileURL ?? music.url)
             if let sourceAudio = try? await musicAsset.loadTracks(withMediaType: .audio).first,
                let track = composition.addMutableTrack(withMediaType: .audio,
                                                        preferredTrackID: kCMPersistentTrackID_Invalid) {

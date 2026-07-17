@@ -550,6 +550,40 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            // Audio effect seeds (C1-C5) applied to the first audio lane.
+            if let m = editor.audioTracks.first {
+                var s = m.effects
+                var touched = false
+                if let eq = env["LUMA_SEED_EQ"] {
+                    touched = true
+                    if let preset = AudioEffectsPanel.eqPresets.first(where: { $0.0.lowercased().replacingOccurrences(of: " ", with: "") == eq.lowercased() }) {
+                        s.eqBandGains = preset.1
+                    } else {
+                        s.eqBandGains = eq.split(separator: ",").compactMap { Double($0) }
+                    }
+                }
+                if let p = env["LUMA_SEED_PITCH"], let v = Double(p) { s.pitchSemitones = v; touched = true }
+                if let vfx = env["LUMA_SEED_VOICEFX"] { s.voiceEffect = vfx; touched = true }
+                if let rv = env["LUMA_SEED_REVERB"] {
+                    let parts = rv.split(separator: "|")
+                    s.reverbPreset = String(parts[0]); touched = true
+                    if parts.count > 1, let mix = Double(parts[1]) { s.reverbMix = mix }
+                }
+                if touched {
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    await editor.applyTrackEffects(id: m.id, s)
+                    for _ in 0..<80 where editor.isRebuilding || editor.isRenderingEffects {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+                if let norm = env["LUMA_SEED_NORMALIZE"], let target = Double(norm) {
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    await editor.normalizeTrack(id: m.id, targetLUFS: target)
+                    for _ in 0..<80 where editor.isRebuilding || editor.isRenderingEffects {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             // Bundled-library test: add entry <id> from the library at t=0.
             if let libID = env["LUMA_SEED_LIBADD"], !editor.isEmpty {
                 for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
@@ -825,6 +859,8 @@ private struct EditorContent: View {
     @State private var showFrames = true
     /// Audio lane whose volume envelope is being edited (A4).
     @State private var envelopeTrackID: UUID?
+    /// Audio lane whose effects are being edited (C1–C5).
+    @State private var effectsTrackID: UUID?
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -899,6 +935,10 @@ private struct EditorContent: View {
         .sheet(item: $envelopeTrackID) { id in
             AudioEnvelopeEditor(editor: editor, trackID: id) { envelopeTrackID = nil }
                 .presentationDetents([.medium])
+        }
+        .sheet(item: $effectsTrackID) { id in
+            AudioEffectsPanel(editor: editor, trackID: id) { effectsTrackID = nil }
+                .presentationDetents([.large])
         }
         .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
             if let clip = editor.selectedClip {
@@ -1507,21 +1547,38 @@ private struct EditorContent: View {
                     .buttonStyle(.lumaPress)
                 }
             }
-            Button {
-                envelopeTrackID = music.id
-                LumaHaptics.shared.tap()
-            } label: {
-                Label("Volume Envelope", systemImage: "waveform.path.ecg.rectangle")
-                    .font(.footnote.weight(.semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(LumaTheme.surface, in: Capsule())
-                    .overlay(alignment: .trailing) {
-                        if !(live()?.volumePoints.isEmpty ?? true) {
-                            Circle().fill(LumaTheme.teal).frame(width: 7, height: 7).offset(x: 4)
+            HStack(spacing: 10) {
+                Button {
+                    envelopeTrackID = music.id
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Envelope", systemImage: "waveform.path.ecg.rectangle")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(LumaTheme.surface, in: Capsule())
+                        .overlay(alignment: .trailing) {
+                            if !(live()?.volumePoints.isEmpty ?? true) {
+                                Circle().fill(LumaTheme.teal).frame(width: 7, height: 7).offset(x: 4)
+                            }
                         }
-                    }
+                }
+                .buttonStyle(.lumaPress)
+                Button {
+                    effectsTrackID = music.id
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Label("Effects", systemImage: "slider.horizontal.2.square")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(LumaTheme.surface, in: Capsule())
+                        .overlay(alignment: .trailing) {
+                            if !(live()?.effects.isNeutral ?? true) {
+                                Circle().fill(LumaTheme.teal).frame(width: 7, height: 7).offset(x: 4)
+                            }
+                        }
+                }
+                .buttonStyle(.lumaPress)
             }
-            .buttonStyle(.lumaPress)
 
             // Auto-duck (A5) + loop (A6) toggles.
             HStack(spacing: 14) {
