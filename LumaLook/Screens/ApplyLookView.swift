@@ -579,6 +579,29 @@ struct ApplyLookView: View {
                             }
                         }
                     } else {
+                    // Your saved looks lead the default view (hidden when a
+                    // category chip narrows the strip).
+                    if category == "All" {
+                        ForEach(app.store.savedLooks) { saved in
+                            LookThumbCell(
+                                title: saved.name,
+                                grade: MockData.looks.first { $0.name == saved.baseLookName }?.gradeTint,
+                                selected: app.selectedLook.name == saved.baseLookName
+                                    && app.selectedLUT?.id == saved.lutID
+                                    && app.settings == saved.settings,
+                                badge: "SAVED",
+                                image: nil
+                            ) {
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                    app.applySavedLook(saved)
+                                }
+                            }
+                            .scrollTransition(.interactive) { content, phase in
+                                content.scaleEffect(phase.isIdentity ? 1 : 0.9)
+                                    .opacity(phase.isIdentity ? 1 : 0.6)
+                            }
+                        }
+                    }
                     ForEach(filteredLooks) { look in
                         LookThumbCell(
                             title: look.name,

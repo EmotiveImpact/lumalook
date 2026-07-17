@@ -1772,14 +1772,16 @@ private struct EditorContent: View {
     /// look preset. Existing layers can be cleared.
     private var adjustLayerMenu: some View {
         Menu {
-            Section("Add adjustment layer") {
-                ForEach(MockData.looks.prefix(10)) { look in
-                    Button {
-                        let grade = ClipGrade(baseLookName: look.name, lutID: nil,
-                                              settings: LookSettings())
-                        editor.addAdjustmentLayer(grade: grade)
-                        LumaHaptics.shared.tap()
-                    } label: { Text(look.name) }
+            // The whole library, grouped: signature presets, installed packs,
+            // imported LUTs and saved looks all become adjustment layers.
+            ForEach(app.libraryLooksBySection, id: \.section) { group in
+                Section(group.section.title) {
+                    ForEach(group.looks) { look in
+                        Button {
+                            editor.addAdjustmentLayer(grade: look.clipGrade())
+                            LumaHaptics.shared.tap()
+                        } label: { Text(look.name) }
+                    }
                 }
             }
             if !editor.adjustmentLayers.isEmpty {

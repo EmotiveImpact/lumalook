@@ -168,7 +168,7 @@ struct CameraLiveLookView: View {
         .onAppear {
             camera.lookState = app.lookState
             camera.requestAndStart()
-            thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
+            thumbs.render(source: liveThumbSource, looks: MockData.looks, luts: favouriteLUTs.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .onDisappear { camera.stopSession() }
         .onChange(of: camera.isRecording) { _, recording in
@@ -182,7 +182,7 @@ struct CameraLiveLookView: View {
         .onReceive(camera.$previewImage) { frame in
             guard liveThumbSource == nil, let frame else { return }
             liveThumbSource = CIImage(cgImage: frame)
-            thumbs.render(source: liveThumbSource, looks: Array(MockData.looks.prefix(6)), luts: [])
+            thumbs.render(source: liveThumbSource, looks: MockData.looks, luts: favouriteLUTs.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
     }
 
@@ -253,10 +253,16 @@ struct CameraLiveLookView: View {
 
     // MARK: - Looks
 
+    /// Favourited LUTs surfaced on the camera strip (bounded so thumbnail
+    /// rendering stays cheap; the live grade only ever applies the one).
+    private var favouriteLUTs: [LUTFile] {
+        Array(app.lutRepository.luts.filter(\.isFavourite).prefix(8))
+    }
+
     private var looksRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
-                ForEach(MockData.looks.prefix(6)) { look in
+                ForEach(MockData.looks) { look in
                     Button {
                         app.selectedLook = look
                     } label: {
@@ -279,6 +285,39 @@ struct CameraLiveLookView: View {
                                 .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
                                 .lineLimit(1)
                                 .frame(width: 80)
+                        }
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+                // Favourited LUTs ride the camera strip too, so a shot can be
+                // framed through an imported/installed look, not just built-ins.
+                ForEach(favouriteLUTs) { lut in
+                    Button {
+                        app.selectedLUT = lut
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        VStack(spacing: 6) {
+                            Group {
+                                if let image = thumbs.images[LookThumbs.key(lut: lut)] {
+                                    GradedThumb(image: image, size: CGSize(width: 78, height: 78),
+                                                radius: 14, selected: app.selectedLUT?.id == lut.id)
+                                } else {
+                                    SceneThumb(scene: .desert, grade: Color(red: 0.3, green: 0.8, blue: 0.9),
+                                               radius: 14, selected: app.selectedLUT?.id == lut.id)
+                                }
+                            }
+                            .frame(width: 78, height: 78)
+                            .overlay(alignment: .topLeading) {
+                                Text(lut.isLogTarget ? "LOG" : "LUT")
+                                    .font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
+                                    .padding(.horizontal, 4).padding(.vertical, 2)
+                                    .background(LumaTheme.accent, in: Capsule()).padding(5)
+                            }
+                            Text(lut.displayName)
+                                .font(.system(size: 12, weight: app.selectedLUT?.id == lut.id ? .semibold : .regular))
+                                .foregroundStyle(app.selectedLUT?.id == lut.id ? .white : .white.opacity(0.7))
+                                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                                .lineLimit(1).frame(width: 80)
                         }
                     }
                     .buttonStyle(.lumaPress)

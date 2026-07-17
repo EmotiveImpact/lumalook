@@ -328,14 +328,27 @@ struct FilterPackDetailView: View {
     private var installButton: some View {
         VStack(spacing: 10) {
             Button {
-                buyOrInstall()
+                if app.packStore.isInstalled(pack) {
+                    // Use now: open the grade room, where this pack's looks now
+                    // live in the strip. Straight in if media is already
+                    // chosen, else via Select Clip so there's something to grade.
+                    if app.selectedVideoURL != nil || app.selectedImage != nil {
+                        app.path.append(.applyLook)
+                    } else {
+                        app.path.append(.selectClip)
+                    }
+                    LumaHaptics.shared.tap()
+                } else {
+                    buyOrInstall()
+                }
             } label: {
                 HStack(spacing: 10) {
                     if installing || storeService.purchaseInFlight {
                         ProgressView().tint(.white)
                     } else if app.packStore.isInstalled(pack) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text("Installed — in your Looks")
+                        Text("Installed — Use now")
+                        Image(systemName: "arrow.right")
                     } else if unlocked {
                         Text(pack.isFree ? "Install Free" : "Install")
                     } else if pack.isProIncluded {
@@ -354,7 +367,8 @@ struct FilterPackDetailView: View {
                             in: RoundedRectangle(cornerRadius: 16))
             }
             .buttonStyle(.lumaPress)
-            .disabled(app.packStore.isInstalled(pack) || storeService.purchaseInFlight)
+            // Installed is now an ENABLED "Use now" door, not a dead end.
+            .disabled(storeService.purchaseInFlight)
 
             if !unlocked && !pack.isProIncluded {
                 Button {
