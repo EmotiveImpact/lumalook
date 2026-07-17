@@ -1272,8 +1272,11 @@ final class EditorState: ObservableObject {
     /// from the playhead while the mic captures; stop drops the take on its
     /// own audio lane exactly where recording started.
     @Published private(set) var isRecordingVoiceover = false
+    /// Live mic input level 0…1 (B2), published at ~30 Hz while recording.
+    @Published private(set) var inputLevel: Double = 0
     private var voiceoverRecorder: AVAudioRecorder?
     private var voiceoverStartOffset: Double = 0
+    private var meterTask: Task<Void, Never>?
 
     func startVoiceover() {
         guard !isRecordingVoiceover, totalDuration > 0.4 else { return }
@@ -1289,8 +1292,12 @@ final class EditorState: ObservableObject {
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
         ]
-        guard let recorder = try? AVAudioRecorder(url: url, settings: settings),
-              recorder.record() else {
+        guard let recorder = try? AVAudioRecorder(url: url, settings: settings) else {
+            try? session.setCategory(.playback, mode: .moviePlayback)
+            return
+        }
+        recorder.isMeteringEnabled = true
+        guard recorder.record() else {
             try? session.setCategory(.playback, mode: .moviePlayback)
             return
         }
@@ -1299,6 +1306,16 @@ final class EditorState: ObservableObject {
         isRecordingVoiceover = true
         player?.isMuted = true
         if !isPlaying { togglePlayback() }
+        // B2: 30 Hz input-level meter.
+        meterTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let rec = self.voiceoverRecorder else { break }
+                rec.updateMeters()
+                let power = rec.averagePower(forChannel: 0)   // dBFS, −160…0
+                self.inputLevel = Double(pow(10, power / 20))
+                try? await Task.sleep(nanoseconds: 33_000_000)
+            }
+        }
     }
 
     func stopVoiceover() {
@@ -1306,6 +1323,8 @@ final class EditorState: ObservableObject {
         recorder.stop()
         voiceoverRecorder = nil
         isRecordingVoiceover = false
+        meterTask?.cancel(); meterTask = nil
+        inputLevel = 0
         if isPlaying { togglePlayback() }
         player?.isMuted = false
         let session = AVAudioSession.sharedInstance()

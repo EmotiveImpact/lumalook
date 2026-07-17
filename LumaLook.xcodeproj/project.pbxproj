@@ -24,6 +24,7 @@
 		17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71565855D4F4F92716382C0A /* TimelineV2.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
 		18C1DF236A3E5618431BA1DD /* FS_MS14.cube in Resources */ = {isa = PBXBuildFile; fileRef = 45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */; };
+		1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8722C35F72247FE70F9AF07F /* InputMeterView.swift */; };
 		1C1A4D8D9504B11FFBD650BE /* FS_DL400.cube in Resources */ = {isa = PBXBuildFile; fileRef = BE8EA353524205957ACA01CD /* FS_DL400.cube */; };
 		1C6901E0A436E9ADAE380311 /* FS_EL400.cube in Resources */ = {isa = PBXBuildFile; fileRef = B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */; };
 		1EE1835791BA9C9AE4AD4A33 /* FS_FP3000N.cube in Resources */ = {isa = PBXBuildFile; fileRef = FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */; };
@@ -273,6 +274,7 @@
 		8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */ = {isa = PBXFileReference; path = FS_CP3513.cube; sourceTree = "<group>"; };
 		826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPacks.swift; sourceTree = "<group>"; };
 		85F7604D70414A0B449CAADF /* FS_TX400.cube */ = {isa = PBXFileReference; path = FS_TX400.cube; sourceTree = "<group>"; };
+		8722C35F72247FE70F9AF07F /* InputMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputMeterView.swift; sourceTree = "<group>"; };
 		8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */ = {isa = PBXFileReference; path = CompositorBlank.mp4; sourceTree = "<group>"; };
 		87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */ = {isa = PBXFileReference; path = FS_PX680C.cube; sourceTree = "<group>"; };
 		87F176B33481AA29E661CF5E /* FS_TZ0.cube */ = {isa = PBXFileReference; path = FS_TZ0.cube; sourceTree = "<group>"; };
@@ -561,6 +563,7 @@
 				61A5624E7651D005E2DA05C1 /* CameraChrome.swift */,
 				D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */,
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
+				8722C35F72247FE70F9AF07F /* InputMeterView.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
 				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
@@ -860,6 +863,7 @@
 				A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */,
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
+				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,

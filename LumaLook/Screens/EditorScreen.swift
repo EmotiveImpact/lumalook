@@ -836,6 +836,13 @@ private struct EditorContent: View {
             }
 
             dock
+                .overlay(alignment: .top) {
+                    if editor.isRecordingVoiceover {
+                        InputMeterView(level: editor.inputLevel)
+                            .offset(y: -46)
+                            .transition(.opacity)
+                    }
+                }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
