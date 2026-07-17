@@ -762,6 +762,8 @@ private struct EditorContent: View {
     @State private var looksTargetClipID: UUID?
     /// Transport readout mode: MM:SS:FF timecode vs plain MM:SS (long-press).
     @State private var showFrames = true
+    /// Audio lane whose volume envelope is being edited (A4).
+    @State private var envelopeTrackID: UUID?
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -825,6 +827,10 @@ private struct EditorContent: View {
             } else {
                 Color.clear.onAppear { showMusicPanel = false }
             }
+        }
+        .sheet(item: $envelopeTrackID) { id in
+            AudioEnvelopeEditor(editor: editor, trackID: id) { envelopeTrackID = nil }
+                .presentationDetents([.medium])
         }
         .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
             if let clip = editor.selectedClip {
@@ -1433,6 +1439,22 @@ private struct EditorContent: View {
                     .buttonStyle(.lumaPress)
                 }
             }
+            Button {
+                envelopeTrackID = music.id
+                LumaHaptics.shared.tap()
+            } label: {
+                Label("Volume Envelope", systemImage: "waveform.path.ecg.rectangle")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(LumaTheme.surface, in: Capsule())
+                    .overlay(alignment: .trailing) {
+                        if !(live()?.volumePoints.isEmpty ?? true) {
+                            Circle().fill(LumaTheme.teal).frame(width: 7, height: 7).offset(x: 4)
+                        }
+                    }
+            }
+            .buttonStyle(.lumaPress)
+
             // Auto-duck (A5) + loop (A6) toggles.
             HStack(spacing: 14) {
                 Toggle("Duck under voice", isOn: Binding(

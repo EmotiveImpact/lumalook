@@ -138,6 +138,7 @@
 		CD11513E989BF30CC434E279 /* FS_FP125.cube in Resources */ = {isa = PBXBuildFile; fileRef = 71A6E32214C9321C7379CCC6 /* FS_FP125.cube */; };
 		CE80855BE2146D1F066D1268 /* PipPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D85C68EA6204E1F8006C6F /* PipPresets.swift */; };
 		D09DE830CF50582B4F392811 /* FS_PL667.cube in Resources */ = {isa = PBXBuildFile; fileRef = F2F63CA8389113D35C675EEE /* FS_PL667.cube */; };
+		D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */; };
 		D20F0AAE5FC1E0307AE1F2DD /* FS_SP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = E22A35DFADB72BF4DB87151D /* FS_SP200.cube */; };
 		D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 158CFCA17750E771F995959B /* hero_desert.jpg */; };
 		D33CDA48E36671A1DF745435 /* FS_CP2393.cube in Resources */ = {isa = PBXBuildFile; fileRef = D815AF71877366D60E429A6F /* FS_CP2393.cube */; };
@@ -324,6 +325,7 @@
 		D4DE7A157110C99E2B346F44 /* FS_MS12.cube */ = {isa = PBXFileReference; path = FS_MS12.cube; sourceTree = "<group>"; };
 		D7804F266F5E284C813A5347 /* FS_MS5.cube */ = {isa = PBXFileReference; path = FS_MS5.cube; sourceTree = "<group>"; };
 		D815AF71877366D60E429A6F /* FS_CP2393.cube */ = {isa = PBXFileReference; path = FS_CP2393.cube; sourceTree = "<group>"; };
+		D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEnvelopeEditor.swift; sourceTree = "<group>"; };
 		DCFFB79AE65C889172E26DA4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DD8AEF2B3B897BD002287240 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
 		DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */ = {isa = PBXFileReference; path = FS_PR100.cube; sourceTree = "<group>"; };
@@ -401,6 +403,7 @@
 		6179EBD36201DBA3960BCD66 /* Editor */ = {
 			isa = PBXGroup;
 			children = (
+				D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */,
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
@@ -829,6 +832,7 @@
 			files = (
 				49EC96A150DB992461300428 /* AppModel.swift in Sources */,
 				6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */,
+				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
 				4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */,
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
