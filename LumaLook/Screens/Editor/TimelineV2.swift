@@ -7,7 +7,7 @@ import UIKit
 struct TimelineMetrics: Equatable {
     var pointsPerSecond: CGFloat = 50           // zoom level
     static let minPPS: CGFloat = 12             // ~50 s visible on a 600 pt strip
-    static let maxPPS: CGFloat = 240            // frame-accurate trimming zoom
+    static let maxPPS: CGFloat = 360            // frame-accurate trimming zoom
 
     func x(for time: Double) -> CGFloat { CGFloat(time) * pointsPerSecond }
     func time(for x: CGFloat) -> Double { Double(x / pointsPerSecond) }
@@ -925,6 +925,22 @@ struct MusicLane: View {
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.12),
                           lineWidth: isDraggingBar ? 2 : 1))
+        .overlay(alignment: .leading) {
+            // Beat markers (C6): 1-pt ticks at each detected beat.
+            if !music.beatMarkers.isEmpty {
+                ZStack(alignment: .leading) {
+                    ForEach(Array(music.beatMarkers.enumerated()), id: \.offset) { _, beat in
+                        let x = metrics.x(for: beat - music.trimStart)
+                        if x >= 0, x <= barWidth {
+                            Rectangle().fill(.white.opacity(0.85))
+                                .frame(width: 1, height: LaneMetrics.music - 6)
+                                .offset(x: x)
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+        }
         .overlay {
             if barWidth > 120 {
                 MusicTrimHandles(metrics: metrics, trackID: music.id, editor: editor)

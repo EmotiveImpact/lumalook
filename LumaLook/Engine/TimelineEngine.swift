@@ -1060,17 +1060,25 @@ final class EditorState: ObservableObject {
 
     /// Splits the clip under the playhead at the current time.
     func splitAtPlayhead() {
+        pushUndoSnapshot()
+        if performSplit(at: currentTime) { rebuild() }
+    }
+
+    /// Splits the clip containing `time` (timeline seconds) in place, without
+    /// pushing undo or rebuilding — the caller batches those. Returns whether
+    /// a split happened.
+    @discardableResult
+    private func performSplit(at time: Double) -> Bool {
         let starts = clipStartTimes
         guard let index = clips.firstIndex(where: { clip in
             guard let start = starts[clip.id] else { return false }
-            return currentTime > start + 0.15 && currentTime < start + clip.timelineDuration - 0.15
-        }) else { return }
+            return time > start + 0.15 && time < start + clip.timelineDuration - 0.15
+        }) else { return false }
 
         let clip = clips[index]
-        let localOffset = (currentTime - (starts[clip.id] ?? 0)) * clip.speed
+        let localOffset = (time - (starts[clip.id] ?? 0)) * clip.speed
         let splitPoint = clip.trimStart + localOffset
 
-        pushUndoSnapshot()
         var first = clip
         first.trimEnd = splitPoint
         first.transitionAfter = .none
@@ -1085,8 +1093,6 @@ final class EditorState: ObservableObject {
         clips.insert(second, at: index + 1)
         selectedClipID = second.id
 
-        // Refresh the second half's thumbnail to its new first frame
-        // (stills keep theirs — every frame is the same frame).
         if !clip.isImage {
             Task { [id = second.id, url = clip.url] in
                 let thumb = await Self.thumbnail(for: AVURLAsset(url: url), at: splitPoint + 0.02)
@@ -1095,9 +1101,42 @@ final class EditorState: ObservableObject {
                 }
             }
         }
-        rebuild()
         refreshFilmstrip(clipID: first.id)
         refreshFilmstrip(clipID: second.id)
+        return true
+    }
+
+    /// True while beats are being detected.
+    @Published private(set) var isDetectingBeats = false
+
+    /// Runs beat detection on a lane and stores the markers (C6).
+    func detectBeats(trackID: UUID) async {
+        guard let track = audioTracks.first(where: { $0.id == trackID }) else { return }
+        isDetectingBeats = true
+        let analysis = await BeatDetector.analyze(url: track.renderedFileURL ?? track.url)
+        isDetectingBeats = false
+        guard let i = audioTracks.firstIndex(where: { $0.id == trackID }) else { return }
+        audioTracks[i].beatMarkers = analysis.beats
+    }
+
+    /// Auto-cuts the video at the lane's beats (detecting first if needed).
+    /// One undo covers all splits; enforces a 0.4 s minimum gap.
+    func autoCutToBeats(trackID: UUID) async {
+        if audioTracks.first(where: { $0.id == trackID })?.beatMarkers.isEmpty ?? true {
+            await detectBeats(trackID: trackID)
+        }
+        guard let track = audioTracks.first(where: { $0.id == trackID }) else { return }
+        // Beat times are relative to the lane's media; shift to timeline coords.
+        let beats = track.beatMarkers
+            .map { $0 - track.trimStart + track.timelineOffset }
+            .filter { $0 > 0.4 && $0 < totalDuration - 0.4 }
+        guard !beats.isEmpty else { return }
+        pushUndoSnapshot()
+        var lastCut = -1.0
+        for beat in beats.sorted() where beat - lastCut >= 0.4 {
+            if performSplit(at: beat) { lastCut = beat }
+        }
+        rebuild()
     }
 
     /// Default freeze-frame hold duration (seconds).

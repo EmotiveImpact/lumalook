@@ -596,6 +596,15 @@ struct EditorTimelineView: View {
                     for _ in 0..<30 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
                 }
             }
+            // Auto-cut to beats: detect on the first music lane, split the video.
+            if env["LUMA_SEED_BEATCUT"] == "1", let m = editor.audioTracks.first {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                await editor.autoCutToBeats(trackID: m.id)
+                for _ in 0..<40 where editor.isRebuilding || editor.isDetectingBeats {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                print("[LUMA] BEATCUT clips=\(editor.clips.count)")
+            }
             // Beat-detector test: prints detected beats + bpm.
             if let path = env["LUMA_SEED_BEATTEST"], FileManager.default.fileExists(atPath: path) {
                 let a = await BeatDetector.analyze(url: URL(fileURLWithPath: path))
@@ -1584,6 +1593,31 @@ private struct EditorContent: View {
                                 Circle().fill(LumaTheme.teal).frame(width: 7, height: 7).offset(x: 4)
                             }
                         }
+                }
+                .buttonStyle(.lumaPress)
+            }
+
+            // Beat detection + auto-cut (C6).
+            HStack(spacing: 10) {
+                Button {
+                    LumaHaptics.shared.tap()
+                    Task { await editor.detectBeats(trackID: music.id) }
+                } label: {
+                    Label(editor.isDetectingBeats ? "Detecting…" : "Detect Beats",
+                          systemImage: "waveform.and.magnifyingglass")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(LumaTheme.surface, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                Button {
+                    LumaHaptics.shared.tap()
+                    Task { await editor.autoCutToBeats(trackID: music.id) }
+                } label: {
+                    Label("Auto-Cut", systemImage: "scissors.badge.ellipsis")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(LumaTheme.accent, in: Capsule())
                 }
                 .buttonStyle(.lumaPress)
             }
