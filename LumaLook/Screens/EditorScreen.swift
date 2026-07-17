@@ -12,6 +12,8 @@ struct EditorTimelineView: View {
     @State private var showAddPicker = false
     @State private var overlayPickerItem: PhotosPickerItem?
     @State private var showOverlayPicker = false
+    @State private var replacePickerItem: PhotosPickerItem?
+    @State private var showReplacePicker = false
     @State private var showOverlayPanel = false
     @State private var selectedOverlayID: UUID?
     @State private var isLoadingClip = false
@@ -56,7 +58,8 @@ struct EditorTimelineView: View {
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
-                onOpenAdjust: { app.path.append(.customLook) }
+                onOpenAdjust: { app.path.append(.customLook) },
+                onReplace: { showReplacePicker = true }
             )
         }
         .navigationBarBackButtonHidden()
@@ -66,6 +69,8 @@ struct EditorTimelineView: View {
         .photosPicker(isPresented: $showAddPicker, selection: $addPickerItem,
                       matching: .any(of: [.images, .videos]))
         .photosPicker(isPresented: $showOverlayPicker, selection: $overlayPickerItem,
+                      matching: .any(of: [.images, .videos]))
+        .photosPicker(isPresented: $showReplacePicker, selection: $replacePickerItem,
                       matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showMusicImporter,
                       allowedContentTypes: [.audio],
@@ -105,6 +110,22 @@ struct EditorTimelineView: View {
                     showOverlayPanel = true
                 }
                 overlayPickerItem = nil
+            }
+        }
+        .onChange(of: replacePickerItem) { _, newItem in
+            guard let newItem, let targetID = editor.selectedClipID else {
+                replacePickerItem = nil
+                return
+            }
+            isLoadingClip = true
+            Task {
+                defer { isLoadingClip = false }
+                if let video = try? await newItem.loadTransferable(type: PickedVideo.self) {
+                    await editor.replaceClip(id: targetID, with: video.url)
+                } else if let imageURL = await Self.pickedImageFile(from: newItem) {
+                    await editor.replaceClip(id: targetID, with: imageURL)
+                }
+                replacePickerItem = nil
             }
         }
         .onAppear {
@@ -327,6 +348,18 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            if let path = env["LUMA_SEED_REPLACE"], FileManager.default.fileExists(atPath: path),
+               !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                await editor.replaceClip(id: editor.clips.first!.id,
+                                         with: URL(fileURLWithPath: path))
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if let rotStr = env["LUMA_SEED_ROTATE"], let turns = Int(rotStr), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -452,6 +485,7 @@ private struct EditorContent: View {
     let onOpenAudio: () -> Void
     let onOpenCrop: () -> Void
     let onOpenAdjust: () -> Void
+    let onReplace: () -> Void
     /// When set, the looks strip grades THIS clip instead of the timeline.
     @State private var looksTargetClipID: UUID?
     /// Transport readout mode: MM:SS:FF timecode vs plain MM:SS (long-press).
@@ -604,6 +638,10 @@ private struct EditorContent: View {
                     FlatTool(title: "Duplicate", icon: "plus.square.on.square") {
                         editor.duplicateSelected()
                         LumaHaptics.shared.tap()
+                    }
+                    .frame(width: 58)
+                    FlatTool(title: "Replace", icon: "arrow.triangle.2.circlepath") {
+                        onReplace()
                     }
                     .frame(width: 58)
                     FlatTool(title: "Delete", icon: "trash") {

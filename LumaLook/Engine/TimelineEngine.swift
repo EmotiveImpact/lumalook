@@ -96,7 +96,7 @@ final class EditorState: ObservableObject {
 
     struct Clip: Identifiable {
         var id: UUID
-        let url: URL
+        var url: URL                // var so Replace/Reverse can swap the media
         var assetDuration: Double
         var trimStart: Double
         var trimEnd: Double
@@ -492,6 +492,64 @@ final class EditorState: ObservableObject {
         selectedClipID = clip.id
         rebuild()
         refreshFilmstrip(clipID: clip.id)
+    }
+
+    /// Replaces the clip's media in place, keeping the edit decision list:
+    /// trim window (clamped to the new duration), speed, grade, transition,
+    /// volume, and display transforms are all preserved — only the footage
+    /// swaps. Handles video→video; image sources fall back to a trim reset.
+    func replaceClip(id: UUID, with url: URL) async {
+        guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        let durableURL = url.path.hasPrefix(store.clipsFolder.path)
+            ? url
+            : (store.importClipFile(from: url) ?? url)
+        let ext = durableURL.pathExtension.lowercased()
+        let imageExtensions = ["jpg", "jpeg", "png", "heic", "heif", "webp", "tiff"]
+        let isImage = imageExtensions.contains(ext)
+
+        var newDuration: Double
+        var hasAudio = false
+        if isImage {
+            guard Self.imageThumbnail(at: durableURL) != nil else { return }
+            newDuration = Self.photoMaxDuration
+        } else {
+            let asset = AVURLAsset(url: durableURL)
+            guard let d = try? await asset.load(.duration).seconds,
+                  d.isFinite, d > 0.05 else { return }
+            newDuration = d
+            hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
+        }
+
+        pushUndoSnapshot()
+        clips[i].url = durableURL
+        clips[i].assetDuration = newDuration
+        clips[i].isImage = isImage
+        clips[i].hasAudio = hasAudio
+        // Keep the trim window where it fits; clamp into the new media.
+        if clips[i].trimEnd > newDuration || clips[i].trimStart >= newDuration - 0.05 {
+            clips[i].trimStart = min(clips[i].trimStart, max(0, newDuration - 0.2))
+            clips[i].trimEnd = newDuration
+        }
+        clips[i].thumbnail = nil
+        clips[i].filmstrip = []
+        let replacedID = clips[i].id
+        rebuild()
+
+        // Refresh thumbnail + filmstrip off the swapped media.
+        if isImage {
+            let thumb = await Task.detached { Self.imageThumbnail(at: durableURL) }.value
+            if let j = clips.firstIndex(where: { $0.id == replacedID }), let thumb {
+                clips[j].thumbnail = thumb
+                clips[j].filmstrip = [thumb]
+            }
+        } else {
+            let asset = AVURLAsset(url: durableURL)
+            let thumb = await Self.thumbnail(for: asset, at: 0.03)
+            if let j = clips.firstIndex(where: { $0.id == replacedID }) {
+                clips[j].thumbnail = thumb
+            }
+            refreshFilmstrip(clipID: replacedID)
+        }
     }
 
     /// Default and maximum display durations for photo clips (T7). Trim
