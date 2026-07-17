@@ -35,6 +35,7 @@
 		1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */; };
 		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
+		25121F74107C54C8878E9161 /* TemplateLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F870BB157E948E4AD6D2B5 /* TemplateLibraryView.swift */; };
 		25D91202BA6C2E9F0CDD6D9C /* FS_SP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 55A66FB773AEE510A8E14555 /* FS_SP400.cube */; };
 		260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE2524F01E128404964986C /* hero_golden.jpg */; };
 		27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */ = {isa = PBXBuildFile; fileRef = 222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */; };
@@ -303,6 +304,7 @@
 		71A6E32214C9321C7379CCC6 /* FS_FP125.cube */ = {isa = PBXFileReference; path = FS_FP125.cube; sourceTree = "<group>"; };
 		729205E4A69C86566E25EEC5 /* ding.m4a */ = {isa = PBXFileReference; path = ding.m4a; sourceTree = "<group>"; };
 		72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaModels.swift; sourceTree = "<group>"; };
+		72F870BB157E948E4AD6D2B5 /* TemplateLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateLibraryView.swift; sourceTree = "<group>"; };
 		73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinFirstPresets.swift; sourceTree = "<group>"; };
 		73DAA7F9A11628B31666692E /* FS_PL690.cube */ = {isa = PBXFileReference; path = FS_PL690.cube; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
@@ -490,6 +492,7 @@
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
 				A25EF472896C678306B040FD /* StickerLibraryView.swift */,
+				72F870BB157E948E4AD6D2B5 /* TemplateLibraryView.swift */,
 				71565855D4F4F92716382C0A /* TimelineV2.swift */,
 			);
 			path = Editor;
@@ -1006,6 +1009,7 @@
 				EA898050E6980825658B5299 /* StickerBaker.swift in Sources */,
 				92C112D6751A162C6FFCBF7F /* StickerLibraryView.swift in Sources */,
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
+				25121F74107C54C8878E9161 /* TemplateLibraryView.swift in Sources */,
 				DF455A8B10DE80D6A9E9EBAF /* TemplateModels.swift in Sources */,
 				D07AA4E4085478F122967244 /* TextAnimator.swift in Sources */,
 				13083AA5046042ADC0C08E57 /* TextRasterizer.swift in Sources */,

@@ -2011,6 +2011,57 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F11 — applies a trending template to the timeline.
+    ///
+    /// Slots map onto the clips in order and CYCLE if the template has fewer
+    /// slots than clips, so a 6-slot template still shapes an 11-clip edit.
+    /// One undo entry and one rebuild for the whole thing: a template is a
+    /// single creative act, not twenty separate ones.
+    ///
+    /// Trimming is non-destructive — a slot shortens the clip's OUT point but
+    /// never lengthens it past the media it actually has.
+    @discardableResult
+    func applyTemplate(_ template: VideoTemplate) -> Bool {
+        guard !clips.isEmpty, !template.slots.isEmpty else { return false }
+        pushUndoSnapshot()
+
+        // Canvas first: aspect + background frame the whole edit.
+        if let fmt = EditorFormat(rawValue: template.aspect) { format = fmt }
+        if let mode = template.canvasMode.flatMap(CanvasBackgroundMode.init) { canvasMode = mode }
+
+        for (i, clip) in clips.enumerated() {
+            let slot = template.slots[i % template.slots.count]
+
+            if let speed = slot.speed, speed > 0.05 { clips[i].speed = speed }
+
+            // Fit the slot: honour the requested on-screen duration, but only
+            // as far as the source media allows (speed scales the timeline).
+            let wanted = slot.duration * clips[i].speed
+            let available = clip.assetDuration - clips[i].trimStart
+            if wanted > 0.05, available > 0.05 {
+                clips[i].trimEnd = clips[i].trimStart + min(wanted, available)
+            }
+
+            if let raw = slot.transitionAfter, let style = TransitionStyle(rawValue: raw) {
+                clips[i].transitionAfter = style
+                clips[i].transitionDuration = slot.transitionDuration
+            }
+            if let kb = slot.kenBurns, let preset = KenBurnsPreset(rawValue: kb) {
+                clips[i].transformKeyframes =
+                    preset.keyframes(duration: clips[i].timelineDuration)
+            }
+        }
+
+        if let style = template.audioReactive.flatMap(AudioReactiveStyle.init) {
+            audioReactive = AudioReactiveConfig(style: style, strength: 0.6,
+                                                sourceTrackID: audioTracks.first?.id)
+        }
+
+        syncClipTransformLayout()
+        rebuild()
+        return true
+    }
+
     /// F10 — turns transcript segments into caption text layers.
     ///
     /// Split from `generateCaptions` deliberately: this half is a pure
@@ -2470,6 +2521,29 @@ final class EditorState: ObservableObject {
     enum KenBurnsPreset: String, CaseIterable {
         case none, zoomIn, zoomOut, panLeft, panRight, panUp, panDown
 
+        /// The pan/zoom keyframes for a clip of `duration`. Lives on the preset
+        /// so the panel (setKenBurns) and templates (applyTemplate) can never
+        /// drift apart.
+        func keyframes(duration dur: Double,
+                       easing: KeyframeEasing = .easeInOut) -> [ClipTransformKeyframe] {
+            let z = 1.3
+            let lo = 0.28, hi = 0.72   // pan extremes (keep the window in-frame)
+            let c = 0.5
+            func kf(_ t: Double, _ zoom: Double, _ x: Double, _ y: Double) -> ClipTransformKeyframe {
+                ClipTransformKeyframe(time: t, zoom: zoom, centerX: x, centerY: y,
+                                      easing: t == 0 ? easing.rawValue : nil)
+            }
+            switch self {
+            case .none:     return []
+            case .zoomIn:   return [kf(0, 1, c, c), kf(dur, z, c, c)]
+            case .zoomOut:  return [kf(0, z, c, c), kf(dur, 1.001, c, c)]
+            case .panLeft:  return [kf(0, z, hi, c), kf(dur, z, lo, c)]
+            case .panRight: return [kf(0, z, lo, c), kf(dur, z, hi, c)]
+            case .panUp:    return [kf(0, z, c, hi), kf(dur, z, c, lo)]
+            case .panDown:  return [kf(0, z, c, lo), kf(dur, z, c, hi)]
+            }
+        }
+
         var label: String {
             switch self {
             case .none: return "None"
@@ -2489,23 +2563,8 @@ final class EditorState: ObservableObject {
     func setKenBurns(id: UUID, preset: KenBurnsPreset, easing: KeyframeEasing = .easeInOut) {
         guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
-        let dur = clips[i].timelineDuration
-        let z = 1.3
-        let lo = 0.28, hi = 0.72   // pan extremes (keep the window in-frame)
-        let c = 0.5
-        func kf(_ t: Double, _ zoom: Double, _ x: Double, _ y: Double) -> ClipTransformKeyframe {
-            ClipTransformKeyframe(time: t, zoom: zoom, centerX: x, centerY: y,
-                                  easing: t == 0 ? easing.rawValue : nil)
-        }
-        switch preset {
-        case .none:     clips[i].transformKeyframes = []
-        case .zoomIn:   clips[i].transformKeyframes = [kf(0, 1, c, c), kf(dur, z, c, c)]
-        case .zoomOut:  clips[i].transformKeyframes = [kf(0, z, c, c), kf(dur, 1.001, c, c)]
-        case .panLeft:  clips[i].transformKeyframes = [kf(0, z, hi, c), kf(dur, z, lo, c)]
-        case .panRight: clips[i].transformKeyframes = [kf(0, z, lo, c), kf(dur, z, hi, c)]
-        case .panUp:    clips[i].transformKeyframes = [kf(0, z, c, hi), kf(dur, z, c, lo)]
-        case .panDown:  clips[i].transformKeyframes = [kf(0, z, c, lo), kf(dur, z, c, hi)]
-        }
+        clips[i].transformKeyframes = preset.keyframes(duration: clips[i].timelineDuration,
+                                                       easing: easing)
         syncClipTransformLayout(refreshFrame: true)
         scheduleAutosave()
     }

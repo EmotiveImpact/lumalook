@@ -32,6 +32,7 @@ struct EditorTimelineView: View {
     @State private var showStickerLibrary = false
     @State private var showMaskPanel = false
     @State private var isCaptioning = false
+    @State private var showTemplates = false
     @State private var isExporting = false
     @State private var showExportSheet = false
     @State private var showFullscreenPreview = false
@@ -72,6 +73,7 @@ struct EditorTimelineView: View {
                         }
                     }
                 },
+                onTemplates: { showTemplates = true },
                 onAddMusic: { showAudioSourceChooser = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
@@ -103,6 +105,9 @@ struct EditorTimelineView: View {
         }
         .sheet(isPresented: $showStickerLibrary) {
             StickerLibraryView()
+        }
+        .sheet(isPresented: $showTemplates) {
+            TemplateLibraryView(editor: editor)
         }
         .sheet(isPresented: $showMaskPanel) {
             if let id = editor.selectedClipID ?? editor.clips.first?.id {
@@ -400,6 +405,20 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F11: apply a template by id.
+            if let tid = env["LUMA_SEED_TEMPLATE"], !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                let before = editor.totalDuration
+                if let t = TemplateLibrary.all.first(where: { $0.id == tid }) {
+                    let ok = editor.applyTemplate(t)
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    print("[LUMA] TEMPLATE id=\(tid) ok=\(ok) fmt=\(editor.format.rawValue) before=\(String(format: "%.2f", before)) after=\(String(format: "%.2f", editor.totalDuration)) clip0dur=\(String(format: "%.2f", editor.clips.first?.timelineDuration ?? 0)) trans=\(editor.clips.first?.transitionAfter.rawValue ?? "nil")")
+                } else {
+                    print("[LUMA] TEMPLATE id=\(tid) NOT FOUND ids=\(TemplateLibrary.all.map(\.id))")
+                }
+            }
             // F10: caption layers from injected segments. Format
             // "text@start@dur;text@start@dur". Bypasses STT so the layering +
             // SRT path is verifiable headlessly (simctl cannot grant speech).
@@ -1099,6 +1118,7 @@ private struct EditorContent: View {
     let onAddSticker: () -> Void
     let onOpenMask: () -> Void
     let onCaptions: () -> Void
+    let onTemplates: () -> Void
     let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
@@ -1457,6 +1477,10 @@ private struct EditorContent: View {
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
                             .frame(width: 58)
+                        FlatTool(title: "Template", icon: "wand.and.stars", action: onTemplates)
+                            .frame(width: 62)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: "Captions", icon: "captions.bubble", action: onCaptions)
                             .frame(width: 62)
                             .opacity(editor.isEmpty ? 0.35 : 1)
