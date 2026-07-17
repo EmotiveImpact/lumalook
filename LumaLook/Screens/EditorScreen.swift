@@ -25,6 +25,9 @@ struct EditorTimelineView: View {
     @State private var showMusicPanel = false
     @State private var showClipAudioPanel = false
     @State private var selectedAudioID: UUID?
+    #if DEBUG
+    @State private var debugFXTrackID: UUID?   // opens AudioEffectsPanel for verification
+    #endif
     @State private var transitionClipID: UUID?
     @State private var showMusicImporter = false
     @State private var showAudioSourceChooser = false
@@ -85,6 +88,12 @@ struct EditorTimelineView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        #if DEBUG
+        .sheet(item: $debugFXTrackID) { id in
+            AudioEffectsPanel(editor: editor, trackID: id) { debugFXTrackID = nil }
+                .presentationDetents([.large])
+        }
+        #endif
         // Mixed pickers (T7): picking an image adds a photo clip to the MAIN
         // track; the Overlay picker layers it as PIP instead.
         .photosPicker(isPresented: $showAddPicker, selection: $addPickerItem,
@@ -292,6 +301,17 @@ struct EditorTimelineView: View {
                         await editor.addAudioTrack(importedURL: imported,
                                                    title: url.deletingPathExtension().lastPathComponent)
                     }
+                }
+            }
+            // Open an audio panel for verification: "music" → the music/clip
+            // audio panel; "fx" → the AudioEffectsPanel (EQ/pitch/voice/reverb).
+            if let which = env["LUMA_SEED_AUDIOPANEL"] {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                if which == "fx" {
+                    debugFXTrackID = editor.audioTracks.first?.id
+                } else {
+                    selectedAudioID = editor.audioTracks.first?.id
+                    showMusicPanel = true
                 }
             }
             // Per-clip looks (Next-10 #1): split the seeded clip at its
@@ -1213,21 +1233,25 @@ private struct EditorContent: View {
         // and scrubbable underneath while you trim, mix or pick a look.
         .lumaToolSheet(isPresented: $showTrimPanel, style: .panel) {
             if let clip = editor.selectedClip {
-                trimPanel(clip: clip)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                ScrollView {
+                    trimPanel(clip: clip)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 18)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showTrimPanel = false }
             }
         }
-        .lumaToolSheet(isPresented: $showMusicPanel, style: .panel) {
+        .lumaToolSheet(isPresented: $showMusicPanel, style: .tallPanel) {
             if let music = editor.audioTracks.first(where: { $0.id == selectedAudioID })
                         ?? editor.audioTracks.first {
-                musicPanel(music: music)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                ScrollView {
+                    musicPanel(music: music)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 18)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showMusicPanel = false }
             }
@@ -1240,12 +1264,14 @@ private struct EditorContent: View {
             AudioEffectsPanel(editor: editor, trackID: id) { effectsTrackID = nil }
                 .presentationDetents([.large])
         }
-        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
+        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .tallPanel) {
             if let clip = editor.selectedClip {
-                clipAudioPanel(clip: clip)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                ScrollView {
+                    clipAudioPanel(clip: clip)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 18)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showClipAudioPanel = false }
             }

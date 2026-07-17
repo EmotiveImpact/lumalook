@@ -67,6 +67,16 @@ struct LumaMediumDetent: CustomPresentationDetent {
     }
 }
 
+/// Tall panel for content-heavy tools (music/clip audio: kind, volume, two
+/// fades, curves, envelope/effects, beats, ducking, loop). Opens showing the
+/// whole control stack, still short of full-screen so a sliver of the asset
+/// stays visible above.
+struct LumaLargeDetent: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        LumaDetentMetrics.resolve(620, compactFraction: 0.96, in: context)
+    }
+}
+
 extension PresentationDetent {
     /// ~96 pt dock — one row of tool icons.
     static let lumaMicro = PresentationDetent.custom(LumaMicroDetent.self)
@@ -76,6 +86,8 @@ extension PresentationDetent {
     static let lumaSmall = PresentationDetent.custom(LumaSmallDetent.self)
     /// ~340 pt — full tool panel.
     static let lumaMedium = PresentationDetent.custom(LumaMediumDetent.self)
+    /// ~620 pt — content-heavy panel, whole control stack visible.
+    static let lumaLarge = PresentationDetent.custom(LumaLargeDetent.self)
 }
 
 // MARK: - 2. Sheet style + .lumaToolSheet
@@ -86,6 +98,10 @@ extension PresentationDetent {
 struct LumaSheetStyle {
     /// Detents the sheet can rest at, smallest first.
     var detents: Set<PresentationDetent>
+    /// The detent the sheet OPENS at. Without this SwiftUI picks the smallest,
+    /// so rich panels open cramped ("not fully open"); a comfortable default
+    /// that's still draggable up/down is the Apple-standard behaviour.
+    var defaultDetent: PresentationDetent = .lumaMedium
     /// The canvas behind the sheet stays fully interactive (no dimming) up
     /// through this detent. `nil` = normal modal dimming.
     var undimmedUpThrough: PresentationDetent?
@@ -101,6 +117,7 @@ struct LumaSheetStyle {
     /// never dims the canvas, can't be swiped away.
     static let dock = LumaSheetStyle(
         detents: [.lumaMicro, .lumaMedium],
+        defaultDetent: .lumaMicro,
         undimmedUpThrough: .lumaMedium,
         showsDragIndicator: true,
         allowsDismissal: false
@@ -110,15 +127,25 @@ struct LumaSheetStyle {
     /// swipe to dismiss.
     static let strip = LumaSheetStyle(
         detents: [.lumaTiny],
+        defaultDetent: .lumaTiny,
         undimmedUpThrough: .lumaTiny
     )
 
-    /// Adjustment panel with sliders: small ↔ medium ↔ large. Canvas stays
-    /// live at small; rich panels (text with font/animation/stroke rows) need
-    /// `.large` so every control is reachable, and their content scrolls.
+    /// Adjustment panel with sliders: small ↔ medium ↔ large. Opens at medium
+    /// (comfortable, not cramped), draggable down to small (canvas live) or up
+    /// to large; rich panels scroll so every control is reachable.
     static let panel = LumaSheetStyle(
         detents: [.lumaSmall, .lumaMedium, .large],
+        defaultDetent: .lumaMedium,
         undimmedUpThrough: .lumaSmall
+    )
+
+    /// Content-heavy panel (music / clip audio): opens tall showing the whole
+    /// control stack; collapse to medium to see the timeline, expand to full.
+    static let tallPanel = LumaSheetStyle(
+        detents: [.lumaMedium, .lumaLarge, .large],
+        defaultDetent: .lumaLarge,
+        undimmedUpThrough: .lumaMedium
     )
 }
 
@@ -127,11 +154,21 @@ private struct LumaToolSheetModifier<SheetContent: View>: ViewModifier {
     let style: LumaSheetStyle
     let onDismiss: (() -> Void)?
     @ViewBuilder let sheetContent: () -> SheetContent
+    @State private var detent: PresentationDetent
+
+    init(isPresented: Binding<Bool>, style: LumaSheetStyle,
+         onDismiss: (() -> Void)?, @ViewBuilder sheetContent: @escaping () -> SheetContent) {
+        self._isPresented = isPresented
+        self.style = style
+        self.onDismiss = onDismiss
+        self.sheetContent = sheetContent
+        self._detent = State(initialValue: style.defaultDetent)
+    }
 
     func body(content: Content) -> some View {
         content.sheet(isPresented: $isPresented, onDismiss: onDismiss) {
             sheetContent()
-                .presentationDetents(style.detents)
+                .presentationDetents(style.detents, selection: $detent)
                 .presentationDragIndicator(style.showsDragIndicator ? .visible : .hidden)
                 .presentationCornerRadius(style.cornerRadius)
                 .presentationBackgroundInteraction(

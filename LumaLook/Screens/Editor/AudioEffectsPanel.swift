@@ -60,9 +60,14 @@ struct AudioEffectsPanel: View {
                                         bands[i] = v
                                         var s = fx; s.eqBandGains = bands; s.eqPresetName = nil; apply(s)
                                     }), in: -12...12)
+                                    // Size to the slider's LENGTH first, then
+                                    // rotate, then set a NARROW layout footprint
+                                    // — rotationEffect doesn't change layout, so
+                                    // without the final frame each band stays
+                                    // 90pt wide and the panel spills off-screen.
+                                    .frame(width: 90)
                                     .rotationEffect(.degrees(-90))
-                                    .frame(width: 90, height: 30)
-                                    .frame(height: 90)
+                                    .frame(width: 46, height: 96)
                                 Text(bandLabels[i]).font(.system(size: 9)).foregroundStyle(LumaTheme.textSecondary)
                             }
                         }
