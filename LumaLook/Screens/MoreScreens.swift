@@ -851,10 +851,12 @@ struct CropFormatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var zoom = 100.0
     @State private var format: EditorFormat = .widescreen
+    @State private var canvasMode: CanvasBackgroundMode = .fill
 
     var body: some View {
         LumaScreen(title: "Format", trailingText: "Apply", trailingAction: {
             app.editor.setFormat(format, zoom: zoom)
+            app.editor.setCanvasMode(canvasMode)
             dismiss()
         }) {
             // Live crop preview: the chosen aspect framed over the footage,
@@ -897,6 +899,32 @@ struct CropFormatView: View {
                 }
             }
 
+            // Canvas background: how the clip sits inside the frame (fill vs
+            // fit with a background painted in the bars).
+            Text("Canvas")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(CanvasBackgroundMode.allCases, id: \.self) { mode in
+                        Button { canvasMode = mode } label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: mode.icon)
+                                    .font(.system(size: 20, weight: .medium))
+                                Text(mode.label).font(.system(size: 12))
+                            }
+                            .frame(width: 72, height: 62)
+                            .foregroundStyle(canvasMode == mode ? .black : .white)
+                            .background(canvasMode == mode ? AnyShapeStyle(LumaTheme.accentBright)
+                                                           : AnyShapeStyle(LumaTheme.surface),
+                                        in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             InlineSlider(title: "Zoom", value: $zoom, range: 100...300) { "\(Int($0))" }
 
             HStack(spacing: 12) {
@@ -927,6 +955,7 @@ struct CropFormatView: View {
         .onAppear {
             format = app.editor.format
             zoom = app.editor.zoom
+            canvasMode = app.editor.canvasMode
         }
     }
 

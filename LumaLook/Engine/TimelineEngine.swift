@@ -223,6 +223,10 @@ final class EditorState: ObservableObject {
         var zoom: Double
         var audioTracks: [MusicTrack]
         var overlays: [OverlayItem]
+        var canvasMode: CanvasBackgroundMode
+        var canvasSolidHex: String
+        var canvasGradientTopHex: String
+        var canvasGradientBottomHex: String
     }
 
     // Timeline
@@ -234,6 +238,26 @@ final class EditorState: ObservableObject {
     // Canvas
     @Published var format: EditorFormat = .widescreen
     @Published var zoom: Double = 100
+    /// Background fill behind the framed clip (fill/fit/blur/solid/gradient).
+    @Published var canvasMode: CanvasBackgroundMode = .fill
+    @Published var canvasSolidHex: String = "#101014"
+    @Published var canvasGradientTopHex: String = "#2A2A38"
+    @Published var canvasGradientBottomHex: String = "#050507"
+
+    /// The compositor payload assembled from the canvas fields.
+    var canvasSpec: CanvasSpec {
+        CanvasSpec(mode: canvasMode, solidHex: canvasSolidHex,
+                   gradientTopHex: canvasGradientTopHex,
+                   gradientBottomHex: canvasGradientBottomHex)
+    }
+
+    /// Sets the canvas background mode (with undo).
+    func setCanvasMode(_ mode: CanvasBackgroundMode) {
+        guard canvasMode != mode else { return }
+        pushUndoSnapshot()
+        canvasMode = mode
+        rebuild()
+    }
 
     // Audio
     @Published var volume: Double = 100
@@ -356,7 +380,11 @@ final class EditorState: ObservableObject {
                               text: $0.text,
                               textStyle: $0.text == nil ? nil : $0.textStyle.rawValue,
                               textColorHex: $0.text == nil ? nil : $0.textColorHex)
-            }
+            },
+            canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
+            canvasSolidHex: canvasSolidHex,
+            canvasGradientTopHex: canvasGradientTopHex,
+            canvasGradientBottomHex: canvasGradientBottomHex
         )
         store.upsert(project: stored)
     }
@@ -367,6 +395,10 @@ final class EditorState: ObservableObject {
         projectTitle = project.title
         format = EditorFormat(rawValue: project.format) ?? .widescreen
         zoom = project.zoom
+        canvasMode = project.canvasMode.flatMap(CanvasBackgroundMode.init) ?? .fill
+        canvasSolidHex = project.canvasSolidHex ?? "#101014"
+        canvasGradientTopHex = project.canvasGradientTopHex ?? "#2A2A38"
+        canvasGradientBottomHex = project.canvasGradientBottomHex ?? "#050507"
         volume = project.volume
         fadeIn = project.fadeIn
         fadeOut = project.fadeOut
@@ -1466,7 +1498,10 @@ final class EditorState: ObservableObject {
 
     private func currentSnapshot() -> Snapshot {
         Snapshot(clips: clips, format: format, zoom: zoom,
-                 audioTracks: audioTracks, overlays: overlays)
+                 audioTracks: audioTracks, overlays: overlays,
+                 canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
+                 canvasGradientTopHex: canvasGradientTopHex,
+                 canvasGradientBottomHex: canvasGradientBottomHex)
     }
 
     private func pushUndoSnapshot() {
@@ -1493,6 +1528,10 @@ final class EditorState: ObservableObject {
         zoom = snapshot.zoom
         audioTracks = snapshot.audioTracks
         overlays = snapshot.overlays
+        canvasMode = snapshot.canvasMode
+        canvasSolidHex = snapshot.canvasSolidHex
+        canvasGradientTopHex = snapshot.canvasGradientTopHex
+        canvasGradientBottomHex = snapshot.canvasGradientBottomHex
         if let id = selectedClipID, !clips.contains(where: { $0.id == id }) {
             selectedClipID = clips.last?.id
         }
@@ -2079,7 +2118,8 @@ final class EditorState: ObservableObject {
                 overlayLayout: overlayLayout,
                 lookState: lookState,
                 renderSize: renderSize,
-                zoomFactor: max(1.0, zoom / 100.0)))
+                zoomFactor: max(1.0, zoom / 100.0),
+                canvas: canvasSpec))
         }
         return instructions
     }

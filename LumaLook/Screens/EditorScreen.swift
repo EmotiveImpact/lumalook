@@ -370,6 +370,19 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if let raw = env["LUMA_SEED_CANVAS"], let mode = CanvasBackgroundMode(rawValue: raw),
+               !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let fmt = env["LUMA_SEED_FORMAT"], let f = EditorFormat(rawValue: fmt) {
+                    editor.setFormat(f, zoom: editor.zoom)
+                }
+                editor.setCanvasMode(mode)
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if let rotStr = env["LUMA_SEED_ROTATE"], let turns = Int(rotStr), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)

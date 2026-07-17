@@ -102,6 +102,12 @@ struct StoredProject: Codable, Identifiable {
     /// PIP overlay lane (T1). Optional with nil default AT THE STRUCT END —
     /// every earlier generation of Projects.json must keep decoding.
     var overlays: [StoredOverlay]? = nil
+    /// Canvas background (fill/fit/blur/solid/gradient) + its colours.
+    /// Optional-at-end; nil = fill (the legacy behaviour).
+    var canvasMode: String? = nil
+    var canvasSolidHex: String? = nil
+    var canvasGradientTopHex: String? = nil
+    var canvasGradientBottomHex: String? = nil
 }
 
 /// An Apply-a-Look session: the media + the exact grade, restorable from

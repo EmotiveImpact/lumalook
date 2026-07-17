@@ -171,6 +171,42 @@ struct OverlaySpec {
 /// Carries everything `LumaVideoCompositor` needs for one time segment.
 /// Segments are cut at photo-clip and overlay boundaries so
 /// `requiredSourceTrackIDs` always matches what the segment actually reads.
+/// Background fill behind the framed clip. `.fill` aspect-fills the canvas
+/// (edges cropped, no background). The rest aspect-FIT the clip and paint a
+/// background in the letterbox/pillar bars — the img.ly / CapCut "canvas" tool.
+enum CanvasBackgroundMode: String, Codable, CaseIterable {
+    case fill, fit, blur, solid, gradient
+
+    var label: String {
+        switch self {
+        case .fill: return "Fill"
+        case .fit: return "Fit"
+        case .blur: return "Blur"
+        case .solid: return "Colour"
+        case .gradient: return "Gradient"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .fill: return "rectangle.fill"
+        case .fit: return "rectangle.inset.filled"
+        case .blur: return "drop.fill"
+        case .solid: return "paintpalette.fill"
+        case .gradient: return "square.righthalf.filled"
+        }
+    }
+}
+
+/// Canvas background settings. Pure values → bakes identically in preview and
+/// export.
+struct CanvasSpec: Equatable {
+    var mode: CanvasBackgroundMode = .fill
+    var solidHex: String = "#101014"
+    var gradientTopHex: String = "#2A2A38"
+    var gradientBottomHex: String = "#050507"
+    static let fill = CanvasSpec()
+}
+
 final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionProtocol {
     let timeRange: CMTimeRange
     let enablePostProcessing = false
@@ -189,6 +225,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let lookState: LookState
     let renderSize: CGSize
     let zoomFactor: CGFloat
+    let canvas: CanvasSpec
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -199,7 +236,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          overlayLayout: OverlayLayout,
          lookState: LookState,
          renderSize: CGSize,
-         zoomFactor: CGFloat) {
+         zoomFactor: CGFloat,
+         canvas: CanvasSpec = .fill) {
         self.timeRange = timeRange
         // An empty ID list means "call the compositor with no source frames"
         // (photo-clip segments) — exactly what T7 needs.
@@ -212,6 +250,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.lookState = lookState
         self.renderSize = renderSize
         self.zoomFactor = zoomFactor
+        self.canvas = canvas
         super.init()
     }
 }
@@ -323,7 +362,8 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         var canvas: CIImage
         if let meta, let imageURL = meta.imageURL, let still = stillImage(at: imageURL) {
             let oriented = applyUserOrientation(still, meta.display)
-            canvas = aspectFill(oriented, into: renderSize, zoom: instruction.zoomFactor)
+            canvas = composeCanvas(oriented, into: renderSize, zoom: instruction.zoomFactor,
+                                   spec: instruction.canvas)
         } else if let sourceBuffer = request.sourceFrame(byTrackID: instruction.mainTrackID) {
             var image = CIImage(cvPixelBuffer: sourceBuffer)
             if let meta, !meta.transform.isIdentity {
@@ -332,7 +372,8 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                                                 y: -image.extent.minY))
             }
             if let meta { image = applyUserOrientation(image, meta.display) }
-            canvas = aspectFill(image, into: renderSize, zoom: instruction.zoomFactor)
+            canvas = composeCanvas(image, into: renderSize, zoom: instruction.zoomFactor,
+                                   spec: instruction.canvas)
         } else {
             // No source and no still (e.g. race right at a boundary): black.
             canvas = CIImage(color: .black)
@@ -533,6 +574,75 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         }
         return img.transformed(by: CGAffineTransform(translationX: -img.extent.minX,
                                                      y: -img.extent.minY))
+    }
+
+    /// Places the framed clip on the chosen canvas background. `.fill` is the
+    /// legacy aspect-fill (no background); the rest aspect-FIT the clip and
+    /// paint the letterbox bars.
+    private func composeCanvas(_ image: CIImage, into renderSize: CGSize,
+                               zoom: CGFloat, spec: CanvasSpec) -> CIImage {
+        let renderRect = CGRect(origin: .zero, size: renderSize)
+        if spec.mode == .fill {
+            return aspectFill(image, into: renderSize, zoom: zoom)
+        }
+        let foreground = aspectFit(image, into: renderSize, zoom: zoom)
+        let background: CIImage
+        switch spec.mode {
+        case .fill:
+            return foreground   // unreachable
+        case .fit:
+            background = CIImage(color: CIColor(red: 0, green: 0, blue: 0)).cropped(to: renderRect)
+        case .solid:
+            background = CIImage(color: ciColor(hex: spec.solidHex)).cropped(to: renderRect)
+        case .gradient:
+            background = gradientImage(top: spec.gradientTopHex, bottom: spec.gradientBottomHex,
+                                       size: renderSize)
+        case .blur:
+            // A blurred, over-scaled copy of the same frame fills the bars.
+            let filled = aspectFill(image, into: renderSize, zoom: zoom * 1.15)
+            let blur = CIFilter.gaussianBlur()
+            blur.inputImage = filled.clampedToExtent()
+            blur.radius = Float(min(renderSize.width, renderSize.height) * 0.05)
+            let darken = CIFilter.colorControls()
+            darken.inputImage = (blur.outputImage ?? filled).cropped(to: renderRect)
+            darken.brightness = -0.1
+            darken.saturation = 1.05
+            background = (darken.outputImage ?? filled).cropped(to: renderRect)
+        }
+        return foreground.composited(over: background).cropped(to: renderRect)
+    }
+
+    /// Aspect-FIT into the render canvas honouring zoom (letterbox/pillar).
+    private func aspectFit(_ image: CIImage, into renderSize: CGSize, zoom: CGFloat) -> CIImage {
+        var image = image
+        let sx = renderSize.width / image.extent.width
+        let sy = renderSize.height / image.extent.height
+        let scale = min(sx, sy) * zoom
+        image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let dx = (renderSize.width - image.extent.width) / 2 - image.extent.minX
+        let dy = (renderSize.height - image.extent.height) / 2 - image.extent.minY
+        return image.transformed(by: CGAffineTransform(translationX: dx, y: dy))
+    }
+
+    /// Vertical two-stop gradient sized to the canvas.
+    private func gradientImage(top: String, bottom: String, size: CGSize) -> CIImage {
+        let gradient = CIFilter.smoothLinearGradient()
+        gradient.point0 = CGPoint(x: size.width / 2, y: size.height)   // top (y-up)
+        gradient.point1 = CGPoint(x: size.width / 2, y: 0)             // bottom
+        gradient.color0 = ciColor(hex: top)
+        gradient.color1 = ciColor(hex: bottom)
+        return (gradient.outputImage ?? CIImage(color: ciColor(hex: bottom)))
+            .cropped(to: CGRect(origin: .zero, size: size))
+    }
+
+    /// Parses "#RRGGBB" into a CIColor (falls back to black).
+    private func ciColor(hex: String) -> CIColor {
+        var s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return CIColor(red: 0, green: 0, blue: 0) }
+        return CIColor(red: CGFloat((v >> 16) & 0xFF) / 255,
+                       green: CGFloat((v >> 8) & 0xFF) / 255,
+                       blue: CGFloat(v & 0xFF) / 255)
     }
 
     /// Aspect-fill into the render canvas honouring zoom — verbatim port of
