@@ -102,7 +102,46 @@ struct OverlayEffectsPanel: View {
     // MARK: - Chroma / Mask / Adjust / Border (F4–F7 fill these in)
 
     @ViewBuilder private var chromaControls: some View {
-        Text("Chroma key — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)
+        let chroma = fx.chroma
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Green screen", isOn: Binding(
+                get: { chroma != nil },
+                set: { on in
+                    editor.setOverlayChroma(id: overlayID, on ? ChromaKeySettings() : nil)
+                    LumaHaptics.shared.tap()
+                }))
+                .font(.system(size: 14, weight: .semibold))
+                .tint(LumaTheme.accentBright)
+
+            if let chroma {
+                HStack(spacing: 10) {
+                    Text("Key").font(.footnote).foregroundStyle(LumaTheme.textSecondary)
+                    ForEach(["#00FF00", "#0000FF", "#00FFFF", "#FF00FF"], id: \.self) { hex in
+                        Button {
+                            var c = chroma; c.colorHex = hex
+                            editor.setOverlayChroma(id: overlayID, c)
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Circle().fill(Color(hex: hex)).frame(width: 22, height: 22)
+                                .overlay(Circle().stroke(chroma.colorHex.uppercased() == hex
+                                    ? LumaTheme.accentBright : .white.opacity(0.2),
+                                    lineWidth: chroma.colorHex.uppercased() == hex ? 2.5 : 1))
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
+                InlineSlider(title: "Tolerance", value: Binding(
+                    get: { chroma.tolerance * 100 },
+                    set: { var c = chroma; c.tolerance = $0 / 100
+                           editor.setOverlayChroma(id: overlayID, c, snapshot: false) }
+                ), range: 5...80) { "\(Int($0))" }
+                InlineSlider(title: "Softness", value: Binding(
+                    get: { chroma.softness * 100 },
+                    set: { var c = chroma; c.softness = $0 / 100
+                           editor.setOverlayChroma(id: overlayID, c, snapshot: false) }
+                ), range: 0...40) { "\(Int($0))" }
+            }
+        }
     }
     @ViewBuilder private var maskControls: some View {
         Text("Mask — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)

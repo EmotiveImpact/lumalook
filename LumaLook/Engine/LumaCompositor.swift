@@ -521,9 +521,16 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             }
             guard var overlay = overlayImage, overlay.extent.width > 0 else { continue }
 
-            // ---- Overlay effect hook chain (F4–F7 add stages here) ----
+            // ---- Overlay effect hook chain ----
             // Order: chroma (raw) → grade → adjust → scale → mask → border →
             //        rotate/position/opacity → blend composite.
+
+            // F4 chroma key: operate on the RAW frame before grading — grading
+            // shifts the green and would break the key. Text never keys.
+            if !isText, let chroma = fx.chroma {
+                overlay = ChromaKeyFilter.apply(to: overlay, settings: chroma)
+                    .cropped(to: overlay.extent)
+            }
 
             // Same look on the PIP as the base — one grade across the frame.
             // Text stays ungraded: titles must hold their exact colour.

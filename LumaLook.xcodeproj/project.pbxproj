@@ -109,6 +109,7 @@
 		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
 		9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */; };
+		9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */; };
 		A0576CA334B7E390B01D9BBE /* FS_MS4.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AB35F2AD0526EF4380F835E /* FS_MS4.cube */; };
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8AEF2B3B897BD002287240 /* ExportSheet.swift */; };
@@ -241,6 +242,7 @@
 		5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaLookApp.swift; sourceTree = "<group>"; };
 		61A5624E7651D005E2DA05C1 /* CameraChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraChrome.swift; sourceTree = "<group>"; };
 		63190B53784A9183F103288A /* FS_PT400V.cube */ = {isa = PBXFileReference; path = FS_PT400V.cube; sourceTree = "<group>"; };
+		64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromaKeyFilter.swift; sourceTree = "<group>"; };
 		65114680C08ADE0365D4F133 /* FS_FN400.cube */ = {isa = PBXFileReference; path = FS_FN400.cube; sourceTree = "<group>"; };
 		6B846D621E4F274EC907E0EC /* LumaDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaDial.swift; sourceTree = "<group>"; };
 		6B8727A81A0DEF252195C4BD /* FS_RO25.cube */ = {isa = PBXFileReference; path = FS_RO25.cube; sourceTree = "<group>"; };
@@ -595,6 +597,7 @@
 			isa = PBXGroup;
 			children = (
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
+				64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */,
 				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
 				05BB58FB882FE612A9E05282 /* ColorMath.swift */,
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
@@ -821,6 +824,7 @@
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,
+				9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */,
 				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
