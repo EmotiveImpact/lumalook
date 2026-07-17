@@ -588,13 +588,32 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
-    func deleteSelected() {
-        guard let id = selectedClipID, clips.contains(where: { $0.id == id }) else { return }
+    /// Deletes the selected clip. When `ripple` (the NLE default), every
+    /// overlay/music item that started after the removed clip slides earlier
+    /// by the clip's timeline length so nothing drifts out of sync; a non-
+    /// ripple delete leaves the other lanes pinned to the clock.
+    func deleteSelected(ripple: Bool = true) {
+        guard let id = selectedClipID,
+              let clip = clips.first(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
+        let start = clipStartTimes[id] ?? 0
+        let length = clip.timelineDuration
         clips.removeAll { $0.id == id }
+        if ripple, length > 0 {
+            for i in overlays.indices where overlays[i].timelineOffset > start + 0.01 {
+                overlays[i].timelineOffset = max(0, overlays[i].timelineOffset - length)
+            }
+            for i in audioTracks.indices where audioTracks[i].timelineOffset > start + 0.01 {
+                audioTracks[i].timelineOffset = max(0, audioTracks[i].timelineOffset - length)
+            }
+        }
         selectedClipID = clips.last?.id
         rebuild()
     }
+
+    /// In-session clipboard: survives across projects so a clip copied in one
+    /// project can be pasted into another.
+    static var clipboardClip: Clip?
 
     /// Duplicates the selected clip (all trim/speed/grade/transition state)
     /// as a new clip inserted right after it.
@@ -606,6 +625,30 @@ final class EditorState: ObservableObject {
         copy.id = UUID()
         copy.transitionAfter = .none   // don't duplicate the cut into the original's neighbour
         clips.insert(copy, at: index + 1)
+        selectedClipID = copy.id
+        rebuild()
+        refreshFilmstrip(clipID: copy.id)
+    }
+
+    /// Copies the selected clip to the in-session clipboard.
+    func copySelected() {
+        guard let id = selectedClipID,
+              let clip = clips.first(where: { $0.id == id }) else { return }
+        Self.clipboardClip = clip
+    }
+
+    /// Pastes the clipboard clip (fresh UUID) after the selection, or appends
+    /// it if nothing is selected. The media file is shared by URL — the
+    /// PersistenceStore reference-counting already handles shared fileNames.
+    func pasteClip() {
+        guard var copy = Self.clipboardClip else { return }
+        pushUndoSnapshot()
+        copy.id = UUID()
+        copy.transitionAfter = .none
+        let insertAt = selectedClipID
+            .flatMap { sel in clips.firstIndex(where: { $0.id == sel }) }
+            .map { $0 + 1 } ?? clips.count
+        clips.insert(copy, at: insertAt)
         selectedClipID = copy.id
         rebuild()
         refreshFilmstrip(clipID: copy.id)

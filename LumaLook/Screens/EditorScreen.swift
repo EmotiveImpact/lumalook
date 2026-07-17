@@ -295,6 +295,38 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                editor.copySelected()
+                editor.pasteClip()
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+            // Ripple test: place the seeded overlay on clip 2 (offset 12s),
+            // then ripple-delete clip 1 — the overlay must slide to ~2s.
+            // LUMA_SEED_RIPPLE=2 leaves clip 1 in place (control export).
+            if let rippleMode = env["LUMA_SEED_RIPPLE"], editor.clips.count >= 2 {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let ov = editor.overlays.first {
+                    editor.setOverlayOffset(id: ov.id, 12)
+                    for _ in 0..<20 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+                if rippleMode == "1" {
+                    editor.selectedClipID = editor.clips.first?.id
+                    editor.deleteSelected(ripple: true)
+                    for _ in 0..<40 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             if let nudgeStr = env["LUMA_SEED_NUDGE"], let n = Int(nudgeStr), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -534,7 +566,7 @@ private struct EditorContent: View {
                     FlatTool(title: "Split", icon: "square.split.2x1") {
                         editor.splitAtPlayhead()
                     }
-                    FlatTool(title: "Copy", icon: "plus.square.on.square") {
+                    FlatTool(title: "Duplicate", icon: "plus.square.on.square") {
                         editor.duplicateSelected()
                         LumaHaptics.shared.tap()
                     }

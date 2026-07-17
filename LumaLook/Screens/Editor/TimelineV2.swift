@@ -330,10 +330,28 @@ struct VideoLane: View {
                             editor.selectedClipID = clip.id == editor.selectedClipID ? nil : clip.id
                         }
                         .contextMenu {
+                            Button {
+                                editor.selectedClipID = clip.id
+                                editor.duplicateSelected()
+                            } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                            Button {
+                                editor.selectedClipID = clip.id
+                                editor.copySelected()
+                            } label: { Label("Copy", systemImage: "doc.on.doc") }
+                            Button {
+                                editor.selectedClipID = clip.id
+                                editor.pasteClip()
+                            } label: { Label("Paste", systemImage: "doc.on.clipboard") }
+                                .disabled(EditorState.clipboardClip == nil)
+                            Divider()
                             Button(role: .destructive) {
                                 editor.selectedClipID = clip.id
-                                editor.deleteSelected()
-                            } label: { Label("Delete", systemImage: "trash") }
+                                editor.deleteSelected(ripple: true)
+                            } label: { Label("Ripple Delete", systemImage: "trash") }
+                            Button(role: .destructive) {
+                                editor.selectedClipID = clip.id
+                                editor.deleteSelected(ripple: false)
+                            } label: { Label("Delete, keep other lanes", systemImage: "trash.slash") }
                         }
                 }
             }
