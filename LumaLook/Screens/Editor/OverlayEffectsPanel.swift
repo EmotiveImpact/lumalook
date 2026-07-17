@@ -29,6 +29,27 @@ struct OverlayEffectsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // PIP preset row (F8): one-tap layouts (placement + mask/border).
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(PipPreset.all) { preset in
+                        Button {
+                            editor.applyPipPreset(id: overlayID, preset)
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: preset.icon).font(.system(size: 17))
+                                Text(preset.name).font(.system(size: 9)).lineLimit(1)
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: 62, height: 52)
+                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
+            }
+
             // Section chips.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {

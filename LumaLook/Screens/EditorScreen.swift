@@ -406,6 +406,13 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // PIP preset: LUMA_SEED_PIP_PRESET=circleCam applied to the first overlay.
+            if let presetID = env["LUMA_SEED_PIP_PRESET"], let ov = editor.overlays.first,
+               let preset = PipPreset.all.first(where: { $0.id == presetID }) {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                editor.applyPipPreset(id: ov.id, preset)
+                for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+            }
             // Overlay effects: e.g. LUMA_SEED_OVERLAY_FX="blend=screen" or
             // "chroma=#00FF00;mask=ellipse;adjust=exposure:1.0;border=0.04,#FFFFFF,0.1".
             if let fxStr = env["LUMA_SEED_OVERLAY_FX"], let ov = editor.overlays.first {

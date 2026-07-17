@@ -135,6 +135,7 @@
 		CC2B75F8447C61F9064E9596 /* FS_FP100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96B3F0A8C9651152F4928AAC /* FS_FP100C.cube */; };
 		CC96F7992C81799F1D971606 /* FS_PF50.cube in Resources */ = {isa = PBXBuildFile; fileRef = 17D87D9EC09C9235D29B2913 /* FS_PF50.cube */; };
 		CD11513E989BF30CC434E279 /* FS_FP125.cube in Resources */ = {isa = PBXBuildFile; fileRef = 71A6E32214C9321C7379CCC6 /* FS_FP125.cube */; };
+		CE80855BE2146D1F066D1268 /* PipPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D85C68EA6204E1F8006C6F /* PipPresets.swift */; };
 		D09DE830CF50582B4F392811 /* FS_PL667.cube in Resources */ = {isa = PBXBuildFile; fileRef = F2F63CA8389113D35C675EEE /* FS_PL667.cube */; };
 		D20F0AAE5FC1E0307AE1F2DD /* FS_SP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = E22A35DFADB72BF4DB87151D /* FS_SP200.cube */; };
 		D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 158CFCA17750E771F995959B /* hero_desert.jpg */; };
@@ -235,6 +236,7 @@
 		55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorGradingViews.swift; sourceTree = "<group>"; };
 		55A66FB773AEE510A8E14555 /* FS_SP400.cube */ = {isa = PBXFileReference; path = FS_SP400.cube; sourceTree = "<group>"; };
 		5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaRootView.swift; sourceTree = "<group>"; };
+		57D85C68EA6204E1F8006C6F /* PipPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipPresets.swift; sourceTree = "<group>"; };
 		58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */ = {isa = PBXFileReference; path = FS_PT160N.cube; sourceTree = "<group>"; };
 		585AC072642EB31074E401C7 /* LumaLook.storekit */ = {isa = PBXFileReference; path = LumaLook.storekit; sourceTree = "<group>"; };
 		5AA55F19B38C01C558951683 /* ExportCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportCompleteView.swift; sourceTree = "<group>"; };
@@ -399,6 +401,7 @@
 			children = (
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
+				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
 				71565855D4F4F92716382C0A /* TimelineV2.swift */,
 			);
 			path = Editor;
@@ -860,6 +863,7 @@
 				7E736E0D019FC99EABA35E38 /* OverlayMaskRenderer.swift in Sources */,
 				9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */,
 				842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */,
+				CE80855BE2146D1F066D1268 /* PipPresets.swift in Sources */,
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				7191972FF427F33077859C6F /* Scopes.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,

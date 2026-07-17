@@ -1696,6 +1696,20 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// Applies a PIP preset (placement + mask/border) in one undo step. A
+    /// preset defines a static layout, so any placement keyframes are cleared.
+    func applyPipPreset(id: UUID, _ preset: PipPreset) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        overlays[i].sizeFraction = min(max(0.05, preset.sizeFraction), 1.0)
+        overlays[i].center = preset.center
+        overlays[i].effects.mask = preset.mask
+        overlays[i].effects.border = preset.border
+        overlays[i].keyframes = []
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
     /// Live tone sliders — no snapshot.
     func setOverlayAdjustments(id: UUID, _ adjust: OverlayAdjustments?) {
         guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
