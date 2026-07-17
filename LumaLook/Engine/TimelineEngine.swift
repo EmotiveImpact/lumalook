@@ -95,7 +95,7 @@ enum TransitionStyle: String, Codable, CaseIterable {
 final class EditorState: ObservableObject {
 
     struct Clip: Identifiable {
-        let id: UUID
+        var id: UUID
         let url: URL
         var assetDuration: Double
         var trimStart: Double
@@ -594,6 +594,27 @@ final class EditorState: ObservableObject {
         clips.removeAll { $0.id == id }
         selectedClipID = clips.last?.id
         rebuild()
+    }
+
+    /// Duplicates the selected clip (all trim/speed/grade/transition state)
+    /// as a new clip inserted right after it.
+    func duplicateSelected() {
+        guard let id = selectedClipID,
+              let index = clips.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        var copy = clips[index]
+        copy.id = UUID()
+        copy.transitionAfter = .none   // don't duplicate the cut into the original's neighbour
+        clips.insert(copy, at: index + 1)
+        selectedClipID = copy.id
+        rebuild()
+        refreshFilmstrip(clipID: copy.id)
+    }
+
+    /// Continuous per-clip speed (0.1×…4×). `setSpeed` already accepts any
+    /// Double; this just clamps for the slider.
+    func setClipSpeed(_ speed: Double) {
+        setSpeed(min(4, max(0.1, speed)))
     }
 
     /// Splits the clip under the playhead at the current time.

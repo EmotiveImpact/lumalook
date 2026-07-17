@@ -285,6 +285,26 @@ struct EditorTimelineView: View {
                 }
                 showFullscreenPreview = true
             }
+            if env["LUMA_SEED_DUPLICATE"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                editor.duplicateSelected()
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+            if let speedStr = env["LUMA_SEED_SPEED"], let speed = Double(speedStr), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                editor.setClipSpeed(speed)
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
                 // Wait out the async rebuild before hitting play/export.
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -504,6 +524,10 @@ private struct EditorContent: View {
                     }
                     FlatTool(title: "Split", icon: "square.split.2x1") {
                         editor.splitAtPlayhead()
+                    }
+                    FlatTool(title: "Copy", icon: "plus.square.on.square") {
+                        editor.duplicateSelected()
+                        LumaHaptics.shared.tap()
                     }
                     FlatTool(title: "Delete", icon: "trash") {
                         editor.deleteSelected()
@@ -749,9 +773,11 @@ private struct EditorContent: View {
 
     private var speedMenu: some View {
         Menu {
-            ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { speed in
+            // Continuous control: presets across the full 0.1×–4× range.
+            ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], id: \.self) { speed in
                 Button {
-                    editor.setSpeed(speed)
+                    editor.setClipSpeed(speed)
+                    LumaHaptics.shared.tap()
                 } label: {
                     if editor.selectedClip?.speed == speed {
                         Label(speedLabel(speed), systemImage: "checkmark")
