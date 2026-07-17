@@ -189,6 +189,42 @@ struct OverlayEffectsPanel: View {
         Text("Adjust — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)
     }
     @ViewBuilder private var borderControls: some View {
-        Text("Border — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)
+        let border = fx.border
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Border", isOn: Binding(
+                get: { border != nil },
+                set: { on in
+                    editor.setOverlayBorder(id: overlayID, on ? OverlayBorderSettings() : nil)
+                    LumaHaptics.shared.tap()
+                }))
+                .font(.system(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+            if let border {
+                HStack(spacing: 10) {
+                    Text("Colour").font(.footnote).foregroundStyle(LumaTheme.textSecondary)
+                    ForEach(["#FFFFFF", "#000000", "#FFD60A", "#FF375F", "#0A84FF"], id: \.self) { hex in
+                        Button {
+                            var b = border; b.colorHex = hex
+                            editor.setOverlayBorder(id: overlayID, b)
+                        } label: {
+                            Circle().fill(Color(hex: hex)).frame(width: 20, height: 20)
+                                .overlay(Circle().stroke(border.colorHex.uppercased() == hex
+                                    ? LumaTheme.accentBright : .white.opacity(0.25),
+                                    lineWidth: border.colorHex.uppercased() == hex ? 2.5 : 1))
+                        }
+                        .buttonStyle(.lumaPress)
+                    }
+                }
+                InlineSlider(title: "Width", value: Binding(
+                    get: { border.widthFraction * 100 },
+                    set: { var b = border; b.widthFraction = $0 / 100
+                           editor.setOverlayBorder(id: overlayID, b, snapshot: false) }
+                ), range: 1...12) { "\(Int($0))" }
+                InlineSlider(title: "Corner", value: Binding(
+                    get: { border.cornerRadiusFraction * 100 },
+                    set: { var b = border; b.cornerRadiusFraction = $0 / 100
+                           editor.setOverlayBorder(id: overlayID, b, snapshot: false) }
+                ), range: 0...50) { "\(Int($0))" }
+            }
+        }
     }
 }
