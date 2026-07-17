@@ -1037,6 +1037,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LumaLook needs microphone access to record audio with your videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LumaLook needs permission to save exported videos to your photo library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LumaLook needs photo library access so you can choose videos to edit.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LumaLook uses speech recognition to turn the speech in your video into captions.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1187,6 +1188,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LumaLook needs microphone access to record audio with your videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LumaLook needs permission to save exported videos to your photo library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LumaLook needs photo library access so you can choose videos to edit.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LumaLook uses speech recognition to turn the speech in your video into captions.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (

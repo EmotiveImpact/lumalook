@@ -2011,6 +2011,66 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F10 — turns transcript segments into caption text layers.
+    ///
+    /// Split from `generateCaptions` deliberately: this half is a pure
+    /// timeline mutation with no speech dependency, so it is testable without
+    /// microphone/speech authorisation.
+    @discardableResult
+    func addCaptions(_ segments: [CaptionSegment]) -> Int {
+        let usable = segments.filter { $0.duration > 0.05 && $0.start < totalDuration }
+        guard !usable.isEmpty else { return 0 }
+        pushUndoSnapshot()
+        for seg in usable {
+            let offset = min(max(0, seg.start), max(0, totalDuration - 0.1))
+            let duration = min(seg.duration, totalDuration - offset)
+            guard duration > 0.05 else { continue }
+            var item = OverlayItem(id: UUID(), url: URL(fileURLWithPath: "/dev/null"),
+                                   isImage: true, timelineOffset: offset,
+                                   duration: duration, title: "Caption")
+            item.text = seg.text
+            item.textStyle = .subtitle
+            // Captions read against any footage: white on a black box, low.
+            item.textBoxHex = "#000000"
+            item.textColorHex = "#FFFFFF"
+            item.center = CGPoint(x: 0.5, y: 0.82)
+            item.sizeFraction = 0.8
+            item.kind = "caption"
+            item.lane = firstFreeLane(at: offset, duration: duration)
+            overlays.append(item)
+        }
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return usable.count
+    }
+
+    /// F10 — transcribes the timeline's audio and lays the captions in.
+    /// Returns the number of caption layers added (0 = unauthorised/no speech).
+    @discardableResult
+    func generateCaptions(locale: Locale = .current) async -> Int {
+        guard totalDuration > 0.2 else { return 0 }
+        guard await CaptionEngine.requestAuthorization() else { return 0 }
+        do {
+            let built = try await buildComposition(renderScale: 1)
+            let audioURL = try await VideoExporter().exportAudioOnly(asset: built.composition,
+                                                                     audioMix: built.audioMix)
+            defer { try? FileManager.default.removeItem(at: audioURL) }
+            let segments = try await CaptionEngine.transcribe(url: audioURL, locale: locale)
+            return addCaptions(segments)
+        } catch {
+            return 0
+        }
+    }
+
+    /// F10 — SRT for the caption layers currently on the timeline.
+    func captionsSRT() -> String {
+        let segs = overlays
+            .filter { $0.kind == "caption" && $0.text != nil }
+            .sorted { $0.timelineOffset < $1.timelineOffset }
+            .map { CaptionSegment(text: $0.text ?? "", start: $0.timelineOffset, duration: $0.duration) }
+        return CaptionEngine.srt(from: segs)
+    }
+
     /// F3 — sets the animated-text preset (with undo).
     func setTextAnimation(id: UUID, _ preset: TextAnimation) {
         guard let i = overlays.firstIndex(where: { $0.id == id }),

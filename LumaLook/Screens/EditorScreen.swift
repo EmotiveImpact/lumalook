@@ -31,6 +31,7 @@ struct EditorTimelineView: View {
     @State private var showAudioLibrary = false
     @State private var showStickerLibrary = false
     @State private var showMaskPanel = false
+    @State private var isCaptioning = false
     @State private var isExporting = false
     @State private var showExportSheet = false
     @State private var showFullscreenPreview = false
@@ -61,6 +62,16 @@ struct EditorTimelineView: View {
                 onAddOverlay: { showOverlayPicker = true },
                 onAddSticker: { showStickerLibrary = true },
                 onOpenMask: { showMaskPanel = true },
+                onCaptions: {
+                    Task {
+                        isCaptioning = true
+                        let n = await editor.generateCaptions()
+                        isCaptioning = false
+                        if n == 0 {
+                            exportError = "No speech found — check Settings › Privacy › Speech Recognition."
+                        }
+                    }
+                },
                 onAddMusic: { showAudioSourceChooser = true },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
@@ -389,6 +400,25 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F10: caption layers from injected segments. Format
+            // "text@start@dur;text@start@dur". Bypasses STT so the layering +
+            // SRT path is verifiable headlessly (simctl cannot grant speech).
+            if let cs = env["LUMA_SEED_CAPTIONS"], !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                let segs: [CaptionSegment] = cs.split(separator: ";").compactMap { part in
+                    let f = part.split(separator: "@").map(String.init)
+                    guard f.count == 3, let st = Double(f[1]), let d = Double(f[2]) else { return nil }
+                    return CaptionSegment(text: f[0], start: st, duration: d)
+                }
+                let n = editor.addCaptions(segs)
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let srt = editor.captionsSRT()
+                try? srt.write(to: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("captions.srt"), atomically: true, encoding: .utf8)
+                print("[LUMA] CAPTIONS added=\(n) layers=\(editor.overlays.filter { $0.kind == "caption" }.count)")
+            }
             // F3: an animated title. Format "TEXT|preset".
             if let ta = env["LUMA_SEED_TEXTANIM"], !editor.isEmpty {
                 let f = ta.split(separator: "|").map(String.init)
@@ -1068,6 +1098,7 @@ private struct EditorContent: View {
     let onAddOverlay: () -> Void
     let onAddSticker: () -> Void
     let onOpenMask: () -> Void
+    let onCaptions: () -> Void
     let onAddMusic: () -> Void
     let onExport: () -> Void
     let onOpenAudio: () -> Void
@@ -1426,6 +1457,10 @@ private struct EditorContent: View {
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
                             .frame(width: 58)
+                        FlatTool(title: "Captions", icon: "captions.bubble", action: onCaptions)
+                            .frame(width: 62)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: "Spot", icon: "circle.dashed.inset.filled", action: onOpenMask)
                             .frame(width: 58)
                             .opacity(editor.isEmpty ? 0.35 : 1)
