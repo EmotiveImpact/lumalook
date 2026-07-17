@@ -389,6 +389,20 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F5: an animated GIF as an overlay — must advance with time.
+            if let g = env["LUMA_SEED_GIF"], !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                await editor.addOverlay(from: URL(fileURLWithPath: g), isImage: true)
+                if let o = editor.overlays.last {
+                    editor.setOverlayCenter(id: o.id, CGPoint(x: 0.5, y: 0.5))
+                    editor.setOverlaySize(id: o.id, 0.5)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                print("[LUMA] GIFIMPORT overlays=\(editor.overlays.count)")
+            }
             // F8: a spot tool on the first clip. Format "shape|effect|amount".
             if let m = env["LUMA_SEED_CLIPMASK"], !editor.isEmpty {
                 let f = m.split(separator: "|").map(String.init)
@@ -969,16 +983,19 @@ struct EditorTimelineView: View {
                                                         videoComposition: built.videoComposition,
                                                         audioMix: built.audioMix,
                                                         spec: spec)
+                    // F5: transcode BEFORE the Photos hand-off. The GIF is a
+                    // local artefact and must not depend on the photo-library
+                    // permission — if the user denies it (or the prompt is
+                    // never answered), they should still get their GIF.
+                    // The finished mov already has the grade, overlays and
+                    // frame burnt in, so no composition is needed.
+                    app.lastExportGIFURL = (spec.alsoGIF && !spec.audioOnly)
+                        ? await GIFExporter.makeGIF(from: url)
+                        : nil
                     app.lastExportSavedToPhotos = await app.exporter.saveToPhotos(url: url)
                 }
                 // F5: transcode the FINISHED mov — everything (grade, overlays,
                 // frame) is already burnt in, so the GIF needs no composition.
-                if spec.alsoGIF, !spec.audioOnly {
-                    app.lastExportGIFURL = await GIFExporter.makeGIF(from: url)
-                    print("[LUMA] GIF url=\(app.lastExportGIFURL?.lastPathComponent ?? "nil")")
-                } else {
-                    app.lastExportGIFURL = nil
-                }
                 app.lastExportURL = url
                 isExporting = false
                 LumaHaptics.shared.exportSuccess()
