@@ -344,6 +344,22 @@ final class EditorState: ObservableObject {
         var textBoxHex: String? = nil
         /// F2 — "left" | "center" | "right".
         var textAlignment: String = "center"
+        /// F4 — vector shape layer (ShapeKind rawValue). nil = not a shape.
+        var shapeKind: String? = nil
+        var shapeFillHex: String? = "#FFFFFF"
+        var shapeStrokeHex: String? = nil
+        var shapeStrokeWidth: Double = 0
+        var shapeRotation: Double = 0
+
+        /// The shape payload, or nil when this layer isn't a shape.
+        var shapeSpec: ShapeSpec? {
+            guard let kind = shapeKind.flatMap({ ShapeKind(rawValue: $0) }) else { return nil }
+            return ShapeSpec(kind: kind,
+                             fillHex: shapeFillHex,
+                             strokeHex: shapeStrokeHex,
+                             strokeWidth: CGFloat(shapeStrokeWidth),
+                             rotationDegrees: shapeRotation)
+        }
 
         /// The rasteriser payload for this layer.
         ///
@@ -637,7 +653,12 @@ final class EditorState: ObservableObject {
                               textStrokeHex: $0.textStrokeHex,
                               textStrokeWidth: $0.textStrokeWidth == 0 ? nil : $0.textStrokeWidth,
                               textBoxHex: $0.textBoxHex,
-                              textAlignment: $0.textAlignment == "center" ? nil : $0.textAlignment)
+                              textAlignment: $0.textAlignment == "center" ? nil : $0.textAlignment,
+                              shapeKind: $0.shapeKind,
+                              shapeFillHex: $0.shapeFillHex,
+                              shapeStrokeHex: $0.shapeStrokeHex,
+                              shapeStrokeWidth: $0.shapeStrokeWidth == 0 ? nil : $0.shapeStrokeWidth,
+                              shapeRotation: $0.shapeRotation == 0 ? nil : $0.shapeRotation)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -718,7 +739,10 @@ final class EditorState: ObservableObject {
         overlays = (project.overlays ?? []).compactMap { stored in
             let url = store.clipsFolder.appendingPathComponent(stored.fileName)
             // Text layers carry no media file; everything else must exist.
-            guard stored.text != nil || FileManager.default.fileExists(atPath: url.path) else { return nil }
+            // Synthetic layers (text F2, shapes F4) have no media on disk —
+            // only file-backed overlays are dropped when their media is gone.
+            guard stored.text != nil || stored.shapeKind != nil
+                    || FileManager.default.fileExists(atPath: url.path) else { return nil }
             var item = OverlayItem(id: stored.id, url: url, isImage: stored.isImage,
                                    timelineOffset: stored.timelineOffset, duration: stored.duration,
                                    mediaStart: stored.mediaStart ?? 0,
@@ -739,6 +763,11 @@ final class EditorState: ObservableObject {
             item.textStrokeWidth = stored.textStrokeWidth ?? 0
             item.textBoxHex = stored.textBoxHex
             item.textAlignment = stored.textAlignment ?? "center"
+            item.shapeKind = stored.shapeKind
+            item.shapeFillHex = stored.shapeFillHex
+            item.shapeStrokeHex = stored.shapeStrokeHex
+            item.shapeStrokeWidth = stored.shapeStrokeWidth ?? 0
+            item.shapeRotation = stored.shapeRotation ?? 0
             item.lane = stored.lane ?? 0
             item.effects = stored.effects ?? OverlayEffects()
             item.kind = stored.kind
@@ -1830,6 +1859,49 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F4 — adds a vector shape layer at the playhead. Shapes ride the same
+    /// synthetic path as text: rendered live by the compositor (so fill and
+    /// stroke stay editable), ungraded, on the first free lane.
+    @discardableResult
+    func addShapeOverlay(kind: ShapeKind) -> UUID? {
+        guard totalDuration > 0.4 else { return nil }
+        let offset = min(max(0, currentTime), max(0, totalDuration - 0.4))
+        guard offset < totalDuration - 0.2 else { return nil }
+        let duration = min(Self.photoDefaultDuration, totalDuration - offset)
+        guard duration > 0.2 else { return nil }
+        let lane = firstFreeLane(at: offset, duration: duration)
+
+        pushUndoSnapshot()
+        var item = OverlayItem(id: UUID(), url: URL(fileURLWithPath: "/dev/null"),
+                               isImage: true, timelineOffset: offset,
+                               duration: duration, title: kind.label)
+        item.shapeKind = kind.rawValue
+        item.center = CGPoint(x: 0.5, y: 0.5)
+        item.sizeFraction = 0.35
+        item.lane = lane
+        item.kind = "shape"
+        overlays.append(item)
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return item.id
+    }
+
+    /// F4 — shape fill / stroke / rotation edits.
+    func setShapeDecor(id: UUID,
+                       fillHex: String?? = nil,
+                       strokeHex: String?? = nil,
+                       strokeWidth: Double? = nil,
+                       rotation: Double? = nil) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].shapeKind != nil else { return }
+        pushUndoSnapshot()
+        if let fillHex { overlays[i].shapeFillHex = fillHex }
+        if let strokeHex { overlays[i].shapeStrokeHex = strokeHex }
+        if let strokeWidth { overlays[i].shapeStrokeWidth = strokeWidth }
+        if let rotation { overlays[i].shapeRotation = rotation }
+        rebuild()
+    }
+
     /// F2 — text decoration: font / stroke / box / alignment. One setter so
     /// the panel's five controls share a single undo entry shape; every field
     /// is optional, nil meaning "leave it alone".
@@ -2710,6 +2782,16 @@ final class EditorState: ObservableObject {
             }
             guard playable > 0.05 else { continue }
 
+            if let shape = overlay.shapeSpec {
+                overlaySpecs.append(OverlaySpec(id: overlay.id,
+                                                trackID: kCMPersistentTrackID_Invalid,
+                                                imageURL: nil,
+                                                transform: .identity,
+                                                start: start, end: start + playable,
+                                                shape: shape,
+                                                lane: overlay.lane))
+                continue
+            }
             if let text = overlay.text {
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: kCMPersistentTrackID_Invalid,

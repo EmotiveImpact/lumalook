@@ -379,6 +379,22 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F4: a shape at centre. Format "kind|fillHex".
+            if let sh = env["LUMA_SEED_SHAPE"], !editor.isEmpty {
+                let f = sh.split(separator: "|").map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                if let kind = ShapeKind(rawValue: f[0]), let id = editor.addShapeOverlay(kind: kind) {
+                    if f.count > 1 { editor.setShapeDecor(id: id, fillHex: .some(f[1])) }
+                    editor.setOverlayCenter(id: id, CGPoint(x: 0.5, y: 0.5))
+                    editor.setOverlaySize(id: id, 0.5)
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let o = editor.overlays.last
+                print("[LUMA] SHAPE kind=\(o?.shapeKind ?? "nil") fill=\(o?.shapeFillHex ?? "nil") kindTag=\(o?.kind ?? "nil")")
+            }
             // F2: a stroked/boxed title, centred, for pixel sampling.
             // Format: "TEXT|strokeHex|strokeWidth|boxHex|align"
             if let t = env["LUMA_SEED_TEXTDECOR"], !editor.isEmpty {
@@ -1208,6 +1224,30 @@ private struct EditorContent: View {
                         .opacity(editor.isEmpty ? 0.35 : 1)
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Sticker", icon: "face.smiling", action: onAddSticker)
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
+                        Menu {
+                            ForEach(ShapeKind.allCases, id: \.self) { kind in
+                                Button {
+                                    if let id = editor.addShapeOverlay(kind: kind) {
+                                        selectedOverlayID = id
+                                        withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = true }
+                                    }
+                                } label: { Label(kind.label, systemImage: kind.icon) }
+                            }
+                        } label: {
+                            // Mirrors FlatTool's grammar; a Menu can't wrap it
+                            // (FlatTool owns its own Button).
+                            VStack(spacing: 8) {
+                                Image(systemName: "square.on.circle")
+                                    .font(.system(size: 19, weight: .medium))
+                                Text("Shape").font(.system(size: 13))
+                            }
+                            .foregroundStyle(LumaTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
                         .frame(width: 58)
                         .opacity(editor.isEmpty ? 0.35 : 1)
                         .disabled(editor.isEmpty)

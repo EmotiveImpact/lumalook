@@ -254,6 +254,8 @@ struct OverlaySpec {
     var text: String? = nil
     /// F2 — the full rasteriser payload (font/colour/stroke/box/align).
     var textSpec = TextStyleSpec()
+    /// F4 — vector shape layer; nil unless this overlay is a shape.
+    var shape: ShapeSpec? = nil
     /// Stacking lane: higher lanes composite last (on top).
     var lane: Int = 0
 }
@@ -567,10 +569,16 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             let fx = instruction.overlayEffects.effects(for: spec.id) ?? OverlayEffects()
 
             var overlayImage: CIImage?
-            var isText = false
+            // Synthetic layers (text + shapes) hold their exact authored
+            // colour: no grade, no chroma/mask/border passes.
+            var isVector = false
             if let text = spec.text {
                 overlayImage = TextRasterizer.image(text, style: spec.textSpec)
-                isText = true
+                isVector = true
+            } else if let shape = spec.shape {
+                // Square authoring canvas; sizeFraction normalises width below.
+                overlayImage = ShapeRenderer.image(shape, size: CGSize(width: 512, height: 512))
+                isVector = true
             } else if let imageURL = spec.imageURL {
                 overlayImage = stillImage(at: imageURL)
             } else if spec.trackID != kCMPersistentTrackID_Invalid,
@@ -591,14 +599,14 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
             // F4 chroma key: operate on the RAW frame before grading — grading
             // shifts the green and would break the key. Text never keys.
-            if !isText, let chroma = fx.chroma {
+            if !isVector, let chroma = fx.chroma {
                 overlay = ChromaKeyFilter.apply(to: overlay, settings: chroma)
                     .cropped(to: overlay.extent)
             }
 
             // Same look on the PIP as the base — one grade across the frame.
-            // Text stays ungraded: titles must hold their exact colour.
-            if !isText {
+            // Text/shapes stay ungraded: they must hold their exact colour.
+            if !isVector {
                 overlay = pipeline.apply(state: activeState,
                                          to: overlay,
                                          includeSplit: false)
@@ -606,7 +614,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             }
 
             // F6 per-overlay tone adjustment, layered on top of the grade.
-            if !isText, let adjust = fx.adjust, !adjust.isIdentity {
+            if !isVector, let adjust = fx.adjust, !adjust.isIdentity {
                 overlay = pipeline.applyOverlayAdjustments(adjust, to: overlay)
             }
 
@@ -618,7 +626,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
             // F5 mask: generated for the SCALED extent so feather widths are in
             // render pixels. Applied before rotation so the alpha rotates with it.
-            if !isText, let maskSettings = fx.mask {
+            if !isVector, let maskSettings = fx.mask {
                 let m = OverlayMaskRenderer.mask(maskSettings, extent: overlay.extent)
                 overlay = overlay.applyingFilter("CIBlendWithAlphaMask", parameters: [
                     kCIInputBackgroundImageKey: CIImage.empty(),
@@ -628,7 +636,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
             // F7 border ring: composited UNDER the overlay so the frame hugs
             // the edge; drawn pre-rotation so it rotates with the overlay.
-            if !isText, let border = fx.border {
+            if !isVector, let border = fx.border {
                 let ring = OverlayMaskRenderer.borderRing(border, extent: overlay.extent)
                 overlay = ring.composited(over: overlay).cropped(to: overlay.extent)
             }
@@ -666,7 +674,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
 
             // Blend-mode composite (F3): Blend(overlay, base) then source-over.
             // Text overlays always use normal so titles hold their colour.
-            if !isText, let filterName = fx.blendMode.ciFilterName {
+            if !isVector, let filterName = fx.blendMode.ciFilterName {
                 let blended = overlay.applyingFilter(
                     filterName, parameters: [kCIInputBackgroundImageKey: graded])
                     .cropped(to: overlay.extent.intersection(renderRect))
