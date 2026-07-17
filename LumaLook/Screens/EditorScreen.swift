@@ -398,6 +398,27 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if let rampRaw = env["LUMA_SEED_RAMP"],
+               let ramp = EditorState.SpeedRamp(rawValue: rampRaw), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+                editor.setSpeedRamp(ramp)
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+            if env["LUMA_SEED_FREEZE"] == "1", !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: editor.totalDuration / 2)
+                await editor.freezeAtPlayhead()
+                for _ in 0..<40 where editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
             if let kbRaw = env["LUMA_SEED_KENBURNS"],
                let preset = EditorState.KenBurnsPreset(rawValue: kbRaw), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
@@ -704,6 +725,11 @@ private struct EditorContent: View {
                     .frame(width: 58)
                     FlatTool(title: "Split", icon: "square.split.2x1") {
                         editor.splitAtPlayhead()
+                    }
+                    .frame(width: 58)
+                    FlatTool(title: "Freeze", icon: "snowflake") {
+                        LumaHaptics.shared.tap()
+                        Task { await editor.freezeAtPlayhead() }
                     }
                     .frame(width: 58)
                     FlatTool(title: "Crop", icon: "crop") {
@@ -1016,6 +1042,21 @@ private struct EditorContent: View {
 
     private var speedMenu: some View {
         Menu {
+            // Speed-ramp presets: variable-speed acceleration curves.
+            Menu("Speed Ramp") {
+                ForEach(EditorState.SpeedRamp.allCases, id: \.self) { ramp in
+                    Button {
+                        editor.setSpeedRamp(ramp)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        if editor.selectedClip?.speedRamp == ramp.rawValue {
+                            Label(ramp.label, systemImage: "checkmark")
+                        } else {
+                            Text(ramp.label)
+                        }
+                    }
+                }
+            }
             // Continuous control: presets across the full 0.1×–4× range.
             // Audio is always pitch-preserved (spectral) so speed changes
             // never chipmunk the sound.

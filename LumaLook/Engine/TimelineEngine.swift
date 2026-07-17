@@ -94,6 +94,35 @@ enum TransitionStyle: String, Codable, CaseIterable {
 @MainActor
 final class EditorState: ObservableObject {
 
+    /// Speed-ramp shapes over the clip's normalised progress. Each returns a
+    /// speed multiplier at t∈[0,1]; the build slices the clip and time-scales
+    /// each slice so playback smoothly accelerates/decelerates.
+    enum SpeedRamp: String, CaseIterable {
+        case none, slowFast, fastSlow, slowFastSlow, fastSlowFast
+
+        var label: String {
+            switch self {
+            case .none: return "None"
+            case .slowFast: return "Slow → Fast"
+            case .fastSlow: return "Fast → Slow"
+            case .slowFastSlow: return "Slow-Fast-Slow"
+            case .fastSlowFast: return "Fast-Slow-Fast"
+            }
+        }
+
+        /// Speed multiplier at normalised progress t (0…1).
+        func speed(at t: Double) -> Double {
+            let slow = 0.4, fast = 2.2
+            switch self {
+            case .none: return 1
+            case .slowFast: return slow + (fast - slow) * t
+            case .fastSlow: return fast + (slow - fast) * t
+            case .slowFastSlow: return slow + (fast - slow) * (1 - abs(2 * t - 1))
+            case .fastSlowFast: return fast + (slow - fast) * (1 - abs(2 * t - 1))
+            }
+        }
+    }
+
     struct Clip: Identifiable {
         var id: UUID
         var url: URL                // var so Replace/Reverse can swap the media
@@ -128,6 +157,8 @@ final class EditorState: ObservableObject {
         /// Ken Burns pan/zoom keyframes (offsets within the clip's run);
         /// empty = static.
         var transformKeyframes: [ClipTransformKeyframe] = []
+        /// Speed ramp preset (rawValue); "none" = constant `speed`.
+        var speedRamp: String = SpeedRamp.none.rawValue
 
         /// Duration this clip occupies on the timeline after trim + speed.
         var timelineDuration: Double { max(0, (trimEnd - trimStart) / speed) }
@@ -365,7 +396,8 @@ final class EditorState: ObservableObject {
                            cropX: $0.cropRect.minX, cropY: $0.cropRect.minY,
                            cropW: $0.cropRect.width, cropH: $0.cropRect.height,
                            straightenDegrees: $0.straightenDegrees,
-                           transformKeyframes: $0.transformKeyframes.isEmpty ? nil : $0.transformKeyframes)
+                           transformKeyframes: $0.transformKeyframes.isEmpty ? nil : $0.transformKeyframes,
+                           speedRamp: $0.speedRamp == SpeedRamp.none.rawValue ? nil : $0.speedRamp)
             },
             format: format.rawValue, zoom: zoom,
             volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, muteAudio: muteAudio,
@@ -434,7 +466,8 @@ final class EditorState: ObservableObject {
                         cropRect: CGRect(x: stored.cropX ?? 0, y: stored.cropY ?? 0,
                                          width: stored.cropW ?? 1, height: stored.cropH ?? 1),
                         straightenDegrees: stored.straightenDegrees ?? 0,
-                        transformKeyframes: stored.transformKeyframes ?? [])
+                        transformKeyframes: stored.transformKeyframes ?? [],
+                        speedRamp: stored.speedRamp ?? SpeedRamp.none.rawValue)
         }
         selectedClipID = clips.last?.id
         let storedAudio = project.audioTracks ?? project.music.map { [$0] } ?? []
@@ -823,6 +856,16 @@ final class EditorState: ObservableObject {
         setSpeed(min(4, max(0.1, speed)))
     }
 
+    /// Sets a speed-ramp preset on the selected clip (rebuilds the timing).
+    func setSpeedRamp(_ ramp: SpeedRamp) {
+        guard let id = selectedClipID,
+              let i = clips.firstIndex(where: { $0.id == id }) else { return }
+        guard clips[i].speedRamp != ramp.rawValue else { return }
+        pushUndoSnapshot()
+        clips[i].speedRamp = ramp.rawValue
+        rebuild()
+    }
+
     /// Applies a free crop (unit rect) + straighten to the selected clip.
     func setCropStraighten(id: UUID, cropRect: CGRect, straightenDegrees: Double) {
         guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
@@ -891,6 +934,72 @@ final class EditorState: ObservableObject {
         rebuild()
         refreshFilmstrip(clipID: first.id)
         refreshFilmstrip(clipID: second.id)
+    }
+
+    /// Default freeze-frame hold duration (seconds).
+    static let freezeDuration = 2.0
+
+    /// Freeze frame: grabs the frame under the playhead as a still, splits the
+    /// clip there, and drops the frozen still (a photo clip) into the gap so
+    /// the action holds before resuming. Uses the existing T7 photo-clip path.
+    func freezeAtPlayhead() async {
+        let starts = clipStartTimes
+        guard let index = clips.firstIndex(where: { clip in
+            guard let start = starts[clip.id] else { return false }
+            return currentTime >= start - 0.01 && currentTime < start + clip.timelineDuration + 0.01
+        }), !clips[index].isImage else { return }
+
+        let clip = clips[index]
+        let localOffset = (currentTime - (starts[clip.id] ?? 0)) * clip.speed
+        let sourceTime = min(max(clip.trimStart, clip.trimStart + localOffset), clip.trimEnd)
+
+        // Render the frame at full source resolution.
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: clip.url))
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        guard let cg = try? await generator.image(
+            at: CMTime(seconds: sourceTime, preferredTimescale: 600)).image else { return }
+
+        let stillURL = store.clipsFolder.appendingPathComponent("freeze_\(UUID().uuidString).jpg")
+        guard Self.writeJPEG(cg, to: stillURL) else { return }
+
+        pushUndoSnapshot()
+        var freeze = Clip(id: UUID(), url: stillURL, assetDuration: Self.photoMaxDuration,
+                          trimStart: 0, trimEnd: Self.freezeDuration, isImage: true)
+        let thumb = Self.imageThumbnail(at: stillURL)
+        freeze.thumbnail = thumb
+        freeze.filmstrip = thumb.map { [$0] } ?? []
+
+        // Split only when both halves survive; otherwise butt the freeze up
+        // against the clip edge.
+        if sourceTime > clip.trimStart + 0.1 && sourceTime < clip.trimEnd - 0.1 {
+            var first = clip
+            first.trimEnd = sourceTime
+            first.transitionAfter = .none
+            var second = clip
+            second.id = UUID()
+            second.trimStart = sourceTime
+            second.thumbnail = nil
+            clips[index] = first
+            clips.insert(freeze, at: index + 1)
+            clips.insert(second, at: index + 2)
+            refreshFilmstrip(clipID: first.id)
+            refreshFilmstrip(clipID: second.id)
+        } else {
+            clips.insert(freeze, at: index + 1)
+        }
+        selectedClipID = freeze.id
+        rebuild()
+    }
+
+    /// Writes a CGImage to `url` as JPEG. Returns false on failure.
+    nonisolated static func writeJPEG(_ image: CGImage, to url: URL, quality: CGFloat = 0.9) -> Bool {
+        guard let dest = CGImageDestinationCreateWithURL(
+            url as CFURL, "public.jpeg" as CFString, 1, nil) else { return false }
+        CGImageDestinationAddImage(dest, image,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        return CGImageDestinationFinalize(dest)
     }
 
     func applyTrim(start: Double, end: Double) {
@@ -1904,7 +2013,27 @@ final class EditorState: ObservableObject {
             }
 
             var insertedDuration = range.duration
-            if clip.speed != 1.0 {
+            let ramp = SpeedRamp(rawValue: clip.speedRamp) ?? SpeedRamp.none
+            if ramp != .none {
+                // Piecewise ramp: slice the inserted range and time-scale each
+                // slice by its curve speed. Scale slices LAST→FIRST so earlier
+                // slices keep their track positions until their turn.
+                let slices = 12
+                let srcDur = clip.trimEnd - clip.trimStart
+                let sliceSrc = srcDur / Double(slices)
+                var total = 0.0
+                for k in stride(from: slices - 1, through: 0, by: -1) {
+                    let s = ramp.speed(at: (Double(k) + 0.5) / Double(slices))
+                    let sliceRange = CMTimeRange(
+                        start: cursor + CMTime(seconds: Double(k) * sliceSrc, preferredTimescale: timescale),
+                        duration: CMTime(seconds: sliceSrc, preferredTimescale: timescale))
+                    let scaled = CMTime(seconds: sliceSrc / s, preferredTimescale: timescale)
+                    videoTrack.scaleTimeRange(sliceRange, toDuration: scaled)
+                    if insertedAudio { audioTrack?.scaleTimeRange(sliceRange, toDuration: scaled) }
+                    total += sliceSrc / s
+                }
+                insertedDuration = CMTime(seconds: total, preferredTimescale: timescale)
+            } else if clip.speed != 1.0 {
                 let scaled = CMTime(seconds: (clip.trimEnd - clip.trimStart) / clip.speed,
                                     preferredTimescale: timescale)
                 let insertedRange = CMTimeRange(start: cursor, duration: range.duration)

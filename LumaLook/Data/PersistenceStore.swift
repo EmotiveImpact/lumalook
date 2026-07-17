@@ -35,6 +35,8 @@ struct StoredClip: Codable, Identifiable {
     var straightenDegrees: Double? = nil
     /// Ken Burns pan/zoom keyframes. Optional-at-end; nil = static.
     var transformKeyframes: [ClipTransformKeyframe]? = nil
+    /// Speed-ramp preset rawValue. Optional-at-end; nil = none.
+    var speedRamp: String? = nil
 }
 
 /// A pinned overlay placement at an offset within the overlay's run (T5).
