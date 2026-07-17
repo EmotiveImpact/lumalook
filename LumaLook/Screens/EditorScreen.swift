@@ -389,6 +389,21 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F7: a particle layer over the whole clip. Format "kind|intensity".
+            if let pt = env["LUMA_SEED_PARTICLES"], !editor.isEmpty {
+                let f = pt.split(separator: "|").map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                if let kind = ParticleKind(rawValue: f[0]),
+                   let id = editor.addParticleLayer(kind: kind, duration: editor.totalDuration) {
+                    if f.count > 1, let v = Double(f[1]) { editor.setParticleIntensity(id: id, v) }
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let l = editor.particleLayers.last
+                print("[LUMA] PARTICLES kind=\(l?.kind ?? "nil") intensity=\(l?.intensity ?? -1)")
+            }
             // F5: an animated GIF as an overlay — must advance with time.
             if let g = env["LUMA_SEED_GIF"], !editor.isEmpty {
                 for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
@@ -1338,6 +1353,26 @@ private struct EditorContent: View {
                             .contentShape(Rectangle())
                         }
                         .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
+                        Menu {
+                            ForEach(ParticleKind.allCases, id: \.self) { kind in
+                                Button {
+                                    editor.addParticleLayer(kind: kind)
+                                    LumaHaptics.shared.tap()
+                                } label: { Label(kind.label, systemImage: kind.icon) }
+                            }
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: "sparkles.rectangle.stack")
+                                    .font(.system(size: 19, weight: .medium))
+                                Text("Particles").font(.system(size: 13))
+                            }
+                            .foregroundStyle(LumaTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .frame(width: 62)
                         .opacity(editor.isEmpty ? 0.35 : 1)
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Looks", icon: "camera.filters", selected: showLooksStrip) {

@@ -297,6 +297,19 @@ struct EffectLayer: Identifiable, Codable, Equatable {
     var timelineEnd: Double { timelineOffset + duration }
 }
 
+/// F7 — a timed particle overlay (dust/rain/snow/sparkle/confetti).
+/// Same span shape as EffectLayer; kept separate so the two libraries stay
+/// independently pickable rather than sharing one muddled "kind" string.
+struct ParticleLayer: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var timelineOffset: Double
+    var duration: Double
+    /// ParticleKind rawValue.
+    var kind: String
+    var intensity: Double = 0.6
+    var timelineEnd: Double { timelineOffset + duration }
+}
+
 struct MockClip: Identifiable, Hashable {
     let id = UUID()
     let title: String

@@ -200,6 +200,14 @@ struct AdjustmentSpan {
     let state: LookState
 }
 
+/// F7 — a timed particle layer over the whole frame.
+struct ParticleSpan {
+    let start: Double
+    let end: Double
+    let kind: ParticleKind
+    let intensity: Double
+}
+
 /// F6 — a timed effect over the whole frame. `localTime` inside the span
 /// drives every animation, so preview and export match frame for frame.
 struct EffectSpan {
@@ -340,6 +348,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let adjustments: [AdjustmentSpan]
     /// F6 full-frame effects active in this segment.
     let effects: [EffectSpan]
+    /// F7 particle layers active in this segment.
+    let particles: [ParticleSpan]
     /// Audio-reactive modulation (pulse/glow/shake), nil = off.
     let audioReactive: AudioReactiveSpec?
     /// Project-level frame/border, composited last. `FramePreset` rawValue.
@@ -360,6 +370,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          transformLayout: ClipTransformLayout? = nil,
          adjustments: [AdjustmentSpan] = [],
          effects: [EffectSpan] = [],
+         particles: [ParticleSpan] = [],
          audioReactive: AudioReactiveSpec? = nil,
          framePreset: String = FramePreset.none.rawValue) {
         self.timeRange = timeRange
@@ -379,6 +390,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.transformLayout = transformLayout
         self.adjustments = adjustments
         self.effects = effects
+        self.particles = particles
         self.audioReactive = audioReactive
         self.framePreset = framePreset
         super.init()
@@ -555,6 +567,17 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                           localTime: seconds - fx.start,
                                           intensity: fx.intensity,
                                           rect: renderRect)
+        }
+
+        // --- F7 particle layers: over the effects (dust floats above a
+        // glitching picture) but still under the overlays. ------------------
+        for p in instruction.particles
+        where seconds >= p.start - 0.001 && seconds < p.end + 0.001 {
+            graded = ParticleRenderer.apply(p.kind,
+                                            to: graded.cropped(to: renderRect),
+                                            localTime: seconds - p.start,
+                                            intensity: p.intensity,
+                                            rect: renderRect)
         }
 
         // --- Audio-reactive modulation (D1): pulse/glow/shake by loudness ----

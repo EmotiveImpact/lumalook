@@ -173,6 +173,8 @@ struct StoredProject: Codable, Identifiable {
     var framePreset: String? = nil
     /// F6 timed full-frame effects. Optional-at-end.
     var effectLayers: [EffectLayer]? = nil
+    /// F7 timed particle layers. Optional-at-end.
+    var particleLayers: [ParticleLayer]? = nil
 }
 
 /// Persisted audio-reactive config.

@@ -464,6 +464,7 @@ final class EditorState: ObservableObject {
         var overlays: [OverlayItem]
         var adjustmentLayers: [AdjustmentLayer]
         var effectLayers: [EffectLayer]
+        var particleLayers: [ParticleLayer]
         var canvasMode: CanvasBackgroundMode
         var canvasSolidHex: String
         var canvasGradientTopHex: String
@@ -478,6 +479,8 @@ final class EditorState: ObservableObject {
     @Published private(set) var overlays: [OverlayItem] = []
     /// F6 — timed full-frame effects (glitch/VHS/light leak/...).
     @Published private(set) var effectLayers: [EffectLayer] = []
+    /// F7 — timed particle layers (dust/rain/snow/sparkle/confetti).
+    @Published private(set) var particleLayers: [ParticleLayer] = []
     /// Full-frame adjustment grades floating over the clips (adjustment layers).
     @Published private(set) var adjustmentLayers: [AdjustmentLayer] = []
     /// Audio-reactive visual config (D1); nil = off.
@@ -708,7 +711,8 @@ final class EditorState: ObservableObject {
                                     sourceTrackID: $0.sourceTrackID)
             },
             framePreset: framePreset == FramePreset.none.rawValue ? nil : framePreset,
-            effectLayers: effectLayers.isEmpty ? nil : effectLayers
+            effectLayers: effectLayers.isEmpty ? nil : effectLayers,
+            particleLayers: particleLayers.isEmpty ? nil : particleLayers
         )
         store.upsert(project: stored)
     }
@@ -721,6 +725,7 @@ final class EditorState: ObservableObject {
         zoom = project.zoom
         adjustmentLayers = project.adjustmentLayers ?? []
         effectLayers = project.effectLayers ?? []
+        particleLayers = project.particleLayers ?? []
         audioReactive = project.audioReactive.flatMap { s in
             AudioReactiveStyle(rawValue: s.style).map {
                 AudioReactiveConfig(style: $0, strength: s.strength, sourceTrackID: s.sourceTrackID)
@@ -1933,6 +1938,36 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F7 — drops a particle layer at the playhead.
+    @discardableResult
+    func addParticleLayer(kind: ParticleKind, duration: Double = 3.0) -> UUID? {
+        guard totalDuration > 0.2 else { return nil }
+        let offset = min(max(0, currentTime), max(0, totalDuration - 0.2))
+        let span = min(duration, totalDuration - offset)
+        guard span > 0.1 else { return nil }
+        pushUndoSnapshot()
+        let layer = ParticleLayer(timelineOffset: offset, duration: span, kind: kind.rawValue)
+        particleLayers.append(layer)
+        particleLayers.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return layer.id
+    }
+
+    func setParticleIntensity(id: UUID, _ value: Double) {
+        guard let i = particleLayers.firstIndex(where: { $0.id == id }),
+              particleLayers[i].intensity != value else { return }
+        pushUndoSnapshot()
+        particleLayers[i].intensity = min(max(value, 0), 1)
+        rebuild()
+    }
+
+    func removeParticleLayer(id: UUID) {
+        guard particleLayers.contains(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        particleLayers.removeAll { $0.id == id }
+        rebuild()
+    }
+
     /// F6 — drops an effect layer at the playhead.
     @discardableResult
     func addEffectLayer(kind: EffectKind, duration: Double = 2.0) -> UUID? {
@@ -2493,6 +2528,7 @@ final class EditorState: ObservableObject {
                  audioTracks: audioTracks, overlays: overlays,
                  adjustmentLayers: adjustmentLayers,
                  effectLayers: effectLayers,
+                 particleLayers: particleLayers,
                  canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
                  canvasGradientTopHex: canvasGradientTopHex,
                  canvasGradientBottomHex: canvasGradientBottomHex,
@@ -2525,6 +2561,7 @@ final class EditorState: ObservableObject {
         overlays = snapshot.overlays
         adjustmentLayers = snapshot.adjustmentLayers
         effectLayers = snapshot.effectLayers
+        particleLayers = snapshot.particleLayers
         canvasMode = snapshot.canvasMode
         canvasSolidHex = snapshot.canvasSolidHex
         canvasGradientTopHex = snapshot.canvasGradientTopHex
@@ -3109,6 +3146,15 @@ final class EditorState: ObservableObject {
                                   kind: kind, intensity: layer.intensity)
             }
 
+        let particleSpans = particleLayers
+            .filter { $0.duration > 0.05 && $0.timelineOffset < cursor.seconds }
+            .compactMap { layer -> ParticleSpan? in
+                guard let kind = ParticleKind(rawValue: layer.kind) else { return nil }
+                return ParticleSpan(start: max(0, layer.timelineOffset),
+                                    end: min(layer.timelineEnd, cursor.seconds),
+                                    kind: kind, intensity: layer.intensity)
+            }
+
         // Audio-reactive level envelope (D1): 30 Hz loudness of the source lane.
         var reactiveSpec: AudioReactiveSpec?
         if let cfg = audioReactive,
@@ -3134,6 +3180,7 @@ final class EditorState: ObservableObject {
             overlaySpecs: overlaySpecs,
             adjustmentSpans: adjustmentSpans,
             effectSpans: effectSpans,
+            particleSpans: particleSpans,
             audioReactive: reactiveSpec,
             renderSize: renderSize)
         videoComposition.applySDRColorPolicy()
@@ -3165,6 +3212,7 @@ final class EditorState: ObservableObject {
                                   overlaySpecs: [OverlaySpec],
                                   adjustmentSpans: [AdjustmentSpan] = [],
                                   effectSpans: [EffectSpan] = [],
+                                  particleSpans: [ParticleSpan] = [],
                                   audioReactive: AudioReactiveSpec? = nil,
                                   renderSize: CGSize) -> [LumaCompositionInstruction] {
         let total = totalDuration.seconds
@@ -3243,6 +3291,9 @@ final class EditorState: ObservableObject {
                     mid >= $0.start - 0.001 && mid < $0.end + 0.001
                 },
                 effects: effectSpans.filter {
+                    mid >= $0.start - 0.001 && mid < $0.end + 0.001
+                },
+                particles: particleSpans.filter {
                     mid >= $0.start - 0.001 && mid < $0.end + 0.001
                 },
                 audioReactive: audioReactive,
