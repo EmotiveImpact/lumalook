@@ -921,6 +921,8 @@ private struct EditorContent: View {
     private var speedMenu: some View {
         Menu {
             // Continuous control: presets across the full 0.1×–4× range.
+            // Audio is always pitch-preserved (spectral) so speed changes
+            // never chipmunk the sound.
             ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], id: \.self) { speed in
                 Button {
                     editor.setClipSpeed(speed)

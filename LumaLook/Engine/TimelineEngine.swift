@@ -2051,6 +2051,10 @@ final class EditorState: ObservableObject {
 
         if let clipTrack, !clipTrack.segments.isEmpty {
             let parameters = AVMutableAudioMixInputParameters(track: clipTrack)
+            // Pitch-preserve on speed change (no chipmunk): high-quality
+            // spectral time-stretch, set explicitly so it never depends on the
+            // export session's default.
+            parameters.audioTimePitchAlgorithm = .spectral
             let base = Float(muteAudio ? 0 : volume / 100.0)
             parameters.setVolume(base, at: .zero)
             // Per-clip volume/mute: stepped volumes at each clip's start on
