@@ -620,7 +620,8 @@ enum PackInstaller {
                 guard let bundled = Bundle.main.url(
                     forResource: (cubeFile as NSString).deletingPathExtension,
                     withExtension: "cube") else { continue }
-                if (try? repository.importLUT(from: bundled, displayName: look.name)) != nil {
+                if (try? repository.importLUT(from: bundled, displayName: look.name,
+                                              packID: pack.id)) != nil {
                     installed += 1
                 }
                 continue
@@ -629,7 +630,7 @@ enum PackInstaller {
             let url = tmp.appendingPathComponent("\(look.name).cube")
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
-                _ = try repository.importLUT(from: url)
+                _ = try repository.importLUT(from: url, displayName: look.name, packID: pack.id)
                 try? FileManager.default.removeItem(at: url)
                 installed += 1
             } catch {

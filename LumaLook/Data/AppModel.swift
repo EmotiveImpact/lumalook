@@ -3,6 +3,7 @@ import AVFoundation
 import Photos
 import PhotosUI
 import CoreImage
+import Combine
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -247,6 +248,11 @@ final class AppModel: ObservableObject {
     /// Player for the selected clip with the look applied in real time.
     @Published private(set) var player: AVPlayer?
 
+    /// Re-publish `app` when a nested store mutates, so `libraryLooks` (which
+    /// reads lutRepository/store/packStore) stays live in every pick surface —
+    /// installing a pack or importing a LUT now refreshes strips immediately.
+    private var storeCancellables = Set<AnyCancellable>()
+
     init() {
         // Without an explicit .playback category, iOS mutes ALL app audio
         // whenever the ring/silent switch is on silent — the classic
@@ -255,6 +261,14 @@ final class AppModel: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(true)
         syncLookState()
         applyDebugRoute()
+
+        for publisher in [lutRepository.objectWillChange,
+                          store.objectWillChange,
+                          packStore.objectWillChange] {
+            publisher
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &storeCancellables)
+        }
     }
 
     /// Debug-only: launch straight into a screen for UI verification,

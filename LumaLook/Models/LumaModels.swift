@@ -330,6 +330,11 @@ struct LUTFile: Identifiable, Codable, Hashable {
     /// switching subtle↔strong LUTs doesn't re-blow the level. Optional →
     /// synthesized Codable decodes old indexes unchanged.
     var defaultOpacity: Double? = nil
+    /// Source pack id when this LUT was installed from the Store (nil = a user
+    /// import). Splits the flat LUT list into Installed vs Imported and
+    /// preserves the purchased-pack identity. Optional-at-end → old
+    /// luts_index.json decodes unchanged (nil).
+    var packID: String? = nil
     var defaultBlend: String? = nil
 
     /// The #1 user mistake in the LUT ecosystem is applying a Log-input LUT

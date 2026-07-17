@@ -478,6 +478,27 @@ struct EditorTimelineView: View {
                 let l = editor.particleLayers.last
                 print("[LUMA] PARTICLES kind=\(l?.kind ?? "nil") intensity=\(l?.intensity ?? -1)")
             }
+            // B2: install a pack, apply its first installed look to clip 0,
+            // report the unified library. Proves installed looks reach the
+            // editor AND grade the clip (lutID → makeLookState → compositor).
+            if env["LUMA_SEED_LIBLOOK"] != nil, !editor.isEmpty {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if let pack = PackCatalog.packs.first {
+                    let n = PackInstaller.install(pack, into: app.lutRepository)
+                    app.packStore.markInstalled(pack)
+                    let lib = app.libraryLooks
+                    let installed = lib.filter { $0.section == .installed }
+                    print("[LUMA] LIBLOOK installedCount=\(n) libraryTotal=\(lib.count) installedInLib=\(installed.count) sections=\(app.libraryLooksBySection.map { "\($0.section):\($0.looks.count)" })")
+                    if let first = installed.first, let clip = editor.clips.first {
+                        editor.setClipGrade(id: clip.id, first.clipGrade())
+                        print("[LUMA] LIBLOOK applied='\(first.name)' lutID=\(first.clipGrade().lutID?.uuidString.prefix(8) ?? "nil")")
+                    }
+                    for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                    if env["LUMA_SEED_LIBLOOK"] == "strip" { showLooksStrip = true }
+                }
+            }
             // F5: an animated GIF as an overlay — must advance with time.
             if let g = env["LUMA_SEED_GIF"], !editor.isEmpty {
                 for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
@@ -1104,6 +1125,7 @@ struct EditorTimelineView: View {
 
 private struct EditorContent: View {
     @ObservedObject var editor: EditorState
+    @EnvironmentObject private var app: AppModel
     let isLoadingClip: Bool
     @Binding var showTrimPanel: Bool
     @Binding var trimStart: Double
@@ -2280,9 +2302,18 @@ private struct EditorContent: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    ForEach(MockData.looks) { look in
-                        LookStripCell(look: look, editor: editor,
-                                      targetClipID: looksTargetClipID)
+                    // The WHOLE library — Saved / Signature / Installed packs /
+                    // Imported LUTs — with a divider before each section so the
+                    // installed + imported looks are findable here, where you
+                    // actually apply them.
+                    ForEach(app.libraryLooksBySection, id: \.section) { group in
+                        if group.section != .saved {
+                            LookSectionDivider(title: group.section.title)
+                        }
+                        ForEach(group.looks) { look in
+                            LookStripCell(look: look, editor: editor,
+                                          targetClipID: looksTargetClipID)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -2702,35 +2733,84 @@ private struct OverlayPanel: View {
 
 // MARK: - Cells
 
+/// A slim labelled divider between library sections in the horizontal strip.
+private struct LookSectionDivider: View {
+    let title: String
+    var body: some View {
+        VStack(spacing: 6) {
+            Rectangle().fill(LumaTheme.hairline).frame(width: 1, height: 44)
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(LumaTheme.textMuted)
+                .fixedSize()
+                .frame(width: 56)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
 private struct LookStripCell: View {
-    let look: LookPreset
+    let look: LibraryLook
     @ObservedObject var editor: EditorState
     /// nil grades the whole timeline; set, it grades just that clip.
     var targetClipID: UUID? = nil
     @EnvironmentObject private var app: AppModel
 
+    /// Thumbnail cast: built-in presets carry a tint; a saved look borrows its
+    /// base preset's; LUTs render neutral with a badge.
+    private var tint: Color? {
+        switch look.source {
+        case .builtIn(let p): return p.gradeTint
+        case .saved(let s):   return MockData.looks.first { $0.name == s.baseLookName }?.gradeTint
+        case .lut:            return nil
+        }
+    }
+
     private var isSelected: Bool {
         if let id = targetClipID {
-            return editor.clips.first { $0.id == id }?.grade?.baseLookName == look.name
+            guard let g = editor.clips.first(where: { $0.id == id })?.grade else { return false }
+            switch look.source {
+            case .builtIn(let p): return g.lutID == nil && g.baseLookName == p.name
+            case .lut(let f):     return g.lutID == f.id
+            case .saved(let s):   return g.baseLookName == s.baseLookName && g.lutID == s.lutID
+            }
         }
-        return app.selectedLook.id == look.id && app.selectedLUT == nil
+        switch look.source {
+        case .builtIn(let p): return app.selectedLUT == nil && app.selectedLook.name == p.name
+        case .lut(let f):     return app.selectedLUT?.id == f.id
+        case .saved:          return false
+        }
     }
 
     var body: some View {
         Button {
             if let id = targetClipID {
-                editor.setClipGrade(id: id,
-                                    ClipGrade(baseLookName: look.name, lutID: nil,
-                                              settings: LookSettings()))
+                // One converter for every source — this is what finally sets
+                // `lutID` for installed/imported looks so the clip grades.
+                editor.setClipGrade(id: id, look.clipGrade())
             } else {
-                app.selectedLUT = nil
-                app.selectedLook = look   // lookState updates flow straight into the running preview
+                switch look.source {
+                case .builtIn(let p): app.selectedLUT = nil; app.selectedLook = p
+                case .lut(let f):     app.selectedLUT = f
+                case .saved(let s):   app.applySavedLook(s)
+                }
             }
+            LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 6) {
-                SceneThumb(scene: .forest, grade: look.gradeTint, radius: 12,
-                           selected: isSelected)
+                SceneThumb(scene: .forest, grade: tint, radius: 12, selected: isSelected)
                     .frame(width: 66, height: 56)
+                    .overlay(alignment: .topLeading) {
+                        if case .lut = look.source {
+                            Text("LUT")
+                                .font(.system(size: 8, weight: .heavy))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4).padding(.vertical, 2)
+                                .background(LumaTheme.accent, in: Capsule())
+                                .padding(4)
+                        }
+                    }
                 Text(look.name)
                     .font(.system(size: 11))
                     .foregroundStyle(isSelected ? .white : LumaTheme.textSecondary)

@@ -26,7 +26,7 @@ final class LUTRepository: ObservableObject {
     }
 
     @discardableResult
-    func importLUT(from sourceURL: URL, displayName: String? = nil) throws -> LUTFile {
+    func importLUT(from sourceURL: URL, displayName: String? = nil, packID: String? = nil) throws -> LUTFile {
         try FileManager.default.createDirectory(at: lutFolderURL, withIntermediateDirectories: true)
 
         let needsAccess = sourceURL.startAccessingSecurityScopedResource()
@@ -48,7 +48,8 @@ final class LUTRepository: ObservableObject {
             cubeSize: parsed.size,
             fileSizeBytes: (attrs?[.size] as? NSNumber)?.intValue,
             importedAt: Date(),
-            isFavourite: false
+            isFavourite: false,
+            packID: packID
         )
 
         luts.insert(file, at: 0)

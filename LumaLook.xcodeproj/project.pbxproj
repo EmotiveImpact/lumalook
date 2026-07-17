@@ -61,6 +61,7 @@
 		44256AF26387DA5DB6878E5C /* FS_FP3000.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AF262175592322441A7BEE4 /* FS_FP3000.cube */; };
 		49EC96A150DB992461300428 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21139184E189E20DB4F5FBAA /* AppModel.swift */; };
 		4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */; };
+		4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AAD61FA876823D705F8CF79 /* LookLibrary.swift */; };
 		4DEBB0FD5E3D6006B3759EC7 /* FS_SP1600.cube in Resources */ = {isa = PBXBuildFile; fileRef = 41FBDDA8C50CE4E77289F3ED /* FS_SP1600.cube */; };
 		4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C4D37A2D4D680648CCEA50 /* AudioExtractor.swift */; };
 		4F6D8FC03BE24FB090B7629F /* FS_PX100W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 987D1DDD1C4B7D5CFFE750C9 /* FS_PX100W.cube */; };
@@ -326,6 +327,7 @@
 		87F176B33481AA29E661CF5E /* FS_TZ0.cube */ = {isa = PBXFileReference; path = FS_TZ0.cube; sourceTree = "<group>"; };
 		891A0BF1C013405CA3F546AF /* FS_MS8.cube */ = {isa = PBXFileReference; path = FS_MS8.cube; sourceTree = "<group>"; };
 		89F752262798C945F44F00B2 /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
+		8AAD61FA876823D705F8CF79 /* LookLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookLibrary.swift; sourceTree = "<group>"; };
 		8B0D225A84F898394B902E73 /* FS_FN800.cube */ = {isa = PBXFileReference; path = FS_FN800.cube; sourceTree = "<group>"; };
 		8BE5250A66AE2808502F169B /* MaskRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaskRenderer.swift; sourceTree = "<group>"; };
 		8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */ = {isa = PBXFileReference; path = FS_IN669C.cube; sourceTree = "<group>"; };
@@ -736,6 +738,7 @@
 			isa = PBXGroup;
 			children = (
 				21139184E189E20DB4F5FBAA /* AppModel.swift */,
+				8AAD61FA876823D705F8CF79 /* LookLibrary.swift */,
 				EC61E2463280B4012F21305D /* MockData.swift */,
 				AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */,
 				CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */,
@@ -977,6 +980,7 @@
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
+				4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
