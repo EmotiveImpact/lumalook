@@ -295,6 +295,13 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if let nudgeStr = env["LUMA_SEED_NUDGE"], let n = Int(nudgeStr), !editor.isEmpty {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                editor.stepFrame(n)
+            }
             if let speedStr = env["LUMA_SEED_SPEED"], let speed = Double(speedStr), !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -395,6 +402,8 @@ private struct EditorContent: View {
     let onOpenAdjust: () -> Void
     /// When set, the looks strip grades THIS clip instead of the timeline.
     @State private var looksTargetClipID: UUID?
+    /// Transport readout mode: MM:SS:FF timecode vs plain MM:SS (long-press).
+    @State private var showFrames = true
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -738,14 +747,20 @@ private struct EditorContent: View {
     /// Timecode leading, play controls dead-centre, rebuild spinner trailing.
     private var transport: some View {
         HStack(spacing: 0) {
-            Text("\(timeString(editor.currentTime)) / \(timeString(editor.totalDuration))")
+            Text(readout(editor.currentTime))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(LumaTheme.textSecondary)
                 .monospacedDigit()
                 .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 28) {
+                // Long-press toggles between MM:SS:FF and plain MM:SS.
+                .onLongPressGesture { showFrames.toggle(); LumaHaptics.shared.tap() }
+            HStack(spacing: 18) {
                 Button { editor.seekToBoundary(forward: false) } label: {
-                    Image(systemName: "backward.end.fill").font(.system(size: 17))
+                    Image(systemName: "backward.end.fill").font(.system(size: 15))
+                }
+                // Frame-exact nudge (−1 frame).
+                Button { editor.stepFrame(-1); LumaHaptics.shared.tap() } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold))
                 }
                 Button { editor.togglePlayback() } label: {
                     Image(systemName: editor.isPlaying ? "pause.fill" : "play.fill")
@@ -753,14 +768,18 @@ private struct EditorContent: View {
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: 30)
                 }
+                // Frame-exact nudge (+1 frame).
+                Button { editor.stepFrame(1); LumaHaptics.shared.tap() } label: {
+                    Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold))
+                }
                 Button { editor.seekToBoundary(forward: true) } label: {
-                    Image(systemName: "forward.end.fill").font(.system(size: 17))
+                    Image(systemName: "forward.end.fill").font(.system(size: 15))
                 }
             }
             .foregroundStyle(.white)
             .buttonStyle(.lumaPress)
             .disabled(editor.isEmpty)
-            .sensoryFeedback(.impact(weight: .light), trigger: editor.isPlaying)
+            .sensoryFeedback(.selection, trigger: editor.currentTime)
             HStack {
                 Spacer()
                 if editor.isRebuilding {
@@ -769,6 +788,22 @@ private struct EditorContent: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// Transport readout: `MM:SS:FF / MM:SS:FF` when showFrames, else MM:SS.
+    private func readout(_ current: Double) -> String {
+        showFrames
+            ? "\(timecodeString(current)) / \(timecodeString(editor.totalDuration))"
+            : "\(timeString(current)) / \(timeString(editor.totalDuration))"
+    }
+
+    /// MM:SS:FF at the composition frame rate (30 fps).
+    private func timecodeString(_ seconds: Double) -> String {
+        let total = max(0, seconds)
+        let m = Int(total) / 60
+        let s = Int(total) % 60
+        let f = Int((total - floor(total)) / editor.frameDuration) % 30
+        return String(format: "%02d:%02d:%02d", m, s, f)
     }
 
     private var speedMenu: some View {

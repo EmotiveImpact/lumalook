@@ -1352,6 +1352,19 @@ final class EditorState: ObservableObject {
         currentTime = clamped
     }
 
+    /// Frame duration matching the export video composition (1/30). Used by
+    /// the frame-nudge transport and the MM:SS:FF timecode readout.
+    var frameDuration: Double { 1.0 / 30.0 }
+
+    /// Frame-exact nudge: pauses, steps the current item by ±N frames (no seek
+    /// tolerance games), and re-syncs the published clock.
+    func stepFrame(_ count: Int) {
+        guard let item = player?.currentItem else { return }
+        if isPlaying { togglePlayback() }
+        item.step(byCount: count)
+        currentTime = min(max(0, item.currentTime().seconds), totalDuration)
+    }
+
     func seekToBoundary(forward: Bool) {
         var boundaries: [Double] = [0]
         var cursor = 0.0
