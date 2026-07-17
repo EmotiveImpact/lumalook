@@ -113,9 +113,11 @@ struct LumaSheetStyle {
         undimmedUpThrough: .lumaTiny
     )
 
-    /// Adjustment panel with sliders: small ↔ medium, canvas live while small.
+    /// Adjustment panel with sliders: small ↔ medium ↔ large. Canvas stays
+    /// live at small; rich panels (text with font/animation/stroke rows) need
+    /// `.large` so every control is reachable, and their content scrolls.
     static let panel = LumaSheetStyle(
-        detents: [.lumaSmall, .lumaMedium],
+        detents: [.lumaSmall, .lumaMedium, .large],
         undimmedUpThrough: .lumaSmall
     )
 }

@@ -457,6 +457,11 @@ struct EditorTimelineView: View {
                 for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
                 let o = editor.overlays.last
                 print("[LUMA] TEXTANIM text=\(o?.text ?? "nil") anim=\(o?.textAnimation ?? "nil")")
+                // Open the text panel so its scroll/expand fix is screenshot-verifiable.
+                if env["LUMA_SEED_OPENPANEL"] == "1", let id = editor.overlays.last?.id {
+                    selectedOverlayID = id
+                    showOverlayPanel = true
+                }
             }
             // F7: a particle layer over the whole clip. Format "kind|intensity".
             if let pt = env["LUMA_SEED_PARTICLES"], !editor.isEmpty {
@@ -2482,6 +2487,10 @@ private struct OverlayPanel: View {
     }()
 
     var body: some View {
+        // Scrollable: the text panel's controls (style, colour, animation,
+        // font/align/outline/box, position, size, opacity) exceed any single
+        // detent, so without this the lower half is clipped and unreachable.
+        ScrollView {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: overlay?.isImage == true ? "photo" : "rectangle.on.rectangle")
@@ -2665,6 +2674,8 @@ private struct OverlayPanel: View {
         }
         .padding(16)
         .lumaCard()
+        }
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     private func anchorButton(_ anchor: CGPoint) -> some View {
