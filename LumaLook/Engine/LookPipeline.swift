@@ -92,6 +92,33 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - Main entry point
 
+    /// Per-overlay tone tweak (exposure/contrast/saturation/warmth), layered on
+    /// top of the shared grade. Each value is roughly ±1 in user space.
+    func applyOverlayAdjustments(_ a: OverlayAdjustments, to image: CIImage) -> CIImage {
+        var out = image
+        if a.exposure != 0 {
+            let e = CIFilter.exposureAdjust()
+            e.inputImage = out
+            e.ev = Float(a.exposure)
+            out = e.outputImage ?? out
+        }
+        if a.contrast != 0 || a.saturation != 0 {
+            let c = CIFilter.colorControls()
+            c.inputImage = out
+            c.contrast = Float(1 + a.contrast * 0.5)
+            c.saturation = Float(1 + a.saturation)
+            out = c.outputImage ?? out
+        }
+        if a.warmth != 0 {
+            let t = CIFilter.temperatureAndTint()
+            t.inputImage = out
+            t.neutral = CIVector(x: 6500 - CGFloat(a.warmth) * 1500, y: 0)
+            t.targetNeutral = CIVector(x: 6500, y: 0)
+            out = t.outputImage ?? out
+        }
+        return out.cropped(to: image.extent)
+    }
+
     /// Applies the full look (LUT or built-in recipe + user settings) to a frame,
     /// blending with the original by `settings.intensity`.
     func apply(state: LookState, to image: CIImage, includeSplit: Bool = true) -> CIImage {

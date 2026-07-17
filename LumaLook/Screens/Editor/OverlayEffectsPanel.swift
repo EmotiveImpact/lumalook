@@ -186,7 +186,29 @@ struct OverlayEffectsPanel: View {
         }
     }
     @ViewBuilder private var adjustControls: some View {
-        Text("Adjust — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)
+        let adjust = fx.adjust ?? OverlayAdjustments()
+        VStack(alignment: .leading, spacing: 8) {
+            InlineSlider(title: "Exposure", value: Binding(
+                get: { adjust.exposure * 100 },
+                set: { var a = adjust; a.exposure = $0 / 100; editor.setOverlayAdjustments(id: overlayID, a) }
+            ), range: -100...100) { String(format: "%.1f", $0 / 100) }
+            InlineSlider(title: "Contrast", value: Binding(
+                get: { adjust.contrast * 100 },
+                set: { var a = adjust; a.contrast = $0 / 100; editor.setOverlayAdjustments(id: overlayID, a) }
+            ), range: -100...100) { String(format: "%.1f", $0 / 100) }
+            InlineSlider(title: "Saturation", value: Binding(
+                get: { adjust.saturation * 100 },
+                set: { var a = adjust; a.saturation = $0 / 100; editor.setOverlayAdjustments(id: overlayID, a) }
+            ), range: -100...100) { String(format: "%.1f", $0 / 100) }
+            InlineSlider(title: "Warmth", value: Binding(
+                get: { adjust.warmth * 100 },
+                set: { var a = adjust; a.warmth = $0 / 100; editor.setOverlayAdjustments(id: overlayID, a) }
+            ), range: -100...100) { String(format: "%.1f", $0 / 100) }
+            if !adjust.isIdentity {
+                Button("Reset") { editor.setOverlayAdjustments(id: overlayID, nil) }
+                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.textSecondary)
+            }
+        }
     }
     @ViewBuilder private var borderControls: some View {
         let border = fx.border

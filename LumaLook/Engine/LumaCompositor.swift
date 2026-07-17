@@ -541,6 +541,11 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                     .cropped(to: overlay.extent)
             }
 
+            // F6 per-overlay tone adjustment, layered on top of the grade.
+            if !isText, let adjust = fx.adjust, !adjust.isIdentity {
+                overlay = pipeline.applyOverlayAdjustments(adjust, to: overlay)
+            }
+
             // Scale so the overlay's width is `sizeFraction` of the canvas.
             let fraction = min(max(placement.sizeFraction, 0.05), 1.0)
             let targetWidth = renderSize.width * CGFloat(fraction)
