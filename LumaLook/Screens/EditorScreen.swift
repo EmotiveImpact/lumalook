@@ -539,6 +539,18 @@ struct EditorTimelineView: View {
                     }
                 }
             }
+            // Beat-detector test: prints detected beats + bpm.
+            if let path = env["LUMA_SEED_BEATTEST"], FileManager.default.fileExists(atPath: path) {
+                let a = await BeatDetector.analyze(url: URL(fileURLWithPath: path))
+                let spacings = zip(a.beats.dropFirst(), a.beats).map { $0 - $1 }.sorted()
+                let median = spacings.isEmpty ? 0 : spacings[spacings.count / 2]
+                print("[LUMA] BEATTEST bpm=\(a.bpm) count=\(a.beats.count) medianSpacing=\(median)")
+            }
+            // Loudness test: prints integrated LUFS.
+            if let path = env["LUMA_SEED_LUFSTEST"], FileManager.default.fileExists(atPath: path) {
+                let lufs = await LoudnessAnalyzer.integratedLUFS(url: URL(fileURLWithPath: path))
+                print("[LUMA] LUFSTEST lufs=\(lufs.map { String($0) } ?? "nil")")
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)

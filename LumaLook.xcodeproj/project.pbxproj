@@ -46,6 +46,7 @@
 		3A31749B53F8176168AEA445 /* FS_PL690.cube in Resources */ = {isa = PBXBuildFile; fileRef = 73DAA7F9A11628B31666692E /* FS_PL690.cube */; };
 		3ABFF863D994FAA7A25652AD /* FS_EL100X.cube in Resources */ = {isa = PBXBuildFile; fileRef = 400A15E9F4B13EC5E84CCCEE /* FS_EL100X.cube */; };
 		3B48606084DF05935B94FD79 /* FS_PL665.cube in Resources */ = {isa = PBXBuildFile; fileRef = 15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */; };
+		3E1F818945AB3954E411BB70 /* BeatDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44A412ED9618EA99F079244 /* BeatDetector.swift */; };
 		4035653A6A2ADFF691411433 /* FS_PT400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 03F736AA8559132E21CD652A /* FS_PT400.cube */; };
 		43A18BFFCF9F57D78D79CF71 /* FS_PX680W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */; };
 		43B6BBEA0F03D814152B4832 /* FILM_LUTS_CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */; };
@@ -67,6 +68,7 @@
 		5EF9717C3647997978CD7D63 /* FS_PR100.cube in Resources */ = {isa = PBXBuildFile; fileRef = DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */; };
 		5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */; };
 		614C52B9245B43AD8FDA4143 /* FS_PL664.cube in Resources */ = {isa = PBXBuildFile; fileRef = A43A5E47275D318BFCB0C555 /* FS_PL664.cube */; };
+		63774835EFEEFA197D828A1C /* LoudnessAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */; };
 		63FB5D8E520E9849ECEF1313 /* FS_PX680.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4D02621852558286323E1667 /* FS_PX680.cube */; };
 		6430F8F146CF27F16B0FCB7D /* OverlayEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */; };
 		650993EF4274EEA5FD8721A9 /* ZipReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F752262798C945F44F00B2 /* ZipReader.swift */; };
@@ -243,6 +245,7 @@
 		57D85C68EA6204E1F8006C6F /* PipPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipPresets.swift; sourceTree = "<group>"; };
 		58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */ = {isa = PBXFileReference; path = FS_PT160N.cube; sourceTree = "<group>"; };
 		585AC072642EB31074E401C7 /* LumaLook.storekit */ = {isa = PBXFileReference; path = LumaLook.storekit; sourceTree = "<group>"; };
+		59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoudnessAnalyzer.swift; sourceTree = "<group>"; };
 		5AA55F19B38C01C558951683 /* ExportCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportCompleteView.swift; sourceTree = "<group>"; };
 		5C594D043EBDE22175C914E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
@@ -333,6 +336,7 @@
 		DFEE3525F49D1505EADD9D36 /* FS_PR100.cube */ = {isa = PBXFileReference; path = FS_PR100.cube; sourceTree = "<group>"; };
 		E22A35DFADB72BF4DB87151D /* FS_SP200.cube */ = {isa = PBXFileReference; path = FS_SP200.cube; sourceTree = "<group>"; };
 		E2E440096EDED38FA0B90A53 /* FS_MS1.cube */ = {isa = PBXFileReference; path = FS_MS1.cube; sourceTree = "<group>"; };
+		E44A412ED9618EA99F079244 /* BeatDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatDetector.swift; sourceTree = "<group>"; };
 		EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLiveLookView.swift; sourceTree = "<group>"; };
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */ = {isa = PBXFileReference; path = FS_XP200.cube; sourceTree = "<group>"; };
@@ -610,6 +614,7 @@
 			children = (
 				4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */,
 				F3C4D37A2D4D680648CCEA50 /* AudioExtractor.swift */,
+				E44A412ED9618EA99F079244 /* BeatDetector.swift */,
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
 				64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */,
 				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
@@ -617,6 +622,7 @@
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
+				59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */,
 				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
@@ -838,6 +844,7 @@
 				B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */,
 				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
 				4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */,
+				3E1F818945AB3954E411BB70 /* BeatDetector.swift in Sources */,
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
@@ -859,6 +866,7 @@
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
+				63774835EFEEFA197D828A1C /* LoudnessAnalyzer.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,
 				5689040618691FF213182252 /* LumaCompositor.swift in Sources */,
 				028FC5E5F049628F9B40019A /* LumaDial.swift in Sources */,
