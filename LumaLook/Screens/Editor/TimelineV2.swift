@@ -889,7 +889,7 @@ struct MusicLane: View {
                                      editor.totalDuration - music.timelineOffset))
         let barWidth = max(metrics.x(for: rendered), 28)
         return HStack(spacing: 6) {
-            Image(systemName: music.isMuted ? "speaker.slash.fill" : "music.note")
+            Image(systemName: music.isMuted ? "speaker.slash.fill" : music.kind.icon)
                 .font(.system(size: 11, weight: .bold))
             if barWidth > 90 {
                 Text(music.title)
@@ -910,7 +910,7 @@ struct MusicLane: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 9)
                     .fill(music.isMuted ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                        : AnyShapeStyle(LumaTheme.accentDeep))
+                                        : AnyShapeStyle(music.kind.tint))
                 if !music.waveform.isEmpty {
                     WaveformBars(samples: music.waveform,
                                  windowStart: music.trimStart / max(music.assetDuration, 0.01),

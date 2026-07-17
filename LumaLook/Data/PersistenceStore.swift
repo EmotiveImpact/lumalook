@@ -93,6 +93,8 @@ struct StoredMusic: Codable {
     var timelineOffset: Double
     var volume: Double
     var isMuted: Bool
+    /// Lane kind (music/voice/sfx/extracted). Optional-at-end; nil = music.
+    var kind: String? = nil
 }
 
 struct StoredProject: Codable, Identifiable {

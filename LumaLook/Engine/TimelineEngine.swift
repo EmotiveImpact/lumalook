@@ -47,6 +47,36 @@ enum EditorFormat: String, CaseIterable {
 /// Phase-A transitions: single-source effects rendered in the CI handler
 /// around a cut (no second frame needed). Real cross-dissolves arrive with
 /// the custom compositor (T1).
+/// The role of an audio lane, driving its timeline colour + icon.
+enum AudioLaneKind: String, Codable, CaseIterable {
+    case music, voice, sfx, extracted
+
+    var label: String {
+        switch self {
+        case .music: return "Music"
+        case .voice: return "Voice"
+        case .sfx: return "SFX"
+        case .extracted: return "Detached"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .music: return "music.note"
+        case .voice: return "mic.fill"
+        case .sfx: return "sparkles"
+        case .extracted: return "waveform.badge.plus"
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .music: return LumaTheme.accentDeep
+        case .voice: return LumaTheme.teal
+        case .sfx: return LumaTheme.orange
+        case .extracted: return Color(red: 0.62, green: 0.45, blue: 0.9)
+        }
+    }
+}
+
 enum TransitionStyle: String, Codable, CaseIterable {
     case none
     case dissolve
@@ -227,6 +257,8 @@ final class EditorState: ObservableObject {
         var timelineOffset: Double    // where the music starts on the timeline
         var volume: Double = 100      // 0…100, independent of clip-audio volume
         var isMuted: Bool = false
+        /// Lane kind (music/voice/sfx/extracted) — drives the lane colour+icon.
+        var kind: AudioLaneKind = .music
         /// Whole-file RMS buckets for the lane waveform (regenerated, not persisted).
         var waveform: [Float] = []
 
@@ -464,7 +496,8 @@ final class EditorState: ObservableObject {
                             assetDuration: $0.assetDuration,
                             trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                             timelineOffset: $0.timelineOffset,
-                            volume: $0.volume, isMuted: $0.isMuted)
+                            volume: $0.volume, isMuted: $0.isMuted,
+                            kind: $0.kind == .music ? nil : $0.kind.rawValue)
             },
             overlays: overlays.map {
                 StoredOverlay(id: $0.id, fileName: $0.url.lastPathComponent,
@@ -538,7 +571,8 @@ final class EditorState: ObservableObject {
                               assetDuration: stored.assetDuration,
                               trimStart: stored.trimStart, trimEnd: stored.trimEnd,
                               timelineOffset: stored.timelineOffset,
-                              volume: stored.volume, isMuted: stored.isMuted)
+                              volume: stored.volume, isMuted: stored.isMuted,
+                              kind: stored.kind.flatMap(AudioLaneKind.init) ?? .music)
         }
         overlays = (project.overlays ?? []).compactMap { stored in
             let url = store.clipsFolder.appendingPathComponent(stored.fileName)
@@ -1118,7 +1152,8 @@ final class EditorState: ObservableObject {
     /// Attaches an already-imported audio file as the project's music track.
     /// Adds ANOTHER audio track (music, voiceover, sound) — CapCut-style
     /// stacking. New tracks start at the playhead so layering feels direct.
-    func addAudioTrack(importedURL: URL, title: String, at explicitOffset: Double? = nil) async {
+    func addAudioTrack(importedURL: URL, title: String, at explicitOffset: Double? = nil,
+                       kind: AudioLaneKind = .music) async {
         let asset = AVURLAsset(url: importedURL)
         guard let duration = try? await asset.load(.duration).seconds,
               duration.isFinite, duration > 0.05 else { return }
@@ -1127,9 +1162,18 @@ final class EditorState: ObservableObject {
             ?? (audioTracks.isEmpty ? 0 : min(currentTime, max(0, totalDuration - 0.2)))
         audioTracks.append(MusicTrack(id: UUID(), url: importedURL, title: title,
                                       assetDuration: duration,
-                                      trimStart: 0, trimEnd: duration, timelineOffset: offset))
+                                      trimStart: 0, trimEnd: duration, timelineOffset: offset,
+                                      kind: kind))
         rebuild()
         refreshAllWaveforms()
+    }
+
+    /// Changes an audio lane's kind (colour/icon only — mix-only, no rebuild).
+    func setAudioKind(id: UUID, _ kind: AudioLaneKind) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == id }),
+              audioTracks[i].kind != kind else { return }
+        audioTracks[i].kind = kind
+        scheduleAutosave()
     }
 
     // MARK: - Voiceover (Next-10 #8)
@@ -1184,7 +1228,7 @@ final class EditorState: ObservableObject {
         Task {
             await addAudioTrack(importedURL: url,
                                 title: count == 0 ? "Voiceover" : "Voiceover \(count + 1)",
-                                at: start)
+                                at: start, kind: .voice)
             seek(to: start)
         }
     }

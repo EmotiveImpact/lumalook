@@ -406,6 +406,16 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            // Assign audio-lane kinds in order, e.g. LUMA_SEED_AUDIO_KINDS="voice,sfx".
+            if let kinds = env["LUMA_SEED_AUDIO_KINDS"], !editor.audioTracks.isEmpty {
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                for (i, raw) in kinds.split(separator: ",").enumerated()
+                where i < editor.audioTracks.count {
+                    if let k = AudioLaneKind(rawValue: String(raw)) {
+                        editor.setAudioKind(id: editor.audioTracks[i].id, k)
+                    }
+                }
+            }
             // PIP preset: LUMA_SEED_PIP_PRESET=circleCam applied to the first overlay.
             if let presetID = env["LUMA_SEED_PIP_PRESET"], let ov = editor.overlays.first,
                let preset = PipPreset.all.first(where: { $0.id == presetID }) {
@@ -1292,9 +1302,9 @@ private struct EditorContent: View {
     private func musicPanel(music: EditorState.MusicTrack) -> some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: "music.note")
+                Image(systemName: music.kind.icon)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(LumaTheme.accentBright)
+                    .foregroundStyle(music.kind.tint)
                 Text(music.title)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
@@ -1315,6 +1325,25 @@ private struct EditorContent: View {
                 }
                 .buttonStyle(.lumaPress)
             }
+            // Lane kind picker (colour/icon).
+            HStack(spacing: 8) {
+                ForEach(AudioLaneKind.allCases, id: \.self) { kind in
+                    let on = music.kind == kind
+                    Button {
+                        editor.setAudioKind(id: music.id, kind)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Label(kind.label, systemImage: kind.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(on ? .black : .white)
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(on ? AnyShapeStyle(kind.tint) : AnyShapeStyle(LumaTheme.surface),
+                                        in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             InlineSlider(title: "Volume", value: Binding(
                 get: { editor.audioTracks.first(where: { $0.id == music.id })?.volume ?? 100 },
                 set: { editor.setMusicVolume(id: music.id, $0) }
