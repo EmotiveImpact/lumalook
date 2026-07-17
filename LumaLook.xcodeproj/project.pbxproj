@@ -22,7 +22,9 @@
 		0E17EE8AB98876B6CD3CA10C /* FS_AV200.cube in Resources */ = {isa = PBXBuildFile; fileRef = B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */; };
 		0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A5624E7651D005E2DA05C1 /* CameraChrome.swift */; };
 		123409A8B9084A6F751FEC62 /* FS_PT800H.cube in Resources */ = {isa = PBXBuildFile; fileRef = EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */; };
+		13083AA5046042ADC0C08E57 /* TextRasterizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DF204504D1CEB112C276E84 /* TextRasterizer.swift */; };
 		17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71565855D4F4F92716382C0A /* TimelineV2.swift */; };
+		174C00CAB30D17873FD2F9D2 /* CaptionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667DC03E1DDF23D2D6AB6CA2 /* CaptionEngine.swift */; };
 		183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982FBAAA5098559374D20381 /* LUTManagerView.swift */; };
 		1897C4E6F336473E03F66598 /* AudioEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B9B8AF11ABC3CE95CFA59D /* AudioEffectsPanel.swift */; };
 		18C1DF236A3E5618431BA1DD /* FS_MS14.cube in Resources */ = {isa = PBXBuildFile; fileRef = 45D49D87F063ABE48CAC2CBD /* FS_MS14.cube */; };
@@ -37,6 +39,7 @@
 		260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE2524F01E128404964986C /* hero_golden.jpg */; };
 		27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */ = {isa = PBXBuildFile; fileRef = 222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */; };
 		2BF4BFEE36116C1A8F0B3013 /* FS_EK100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 48B3A573684BF7B15A188E7D /* FS_EK100.cube */; };
+		2FA0ED139432AC2C5276397E /* EffectRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */; };
 		300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */; };
 		30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */; };
 		3027C848F4DB05F3BE35BB8D /* FS_CP2383.cube in Resources */ = {isa = PBXBuildFile; fileRef = 5F1F68DD59817F2629702B2B /* FS_CP2383.cube */; };
@@ -53,6 +56,7 @@
 		4035653A6A2ADFF691411433 /* FS_PT400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 03F736AA8559132E21CD652A /* FS_PT400.cube */; };
 		43A18BFFCF9F57D78D79CF71 /* FS_PX680W.cube in Resources */ = {isa = PBXBuildFile; fileRef = 991EDC27913EBE5DB416BE2B /* FS_PX680W.cube */; };
 		43B6BBEA0F03D814152B4832 /* FILM_LUTS_CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */; };
+		43FD3E3D72D53B440294A48B /* GIFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934F42E8786C51EA29FE4957 /* GIFExporter.swift */; };
 		44256AF26387DA5DB6878E5C /* FS_FP3000.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AF262175592322441A7BEE4 /* FS_FP3000.cube */; };
 		49EC96A150DB992461300428 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21139184E189E20DB4F5FBAA /* AppModel.swift */; };
 		4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */; };
@@ -112,6 +116,7 @@
 		842772D491453C3B86CDCDAB /* PersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */; };
 		84820D410D62E5B492BD031A /* FS_BW400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3A4AF0A6CD3308C85332F017 /* FS_BW400.cube */; };
 		85259369029BD2B8C7645CF7 /* FS_SP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 41753F4EEB74CF332AB8096D /* FS_SP100.cube */; };
+		866451119F8D31BE6F7C0734 /* FrameRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2190914DE90B700ABB549AB6 /* FrameRenderer.swift */; };
 		895EDCA479BE52D0053E8389 /* FS_HP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = B38478EF2EEA2A8135980EED /* FS_HP400.cube */; };
 		89FD0992EDFC25BD86AB9B66 /* FS_CP3513.cube in Resources */ = {isa = PBXBuildFile; fileRef = 8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */; };
 		8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B11A5BDBB38B2DA061BC6B /* LumaModels.swift */; };
@@ -144,6 +149,7 @@
 		C16B1359066E085945BF3413 /* FS_PT800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */; };
 		C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B147754600B3B5803C3E0583 /* ClipBaker.swift */; };
 		C3C80CDA64D4DA86BA105B79 /* whoosh.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4950B9DA4886DBBE75F7C3EA /* whoosh.m4a */; };
+		C5CD14F371ED4259C2147F3E /* MaskRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE5250A66AE2808502F169B /* MaskRenderer.swift */; };
 		C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */ = {isa = PBXBuildFile; fileRef = EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */; };
 		C8C8FA0E35440005949F470D /* swipe.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2806788285790CD5D637B65B /* swipe.m4a */; };
 		CAC199F8B3352305B306C8A5 /* FS_MS3.cube in Resources */ = {isa = PBXBuildFile; fileRef = BD735F7FA0EDAA7D48E675FC /* FS_MS3.cube */; };
@@ -171,15 +177,19 @@
 		DB410DD336810EA3BA24A68D /* FS_SN100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */; };
 		DB574E2EEE8105EB1B743581 /* LumaLookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF2594B84A4430FE08091C1 /* LumaLookApp.swift */; };
 		DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0DEA4AC5F988804E0BFE7243 /* Teal_Orange_17.cube */; };
+		DF455A8B10DE80D6A9E9EBAF /* TemplateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8422267EA494F98D1964261 /* TemplateModels.swift */; };
+		E002D94DBEA587E712C3E682 /* FontLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3147E19399C92E044FD19FA1 /* FontLibrary.swift */; };
 		E08F788FB3FEFC7B757B88D8 /* FS_NP100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */; };
 		E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9688DBD03E8614DC1F6D9E91 /* HomeView.swift */; };
 		E30EB6BE9128883888A3F8BE /* FS_EL200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9F87D838065AE54E0D455078 /* FS_EL200.cube */; };
 		E3A8651B6919B7E16BA13277 /* FS_FP100N.cube in Resources */ = {isa = PBXBuildFile; fileRef = 0D060D290293885AE500BC04 /* FS_FP100N.cube */; };
 		E3D32EFCC5FD15CA910F181B /* FS_KC25.cube in Resources */ = {isa = PBXBuildFile; fileRef = FD72C902555C7738AE0D8BCE /* FS_KC25.cube */; };
+		E5201804C48E20F8255CAED5 /* ShapeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A83E4E19113295305DE7CD8 /* ShapeRenderer.swift */; };
 		E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D131E42DD31D663F90B81B /* EditorScreen.swift */; };
 		E66A752A5BDB9723BCBA72AF /* FS_TM100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 96693A53A846C4E953596A7B /* FS_TM100.cube */; };
 		E7F24CDC9DCE6379B075F31C /* FS_TM3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = CE43932D10683135B309ABE7 /* FS_TM3200.cube */; };
 		EA12744C42B2C5D1F18FF067 /* FS_MS15.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */; };
+		EA898050E6980825658B5299 /* StickerBaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 519912139BCEF7E0ADB3279C /* StickerBaker.swift */; };
 		EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5082DDECC065F7185E2AD705 /* MoreScreens.swift */; };
 		ECED4E0B9CD06827B3E0C4AA /* FS_PL672.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1A04F1F9F823E1A52448E291 /* FS_PL672.cube */; };
 		EE5F14B85BDABDCC7E000EF1 /* FS_DL3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7F298D108110F6DD3E095A95 /* FS_DL3200.cube */; };
@@ -201,6 +211,7 @@
 		05BB58FB882FE612A9E05282 /* ColorMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorMath.swift; sourceTree = "<group>"; };
 		061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */ = {isa = PBXFileReference; path = FS_PT400U.cube; sourceTree = "<group>"; };
 		07F185F22913641FEE760D92 /* LUTRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTRepository.swift; sourceTree = "<group>"; };
+		0A83E4E19113295305DE7CD8 /* ShapeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShapeRenderer.swift; sourceTree = "<group>"; };
 		0AB79D07DD8C1021B30F192D /* FS_PR400.cube */ = {isa = PBXFileReference; path = FS_PR400.cube; sourceTree = "<group>"; };
 		0C79C3A8848E39A21AA47CE4 /* FS_SN100.cube */ = {isa = PBXFileReference; path = FS_SN100.cube; sourceTree = "<group>"; };
 		0D060D290293885AE500BC04 /* FS_FP100N.cube */ = {isa = PBXFileReference; path = FS_FP100N.cube; sourceTree = "<group>"; };
@@ -218,6 +229,7 @@
 		1E4633401F2D5BAE1975D031 /* FILM_LUTS_CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FILM_LUTS_CREDITS.md; sourceTree = "<group>"; };
 		20FB8E4B65E46E4A81EE4C58 /* FS_AP100.cube */ = {isa = PBXFileReference; path = FS_AP100.cube; sourceTree = "<group>"; };
 		21139184E189E20DB4F5FBAA /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		2190914DE90B700ABB549AB6 /* FrameRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameRenderer.swift; sourceTree = "<group>"; };
 		222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */ = {isa = PBXFileReference; path = FS_CP3510.cube; sourceTree = "<group>"; };
 		2259E3CB086EC2E8E52929EB /* FS_IN669.cube */ = {isa = PBXFileReference; path = FS_IN669.cube; sourceTree = "<group>"; };
 		2502776385F3CECA843CFFB0 /* FS_PR400X.cube */ = {isa = PBXFileReference; path = FS_PR400X.cube; sourceTree = "<group>"; };
@@ -231,6 +243,7 @@
 		2D4758690F5507F42704B9E3 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneArt.swift; sourceTree = "<group>"; };
 		2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
+		3147E19399C92E044FD19FA1 /* FontLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontLibrary.swift; sourceTree = "<group>"; };
 		3481632CC4B70ABB890BC517 /* FS_PT160V.cube */ = {isa = PBXFileReference; path = FS_PT160V.cube; sourceTree = "<group>"; };
 		3481F9BB808BEE8D58CED37F /* FS_KC64.cube */ = {isa = PBXFileReference; path = FS_KC64.cube; sourceTree = "<group>"; };
 		35D23AAB06F406BE71A9D491 /* FS_APX25.cube */ = {isa = PBXFileReference; path = FS_APX25.cube; sourceTree = "<group>"; };
@@ -257,6 +270,7 @@
 		4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */ = {isa = PBXFileReference; path = FS_MS15.cube; sourceTree = "<group>"; };
 		5082DDECC065F7185E2AD705 /* MoreScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreScreens.swift; sourceTree = "<group>"; };
 		51847FFB61D4C591A507AF23 /* FS_MS11.cube */ = {isa = PBXFileReference; path = FS_MS11.cube; sourceTree = "<group>"; };
+		519912139BCEF7E0ADB3279C /* StickerBaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerBaker.swift; sourceTree = "<group>"; };
 		53841C670501E1F71C5CA8F5 /* FS_MS10.cube */ = {isa = PBXFileReference; path = FS_MS10.cube; sourceTree = "<group>"; };
 		55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorGradingViews.swift; sourceTree = "<group>"; };
 		55A66FB773AEE510A8E14555 /* FS_SP400.cube */ = {isa = PBXFileReference; path = FS_SP400.cube; sourceTree = "<group>"; };
@@ -275,6 +289,7 @@
 		64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioLibrarySheet.swift; sourceTree = "<group>"; };
 		64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromaKeyFilter.swift; sourceTree = "<group>"; };
 		65114680C08ADE0365D4F133 /* FS_FN400.cube */ = {isa = PBXFileReference; path = FS_FN400.cube; sourceTree = "<group>"; };
+		667DC03E1DDF23D2D6AB6CA2 /* CaptionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionEngine.swift; sourceTree = "<group>"; };
 		6A93AEA55586BC502C0732E2 /* glitch.m4a */ = {isa = PBXFileReference; path = glitch.m4a; sourceTree = "<group>"; };
 		6B846D621E4F274EC907E0EC /* LumaDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaDial.swift; sourceTree = "<group>"; };
 		6B8727A81A0DEF252195C4BD /* FS_RO25.cube */ = {isa = PBXFileReference; path = FS_RO25.cube; sourceTree = "<group>"; };
@@ -291,6 +306,7 @@
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
 		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
+		7DF204504D1CEB112C276E84 /* TextRasterizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRasterizer.swift; sourceTree = "<group>"; };
 		7E1AF5A705895B01F7D17A52 /* FS_FN160.cube */ = {isa = PBXFileReference; path = FS_FN160.cube; sourceTree = "<group>"; };
 		7F298D108110F6DD3E095A95 /* FS_DL3200.cube */ = {isa = PBXFileReference; path = FS_DL3200.cube; sourceTree = "<group>"; };
 		8255C8080BCF23DBAAAF51A0 /* FS_CP3513.cube */ = {isa = PBXFileReference; path = FS_CP3513.cube; sourceTree = "<group>"; };
@@ -303,8 +319,10 @@
 		891A0BF1C013405CA3F546AF /* FS_MS8.cube */ = {isa = PBXFileReference; path = FS_MS8.cube; sourceTree = "<group>"; };
 		89F752262798C945F44F00B2 /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
 		8B0D225A84F898394B902E73 /* FS_FN800.cube */ = {isa = PBXFileReference; path = FS_FN800.cube; sourceTree = "<group>"; };
+		8BE5250A66AE2808502F169B /* MaskRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaskRenderer.swift; sourceTree = "<group>"; };
 		8C4CFEF89208D4FBC7D264F3 /* FS_IN669C.cube */ = {isa = PBXFileReference; path = FS_IN669C.cube; sourceTree = "<group>"; };
 		92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaHaptics.swift; sourceTree = "<group>"; };
+		934F42E8786C51EA29FE4957 /* GIFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFExporter.swift; sourceTree = "<group>"; };
 		944D03FD177DCA04583DC882 /* FS_IR840.cube */ = {isa = PBXFileReference; path = FS_IR840.cube; sourceTree = "<group>"; };
 		94E131FFACC1D76FA27CDC79 /* FS_MS2.cube */ = {isa = PBXFileReference; path = FS_MS2.cube; sourceTree = "<group>"; };
 		96693A53A846C4E953596A7B /* FS_TM100.cube */ = {isa = PBXFileReference; path = FS_TM100.cube; sourceTree = "<group>"; };
@@ -348,6 +366,7 @@
 		C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */ = {isa = PBXFileReference; path = FS_RR80.cube; sourceTree = "<group>"; };
 		C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipView.swift; sourceTree = "<group>"; };
 		C6D8B84208BCDA1900855A3E /* FS_MS7.cube */ = {isa = PBXFileReference; path = FS_MS7.cube; sourceTree = "<group>"; };
+		C8422267EA494F98D1964261 /* TemplateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateModels.swift; sourceTree = "<group>"; };
 		CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_neon.jpg; sourceTree = "<group>"; };
 		CBD94C74B308262B83000612 /* FS_TZ0C.cube */ = {isa = PBXFileReference; path = FS_TZ0C.cube; sourceTree = "<group>"; };
 		CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
@@ -370,6 +389,7 @@
 		EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */ = {isa = PBXFileReference; path = FS_XP200.cube; sourceTree = "<group>"; };
 		EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */ = {isa = PBXFileReference; path = FS_PT800H.cube; sourceTree = "<group>"; };
 		EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */ = {isa = PBXFileReference; path = FS_SX200.cube; sourceTree = "<group>"; };
+		F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectRenderer.swift; sourceTree = "<group>"; };
 		F2F63CA8389113D35C675EEE /* FS_PL667.cube */ = {isa = PBXFileReference; path = FS_PL667.cube; sourceTree = "<group>"; };
 		F3C4D37A2D4D680648CCEA50 /* AudioExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioExtractor.swift; sourceTree = "<group>"; };
 		F58E6ECD1EA58596156C36BD /* FS_RS100.cube */ = {isa = PBXFileReference; path = FS_RS100.cube; sourceTree = "<group>"; };
@@ -666,9 +686,14 @@
 				E44A412ED9618EA99F079244 /* BeatDetector.swift */,
 				780BEB7818D41814F6F0703F /* BundledAudioLibrary.swift */,
 				C01A0C1280A23592103B3574 /* CameraController.swift */,
+				667DC03E1DDF23D2D6AB6CA2 /* CaptionEngine.swift */,
 				64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */,
 				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
 				05BB58FB882FE612A9E05282 /* ColorMath.swift */,
+				F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */,
+				3147E19399C92E044FD19FA1 /* FontLibrary.swift */,
+				2190914DE90B700ABB549AB6 /* FrameRenderer.swift */,
+				934F42E8786C51EA29FE4957 /* GIFExporter.swift */,
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
@@ -676,10 +701,14 @@
 				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
+				8BE5250A66AE2808502F169B /* MaskRenderer.swift */,
 				27BDCC75439CF538EEC13FFC /* OverlayEffects.swift */,
 				0D865130564F1DCF5BD588FA /* OverlayMaskRenderer.swift */,
 				F8699231347E8D7AACDACC31 /* Scopes.swift */,
+				0A83E4E19113295305DE7CD8 /* ShapeRenderer.swift */,
 				73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */,
+				519912139BCEF7E0ADB3279C /* StickerBaker.swift */,
+				7DF204504D1CEB112C276E84 /* TextRasterizer.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
 				7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */,
 				2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */,
@@ -695,6 +724,7 @@
 				EC61E2463280B4012F21305D /* MockData.swift */,
 				AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */,
 				CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */,
+				C8422267EA494F98D1964261 /* TemplateModels.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -912,6 +942,7 @@
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,
+				174C00CAB30D17873FD2F9D2 /* CaptionEngine.swift in Sources */,
 				9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */,
 				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
@@ -919,8 +950,12 @@
 				30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */,
 				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
 				E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */,
+				2FA0ED139432AC2C5276397E /* EffectRenderer.swift in Sources */,
 				6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */,
 				A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */,
+				E002D94DBEA587E712C3E682 /* FontLibrary.swift in Sources */,
+				866451119F8D31BE6F7C0734 /* FrameRenderer.swift in Sources */,
+				43FD3E3D72D53B440294A48B /* GIFExporter.swift in Sources */,
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
@@ -939,6 +974,7 @@
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,
 				300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */,
 				AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */,
+				C5CD14F371ED4259C2147F3E /* MaskRenderer.swift in Sources */,
 				22149D2B572771131F02C893 /* MockData.swift in Sources */,
 				EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */,
 				6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */,
@@ -951,8 +987,12 @@
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				7191972FF427F33077859C6F /* Scopes.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,
+				E5201804C48E20F8255CAED5 /* ShapeRenderer.swift in Sources */,
 				0360C6C2F8A6E390528707AF /* SkinFirstPresets.swift in Sources */,
+				EA898050E6980825658B5299 /* StickerBaker.swift in Sources */,
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
+				DF455A8B10DE80D6A9E9EBAF /* TemplateModels.swift in Sources */,
+				13083AA5046042ADC0C08E57 /* TextRasterizer.swift in Sources */,
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
 				17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */,
 				F6C06F6AF59BF061204EA0A0 /* TransitionRenderer.swift in Sources */,

@@ -374,6 +374,16 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F9: project frame preset (rawValue), e.g. thinWhite / letterbox.
+            if let fp = env["LUMA_SEED_FRAME"], !editor.isEmpty,
+               let preset = FramePreset(rawValue: fp) {
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.setFramePreset(preset)
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                print("[LUMA] FRAME preset=\(editor.framePreset)")
+            }
             if let s2 = env["LUMA_SEED_STACK2"], !editor.isEmpty {
                 let paths = s2.split(separator: ",").map(String.init)
                 if paths.count >= 2 {

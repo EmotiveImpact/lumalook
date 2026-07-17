@@ -326,6 +326,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let adjustments: [AdjustmentSpan]
     /// Audio-reactive modulation (pulse/glow/shake), nil = off.
     let audioReactive: AudioReactiveSpec?
+    /// Project-level frame/border, composited last. `FramePreset` rawValue.
+    let framePreset: String
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -341,7 +343,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          canvas: CanvasSpec = .fill,
          transformLayout: ClipTransformLayout? = nil,
          adjustments: [AdjustmentSpan] = [],
-         audioReactive: AudioReactiveSpec? = nil) {
+         audioReactive: AudioReactiveSpec? = nil,
+         framePreset: String = FramePreset.none.rawValue) {
         self.timeRange = timeRange
         // An empty ID list means "call the compositor with no source frames"
         // (photo-clip segments) — exactly what T7 needs.
@@ -359,6 +362,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.transformLayout = transformLayout
         self.adjustments = adjustments
         self.audioReactive = audioReactive
+        self.framePreset = framePreset
         super.init()
     }
 }
@@ -723,6 +727,12 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 let veil = CIImage(color: veilColor).cropped(to: renderRect)
                 graded = veil.composited(over: graded)
             }
+        }
+
+        // --- Frame / border ------------------------------------------------
+        // Last, deliberately: a wipe or veil must never run across the border.
+        if let preset = FramePreset(rawValue: instruction.framePreset), preset != .none {
+            graded = FrameRenderer.apply(preset, to: graded, rect: renderRect)
         }
 
         // --- Render into the pool buffer and hand it back -------------------

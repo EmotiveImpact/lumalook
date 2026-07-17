@@ -146,6 +146,8 @@ struct StoredProject: Codable, Identifiable {
     var adjustmentLayers: [AdjustmentLayer]? = nil
     /// Audio-reactive visual config (D1). Optional-at-end.
     var audioReactive: StoredAudioReactive? = nil
+    /// Project frame/border preset (F9). Optional-at-end; nil = none.
+    var framePreset: String? = nil
 }
 
 /// Persisted audio-reactive config.

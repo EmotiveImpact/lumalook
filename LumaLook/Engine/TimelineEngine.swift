@@ -402,6 +402,7 @@ final class EditorState: ObservableObject {
         var canvasSolidHex: String
         var canvasGradientTopHex: String
         var canvasGradientBottomHex: String
+        var framePreset: String
     }
 
     // Timeline
@@ -436,6 +437,8 @@ final class EditorState: ObservableObject {
     @Published var canvasSolidHex: String = "#101014"
     @Published var canvasGradientTopHex: String = "#2A2A38"
     @Published var canvasGradientBottomHex: String = "#050507"
+    /// Project-level frame/border preset (`FramePreset` rawValue).
+    @Published var framePreset: String = FramePreset.none.rawValue
 
     /// The compositor payload assembled from the canvas fields.
     var canvasSpec: CanvasSpec {
@@ -449,6 +452,14 @@ final class EditorState: ObservableObject {
         guard canvasMode != mode else { return }
         pushUndoSnapshot()
         canvasMode = mode
+        rebuild()
+    }
+
+    /// Sets the project-level frame/border preset (with undo).
+    func setFramePreset(_ preset: FramePreset) {
+        guard framePreset != preset.rawValue else { return }
+        pushUndoSnapshot()
+        framePreset = preset.rawValue
         rebuild()
     }
 
@@ -607,7 +618,8 @@ final class EditorState: ObservableObject {
             audioReactive: audioReactive.map {
                 StoredAudioReactive(style: $0.style.rawValue, strength: $0.strength,
                                     sourceTrackID: $0.sourceTrackID)
-            }
+            },
+            framePreset: framePreset == FramePreset.none.rawValue ? nil : framePreset
         )
         store.upsert(project: stored)
     }
@@ -624,6 +636,7 @@ final class EditorState: ObservableObject {
                 AudioReactiveConfig(style: $0, strength: s.strength, sourceTrackID: s.sourceTrackID)
             }
         }
+        framePreset = project.framePreset ?? FramePreset.none.rawValue
         canvasMode = project.canvasMode.flatMap(CanvasBackgroundMode.init) ?? .fill
         canvasSolidHex = project.canvasSolidHex ?? "#101014"
         canvasGradientTopHex = project.canvasGradientTopHex ?? "#2A2A38"
@@ -2224,7 +2237,8 @@ final class EditorState: ObservableObject {
                  adjustmentLayers: adjustmentLayers,
                  canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
                  canvasGradientTopHex: canvasGradientTopHex,
-                 canvasGradientBottomHex: canvasGradientBottomHex)
+                 canvasGradientBottomHex: canvasGradientBottomHex,
+                 framePreset: framePreset)
     }
 
     private func pushUndoSnapshot() {
@@ -2256,6 +2270,7 @@ final class EditorState: ObservableObject {
         canvasSolidHex = snapshot.canvasSolidHex
         canvasGradientTopHex = snapshot.canvasGradientTopHex
         canvasGradientBottomHex = snapshot.canvasGradientBottomHex
+        framePreset = snapshot.framePreset
         if let id = selectedClipID, !clips.contains(where: { $0.id == id }) {
             selectedClipID = clips.last?.id
         }
@@ -2946,7 +2961,8 @@ final class EditorState: ObservableObject {
                 adjustments: adjustmentSpans.filter {
                     mid >= $0.start - 0.001 && mid < $0.end + 0.001
                 },
-                audioReactive: audioReactive))
+                audioReactive: audioReactive,
+                framePreset: framePreset))
         }
         return instructions
     }
