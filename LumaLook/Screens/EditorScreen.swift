@@ -120,10 +120,13 @@ struct EditorTimelineView: View {
         }
         .sheet(isPresented: $showMaskPanel) {
             if let id = editor.selectedClipID ?? editor.clips.first?.id {
-                MaskPanel(editor: editor, clipID: id) { showMaskPanel = false }
-                    .padding(.horizontal, 16)
-                    .presentationDetents([.medium])
-                    .presentationBackground(LumaTheme.background)
+                ScrollView {
+                    MaskPanel(editor: editor, clipID: id) { showMaskPanel = false }
+                        .padding(.horizontal, 16)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(LumaTheme.background)
             }
         }
         .sheet(isPresented: $showAudioLibrary) {

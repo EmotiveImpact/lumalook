@@ -116,6 +116,9 @@ struct ExportSpecSheet: View {
     @State private var isBaking = false
 
     var body: some View {
+        // Scrollable so the Export CTA is always reachable — resolution/codec/
+        // fps + audio-only + Also-GIF + estimate + cube row exceed a short detent.
+        ScrollView {
         VStack(spacing: 4) {
             TechReadout("EXPORT", size: 10, color: LumaTheme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -174,7 +177,8 @@ struct ExportSpecSheet: View {
         }
         .padding(.horizontal, 22)
         .padding(.top, 18)
-        .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .scrollBounceBehavior(.basedOnSize)
         .onAppear { spec = ExportSpec.from(rawValue: storedSpec) }
     }
 

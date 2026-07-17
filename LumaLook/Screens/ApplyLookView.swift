@@ -202,9 +202,10 @@ struct ApplyLookView: View {
             }
         }
         .lumaToolSheet(isPresented: $showConversionPicker, style: .panel) {
-            conversionPicker
-                .padding(.top, 18)
-                .frame(maxHeight: .infinity, alignment: .top)
+            ScrollView {
+                conversionPicker.padding(.top, 18)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .alert("Log LUT active", isPresented: $showLogExplainer) {
             Button("Got it", role: .cancel) {}
