@@ -144,7 +144,46 @@ struct OverlayEffectsPanel: View {
         }
     }
     @ViewBuilder private var maskControls: some View {
-        Text("Mask — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)
+        let mask = fx.mask
+        let shapes: [(String, String, String)] = [
+            ("none", "None", "circle.slash"), ("rect", "Rect", "square"),
+            ("roundedRect", "Rounded", "square.dashed"), ("ellipse", "Circle", "circle"),
+            ("linear", "Fade", "square.righthalf.filled"),
+        ]
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(shapes, id: \.0) { key, label, icon in
+                    let on = (mask?.shape ?? "none") == key || (mask == nil && key == "none")
+                    Button {
+                        editor.setOverlayMask(id: overlayID,
+                                              key == "none" ? nil : OverlayMaskSettings(shape: key))
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: icon).font(.system(size: 16))
+                            Text(label).font(.system(size: 10))
+                        }
+                        .foregroundStyle(on ? .black : .white)
+                        .frame(width: 56, height: 48)
+                        .background(on ? AnyShapeStyle(LumaTheme.accentBright)
+                                       : AnyShapeStyle(LumaTheme.surface),
+                                    in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if let mask {
+                InlineSlider(title: "Feather", value: Binding(
+                    get: { mask.feather * 100 },
+                    set: { var m = mask; m.feather = $0 / 100
+                           editor.setOverlayMask(id: overlayID, m, snapshot: false) }
+                ), range: 0...40) { "\(Int($0))" }
+                Toggle("Invert", isOn: Binding(
+                    get: { mask.invert },
+                    set: { var m = mask; m.invert = $0; editor.setOverlayMask(id: overlayID, m) }))
+                    .font(.system(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+            }
+        }
     }
     @ViewBuilder private var adjustControls: some View {
         Text("Adjust — coming soon").font(.footnote).foregroundStyle(LumaTheme.textMuted)

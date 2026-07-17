@@ -547,6 +547,23 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             let scale = targetWidth / overlay.extent.width
             overlay = overlay.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
 
+            // F5 mask: generated for the SCALED extent so feather widths are in
+            // render pixels. Applied before rotation so the alpha rotates with it.
+            if !isText, let maskSettings = fx.mask {
+                let m = OverlayMaskRenderer.mask(maskSettings, extent: overlay.extent)
+                overlay = overlay.applyingFilter("CIBlendWithAlphaMask", parameters: [
+                    kCIInputBackgroundImageKey: CIImage.empty(),
+                    kCIInputMaskImageKey: m,
+                ]).cropped(to: overlay.extent)
+            }
+
+            // F7 border ring: composited UNDER the overlay so the frame hugs
+            // the edge; drawn pre-rotation so it rotates with the overlay.
+            if !isText, let border = fx.border {
+                let ring = OverlayMaskRenderer.borderRing(border, extent: overlay.extent)
+                overlay = ring.composited(over: overlay).cropped(to: overlay.extent)
+            }
+
             // Rotation (keyframes): about the overlay's own centre. UI is
             // clockwise-positive; CI rotates counter-clockwise, so negate.
             if abs(placement.rotationDegrees) > 0.01 {
