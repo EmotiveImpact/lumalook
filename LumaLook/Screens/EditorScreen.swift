@@ -463,6 +463,23 @@ struct EditorTimelineView: View {
                 }
                 for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
             }
+            if let mode = env["LUMA_SEED_DETACH"], let id = editor.clips.first?.id {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                await editor.detachAudio(clipID: id)
+                for _ in 0..<60 where editor.isRebuilding || editor.isDetaching {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                // Mode 2: also delete the extracted lane → export should be
+                // silent, proving the clip stayed muted.
+                if mode == "2", let laneID = editor.audioTracks.last?.id {
+                    editor.removeAudioTrack(id: laneID)
+                    for _ in 0..<40 where editor.isRebuilding {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+            }
             if env["LUMA_SEED_PASTE"] == "1", !editor.isEmpty {
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -883,6 +900,15 @@ private struct EditorContent: View {
                     }
                     .frame(width: 58)
                     .opacity((editor.selectedClip?.isImage ?? true) ? 0.35 : 1)
+                    if editor.selectedClip?.hasAudio == true {
+                        FlatTool(title: editor.isDetaching ? "Detaching" : "Detach",
+                                 icon: "waveform.badge.minus") {
+                            guard !editor.isDetaching, let id = editor.selectedClipID else { return }
+                            LumaHaptics.shared.tap()
+                            Task { await editor.detachAudio(clipID: id) }
+                        }
+                        .frame(width: 58)
+                    }
                     FlatTool(title: "Delete", icon: "trash") {
                         editor.deleteSelected()
                     }

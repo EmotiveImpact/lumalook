@@ -1168,6 +1168,36 @@ final class EditorState: ObservableObject {
         refreshAllWaveforms()
     }
 
+    /// True while extracting a clip's audio into a lane.
+    @Published private(set) var isDetaching = false
+
+    /// Extracts the selected clip's audio into a new `.extracted` lane and
+    /// mutes the clip — CapCut-style detach. One undo covers both mutations.
+    func detachAudio(clipID: UUID) async {
+        guard let clip = clips.first(where: { $0.id == clipID }),
+              clip.hasAudio, !clip.isImage, !isDetaching else { return }
+        isDetaching = true
+        defer { isDetaching = false }
+        let start = clipStartTimes[clipID] ?? 0
+        let extracted = try? await AudioExtractor.extract(
+            from: clip.url, trimStart: clip.trimStart, trimEnd: clip.trimEnd,
+            speed: clip.speed, into: store.audioFolder)
+        guard let extracted else { return }
+        let asset = AVURLAsset(url: extracted)
+        let duration = (try? await asset.load(.duration).seconds) ?? clip.timelineDuration
+        guard let i = clips.firstIndex(where: { $0.id == clipID }) else { return }
+        pushUndoSnapshot()
+        let clipNumber = (clips.firstIndex(where: { $0.id == clipID }) ?? 0) + 1
+        audioTracks.append(MusicTrack(id: UUID(), url: extracted,
+                                      title: "Clip \(clipNumber) audio",
+                                      assetDuration: duration,
+                                      trimStart: 0, trimEnd: duration,
+                                      timelineOffset: start, kind: .extracted))
+        clips[i].isMuted = true
+        rebuild()
+        refreshAllWaveforms()
+    }
+
     /// Changes an audio lane's kind (colour/icon only — mix-only, no rebuild).
     func setAudioKind(id: UUID, _ kind: AudioLaneKind) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }),
