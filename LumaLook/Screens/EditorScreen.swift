@@ -427,10 +427,14 @@ struct EditorTimelineView: View {
                 editor.setMusicEnvelope(id: m.id, pts)
                 for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
             }
-            // Auto-duck: LUMA_SEED_DUCK=1 enables ducking on the first music lane.
-            if env["LUMA_SEED_DUCK"] == "1", let m = editor.audioTracks.first(where: { $0.kind == .music }) {
+            // Auto-duck: LUMA_SEED_DUCK=1 tags track[1] as voice at offset 3,
+            // enables ducking on track[0] (music) — music dips under the voice.
+            if env["LUMA_SEED_DUCK"] == "1", editor.audioTracks.count >= 2 {
                 for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
-                editor.setMusicDucking(id: m.id, true)
+                let voiceID = editor.audioTracks[1].id
+                editor.setAudioKind(id: voiceID, .voice)
+                editor.setMusicOffset(id: voiceID, 3.0)
+                editor.setMusicDucking(id: editor.audioTracks[0].id, true)
                 for _ in 0..<20 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
             }
             // Loop-to-fill: LUMA_SEED_LOOP=1 on the first music lane.
