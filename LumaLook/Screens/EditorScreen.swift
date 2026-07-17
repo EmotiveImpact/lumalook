@@ -1683,6 +1683,38 @@ private struct EditorContent: View {
                     }
             }
         }
+        // Audio-editing focus: when a music/clip-audio panel is open, the
+        // preview shows the AUDIO ASSET (waveform + name) instead of the video,
+        // so the sheet's controls read as belonging to what's on screen.
+        .overlay {
+            if let f = audioFocus {
+                AudioFocusView(title: f.title, subtitle: f.subtitle,
+                               icon: f.icon, samples: f.samples)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: audioFocusKey)
+    }
+
+    /// The asset being edited when an audio panel is open (nil otherwise).
+    private var audioFocus: (title: String, subtitle: String, icon: String, samples: [Float])? {
+        if showMusicPanel,
+           let t = editor.audioTracks.first(where: { $0.id == selectedAudioID }) ?? editor.audioTracks.first {
+            return (t.title,
+                    "\(t.kind.label) · \(String(format: "%.1fs", t.timelineDuration))",
+                    t.kind.icon, t.waveform)
+        }
+        if showClipAudioPanel, let c = editor.selectedClip {
+            return (c.url.deletingPathExtension().lastPathComponent,
+                    "Clip Audio · \(String(format: "%.1fs", c.timelineDuration))",
+                    "waveform", [])
+        }
+        return nil
+    }
+
+    /// Cheap change key so the overlay animates in/out on panel toggles.
+    private var audioFocusKey: String {
+        "\(showMusicPanel)\(showClipAudioPanel)\(selectedAudioID?.uuidString ?? "")"
     }
 
     // MARK: Transport

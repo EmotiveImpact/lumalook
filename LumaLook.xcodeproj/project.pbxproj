@@ -21,6 +21,7 @@
 		0C21A2716659C5C2D3B6CA49 /* FS_FN400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 65114680C08ADE0365D4F133 /* FS_FN400.cube */; };
 		0E17EE8AB98876B6CD3CA10C /* FS_AV200.cube in Resources */ = {isa = PBXBuildFile; fileRef = B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */; };
 		0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A5624E7651D005E2DA05C1 /* CameraChrome.swift */; };
+		122027C7CA41A5B02F2E34CC /* AudioFocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDE425D860F6D3DAEFA927C /* AudioFocusView.swift */; };
 		123409A8B9084A6F751FEC62 /* FS_PT800H.cube in Resources */ = {isa = PBXBuildFile; fileRef = EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */; };
 		13083AA5046042ADC0C08E57 /* TextRasterizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DF204504D1CEB112C276E84 /* TextRasterizer.swift */; };
 		17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71565855D4F4F92716382C0A /* TimelineV2.swift */; };
@@ -400,6 +401,7 @@
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */ = {isa = PBXFileReference; path = FS_XP200.cube; sourceTree = "<group>"; };
 		EDB7CFDB9A3E3AD79C0808E3 /* FS_PT800H.cube */ = {isa = PBXFileReference; path = FS_PT800H.cube; sourceTree = "<group>"; };
+		EDDE425D860F6D3DAEFA927C /* AudioFocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFocusView.swift; sourceTree = "<group>"; };
 		EFD7D16FC1F6CD462DA0F8C9 /* FS_SX200.cube */ = {isa = PBXFileReference; path = FS_SX200.cube; sourceTree = "<group>"; };
 		F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectRenderer.swift; sourceTree = "<group>"; };
 		F2F63CA8389113D35C675EEE /* FS_PL667.cube */ = {isa = PBXFileReference; path = FS_PL667.cube; sourceTree = "<group>"; };
@@ -488,6 +490,7 @@
 			children = (
 				E4B9B8AF11ABC3CE95CFA59D /* AudioEffectsPanel.swift */,
 				D9FCAB8DC24EFCD32EAB026B /* AudioEnvelopeEditor.swift */,
+				EDDE425D860F6D3DAEFA927C /* AudioFocusView.swift */,
 				64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */,
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				3DBC4F6939DD535E66444EAD /* MaskPanel.swift */,
@@ -953,6 +956,7 @@
 				B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */,
 				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
 				4EA05BD27566E38016DA5A1C /* AudioExtractor.swift in Sources */,
+				122027C7CA41A5B02F2E34CC /* AudioFocusView.swift in Sources */,
 				09A8D95B5FC3253500239DC3 /* AudioLibrarySheet.swift in Sources */,
 				3E1F818945AB3954E411BB70 /* BeatDetector.swift in Sources */,
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
