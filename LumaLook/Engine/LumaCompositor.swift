@@ -197,6 +197,15 @@ struct AdjustmentSpan {
     let state: LookState
 }
 
+/// F6 — a timed effect over the whole frame. `localTime` inside the span
+/// drives every animation, so preview and export match frame for frame.
+struct EffectSpan {
+    let start: Double
+    let end: Double
+    let kind: EffectKind
+    let intensity: Double
+}
+
 /// Live per-clip pan/zoom (Ken Burns). Same live-reference trick as
 /// `OverlayLayout`: the editor mutates it and the running compositor reads the
 /// latest keyframes without a composition rebuild. Applied to the base frame
@@ -326,6 +335,8 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let transformLayout: ClipTransformLayout?
     /// Full-frame adjustment grades active in this segment.
     let adjustments: [AdjustmentSpan]
+    /// F6 full-frame effects active in this segment.
+    let effects: [EffectSpan]
     /// Audio-reactive modulation (pulse/glow/shake), nil = off.
     let audioReactive: AudioReactiveSpec?
     /// Project-level frame/border, composited last. `FramePreset` rawValue.
@@ -345,6 +356,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
          canvas: CanvasSpec = .fill,
          transformLayout: ClipTransformLayout? = nil,
          adjustments: [AdjustmentSpan] = [],
+         effects: [EffectSpan] = [],
          audioReactive: AudioReactiveSpec? = nil,
          framePreset: String = FramePreset.none.rawValue) {
         self.timeRange = timeRange
@@ -363,6 +375,7 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
         self.canvas = canvas
         self.transformLayout = transformLayout
         self.adjustments = adjustments
+        self.effects = effects
         self.audioReactive = audioReactive
         self.framePreset = framePreset
         super.init()
@@ -521,6 +534,17 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                                     to: graded.cropped(to: renderRect),
                                     includeSplit: false)
                 .cropped(to: renderRect)
+        }
+
+        // --- F6 effect layers: full-frame, below the overlays so titles and
+        // stickers stay clean on top of a glitching picture. ----------------
+        for fx in instruction.effects
+        where seconds >= fx.start - 0.001 && seconds < fx.end + 0.001 {
+            graded = EffectRenderer.apply(fx.kind,
+                                          to: graded.cropped(to: renderRect),
+                                          localTime: seconds - fx.start,
+                                          intensity: fx.intensity,
+                                          rect: renderRect)
         }
 
         // --- Audio-reactive modulation (D1): pulse/glow/shake by loudness ----

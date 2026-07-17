@@ -285,6 +285,18 @@ struct AdjustmentLayer: Identifiable, Codable, Equatable {
     var timelineEnd: Double { timelineOffset + duration }
 }
 
+/// F6 — a timed visual effect over the whole frame (glitch/VHS/leak/...).
+/// Mirrors AdjustmentLayer: a span on the timeline, applied by the compositor.
+struct EffectLayer: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var timelineOffset: Double
+    var duration: Double
+    /// EffectKind rawValue.
+    var kind: String
+    var intensity: Double = 0.7
+    var timelineEnd: Double { timelineOffset + duration }
+}
+
 struct MockClip: Identifiable, Hashable {
     let id = UUID()
     let title: String

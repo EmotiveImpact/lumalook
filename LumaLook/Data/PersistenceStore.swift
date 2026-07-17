@@ -160,6 +160,8 @@ struct StoredProject: Codable, Identifiable {
     var audioReactive: StoredAudioReactive? = nil
     /// Project frame/border preset (F9). Optional-at-end; nil = none.
     var framePreset: String? = nil
+    /// F6 timed full-frame effects. Optional-at-end.
+    var effectLayers: [EffectLayer]? = nil
 }
 
 /// Persisted audio-reactive config.

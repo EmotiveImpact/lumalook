@@ -379,6 +379,21 @@ struct EditorTimelineView: View {
             }
             // F0 auto-stack test: two overlays added at the same playhead must
             // land on lanes 0/1 (not be pushed later) and both render.
+            // F6: a full-frame effect over the whole clip. Format "kind|intensity".
+            if let fx = env["LUMA_SEED_EFFECT"], !editor.isEmpty {
+                let f = fx.split(separator: "|").map(String.init)
+                for _ in 0..<40 where editor.totalDuration <= 0.1 || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.seek(to: 0)
+                if let kind = EffectKind(rawValue: f[0]),
+                   let id = editor.addEffectLayer(kind: kind, duration: editor.totalDuration) {
+                    if f.count > 1, let v = Double(f[1]) { editor.setEffectIntensity(id: id, v) }
+                }
+                for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let l = editor.effectLayers.last
+                print("[LUMA] EFFECT kind=\(l?.kind ?? "nil") intensity=\(l?.intensity ?? -1) span=\(l?.duration ?? 0)")
+            }
             // F4: a shape at centre. Format "kind|fillHex".
             if let sh = env["LUMA_SEED_SHAPE"], !editor.isEmpty {
                 let f = sh.split(separator: "|").map(String.init)
@@ -1243,6 +1258,26 @@ private struct EditorContent: View {
                                 Image(systemName: "square.on.circle")
                                     .font(.system(size: 19, weight: .medium))
                                 Text("Shape").font(.system(size: 13))
+                            }
+                            .foregroundStyle(LumaTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
+                        Menu {
+                            ForEach(EffectKind.allCases, id: \.self) { kind in
+                                Button {
+                                    editor.addEffectLayer(kind: kind)
+                                    LumaHaptics.shared.tap()
+                                } label: { Label(kind.label, systemImage: kind.icon) }
+                            }
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 19, weight: .medium))
+                                Text("Effects").font(.system(size: 13))
                             }
                             .foregroundStyle(LumaTheme.textSecondary)
                             .frame(maxWidth: .infinity)

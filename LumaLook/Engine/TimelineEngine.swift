@@ -438,6 +438,7 @@ final class EditorState: ObservableObject {
         var audioTracks: [MusicTrack]
         var overlays: [OverlayItem]
         var adjustmentLayers: [AdjustmentLayer]
+        var effectLayers: [EffectLayer]
         var canvasMode: CanvasBackgroundMode
         var canvasSolidHex: String
         var canvasGradientTopHex: String
@@ -450,6 +451,8 @@ final class EditorState: ObservableObject {
     @Published var selectedClipID: UUID?
     @Published private(set) var audioTracks: [MusicTrack] = []
     @Published private(set) var overlays: [OverlayItem] = []
+    /// F6 — timed full-frame effects (glitch/VHS/light leak/...).
+    @Published private(set) var effectLayers: [EffectLayer] = []
     /// Full-frame adjustment grades floating over the clips (adjustment layers).
     @Published private(set) var adjustmentLayers: [AdjustmentLayer] = []
     /// Audio-reactive visual config (D1); nil = off.
@@ -669,7 +672,8 @@ final class EditorState: ObservableObject {
                 StoredAudioReactive(style: $0.style.rawValue, strength: $0.strength,
                                     sourceTrackID: $0.sourceTrackID)
             },
-            framePreset: framePreset == FramePreset.none.rawValue ? nil : framePreset
+            framePreset: framePreset == FramePreset.none.rawValue ? nil : framePreset,
+            effectLayers: effectLayers.isEmpty ? nil : effectLayers
         )
         store.upsert(project: stored)
     }
@@ -681,6 +685,7 @@ final class EditorState: ObservableObject {
         format = EditorFormat(rawValue: project.format) ?? .widescreen
         zoom = project.zoom
         adjustmentLayers = project.adjustmentLayers ?? []
+        effectLayers = project.effectLayers ?? []
         audioReactive = project.audioReactive.flatMap { s in
             AudioReactiveStyle(rawValue: s.style).map {
                 AudioReactiveConfig(style: $0, strength: s.strength, sourceTrackID: s.sourceTrackID)
@@ -1859,6 +1864,45 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// F6 — drops an effect layer at the playhead.
+    @discardableResult
+    func addEffectLayer(kind: EffectKind, duration: Double = 2.0) -> UUID? {
+        guard totalDuration > 0.2 else { return nil }
+        let offset = min(max(0, currentTime), max(0, totalDuration - 0.2))
+        let span = min(duration, totalDuration - offset)
+        guard span > 0.1 else { return nil }
+        pushUndoSnapshot()
+        let layer = EffectLayer(timelineOffset: offset, duration: span, kind: kind.rawValue)
+        effectLayers.append(layer)
+        effectLayers.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return layer.id
+    }
+
+    func setEffectIntensity(id: UUID, _ value: Double) {
+        guard let i = effectLayers.firstIndex(where: { $0.id == id }),
+              effectLayers[i].intensity != value else { return }
+        pushUndoSnapshot()
+        effectLayers[i].intensity = min(max(value, 0), 1)
+        rebuild()
+    }
+
+    func setEffectSpan(id: UUID, offset: Double, duration: Double) {
+        guard let i = effectLayers.firstIndex(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        effectLayers[i].timelineOffset = max(0, offset)
+        effectLayers[i].duration = max(0.1, duration)
+        effectLayers.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+    }
+
+    func removeEffectLayer(id: UUID) {
+        guard effectLayers.contains(where: { $0.id == id }) else { return }
+        pushUndoSnapshot()
+        effectLayers.removeAll { $0.id == id }
+        rebuild()
+    }
+
     /// F4 — adds a vector shape layer at the playhead. Shapes ride the same
     /// synthetic path as text: rendered live by the compositor (so fill and
     /// stroke stay editable), ungraded, on the first free lane.
@@ -2379,6 +2423,7 @@ final class EditorState: ObservableObject {
         Snapshot(clips: clips, format: format, zoom: zoom,
                  audioTracks: audioTracks, overlays: overlays,
                  adjustmentLayers: adjustmentLayers,
+                 effectLayers: effectLayers,
                  canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
                  canvasGradientTopHex: canvasGradientTopHex,
                  canvasGradientBottomHex: canvasGradientBottomHex,
@@ -2410,6 +2455,7 @@ final class EditorState: ObservableObject {
         audioTracks = snapshot.audioTracks
         overlays = snapshot.overlays
         adjustmentLayers = snapshot.adjustmentLayers
+        effectLayers = snapshot.effectLayers
         canvasMode = snapshot.canvasMode
         canvasSolidHex = snapshot.canvasSolidHex
         canvasGradientTopHex = snapshot.canvasGradientTopHex
@@ -2983,6 +3029,15 @@ final class EditorState: ObservableObject {
                                   end: min($0.timelineEnd, cursor.seconds),
                                   state: makeLookState(from: $0.grade)) }
 
+        let effectSpans = effectLayers
+            .filter { $0.duration > 0.05 && $0.timelineOffset < cursor.seconds }
+            .compactMap { layer -> EffectSpan? in
+                guard let kind = EffectKind(rawValue: layer.kind) else { return nil }
+                return EffectSpan(start: max(0, layer.timelineOffset),
+                                  end: min(layer.timelineEnd, cursor.seconds),
+                                  kind: kind, intensity: layer.intensity)
+            }
+
         // Audio-reactive level envelope (D1): 30 Hz loudness of the source lane.
         var reactiveSpec: AudioReactiveSpec?
         if let cfg = audioReactive,
@@ -3007,6 +3062,7 @@ final class EditorState: ObservableObject {
             transitionSpans: spans,
             overlaySpecs: overlaySpecs,
             adjustmentSpans: adjustmentSpans,
+            effectSpans: effectSpans,
             audioReactive: reactiveSpec,
             renderSize: renderSize)
         videoComposition.applySDRColorPolicy()
@@ -3037,6 +3093,7 @@ final class EditorState: ObservableObject {
                                   transitionSpans: [TransitionSpanSpec],
                                   overlaySpecs: [OverlaySpec],
                                   adjustmentSpans: [AdjustmentSpan] = [],
+                                  effectSpans: [EffectSpan] = [],
                                   audioReactive: AudioReactiveSpec? = nil,
                                   renderSize: CGSize) -> [LumaCompositionInstruction] {
         let total = totalDuration.seconds
@@ -3112,6 +3169,9 @@ final class EditorState: ObservableObject {
                 canvas: canvasSpec,
                 transformLayout: clipTransformLayout,
                 adjustments: adjustmentSpans.filter {
+                    mid >= $0.start - 0.001 && mid < $0.end + 0.001
+                },
+                effects: effectSpans.filter {
                     mid >= $0.start - 0.001 && mid < $0.end + 0.001
                 },
                 audioReactive: audioReactive,

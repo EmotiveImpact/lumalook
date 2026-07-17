@@ -80,10 +80,10 @@ enum EffectRenderer {
         // Clamp first: translated channels would otherwise leave a hard black
         // bar at the frame edge instead of the smeared fringe you actually want.
         let src = image.clampedToExtent()
-        let r = channel(src, keep: .r, alpha: false)
+        let r = channel(src, keep: .r)
             .transformed(by: CGAffineTransform(translationX: shift, y: 0))
-        let g = channel(src, keep: .g, alpha: true)
-        let b = channel(src, keep: .b, alpha: false)
+        let g = channel(src, keep: .g)
+        let b = channel(src, keep: .b)
             .transformed(by: CGAffineTransform(translationX: -shift, y: 0))
         return add(add(r, g), b).cropped(to: rect)
     }
@@ -109,11 +109,11 @@ enum EffectRenderer {
     /// scale about the centre, so the fringe grows towards the frame edges.
     private static func prism(_ image: CIImage, i: Double, rect: CGRect) -> CIImage {
         let src = image.clampedToExtent()
-        let r = channel(src, keep: .r, alpha: false)
+        let r = channel(src, keep: .r)
         let g = channel(scaleAboutCentre(src, scale: 1 + 0.01 * CGFloat(i), rect: rect),
-                        keep: .g, alpha: true)
+                        keep: .g)
         let b = channel(scaleAboutCentre(src, scale: 1 + 0.02 * CGFloat(i), rect: rect),
-                        keep: .b, alpha: false)
+                        keep: .b)
         return add(add(r, g), b).cropped(to: rect)
     }
 
@@ -339,16 +339,21 @@ enum EffectRenderer {
 
     private enum Chan { case r, g, b }
 
-    /// Isolates one channel. Only ONE of the three copies in a split should
-    /// carry alpha — additionCompositing sums it, and three opaque layers would
-    /// hand downstream filters a 3× premultiplied alpha to unpremultiply by.
-    private static func channel(_ image: CIImage, keep: Chan, alpha: Bool) -> CIImage {
+    /// Isolates one channel, keeping alpha OPAQUE.
+    ///
+    /// Every copy must stay opaque. Core Image works in PREMULTIPLIED RGBA, so
+    /// a pixel with alpha 0 and a non-zero colour is not representable — CI
+    /// zeroes it, and an alpha-0 "red copy" contributes nothing to the sum.
+    /// (Verified on device: dropping alpha on the R/B copies exported a white
+    /// bar as pure green — both shifted channels silently vanished.)
+    /// Addition saturates the summed alpha back to 1, which is what we want.
+    private static func channel(_ image: CIImage, keep: Chan) -> CIImage {
         let m = CIFilter.colorMatrix()
         m.inputImage = image
         m.rVector = CIVector(x: keep == .r ? 1 : 0, y: 0, z: 0, w: 0)
         m.gVector = CIVector(x: 0, y: keep == .g ? 1 : 0, z: 0, w: 0)
         m.bVector = CIVector(x: 0, y: 0, z: keep == .b ? 1 : 0, w: 0)
-        m.aVector = CIVector(x: 0, y: 0, z: 0, w: alpha ? 1 : 0)
+        m.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
         return m.outputImage ?? image
     }
 
