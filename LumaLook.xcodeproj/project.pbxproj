@@ -162,6 +162,7 @@
 		F16A4058B43C136764ABF0A8 /* FS_PT400V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 63190B53784A9183F103288A /* FS_PT400V.cube */; };
 		F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */; };
 		F5FF40F29D92772033824046 /* FS_PR400X.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2502776385F3CECA843CFFB0 /* FS_PR400X.cube */; };
+		F6C06F6AF59BF061204EA0A0 /* TransitionRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */; };
 		F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BB58FB882FE612A9E05282 /* ColorMath.swift */; };
 		F97B0E5AEE62FCDBD5F87A55 /* FS_SP800.cube in Resources */ = {isa = PBXBuildFile; fileRef = CF404D1CD17AE20761886DF1 /* FS_SP800.cube */; };
 		FDCF6C03A26097C6598C089E /* FS_MS7.cube in Resources */ = {isa = PBXBuildFile; fileRef = C6D8B84208BCDA1900855A3E /* FS_MS7.cube */; };
@@ -247,6 +248,7 @@
 		73DAA7F9A11628B31666692E /* FS_PL690.cube */ = {isa = PBXFileReference; path = FS_PL690.cube; sourceTree = "<group>"; };
 		76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTParser.swift; sourceTree = "<group>"; };
 		7751C4C9D8F96151C1FEAA07 /* FS_PT800.cube */ = {isa = PBXFileReference; path = FS_PT800.cube; sourceTree = "<group>"; };
+		7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionRenderer.swift; sourceTree = "<group>"; };
 		79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationFeel.swift; sourceTree = "<group>"; };
 		7AE2524F01E128404964986C /* hero_golden.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_golden.jpg; sourceTree = "<group>"; };
 		7CA07F33B727EC523266C623 /* LumaCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCompositor.swift; sourceTree = "<group>"; };
@@ -599,6 +601,7 @@
 				F8699231347E8D7AACDACC31 /* Scopes.swift */,
 				73998E19A809DE91D7A3BA7C /* SkinFirstPresets.swift */,
 				2D4758690F5507F42704B9E3 /* TimelineEngine.swift */,
+				7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */,
 				2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */,
 				89F752262798C945F44F00B2 /* ZipReader.swift */,
 			);
@@ -848,6 +851,7 @@
 				76DB184A8EE41AC0010C5422 /* StoreService.swift in Sources */,
 				08E7C756A7625E093E53DF25 /* TimelineEngine.swift in Sources */,
 				17365EA4A1EC82CFAD6CEF68 /* TimelineV2.swift in Sources */,
+				F6C06F6AF59BF061204EA0A0 /* TransitionRenderer.swift in Sources */,
 				D63593D208DA5964D4902D4C /* VideoExporter.swift in Sources */,
 				650993EF4274EEA5FD8721A9 /* ZipReader.swift in Sources */,
 			);

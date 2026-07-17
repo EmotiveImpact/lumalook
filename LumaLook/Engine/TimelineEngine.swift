@@ -54,6 +54,13 @@ enum TransitionStyle: String, Codable, CaseIterable {
     case fadeBlack
     case fadeWhite
     case flash
+    // Motion (push) — incoming slides in, outgoing pushed out.
+    case slideLeft, slideRight, slideUp, slideDown
+    case zoomIn, zoomOut
+    case spin
+    // FX
+    case glitch
+    case lumaWipe
 
     var label: String {
         switch self {
@@ -63,6 +70,15 @@ enum TransitionStyle: String, Codable, CaseIterable {
         case .fadeBlack: return "Fade Black"
         case .fadeWhite: return "Fade White"
         case .flash: return "Flash"
+        case .slideLeft: return "Slide Left"
+        case .slideRight: return "Slide Right"
+        case .slideUp: return "Slide Up"
+        case .slideDown: return "Slide Down"
+        case .zoomIn: return "Zoom In"
+        case .zoomOut: return "Zoom Out"
+        case .spin: return "Spin"
+        case .glitch: return "Glitch"
+        case .lumaWipe: return "Luma Wipe"
         }
     }
 
@@ -74,6 +90,15 @@ enum TransitionStyle: String, Codable, CaseIterable {
         case .fadeBlack: return "circle.lefthalf.filled"
         case .fadeWhite: return "circle.righthalf.filled"
         case .flash: return "bolt.fill"
+        case .slideLeft: return "arrow.left.square"
+        case .slideRight: return "arrow.right.square"
+        case .slideUp: return "arrow.up.square"
+        case .slideDown: return "arrow.down.square"
+        case .zoomIn: return "plus.magnifyingglass"
+        case .zoomOut: return "minus.magnifyingglass"
+        case .spin: return "arrow.triangle.2.circlepath"
+        case .glitch: return "waveform.path.ecg"
+        case .lumaWipe: return "circle.dotted.circle"
         }
     }
 
@@ -81,12 +106,33 @@ enum TransitionStyle: String, Codable, CaseIterable {
         switch self {
         case .none: return 0
         case .flash: return 0.3
+        case .slideLeft, .slideRight, .slideUp, .slideDown: return 0.5
+        case .zoomIn, .zoomOut: return 0.6
+        case .spin: return 0.7
+        case .glitch: return 0.4
+        case .lumaWipe: return 0.8
         default: return 0.6
         }
     }
 
-    /// True cross-transitions blend TWO frames (A/B roll); veils only tint one.
-    var isCrossTransition: Bool { self == .dissolve || self == .wipe }
+    /// Grouping for the picker.
+    var category: String {
+        switch self {
+        case .none, .dissolve, .wipe, .fadeBlack, .fadeWhite, .flash: return "Basic"
+        case .slideLeft, .slideRight, .slideUp, .slideDown, .zoomIn, .zoomOut, .spin: return "Motion"
+        case .glitch, .lumaWipe: return "FX"
+        }
+    }
+
+    /// Veils tint ONE frame (no A/B roll needed).
+    var isVeil: Bool { self == .fadeBlack || self == .fadeWhite || self == .flash }
+
+    /// True cross-transitions blend TWO frames (A/B roll). Everything that
+    /// isn't a cut or a veil needs real incoming+outgoing frames.
+    /// NOTE: `StoredClip.transitionAfter` stores the rawValue; an old app
+    /// build opening a project with a new style decodes it to `.none` via the
+    /// `flatMap(TransitionStyle.init)` fallback in `load` — graceful degrade.
+    var isCrossTransition: Bool { self != .none && !isVeil }
 }
 
 // MARK: - Editor state & composition engine

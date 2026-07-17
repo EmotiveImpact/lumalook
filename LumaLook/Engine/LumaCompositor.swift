@@ -626,34 +626,14 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         request.finish(withComposedVideoFrame: outputBuffer)
     }
 
-    /// Cross-transition blends. Dissolve: linear opacity mix. Wipe: a
-    /// soft-edged left-to-right reveal of the incoming frame.
+    /// Cross-transition blends — delegates to `TransitionRenderer` (dissolve,
+    /// wipe, slides, zooms, spin, glitch, luma-wipe). Kept as a thin shim so
+    /// the render-loop call site is untouched.
     private static func crossBlend(outgoing: CIImage, incoming: CIImage,
                                    progress: CGFloat, style: TransitionStyle,
                                    rect: CGRect) -> CIImage {
-        let p = min(max(progress, 0), 1)
-        switch style {
-        case .wipe:
-            let feather = rect.width * 0.05
-            let edge = (rect.width + feather) * p - feather / 2
-            let gradient = CIFilter.smoothLinearGradient()
-            gradient.point0 = CGPoint(x: edge + feather / 2, y: 0)
-            gradient.point1 = CGPoint(x: edge - feather / 2, y: 0)
-            gradient.color0 = CIColor.black
-            gradient.color1 = CIColor.white
-            let mask = (gradient.outputImage ?? CIImage(color: .white)).cropped(to: rect)
-            let blend = CIFilter.blendWithMask()
-            blend.inputImage = incoming
-            blend.backgroundImage = outgoing
-            blend.maskImage = mask
-            return (blend.outputImage ?? incoming).cropped(to: rect)
-        default:
-            let dissolve = CIFilter.dissolveTransition()
-            dissolve.inputImage = outgoing
-            dissolve.targetImage = incoming
-            dissolve.time = Float(p)
-            return (dissolve.outputImage ?? incoming).cropped(to: rect)
-        }
+        TransitionRenderer.render(outgoing: outgoing, incoming: incoming,
+                                  progress: progress, style: style, rect: rect)
     }
 
     /// User display transforms (mirror then rotate), applied after source

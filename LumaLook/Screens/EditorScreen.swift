@@ -1293,20 +1293,30 @@ private struct EditorContent: View {
     private var transitionPicker: some View {
         VStack(spacing: 12) {
             TechReadout("TRANSITION", size: 11, color: LumaTheme.textSecondary)
-            HStack(spacing: 8) {
-                ForEach(TransitionStyle.allCases, id: \.self) { style in
-                    ToolTile(title: style.label,
-                             icon: style.icon,
-                             selected: currentTransition == style) {
-                        if let id = transitionClipID {
-                            editor.setTransition(afterClipID: id, style: style,
-                                                 duration: currentTransitionClip?.transitionDuration)
-                            LumaHaptics.shared.tap()
+            // 15 styles now — grouped horizontal scroller (Basic / Motion / FX).
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(["Basic", "Motion", "FX"], id: \.self) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            TechReadout(group.uppercased(), size: 9, color: LumaTheme.textMuted)
+                            HStack(spacing: 8) {
+                                ForEach(TransitionStyle.allCases.filter { $0.category == group }, id: \.self) { style in
+                                    ToolTile(title: style.label,
+                                             icon: style.icon,
+                                             selected: currentTransition == style) {
+                                        if let id = transitionClipID {
+                                            editor.setTransition(afterClipID: id, style: style,
+                                                                 duration: currentTransitionClip?.transitionDuration)
+                                            LumaHaptics.shared.tap()
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 22)
             }
-            .padding(.horizontal, 22)
 
             // Editable duration (gap fix): nil = the style default.
             if currentTransition != .none {
