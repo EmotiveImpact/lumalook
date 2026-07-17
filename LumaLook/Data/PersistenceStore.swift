@@ -45,6 +45,8 @@ struct OverlayKeyframe: Codable, Equatable {
     var centerY: Double
     var opacity: Double
     var rotationDegrees: Double
+    /// Easing for the segment leaving this keyframe (rawValue; nil = linear).
+    var easing: String? = nil
 }
 
 /// A picture-in-picture overlay (video or still) attached to a project.

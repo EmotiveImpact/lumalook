@@ -229,6 +229,32 @@ struct LookSettings: Codable, Equatable {
     }
 }
 
+/// Easing applied to the segment LEAVING a keyframe. `ease(t)` reshapes the
+/// normalised 0…1 progress before interpolation, so motion accelerates and/or
+/// decelerates instead of moving at a constant rate.
+enum KeyframeEasing: String, Codable, CaseIterable {
+    case linear, easeIn, easeOut, easeInOut
+
+    var label: String {
+        switch self {
+        case .linear: return "Linear"
+        case .easeIn: return "Ease In"
+        case .easeOut: return "Ease Out"
+        case .easeInOut: return "Smooth"
+        }
+    }
+
+    func ease(_ t: Double) -> Double {
+        let x = min(max(0, t), 1)
+        switch self {
+        case .linear: return x
+        case .easeIn: return x * x
+        case .easeOut: return 1 - (1 - x) * (1 - x)
+        case .easeInOut: return x < 0.5 ? 2 * x * x : 1 - pow(-2 * x + 2, 2) / 2
+        }
+    }
+}
+
 /// A Ken Burns pan/zoom keyframe: at `time` seconds into the clip, show a
 /// `1/zoom` window centred on (`centerX`,`centerY`) in unit space (y-down).
 struct ClipTransformKeyframe: Codable, Equatable {
@@ -236,6 +262,8 @@ struct ClipTransformKeyframe: Codable, Equatable {
     var zoom: Double = 1
     var centerX: Double = 0.5
     var centerY: Double = 0.5
+    /// Easing for the segment leaving this keyframe (rawValue; nil = linear).
+    var easing: String? = nil
 }
 
 /// A clip-level grade override in the editor (per-clip looks): the timeline

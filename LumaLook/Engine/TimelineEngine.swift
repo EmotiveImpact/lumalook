@@ -1493,7 +1493,8 @@ final class EditorState: ObservableObject {
 
     /// Applies a Ken Burns preset to the selected clip (2 keyframes across its
     /// trimmed run). Live: only the layout + paused frame refresh, no rebuild.
-    func setKenBurns(id: UUID, preset: KenBurnsPreset) {
+    /// `easing` shapes the motion (default Smooth for a natural ease-in-out).
+    func setKenBurns(id: UUID, preset: KenBurnsPreset, easing: KeyframeEasing = .easeInOut) {
         guard let i = clips.firstIndex(where: { $0.id == id }) else { return }
         pushUndoSnapshot()
         let dur = clips[i].timelineDuration
@@ -1501,7 +1502,8 @@ final class EditorState: ObservableObject {
         let lo = 0.28, hi = 0.72   // pan extremes (keep the window in-frame)
         let c = 0.5
         func kf(_ t: Double, _ zoom: Double, _ x: Double, _ y: Double) -> ClipTransformKeyframe {
-            ClipTransformKeyframe(time: t, zoom: zoom, centerX: x, centerY: y)
+            ClipTransformKeyframe(time: t, zoom: zoom, centerX: x, centerY: y,
+                                  easing: t == 0 ? easing.rawValue : nil)
         }
         switch preset {
         case .none:     clips[i].transformKeyframes = []
@@ -1516,6 +1518,17 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// Re-eases the selected clip's existing Ken Burns motion (updates the
+    /// easing on its first keyframe, which drives the whole segment).
+    func setKenBurnsEasing(id: UUID, easing: KeyframeEasing) {
+        guard let i = clips.firstIndex(where: { $0.id == id }),
+              !clips[i].transformKeyframes.isEmpty else { return }
+        pushUndoSnapshot()
+        clips[i].transformKeyframes[0].easing = easing.rawValue
+        syncClipTransformLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
     /// Mirrors clips' Ken Burns keyframes into the live layout the compositor
     /// reads. Times are stored as offsets within each clip's run.
     func syncClipTransformLayout(refreshFrame: Bool = false) {
@@ -1525,7 +1538,8 @@ final class EditorState: ObservableObject {
                 ClipTransformLayout.Keyframe(
                     time: $0.time,
                     transform: ClipTransformLayout.Transform(
-                        zoom: $0.zoom, center: CGPoint(x: $0.centerX, y: $0.centerY)))
+                        zoom: $0.zoom, center: CGPoint(x: $0.centerX, y: $0.centerY)),
+                    easing: $0.easing.flatMap { KeyframeEasing(rawValue: $0) } ?? .linear)
             }
         }
         clipTransformLayout.replaceAll(map)
@@ -1550,7 +1564,8 @@ final class EditorState: ObservableObject {
                     sizeFraction: $0.sizeFraction,
                     center: CGPoint(x: $0.centerX, y: $0.centerY),
                     opacity: $0.opacity,
-                    rotationDegrees: $0.rotationDegrees))
+                    rotationDegrees: $0.rotationDegrees),
+                    easing: $0.easing.flatMap { KeyframeEasing(rawValue: $0) } ?? .linear)
             }
             map[overlay.id] = (base, frames)
         }

@@ -405,7 +405,8 @@ struct EditorTimelineView: View {
                 }
                 if let id = editor.clips.first?.id {
                     editor.selectedClipID = id
-                    editor.setKenBurns(id: id, preset: preset)
+                    let ease = env["LUMA_SEED_KBEASE"].flatMap { KeyframeEasing(rawValue: $0) } ?? .easeInOut
+                    editor.setKenBurns(id: id, preset: preset, easing: ease)
                     for _ in 0..<20 where editor.isRebuilding {
                         try? await Task.sleep(nanoseconds: 100_000_000)
                     }
@@ -1056,6 +1057,19 @@ private struct EditorContent: View {
                         LumaHaptics.shared.tap()
                     }
                 } label: { Text(preset.label) }
+            }
+            // Easing only matters once motion exists.
+            if !(editor.selectedClip?.transformKeyframes.isEmpty ?? true) {
+                Menu("Easing") {
+                    ForEach(KeyframeEasing.allCases, id: \.self) { ease in
+                        Button {
+                            if let id = editor.selectedClipID {
+                                editor.setKenBurnsEasing(id: id, easing: ease)
+                                LumaHaptics.shared.tap()
+                            }
+                        } label: { Text(ease.label) }
+                    }
+                }
             }
         } label: {
             VStack(spacing: 8) {

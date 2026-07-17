@@ -113,6 +113,7 @@ final class OverlayLayout: @unchecked Sendable {
     struct Keyframe {
         let time: Double
         var placement: Placement
+        var easing: KeyframeEasing = .linear
     }
 
     private struct Entry {
@@ -141,7 +142,7 @@ final class OverlayLayout: @unchecked Sendable {
         for i in 0..<(frames.count - 1) where offset >= frames[i].time && offset < frames[i + 1].time {
             let a = frames[i], b = frames[i + 1]
             let span = max(b.time - a.time, 0.001)
-            let t = (offset - a.time) / span
+            let t = a.easing.ease((offset - a.time) / span)
             return Placement(
                 sizeFraction: a.placement.sizeFraction
                     + (b.placement.sizeFraction - a.placement.sizeFraction) * t,
@@ -171,7 +172,7 @@ final class ClipTransformLayout: @unchecked Sendable {
         var zoom: Double = 1              // ≥1; the visible window is 1/zoom
         var center = CGPoint(x: 0.5, y: 0.5)   // unit, y-down (UI)
     }
-    struct Keyframe { let time: Double; var transform: Transform }
+    struct Keyframe { let time: Double; var transform: Transform; var easing: KeyframeEasing = .linear }
 
     private let lock = NSLock()
     private var entries: [UUID: [Keyframe]] = [:]
@@ -191,7 +192,7 @@ final class ClipTransformLayout: @unchecked Sendable {
         for i in 0..<(frames.count - 1) where offset >= frames[i].time && offset < frames[i + 1].time {
             let a = frames[i], b = frames[i + 1]
             let span = max(b.time - a.time, 0.001)
-            let t = (offset - a.time) / span
+            let t = a.easing.ease((offset - a.time) / span)
             return Transform(
                 zoom: a.transform.zoom + (b.transform.zoom - a.transform.zoom) * t,
                 center: CGPoint(
