@@ -491,6 +491,7 @@ struct LumaTabBar: View {
                     VStack(spacing: 5) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 21, weight: .regular))
+                            .frame(height: 26)   // glyph heights differ; labels share a baseline
                             .symbolVariant(app.tab == tab ? .fill : .none)
                             .symbolEffect(.bounce.up.byLayer, options: .speed(1.4), value: app.tab == tab)
                             // Entitlement badge: Pro members see it on their

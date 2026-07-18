@@ -1892,6 +1892,10 @@ final class EditorState: ObservableObject {
         guard overlays.count > before, let added = overlays.last(where: { $0.url == url })
         else { return false }
         markOverlay(id: added.id, kind: "sticker")
+        // Lane label: the emoji itself, not the baked file's generated name.
+        if let i = overlays.firstIndex(where: { $0.id == added.id }) {
+            overlays[i].title = emoji
+        }
         return true
     }
 
@@ -3608,7 +3612,12 @@ final class EditorState: ObservableObject {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 320, height: 320)
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        // A loose tolerance lets the generator land on a fully-decoded frame —
+        // zero tolerance at ~0s intermittently returned half-decoded green
+        // rectangles for project thumbs (same fix as filmstripFrames).
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let time = CMTime(seconds: max(seconds, 0.1), preferredTimescale: 600)
         return try? await generator.image(at: time).image
     }
 }

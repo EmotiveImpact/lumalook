@@ -91,7 +91,7 @@ struct EditorTimelineView: View {
         #if DEBUG
         .sheet(item: $debugFXTrackID) { id in
             AudioEffectsPanel(editor: editor, trackID: id) { debugFXTrackID = nil }
-                .presentationDetents([.large])
+                .presentationDetents([.height(560), .large])
         }
         #endif
         // Mixed pickers (T7): picking an image adds a photo clip to the MAIN
@@ -1265,7 +1265,7 @@ private struct EditorContent: View {
         }
         .sheet(item: $effectsTrackID) { id in
             AudioEffectsPanel(editor: editor, trackID: id) { effectsTrackID = nil }
-                .presentationDetents([.large])
+                .presentationDetents([.height(560), .large])
         }
         .lumaToolSheet(isPresented: $showClipAudioPanel, style: .tallPanel) {
             if let clip = editor.selectedClip {
@@ -2443,7 +2443,20 @@ private struct OverlayPanel: View {
                 .onChange(of: textFieldFocused) { _, focused in
                     if !focused { editor.setOverlayText(id: overlayID, draftText) }
                 }
-                .onAppear { draftText = overlay?.text ?? "" }
+                .onAppear {
+                    draftText = overlay?.text ?? ""
+                    // Animated titles are invisible at their own t=0 (popIn/
+                    // fadeIn start at opacity 0) — park the playhead inside the
+                    // hold region so the user styles text they can SEE.
+                    if let o = overlay, o.text != nil,
+                       o.textAnimation != TextAnimation.none.rawValue {
+                        let holdStart = o.timelineOffset + TextAnimator.defaultDuration + 0.05
+                        let holdEnd = o.timelineEnd - TextAnimator.defaultDuration - 0.05
+                        if editor.currentTime < holdStart || editor.currentTime > max(holdStart, holdEnd) {
+                            editor.seek(to: min(holdStart, max(o.timelineOffset, holdEnd)))
+                        }
+                    }
+                }
 
             HStack(spacing: 8) {
                 ForEach(EditorState.TextLayerStyle.allCases, id: \.self) { style in
@@ -2454,6 +2467,7 @@ private struct OverlayPanel: View {
                     } label: {
                         Text(style.label)
                             .font(.footnote.weight(.semibold))
+                            .fixedSize()          // chips never wrap ("Sub-\ntitle")
                             .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)

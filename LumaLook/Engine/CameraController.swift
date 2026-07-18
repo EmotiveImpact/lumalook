@@ -20,6 +20,12 @@ final class CameraController: NSObject, ObservableObject {
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
 
+    /// C3 — the active capture format (resolution / fps / codec), persisted.
+    @Published var spec = CameraSpec.load()
+    /// C8/C9 — viewfinder assists (preview-only; never recorded).
+    @Published var peakingOn = false
+    @Published var zebrasOn = false
+
     /// Live zoom readout for the HUD (1.0x / 2.0x / 3.0x cycle).
     @Published var zoomFactor: CGFloat = 1
     /// Which camera feeds the session (flip toggles it).
@@ -32,6 +38,9 @@ final class CameraController: NSObject, ObservableObject {
     private let mediaQueue = DispatchQueue(label: "com.emotiveimpact.lumalook.camera.media")
     private let videoOutput = AVCaptureVideoDataOutput()
     private let audioOutput = AVCaptureAudioDataOutput()
+    /// C5 — real sensor-resolution stills (the old path saved the ~1MP preview).
+    private let photoOutput = AVCapturePhotoOutput()
+    private var stillCompletion: ((CGImage?) -> Void)?   // sessionQueue set, delegate read
     private let pipeline = LookPipeline.shared
     private var configured = false // sessionQueue only
 
@@ -43,10 +52,48 @@ final class CameraController: NSObject, ObservableObject {
     private var writerStarted = false
     private var wantsRecording = false
     private var outputURL: URL?
+    /// Output geometry for the CURRENT take (from spec at record start).
+    private var recordSize = CGSize(width: 1080, height: 1920)
 
     // MARK: - Permissions & lifecycle
 
+    #if DEBUG
+    /// C0 — sim preview stub: the simulator has no camera, so
+    /// `LUMA_SEED_CAMFRAME=<image path>` feeds a test frame through the SAME
+    /// grading path into `previewImage` at 30 Hz. Every HUD/overlay/gesture
+    /// feature becomes screenshot-verifiable headlessly; capture paths still
+    /// need device QA.
+    private var stubTimer: DispatchSourceTimer?
+
+    private func startStubIfSeeded() -> Bool {
+        guard let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
+              let source = CIImage(contentsOf: URL(fileURLWithPath: path)) else { return false }
+        let upright = source.transformed(by: CGAffineTransform(
+            translationX: -source.extent.minX, y: -source.extent.minY))
+        let timer = DispatchSource.makeTimerSource(queue: mediaQueue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(33))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            let graded: CIImage
+            if let lookState {
+                graded = self.pipeline.apply(state: lookState, to: upright, includeSplit: false)
+            } else {
+                graded = upright
+            }
+            self.publishPreview(graded)
+        }
+        timer.resume()
+        stubTimer = timer
+        DispatchQueue.main.async { self.isRunning = true }
+        print("[LUMA] CAMSTUB running frame=\(Int(upright.extent.width))x\(Int(upright.extent.height))")
+        return true
+    }
+    #endif
+
     func requestAndStart() {
+        #if DEBUG
+        if startStubIfSeeded() { return }
+        #endif
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             startSession()
@@ -77,9 +124,14 @@ final class CameraController: NSObject, ObservableObject {
         guard !configured else { return }
 
         session.beginConfiguration()
-        session.sessionPreset = .hd1920x1080
+        session.sessionPreset = .hd1920x1080   // fallback; applyFormat overrides
 
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+        // C2: prefer a virtual multi-camera so pinch can reach the 0.5x
+        // ultra-wide; the system handles lens switchover inside one device.
+        let device = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back)
+            ?? AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+            ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+        guard let device,
               let videoInput = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(videoInput) else {
             session.commitConfiguration()
@@ -89,6 +141,8 @@ final class CameraController: NSObject, ObservableObject {
         session.addInput(videoInput)
         activeVideoDevice = device
         activeVideoInput = videoInput
+        applyFormat(spec, on: device)
+        configureZoomBaseline(for: device)
 
         if let mic = AVCaptureDevice.default(for: .audio),
            let audioInput = try? AVCaptureDeviceInput(device: mic),
@@ -111,25 +165,298 @@ final class CameraController: NSObject, ObservableObject {
             session.addOutput(audioOutput)
         }
 
+        // C5: photo output rides the same session; capture pulls the FULL
+        // sensor image, not the preview buffer.
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+        }
+
         session.commitConfiguration()
         configured = true
     }
 
+    // MARK: - C3: capture format (resolution / fps / codec)
+
+    /// User picked a new format. Blocked mid-recording (writer geometry must
+    /// stay stable for the take). Applies live to the running session.
+    func setSpec(_ newSpec: CameraSpec) {
+        guard !isRecording else { return }
+        DispatchQueue.main.async { self.spec = newSpec }
+        newSpec.save()
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else {
+                print("[LUMA] CAMSPEC stored=\(newSpec.rawValue) (no device — sim)")
+                return
+            }
+            self.session.beginConfiguration()
+            self.applyFormat(newSpec, on: device)
+            self.session.commitConfiguration()
+        }
+    }
+
+    /// sessionQueue only. Picks an activeFormat matching the spec's dimensions
+    /// + fps and pins the frame duration. Buffers arrive sensor-landscape, so
+    /// the target format is (portraitH × portraitW). Falls back gracefully:
+    /// wrong fps → nearest the format supports; no matching dims → leave the
+    /// session preset alone.
+    private func applyFormat(_ spec: CameraSpec, on device: AVCaptureDevice) {
+        let dims = spec.resolution.portrait
+        let targetW = Int32(dims.h), targetH = Int32(dims.w)   // landscape sensor
+        let candidates = device.formats.filter { f in
+            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            return d.width == targetW && d.height == targetH
+        }
+        guard !candidates.isEmpty else {
+            print("[LUMA] CAMSPEC \(spec.rawValue) — no matching format, keeping preset")
+            return
+        }
+        let wanted = Double(spec.fps)
+        let format = candidates.first { f in
+            f.videoSupportedFrameRateRanges.contains {
+                $0.minFrameRate <= wanted && wanted <= $0.maxFrameRate
+            }
+        } ?? candidates[0]
+        let maxRate = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 30
+        let actualFPS = min(wanted, maxRate)
+        do {
+            try device.lockForConfiguration()
+            device.activeFormat = format
+            let duration = CMTime(value: 1, timescale: CMTimeScale(actualFPS))
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+            device.unlockForConfiguration()
+            print("[LUMA] CAMSPEC applied \(spec.rawValue) fps=\(Int(actualFPS))")
+        } catch {
+            print("[LUMA] CAMSPEC lock failed: \(error)")
+        }
+    }
+
+    // MARK: - C5: full-resolution graded still
+
+    /// True when the REAL session can shoot a sensor still (false in the sim
+    /// stub, where the caller falls back to grabbing the preview frame).
+    var canCaptureFullRes: Bool { session.isRunning }
+
+    /// Captures a full-resolution photo, grades it through the SAME look
+    /// pipeline as the preview, and returns the finished CGImage (nil on
+    /// failure). Callback on main.
+    func captureFullResStill(_ completion: @escaping (CGImage?) -> Void) {
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning,
+                  self.session.outputs.contains(self.photoOutput) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            self.stillCompletion = completion
+            let settings = AVCapturePhotoSettings()
+            settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
+            settings.photoQualityPrioritization = self.photoOutput.maxPhotoQualityPrioritization
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    // MARK: - C6: manual exposure (ISO / shutter angle / EV bias)
+
+    /// Display state for the exposure HUD. `manualExposure` false = full auto.
+    @Published var manualExposure = false
+    @Published var currentISO: Float = 0          // read-back for the panel
+    @Published var shutterAngle: Double = 180     // cine convention
+    @Published var evBias: Float = 0
+
+    /// Supported ISO range of the active format (for the slider bounds).
+    var isoRange: ClosedRange<Float> {
+        guard let device = activeVideoDevice else { return 50...3200 }
+        let f = device.activeFormat
+        return f.minISO...f.maxISO
+    }
+
+    /// C6 — sets manual ISO + shutter ANGLE. Angle → duration via the cine
+    /// identity duration = (angle/360) / fps, so 180° at 30fps = 1/60s.
+    /// nil leaves that component at its current value.
+    func setManualExposure(iso: Float? = nil, angle: Double? = nil) {
+        let targetAngle = angle ?? shutterAngle
+        DispatchQueue.main.async {
+            self.manualExposure = true
+            self.shutterAngle = targetAngle
+            if let iso { self.currentISO = iso }
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice,
+                  device.isExposureModeSupported(.custom) else {
+                print("[LUMA] EXPOSURE manual iso=\(iso.map { String(Int($0)) } ?? "keep") angle=\(Int(targetAngle)) (no device — sim)")
+                return
+            }
+            let fps = Double(self.spec.fps)
+            let seconds = (targetAngle / 360.0) / fps
+            let duration = CMTime(seconds: seconds, preferredTimescale: 1_000_000)
+            let clampedDuration = CMTimeClampToRange(
+                duration, range: CMTimeRange(start: device.activeFormat.minExposureDuration,
+                                             end: device.activeFormat.maxExposureDuration))
+            let clampedISO = min(max(iso ?? device.iso,
+                                     device.activeFormat.minISO), device.activeFormat.maxISO)
+            do {
+                try device.lockForConfiguration()
+                device.setExposureModeCustom(duration: clampedDuration, iso: clampedISO)
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { self.currentISO = clampedISO }
+                print("[LUMA] EXPOSURE iso=\(Int(clampedISO)) angle=\(Int(targetAngle)) dur=1/\(Int(1/seconds))s")
+            } catch {}
+        }
+    }
+
+    /// Snaps the shutter to the 180° rule for the current fps.
+    func snapTo180() { setManualExposure(angle: 180) }
+
+    /// C6 — exposure-compensation bias in EV (auto modes only).
+    func setEVBias(_ ev: Float) {
+        DispatchQueue.main.async { self.evBias = ev }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            let clamped = min(max(ev, device.minExposureTargetBias), device.maxExposureTargetBias)
+            do {
+                try device.lockForConfiguration()
+                device.setExposureTargetBias(clamped)
+                device.unlockForConfiguration()
+            } catch {}
+        }
+    }
+
+    /// Back to full auto exposure.
+    func resetAutoExposure() {
+        DispatchQueue.main.async {
+            self.manualExposure = false
+            self.evBias = 0
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                device.setExposureTargetBias(0)
+                device.unlockForConfiguration()
+                print("[LUMA] EXPOSURE auto")
+            } catch {}
+        }
+    }
+
+    // MARK: - C7: manual white balance (temperature / tint)
+
+    @Published var manualWB = false
+    @Published var wbTemperature: Float = 5600
+    @Published var wbTint: Float = 0
+
+    /// C7 — locks WB to a temperature (K) + tint. Gains are clamped to the
+    /// device's legal range component-wise (out-of-gamut gains crash).
+    func setWhiteBalance(temperature: Float, tint: Float) {
+        DispatchQueue.main.async {
+            self.manualWB = true
+            self.wbTemperature = temperature
+            self.wbTint = tint
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice,
+                  device.isWhiteBalanceModeSupported(.locked) else {
+                print("[LUMA] WB \(Int(temperature))K tint=\(Int(tint)) (no device — sim)")
+                return
+            }
+            let tt = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(
+                temperature: temperature, tint: tint)
+            var gains = device.deviceWhiteBalanceGains(for: tt)
+            let maxGain = device.maxWhiteBalanceGain
+            gains.redGain = min(max(gains.redGain, 1), maxGain)
+            gains.greenGain = min(max(gains.greenGain, 1), maxGain)
+            gains.blueGain = min(max(gains.blueGain, 1), maxGain)
+            do {
+                try device.lockForConfiguration()
+                device.setWhiteBalanceModeLocked(with: gains)
+                device.unlockForConfiguration()
+                print("[LUMA] WB locked \(Int(temperature))K tint=\(Int(tint))")
+            } catch {}
+        }
+    }
+
+    /// Back to continuous auto white balance.
+    func resetAutoWB() {
+        DispatchQueue.main.async { self.manualWB = false }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice,
+                  device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) else { return }
+            do {
+                try device.lockForConfiguration()
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+                device.unlockForConfiguration()
+            } catch {}
+        }
+    }
+
     // MARK: - Zoom & flip (were placebo buttons — now real)
 
-    /// Cycles 1x → 2x → 3x → 1x, clamped to what the device supports.
+    /// C2 — on a virtual multi-camera, videoZoomFactor 1.0 is the ULTRA-WIDE;
+    /// the wide lens sits at the first switch-over factor. `wideBaseline`
+    /// converts between raw factors and the display convention users know
+    /// (0.5x = ultra-wide, 1x = wide). 1 on single-lens devices.
+    private var wideBaseline: CGFloat = 1   // sessionQueue only
+    private var pinchBase: CGFloat = 1      // display zoom at pinch start
+
+    private func configureZoomBaseline(for device: AVCaptureDevice) {
+        wideBaseline = device.virtualDeviceSwitchOverVideoZoomFactors.first
+            .map { CGFloat(truncating: $0) } ?? 1
+        // Start at 1x wide (raw = baseline), matching the old behaviour.
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = wideBaseline
+            device.unlockForConfiguration()
+        } catch {}
+        DispatchQueue.main.async { self.zoomFactor = 1 }
+    }
+
+    /// Cycles 0.5x (if the ultra-wide exists) → 1x → 2x → 3x →, clamped.
     func cycleZoom() {
         sessionQueue.async { [weak self] in
             guard let self, let device = self.activeVideoDevice else { return }
-            let next: CGFloat = self.zoomFactor >= 2.5 ? 1 : (self.zoomFactor >= 1.5 ? 3 : 2)
-            let clamped = min(next, device.maxAvailableVideoZoomFactor)
-            do {
-                try device.lockForConfiguration()
-                device.ramp(toVideoZoomFactor: clamped, withRate: 8)
-                device.unlockForConfiguration()
-                DispatchQueue.main.async { self.zoomFactor = clamped }
-            } catch {}
+            let hasUltraWide = self.wideBaseline > 1
+            let current = self.zoomFactor
+            let next: CGFloat
+            if current >= 2.5 { next = hasUltraWide ? 0.5 : 1 }
+            else if current >= 1.5 { next = 3 }
+            else if current >= 0.75 { next = 2 }
+            else { next = 1 }
+            self.applyDisplayZoom(next, on: device, ramped: true)
         }
+    }
+
+    /// C2 — continuous pinch. Call `beginPinch` on gesture start, then
+    /// `updatePinch(scale:)` with the live magnification.
+    func beginPinch() {
+        pinchBase = zoomFactor
+    }
+
+    func updatePinch(scale: CGFloat) {
+        let target = pinchBase * scale
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            self.applyDisplayZoom(target, on: device, ramped: false)
+        }
+    }
+
+    /// sessionQueue only. Display zoom → raw factor, clamp, apply, publish.
+    private func applyDisplayZoom(_ display: CGFloat, on device: AVCaptureDevice, ramped: Bool) {
+        let raw = display * wideBaseline
+        let clampedRaw = min(max(raw, device.minAvailableVideoZoomFactor),
+                             min(device.maxAvailableVideoZoomFactor, wideBaseline * 10))
+        do {
+            try device.lockForConfiguration()
+            if ramped {
+                device.ramp(toVideoZoomFactor: clampedRaw, withRate: 8)
+            } else {
+                device.videoZoomFactor = clampedRaw
+            }
+            device.unlockForConfiguration()
+            let display = clampedRaw / wideBaseline
+            DispatchQueue.main.async { self.zoomFactor = display }
+        } catch {}
     }
 
     /// Switches front/back. Blocked while recording (the writer's frame
@@ -167,9 +494,86 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func stopSession() {
+        #if DEBUG
+        stubTimer?.cancel()
+        stubTimer = nil
+        #endif
         sessionQueue.async { [weak self] in
             self?.session.stopRunning()
             DispatchQueue.main.async { self?.isRunning = false }
+        }
+    }
+
+    // MARK: - C1: tap-to-focus / tap-to-expose + AE/AF lock
+
+    /// Whether AE/AF is user-locked (drives the HUD badge).
+    @Published var aeafLocked = false
+    /// Where the last focus tap landed, in unit preview coords (for the reticle).
+    @Published var focusPoint: CGPoint?
+
+    /// Focus + expose at a point in UNIT PREVIEW coordinates (portrait-upright,
+    /// y-down, matching the on-screen image). Buffers are rotated 90° to
+    /// portrait, so the sensor-native (landscape) device point is
+    /// (y, 1 - x); the front camera is additionally mirrored in x.
+    func focusExpose(at unit: CGPoint) {
+        DispatchQueue.main.async {
+            self.focusPoint = unit
+            self.aeafLocked = false
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            var devicePoint = CGPoint(x: unit.y, y: 1 - unit.x)
+            if self.cameraPosition == .front { devicePoint.y = 1 - devicePoint.y }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported,
+                   device.isFocusModeSupported(.autoFocus) {
+                    device.focusPointOfInterest = devicePoint
+                    device.focusMode = .autoFocus
+                }
+                if device.isExposurePointOfInterestSupported,
+                   device.isExposureModeSupported(.autoExpose) {
+                    device.exposurePointOfInterest = devicePoint
+                    device.exposureMode = .autoExpose
+                }
+                device.unlockForConfiguration()
+                print("[LUMA] FOCUS unit=\(unit) device=\(devicePoint)")
+            } catch {}
+        }
+    }
+
+    /// Long-press AE/AF lock: freezes focus + exposure where they are.
+    /// Call again (or tap anywhere) to release back to continuous auto.
+    func toggleAEAFLock() {
+        if aeafLocked { return unlockAEAF() }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusModeSupported(.locked) { device.focusMode = .locked }
+                if device.isExposureModeSupported(.locked) { device.exposureMode = .locked }
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { self.aeafLocked = true }
+                print("[LUMA] AEAF locked")
+            } catch {}
+        }
+    }
+
+    func unlockAEAF() {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { self.aeafLocked = false }
+                print("[LUMA] AEAF released")
+            } catch {}
         }
     }
 
@@ -201,10 +605,14 @@ final class CameraController: NSObject, ObservableObject {
             .appendingPathComponent("LumaLook_Live_\(UUID().uuidString).mov")
         guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
 
+        // C3/C4: geometry + codec follow the user's spec, captured once per
+        // take so a mid-take spec change can never tear frames.
+        let dims = spec.resolution.portrait
+        recordSize = CGSize(width: dims.w, height: dims.h)
         let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: 1080,
-            AVVideoHeightKey: 1920
+            AVVideoCodecKey: spec.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
+            AVVideoWidthKey: dims.w,
+            AVVideoHeightKey: dims.h
         ]
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         video.expectsMediaDataInRealTime = true
@@ -212,8 +620,8 @@ final class CameraController: NSObject, ObservableObject {
             assetWriterInput: video,
             sourcePixelBufferAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferWidthKey as String: 1080,
-                kCVPixelBufferHeightKey as String: 1920
+                kCVPixelBufferWidthKey as String: dims.w,
+                kCVPixelBufferHeightKey as String: dims.h
             ])
 
         let audioSettings: [String: Any] = [
@@ -317,8 +725,8 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
         guard let buffer else { return }
 
-        // Aspect-fill the graded frame into the 1080x1920 output.
-        let target = CGRect(x: 0, y: 0, width: 1080, height: 1920)
+        // Aspect-fill the graded frame into the take's output geometry.
+        let target = CGRect(origin: .zero, size: recordSize)
         let scale = max(target.width / sourceExtent.width, target.height / sourceExtent.height)
         var frame = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         frame = frame.transformed(by: CGAffineTransform(
@@ -346,6 +754,10 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
             let scale = 1280 / longest
             preview = preview.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         }
+        // C8/C9 viewfinder assists — applied AFTER the downscale (cheap) and
+        // only to the preview; recordings never carry them.
+        if zebrasOn { preview = ZebraRenderer.apply(to: preview) }
+        if peakingOn { preview = FocusPeakingRenderer.apply(to: preview) }
         guard let cg = pipeline.context.createCGImage(preview, from: preview.extent) else { return }
         DispatchQueue.main.async { [weak self] in
             self?.previewImage = cg
@@ -355,8 +767,47 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
 
 // MARK: - SwiftUI filtered preview
 
+extension CameraController: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+        let completion = stillCompletion
+        stillCompletion = nil
+        guard error == nil,
+              let data = photo.fileDataRepresentation(),
+              let source = CIImage(data: data, options: [.applyOrientationProperty: true]) else {
+            DispatchQueue.main.async { completion?(nil) }
+            return
+        }
+        // Grade at FULL resolution through the same pipeline as the preview,
+        // off the delegate queue (a 48MP grade is not free).
+        mediaQueue.async { [weak self] in
+            guard let self else { return }
+            let upright = source.transformed(by: CGAffineTransform(
+                translationX: -source.extent.minX, y: -source.extent.minY))
+            let graded: CIImage
+            if let lookState {
+                graded = self.pipeline.apply(state: lookState, to: upright, includeSplit: false)
+            } else {
+                graded = upright
+            }
+            let cg = self.pipeline.context.createCGImage(
+                graded, from: graded.extent,
+                format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            print("[LUMA] STILL full-res \(cg.map { "\($0.width)x\($0.height)" } ?? "FAILED")")
+            DispatchQueue.main.async { completion?(cg) }
+        }
+    }
+}
+
 struct FilteredCameraPreview: View {
     @ObservedObject var camera: CameraController
+    /// C1 — tap-to-focus: called with (unit point in IMAGE space, raw view
+    /// point). Unit accounts for the aspect-fill crop, so the sensor is
+    /// focused where the user actually touched the picture.
+    var onTapUnit: ((CGPoint, CGPoint) -> Void)? = nil
+    /// C1 — long-press AE/AF lock.
+    var onLongPress: (() -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -366,6 +817,24 @@ struct FilteredCameraPreview: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
+                    .contentShape(Rectangle())
+                    .gesture(
+                        // Long-press wins over tap; tap fires on release.
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onEnded { _ in onLongPress?() }
+                            .exclusively(before: SpatialTapGesture()
+                                .onEnded { value in
+                                    let p = value.location
+                                    let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
+                                    let s = max(geo.size.width / iw, geo.size.height / ih)
+                                    let offX = (iw * s - geo.size.width) / 2
+                                    let offY = (ih * s - geo.size.height) / 2
+                                    let unit = CGPoint(
+                                        x: min(max((p.x + offX) / s / iw, 0), 1),
+                                        y: min(max((p.y + offY) / s / ih, 0), 1))
+                                    onTapUnit?(unit, p)
+                                })
+                    )
             } else {
                 Color.black
             }
