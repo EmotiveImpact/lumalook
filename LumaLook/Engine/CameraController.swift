@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreImage
+import CoreMotion
 import Photos
 import SwiftUI
 
@@ -28,6 +29,26 @@ final class CameraController: NSObject, ObservableObject {
     /// C12 — live mic level 0…1 for the HUD meter (dB-mapped, throttled).
     @Published var audioLevel: Double = 0
     private var audioLevelTick = 0   // mediaQueue only
+
+    /// C4 — physical orientation (the UI is portrait-locked; gravity tells the
+    /// truth when the phone is held sideways). Sampled at record start.
+    @Published var isLandscape = false
+    /// Which way the phone is tilted: connection angle 0 vs 180 (sign of
+    /// gravity.x). Exact mapping flagged for device QA — one flip if inverted.
+    private var landscapeAngle: CGFloat = 0
+    private let orientationMotion = CMMotionManager()
+
+    private func startOrientationTracking() {
+        guard orientationMotion.isDeviceMotionAvailable else { return }
+        orientationMotion.deviceMotionUpdateInterval = 0.25
+        orientationMotion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+            guard let self, let g = data?.gravity else { return }
+            // Sideways when gravity pulls mostly along the device's x axis.
+            let landscape = abs(g.x) > abs(g.y) * 1.2
+            if landscape { self.landscapeAngle = g.x > 0 ? 0 : 180 }
+            if landscape != self.isLandscape { self.isLandscape = landscape }
+        }
+    }
 
     /// Live zoom readout for the HUD (1.0x / 2.0x / 3.0x cycle).
     @Published var zoomFactor: CGFloat = 1
@@ -57,6 +78,8 @@ final class CameraController: NSObject, ObservableObject {
     private var outputURL: URL?
     /// Output geometry for the CURRENT take (from spec at record start).
     private var recordSize = CGSize(width: 1080, height: 1920)
+    /// C4 — take orientation, committed at record start. mediaQueue only.
+    private var recordLandscape = false
 
     // MARK: - Permissions & lifecycle
 
@@ -112,6 +135,7 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     private func startSession() {
+        DispatchQueue.main.async { self.startOrientationTracking() }
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.configureIfNeeded()
@@ -590,15 +614,38 @@ final class CameraController: NSObject, ObservableObject {
         guard isRunning else { return }
         lastSavedToPhotos = false
         isRecording = true
-        mediaQueue.async { [weak self] in
-            self?.beginWriter()
+        // C4 — commit the take's orientation NOW: rotate the capture
+        // connection so buffers arrive upright for how the phone is held,
+        // and let beginWriter size the file to match. Mid-take rotation
+        // deliberately does NOT re-orient (standard camera behaviour).
+        let landscape = isLandscape
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if let connection = self.videoOutput.connection(with: .video) {
+                let angle: CGFloat = landscape ? self.landscapeAngle : 90
+                if connection.isVideoRotationAngleSupported(angle) {
+                    connection.videoRotationAngle = angle
+                }
+            }
+            self.mediaQueue.async {
+                self.recordLandscape = landscape
+                self.beginWriter()
+            }
         }
+        print("[LUMA] REC start orientation=\(landscape ? "landscape" : "portrait")")
     }
 
     func stopRecording() {
         isRecording = false
         mediaQueue.async { [weak self] in
             self?.finishWriter()
+        }
+        // C4 — back to portrait-upright buffers for the viewfinder.
+        sessionQueue.async { [weak self] in
+            guard let self,
+                  let connection = self.videoOutput.connection(with: .video),
+                  connection.isVideoRotationAngleSupported(90) else { return }
+            connection.videoRotationAngle = 90
         }
     }
 
@@ -611,11 +658,14 @@ final class CameraController: NSObject, ObservableObject {
         // C3/C4: geometry + codec follow the user's spec, captured once per
         // take so a mid-take spec change can never tear frames.
         let dims = spec.resolution.portrait
-        recordSize = CGSize(width: dims.w, height: dims.h)
+        // C4: landscape takes swap the spec's portrait geometry.
+        recordSize = recordLandscape
+            ? CGSize(width: dims.h, height: dims.w)
+            : CGSize(width: dims.w, height: dims.h)
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: spec.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
-            AVVideoWidthKey: dims.w,
-            AVVideoHeightKey: dims.h
+            AVVideoWidthKey: Int(recordSize.width),
+            AVVideoHeightKey: Int(recordSize.height)
         ]
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         video.expectsMediaDataInRealTime = true
@@ -623,8 +673,8 @@ final class CameraController: NSObject, ObservableObject {
             assetWriterInput: video,
             sourcePixelBufferAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferWidthKey as String: dims.w,
-                kCVPixelBufferHeightKey as String: dims.h
+                kCVPixelBufferWidthKey as String: Int(recordSize.width),
+                kCVPixelBufferHeightKey as String: Int(recordSize.height)
             ])
 
         let audioSettings: [String: Any] = [
