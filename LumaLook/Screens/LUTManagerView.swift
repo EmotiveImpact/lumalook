@@ -70,15 +70,16 @@ struct LUTManagerView: View {
                 .padding(.horizontal, -22)   // the List brings its own insets
         }
         .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: [Self.cubeType, .plainText, .data],
+                      allowedContentTypes: [Self.cubeType, .plainText, .png, .data],
                       allowsMultipleSelection: false) { result in
             importError = nil
             importedName = nil
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                guard url.pathExtension.lowercased() == "cube" else {
-                    importError = "Please choose a .cube LUT file."
+                let ext = url.pathExtension.lowercased()
+                guard ["cube", "3dl", "png"].contains(ext) else {
+                    importError = "Choose a .cube, .3dl or HALD .png LUT."
                     return
                 }
                 do {

@@ -85,6 +85,38 @@ extension ParsedLUT {
         }
 
         return ParsedLUT(size: target,
-                         rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) })
+                         rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) },
+                         domainMin: domainMin, domainMax: domainMax)
+    }
+
+    /// T2.6 — plain trilinear resample, used to DOWNSAMPLE oversized lattices
+    /// (65³ cubes, HALD level-12) to the iOS-safe 64³ cap.
+    func resampledTrilinear(to target: Int) -> ParsedLUT {
+        guard size != target, size >= 2 else { return self }
+        let src: [Float] = rgbaFloatData.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        let n = size
+        guard src.count >= n * n * n * 4 else { return self }
+        @inline(__always) func at(_ r: Int, _ g: Int, _ b: Int, _ c: Int) -> Float {
+            src[((b * n + g) * n + r) * 4 + c]
+        }
+        var out = [Float](repeating: 0, count: target * target * target * 4)
+        let scale = Float(n - 1) / Float(target - 1)
+        for bt in 0..<target { for gt in 0..<target { for rt in 0..<target {
+            let fr = Float(rt) * scale, fg = Float(gt) * scale, fb = Float(bt) * scale
+            let r0 = min(Int(fr), n - 2), g0 = min(Int(fg), n - 2), b0 = min(Int(fb), n - 2)
+            let dr = fr - Float(r0), dg = fg - Float(g0), db = fb - Float(b0)
+            let o = ((bt * target + gt) * target + rt) * 4
+            for c in 0..<3 {
+                let c00 = at(r0, g0, b0, c) * (1 - dr) + at(r0 + 1, g0, b0, c) * dr
+                let c10 = at(r0, g0 + 1, b0, c) * (1 - dr) + at(r0 + 1, g0 + 1, b0, c) * dr
+                let c01 = at(r0, g0, b0 + 1, c) * (1 - dr) + at(r0 + 1, g0, b0 + 1, c) * dr
+                let c11 = at(r0, g0 + 1, b0 + 1, c) * (1 - dr) + at(r0 + 1, g0 + 1, b0 + 1, c) * dr
+                out[o + c] = (c00 * (1 - dg) + c10 * dg) * (1 - db) + (c01 * (1 - dg) + c11 * dg) * db
+            }
+            out[o + 3] = 1
+        }}}
+        return ParsedLUT(size: target,
+                         rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) },
+                         domainMin: domainMin, domainMax: domainMax)
     }
 }

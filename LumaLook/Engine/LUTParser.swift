@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 enum LUTParserError: Error, LocalizedError {
     case missingSize
@@ -17,11 +18,22 @@ enum LUTParserError: Error, LocalizedError {
 struct ParsedLUT {
     let size: Int
     let rgbaFloatData: Data
+    /// T2.6 — DOMAIN_MIN/MAX from the source file. Non-default domains get a
+    /// pre-cube input remap in applyLUT (CIColorCube clamps inputs to [0,1]).
+    var domainMin: (Float, Float, Float) = (0, 0, 0)
+    var domainMax: (Float, Float, Float) = (1, 1, 1)
+
+    var hasCustomDomain: Bool {
+        domainMin != (0, 0, 0) || domainMax != (1, 1, 1)
+    }
 }
 
 enum LUTParser {
     static func parseCube(text: String) throws -> ParsedLUT {
         var size: Int?
+        var oneDSize: Int?
+        var domainMin: (Float, Float, Float) = (0, 0, 0)
+        var domainMax: (Float, Float, Float) = (1, 1, 1)
         var values: [Float] = []
 
         for rawLine in text.components(separatedBy: .newlines) {
@@ -39,7 +51,19 @@ enum LUTParser {
                 continue
             }
 
-            if line.uppercased().hasPrefix("DOMAIN_") || line.uppercased().hasPrefix("LUT_1D") {
+            if line.uppercased().hasPrefix("DOMAIN_MIN") {
+                let p = line.split(separator: " ").compactMap { Float($0) }
+                if p.count >= 3 { domainMin = (p[0], p[1], p[2]) }
+                continue
+            }
+            if line.uppercased().hasPrefix("DOMAIN_MAX") {
+                let p = line.split(separator: " ").compactMap { Float($0) }
+                if p.count >= 3 { domainMax = (p[0], p[1], p[2]) }
+                continue
+            }
+            if line.uppercased().hasPrefix("LUT_1D_SIZE") {
+                let parts = line.split(separator: " ")
+                if parts.count >= 2 { oneDSize = Int(parts[1]) }
                 continue
             }
 
@@ -52,6 +76,16 @@ enum LUTParser {
             }
         }
 
+        // T2.6 — a 1D LUT is definitionally a per-channel transfer: bake it
+        // into a separable 33³ cube so the runtime never branches.
+        if size == nil, let n1 = oneDSize {
+            guard values.count / 4 == n1 else {
+                throw LUTParserError.wrongEntryCount(expected: n1, actual: values.count / 4)
+            }
+            return bake1D(values: values, count: n1,
+                          domainMin: domainMin, domainMax: domainMax)
+        }
+
         guard let cubeSize = size else { throw LUTParserError.missingSize }
 
         let expectedEntries = cubeSize * cubeSize * cubeSize
@@ -61,11 +95,156 @@ enum LUTParser {
         }
 
         let data = values.withUnsafeBufferPointer { Data(buffer: $0) }
-        return ParsedLUT(size: cubeSize, rgbaFloatData: data)
+        return ParsedLUT(size: cubeSize, rgbaFloatData: data,
+                         domainMin: domainMin, domainMax: domainMax)
     }
 
+    /// T2.6 — content-sniffing dispatcher: PNG magic → HALD-CLUT; text whose
+    /// first meaningful line is bare integers → .3dl; otherwise .cube (1D or
+    /// 3D by its own header). One internal representation for all of them.
     static func parseCubeFile(at url: URL) throws -> ParsedLUT {
-        let text = try String(contentsOf: url, encoding: .utf8)
+        let raw = try Data(contentsOf: url)
+        if raw.count > 8, raw.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]) {
+            return try parseHALD(pngData: raw)
+        }
+        guard let text = String(data: raw, encoding: .utf8)
+            ?? String(data: raw, encoding: .isoLatin1) else {
+            throw LUTParserError.invalidData
+        }
+        // First meaningful line all bare integers (1 or ~10+ mesh values) → .3dl.
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            let allInts = !tokens.isEmpty && tokens.allSatisfy { Int($0) != nil }
+            if allInts { return try parse3DL(text: text) }
+            break
+        }
         return try parseCube(text: text)
+    }
+
+    // MARK: - 1D → separable cube
+
+    /// Bakes a 1D per-channel transfer into a 33³ cube (linear interpolation
+    /// into the table), honouring the file's domain.
+    private static func bake1D(values: [Float], count: Int,
+                               domainMin: (Float, Float, Float),
+                               domainMax: (Float, Float, Float)) -> ParsedLUT {
+        @inline(__always) func lookup(_ x: Float, _ chan: Int) -> Float {
+            let f = max(0, min(1, x)) * Float(count - 1)
+            let i = min(Int(f), count - 2)
+            let t = f - Float(i)
+            let a = values[i * 4 + chan], b = values[(i + 1) * 4 + chan]
+            return a + (b - a) * t
+        }
+        let n = 33
+        var out = [Float](repeating: 0, count: n * n * n * 4)
+        for b in 0..<n { for g in 0..<n { for r in 0..<n {
+            let i = ((b * n + g) * n + r) * 4
+            out[i] = lookup(Float(r) / Float(n - 1), 0)
+            out[i + 1] = lookup(Float(g) / Float(n - 1), 1)
+            out[i + 2] = lookup(Float(b) / Float(n - 1), 2)
+            out[i + 3] = 1
+        }}}
+        return ParsedLUT(size: n, rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) },
+                         domainMin: domainMin, domainMax: domainMax)
+    }
+
+    // MARK: - .3dl (B-fastest, integer code values)
+
+    /// Autodesk/Assimilate .3dl: a mesh header then N³ integer triples in
+    /// B-FASTEST order. Bit depth detected from the max value (OCIO
+    /// heuristic) — never hard-coded 10-bit.
+    static func parse3DL(text: String) throws -> ParsedLUT {
+        var meshCount: Int?
+        var triples: [(Float, Float, Float)] = []
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            let ints = tokens.compactMap { Float($0) }
+            guard ints.count == tokens.count, !ints.isEmpty else { continue }
+            if ints.count == 3, meshCount != nil {
+                triples.append((ints[0], ints[1], ints[2]))
+            } else if ints.count != 3 || meshCount == nil {
+                // Mesh line: its token count is the grid size.
+                if meshCount == nil, ints.count >= 2 { meshCount = ints.count; continue }
+                if ints.count == 3 { triples.append((ints[0], ints[1], ints[2])) }
+            }
+        }
+        guard let n = meshCount, n >= 2 else { throw LUTParserError.missingSize }
+        guard triples.count == n * n * n else {
+            throw LUTParserError.wrongEntryCount(expected: n * n * n, actual: triples.count)
+        }
+        // Bit depth from max value.
+        let maxV = triples.reduce(Float(0)) { max($0, $1.0, $1.1, $1.2) }
+        let divisor: Float
+        switch maxV {
+        case ...255: divisor = 255
+        case ...1023: divisor = 1023
+        case ...4095: divisor = 4095
+        case ...16383: divisor = 16383
+        default: divisor = 65535
+        }
+        var out = [Float](repeating: 0, count: n * n * n * 4)
+        for r in 0..<n { for g in 0..<n { for b in 0..<n {
+            let src = triples[((r * n) + g) * n + b]        // B-fastest source
+            let dst = ((b * n + g) * n + r) * 4             // r-fastest dest
+            out[dst] = src.0 / divisor
+            out[dst + 1] = src.1 / divisor
+            out[dst + 2] = src.2 / divisor
+            out[dst + 3] = 1
+        }}}
+        return ParsedLUT(size: n, rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) })
+    }
+
+    // MARK: - HALD-CLUT (PNG)
+
+    /// HALD level L: a (L³)×(L³) PNG holding an (L²)³ lattice, buffer index
+    /// r + g·dim + b·dim². Decoded through an explicit sRGB non-premultiplied
+    /// context so the bytes are exactly the file's colour values.
+    static func parseHALD(pngData: Data) throws -> ParsedLUT {
+        guard let provider = CGDataProvider(data: pngData as CFData),
+              let png = CGImage(pngDataProviderSource: provider, decode: nil,
+                                shouldInterpolate: false, intent: .defaultIntent) else {
+            throw LUTParserError.invalidData
+        }
+        let side = png.width
+        guard png.height == side else { throw LUTParserError.invalidData }
+        // side = level³ (level 4 → 64, level 8 → 512); lattice dim = level².
+        let level = Int(pow(Double(side), 1.0 / 3.0).rounded())
+        let dim = level * level
+        guard level >= 2, level * level * level == side,
+              dim * dim * dim == side * side else {
+            throw LUTParserError.invalidData
+        }
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: &pixels, width: side, height: side,
+                                  bitsPerComponent: 8, bytesPerRow: side * 4,
+                                  space: space,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+            throw LUTParserError.invalidData
+        }
+        // Draw un-flipped: CG's origin is bottom-left; HALD indexing expects
+        // row 0 at the TOP, so flip vertically.
+        ctx.translateBy(x: 0, y: CGFloat(side))
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.interpolationQuality = .none
+        ctx.draw(png, in: CGRect(x: 0, y: 0, width: side, height: side))
+
+        var out = [Float](repeating: 0, count: dim * dim * dim * 4)
+        for b in 0..<dim { for g in 0..<dim { for r in 0..<dim {
+            let haldIndex = r + g * dim + b * dim * dim
+            let px = haldIndex * 4
+            let dst = ((b * dim + g) * dim + r) * 4
+            out[dst] = Float(pixels[px]) / 255
+            out[dst + 1] = Float(pixels[px + 1]) / 255
+            out[dst + 2] = Float(pixels[px + 2]) / 255
+            out[dst + 3] = 1
+        }}}
+        var lut = ParsedLUT(size: dim, rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) })
+        if dim > 64 { lut = lut.resampledTrilinear(to: 64) }
+        return lut
     }
 }

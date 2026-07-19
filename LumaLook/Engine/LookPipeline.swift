@@ -364,8 +364,24 @@ final class LookPipeline: @unchecked Sendable {
 
     func applyLUT(_ lut: ParsedLUT, to image: CIImage,
                   opacity: Double = 1.0, blend: LUTBlendMode = .normal) -> CIImage {
+        // T2.6 — DOMAIN remap: CIColorCube samples inputs over [0,1], so a
+        // custom domain becomes a per-channel affine remap in front.
+        var cubeInput = image
+        if lut.hasCustomDomain {
+            let sr = 1 / max(lut.domainMax.0 - lut.domainMin.0, 1e-4)
+            let sg = 1 / max(lut.domainMax.1 - lut.domainMin.1, 1e-4)
+            let sb = 1 / max(lut.domainMax.2 - lut.domainMin.2, 1e-4)
+            cubeInput = image.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: CGFloat(sr), y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: CGFloat(sg), z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: CGFloat(sb), w: 0),
+                "inputBiasVector": CIVector(x: CGFloat(-lut.domainMin.0 * sr),
+                                            y: CGFloat(-lut.domainMin.1 * sg),
+                                            z: CGFloat(-lut.domainMin.2 * sb), w: 0),
+            ])
+        }
         let filter = CIFilter.colorCubeWithColorSpace()
-        filter.inputImage = image
+        filter.inputImage = cubeInput
         filter.cubeDimension = Float(lut.size)
         filter.cubeData = lut.rgbaFloatData
         filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)

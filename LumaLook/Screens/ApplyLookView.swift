@@ -213,7 +213,7 @@ struct ApplyLookView: View {
             Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh — lower the intensity, or shoot Log for the intended result.")
         }
         .fileImporter(isPresented: $showLUTImporter,
-                      allowedContentTypes: [.data, .plainText],
+                      allowedContentTypes: [.data, .plainText, .png],
                       allowsMultipleSelection: false) { result in
             guard case .success(let urls) = result, let url = urls.first else { return }
             let scoped = url.startAccessingSecurityScopedResource()
