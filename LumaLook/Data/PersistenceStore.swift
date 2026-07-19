@@ -201,6 +201,8 @@ struct GradeSession: Codable, Identifiable {
     var conversionOpacity: Double?
     var creativeOpacity: Double?
     var creativeBlend: String?
+    /// T2.8 built-in log profile (rawValue). Optional-at-end.
+    var conversionProfile: String? = nil
 }
 
 struct SavedLook: Codable, Identifiable {

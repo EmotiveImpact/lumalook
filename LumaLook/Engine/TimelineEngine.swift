@@ -1718,6 +1718,7 @@ final class EditorState: ObservableObject {
         if let lutID = grade.lutID, let url = lutFileURL(lutID) {
             state.lut = try? LookPipeline.shared.loadLUT(at: url)
         }
+        state.conversionProfile = grade.conversionProfile.flatMap(LogProfile.init)
         return state
     }
 

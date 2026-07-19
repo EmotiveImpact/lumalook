@@ -15,6 +15,7 @@ final class LookState: @unchecked Sendable {
     private var _lutBlend: LUTBlendMode = .normal
     private var _conversionLUT: ParsedLUT?
     private var _conversionOpacity: Double = 1.0
+    private var _conversionProfile: LogProfile?
     private var _splitFraction: Double?
 
     var recipe: LookRecipe {
@@ -54,6 +55,13 @@ final class LookState: @unchecked Sendable {
     var conversionOpacity: Double {
         get { lock.lock(); defer { lock.unlock() }; return _conversionOpacity }
         set { lock.lock(); _conversionOpacity = newValue; lock.unlock() }
+    }
+
+    /// T2.8 — built-in log profile. Mutually exclusive with `conversionLUT`
+    /// (same slot); the UI enforces it, the pipeline prefers the profile.
+    var conversionProfile: LogProfile? {
+        get { lock.lock(); defer { lock.unlock() }; return _conversionProfile }
+        set { lock.lock(); _conversionProfile = newValue; lock.unlock() }
     }
 
     /// Before/After wipe position (0…1). nil = full grade. Preview only —
@@ -134,7 +142,12 @@ final class LookPipeline: @unchecked Sendable {
         var graded = image
 
         // Slot 1 — conversion (log normalisation), blended by slot opacity.
-        if let conversion = state.conversionLUT {
+        // Built-in profile wins; applied as a PLAIN cube on raw code values
+        // (colorCubeWithColorSpace would mis-linearize the log signal).
+        if let profile = state.conversionProfile {
+            graded = LogNormalizer.apply(profile, to: graded,
+                                         opacity: state.conversionOpacity)
+        } else if let conversion = state.conversionLUT {
             graded = applyLUT(conversion, to: graded, opacity: state.conversionOpacity)
         }
 

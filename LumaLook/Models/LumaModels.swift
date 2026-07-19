@@ -271,6 +271,8 @@ struct ClipTransformKeyframe: Codable, Equatable {
 struct ClipGrade: Codable, Equatable {
     var baseLookName: String
     var lutID: UUID?
+    /// T2.8 — per-clip log profile (rawValue). Optional → legacy decodes.
+    var conversionProfile: String? = nil
     var settings: LookSettings
 }
 

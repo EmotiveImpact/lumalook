@@ -16,7 +16,42 @@ final class AppModel: ObservableObject {
         didSet {
             rebuildPlayer()
             updatePreviewFrame()
-            if !isRestoringSession { detachGradeSession() }
+            if !isRestoringSession {
+                detachGradeSession()
+                autoDetectLogProfile()
+            }
+        }
+    }
+
+    /// T2.8 — auto-detect the source's log/HDR profile from the video track's
+    /// format description. HLG + Apple Log are reliably tagged; S-Log/V-Log/
+    /// D-Log containers are generic → manual picker only.
+    private func autoDetectLogProfile() {
+        guard let url = selectedVideoURL else { return }
+        Task { [weak self] in
+            let asset = AVURLAsset(url: url)
+            guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+                  let descs = try? await track.load(.formatDescriptions),
+                  let desc = descs.first else { return }
+            let ext = CMFormatDescriptionGetExtensions(desc) as? [String: Any]
+            let transfer = ext?[kCVImageBufferTransferFunctionKey as String] as? String
+            var detected: LogProfile?
+            if let transfer {
+                if transfer == (kCVImageBufferTransferFunction_ITU_R_2100_HLG as String) {
+                    detected = .hlg
+                } else if transfer.localizedCaseInsensitiveContains("apple") &&
+                          transfer.localizedCaseInsensitiveContains("log") {
+                    detected = .appleLog
+                }
+            }
+            guard let detected else { return }
+            await MainActor.run { [weak self] in
+                guard let self, self.conversionProfile == nil,
+                      self.conversionLUT == nil else { return }
+                self.conversionProfile = detected
+                self.importToast = "Auto: \(detected.label) → Rec.709"
+                print("[LUMA] LOGDETECT \(detected.rawValue)")
+            }
         }
     }
     @Published var selectedImage: CIImage? {
@@ -103,7 +138,8 @@ final class AppModel: ObservableObject {
             conversionLUTID: conversionLUT?.id,
             conversionOpacity: conversionOpacity,
             creativeOpacity: creativeOpacity,
-            creativeBlend: creativeBlend.rawValue))
+            creativeBlend: creativeBlend.rawValue,
+            conversionProfile: conversionProfile?.rawValue))
     }
 
     /// Reopens a saved grade session exactly where it was left.
@@ -120,6 +156,7 @@ final class AppModel: ObservableObject {
         selectedLUT = session.lutID.flatMap { id in lutRepository.luts.first { $0.id == id } }
         conversionLUT = session.conversionLUTID.flatMap { id in lutRepository.luts.first { $0.id == id } }
         conversionOpacity = session.conversionOpacity ?? 100
+        conversionProfile = session.conversionProfile.flatMap(LogProfile.init)
         creativeOpacity = session.creativeOpacity ?? 100
         creativeBlend = session.creativeBlend.flatMap(LUTBlendMode.init) ?? .normal
         settings = session.settings
@@ -197,8 +234,18 @@ final class AppModel: ObservableObject {
         }
     }
     /// Slot 1 — conversion/log-normalisation LUT applied before the look.
+    /// T2.8 — built-in log profile (mutually exclusive with conversionLUT).
+    @Published var conversionProfile: LogProfile? {
+        didSet {
+            if conversionProfile != nil { conversionLUT = nil }
+            lookState.conversionProfile = conversionProfile
+        }
+    }
     @Published var conversionLUT: LUTFile? {
-        didSet { syncLookState() }
+        didSet {
+            if conversionLUT != nil { conversionProfile = nil }
+            syncLookState()
+        }
     }
     @Published var conversionOpacity: Double = 100 {
         didSet { syncLookState() }
@@ -428,6 +475,7 @@ final class AppModel: ObservableObject {
             lookState.conversionLUT = nil
         }
         lookState.conversionOpacity = conversionOpacity / 100.0
+        lookState.conversionProfile = conversionProfile
         lookState.lutOpacity = creativeOpacity / 100.0
         lookState.lutBlend = creativeBlend
         refreshPausedFrame()

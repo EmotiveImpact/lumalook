@@ -892,15 +892,43 @@ extension ApplyLookView {
 
     private var conversionPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
+            TechReadout("SOURCE FORMAT — NORMALISED FIRST", size: 9, color: LumaTheme.textMuted)
+                .padding(.horizontal, 22)
+            // T2.8 — built-in log profiles: the public transfer math baked to a
+            // cube. No vendor files; mutually exclusive with a conversion LUT.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(LogProfile.allCases, id: \.self) { profile in
+                        let on = app.conversionProfile == profile
+                        Button {
+                            app.conversionProfile = on ? nil : profile
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Text(profile.label)
+                                .font(.system(size: 13, weight: .semibold))
+                                .fixedSize()
+                                .foregroundStyle(on ? .black : .white)
+                                .padding(.horizontal, 13).padding(.vertical, 8)
+                                .background(on ? AnyShapeStyle(LumaTheme.accentBright)
+                                               : AnyShapeStyle(LumaTheme.surface), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 22)
+            }
             TechReadout("CONVERSION LUT — APPLIED FIRST", size: 9, color: LumaTheme.textMuted)
                 .padding(.horizontal, 22)
+                .padding(.top, 6)
             ScrollView {
                 VStack(spacing: 0) {
                     Button {
                         app.conversionLUT = nil
+                        app.conversionProfile = nil
                         showConversionPicker = false
                     } label: {
-                        pickerRow(name: "None", tag: nil, selected: app.conversionLUT == nil)
+                        pickerRow(name: "None", tag: nil,
+                                  selected: app.conversionLUT == nil && app.conversionProfile == nil)
                     }
                     .buttonStyle(.lumaPress)
                     // Log-target LUTs first: that's what conversion slots are for.

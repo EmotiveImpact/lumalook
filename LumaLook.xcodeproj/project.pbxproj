@@ -113,6 +113,7 @@
 		7B0F90A1E94C763D028DBDC5 /* FS_PT400U.cube in Resources */ = {isa = PBXBuildFile; fileRef = 061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */; };
 		7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */; };
 		7C6CC7EC14EE46B845684B11 /* FS_MS11.cube in Resources */ = {isa = PBXBuildFile; fileRef = 51847FFB61D4C591A507AF23 /* FS_MS11.cube */; };
+		7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179CDBD264D592FF761B1F7A /* LogNormalizer.swift */; };
 		7E736E0D019FC99EABA35E38 /* OverlayMaskRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D865130564F1DCF5BD588FA /* OverlayMaskRenderer.swift */; };
 		8109C03DBA5C939837678385 /* impact.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1799850205B123CA13E4FB2A /* impact.m4a */; };
 		819C69108B953E1736A91C32 /* FS_MS1.cube in Resources */ = {isa = PBXBuildFile; fileRef = E2E440096EDED38FA0B90A53 /* FS_MS1.cube */; };
@@ -235,6 +236,7 @@
 		15F8D64D9D3CDDB9338CB155 /* FS_PL665.cube */ = {isa = PBXFileReference; path = FS_PL665.cube; sourceTree = "<group>"; };
 		1769959689A6A4FB63FB2B2F /* click.m4a */ = {isa = PBXFileReference; path = click.m4a; sourceTree = "<group>"; };
 		1799850205B123CA13E4FB2A /* impact.m4a */ = {isa = PBXFileReference; path = impact.m4a; sourceTree = "<group>"; };
+		179CDBD264D592FF761B1F7A /* LogNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogNormalizer.swift; sourceTree = "<group>"; };
 		17D87D9EC09C9235D29B2913 /* FS_PF50.cube */ = {isa = PBXFileReference; path = FS_PF50.cube; sourceTree = "<group>"; };
 		1A04F1F9F823E1A52448E291 /* FS_PL672.cube */ = {isa = PBXFileReference; path = FS_PL672.cube; sourceTree = "<group>"; };
 		1BED5CB29FE9BC1FAADFE3AD /* FS_NP100.cube */ = {isa = PBXFileReference; path = FS_NP100.cube; sourceTree = "<group>"; };
@@ -728,6 +730,7 @@
 				3147E19399C92E044FD19FA1 /* FontLibrary.swift */,
 				2190914DE90B700ABB549AB6 /* FrameRenderer.swift */,
 				934F42E8786C51EA29FE4957 /* GIFExporter.swift */,
+				179CDBD264D592FF761B1F7A /* LogNormalizer.swift */,
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
@@ -1007,6 +1010,7 @@
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
 				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
+				7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */,
 				4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
