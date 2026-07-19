@@ -207,6 +207,7 @@
 		EE5F14B85BDABDCC7E000EF1 /* FS_DL3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7F298D108110F6DD3E095A95 /* FS_DL3200.cube */; };
 		F16A4058B43C136764ABF0A8 /* FS_PT400V.cube in Resources */ = {isa = PBXBuildFile; fileRef = 63190B53784A9183F103288A /* FS_PT400V.cube */; };
 		F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */; };
+		F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0886A833F7C5A61F258FBA /* LUTDensifier.swift */; };
 		F5FF40F29D92772033824046 /* FS_PR400X.cube in Resources */ = {isa = PBXBuildFile; fileRef = 2502776385F3CECA843CFFB0 /* FS_PR400X.cube */; };
 		F6C06F6AF59BF061204EA0A0 /* TransitionRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7773E38B01646AADD9B16EA6 /* TransitionRenderer.swift */; };
 		F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BB58FB882FE612A9E05282 /* ColorMath.swift */; };
@@ -368,6 +369,7 @@
 		AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceStore.swift; sourceTree = "<group>"; };
 		AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeforeAfterView.swift; sourceTree = "<group>"; };
 		AE6F396DED2949332902CD15 /* FS_KC200.cube */ = {isa = PBXFileReference; path = FS_KC200.cube; sourceTree = "<group>"; };
+		AF0886A833F7C5A61F258FBA /* LUTDensifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTDensifier.swift; sourceTree = "<group>"; };
 		B04A5030E4C98B0AC8663228 /* FS_FP100.cube */ = {isa = PBXFileReference; path = FS_FP100.cube; sourceTree = "<group>"; };
 		B0F91D4465C9E6A0277F6AD1 /* FS_EL400.cube */ = {isa = PBXFileReference; path = FS_EL400.cube; sourceTree = "<group>"; };
 		B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayEffectsPanel.swift; sourceTree = "<group>"; };
@@ -731,6 +733,7 @@
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
 				59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */,
 				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
+				AF0886A833F7C5A61F258FBA /* LUTDensifier.swift */,
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				8BE5250A66AE2808502F169B /* MaskRenderer.swift */,
@@ -999,6 +1002,7 @@
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
+				F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */,
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,

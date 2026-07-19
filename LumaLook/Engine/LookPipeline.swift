@@ -84,10 +84,18 @@ final class LookPipeline: @unchecked Sendable {
         cacheLock.unlock()
 
         let parsed = try LUTParser.parseCubeFile(at: url)
+        // T2.5: coarse grids get tetrahedrally pre-upsampled to a dense 64³
+        // once here — the trilinear runtime path over the dense grid carries
+        // nearly all the tetra accuracy with zero render-graph change.
+        let dense = parsed.size < 48 ? parsed.densifiedTetrahedral(to: 64) : parsed
         cacheLock.lock()
-        lutDataCache[url] = parsed
+        // Bound the cache: a dense 64³ is ~4.2 MB; six is plenty (creative +
+        // conversion + a few recents). Unbounded, a LUT-browsing session
+        // would pin hundreds of MB.
+        if lutDataCache.count >= 6 { lutDataCache.removeAll() }
+        lutDataCache[url] = dense
         cacheLock.unlock()
-        return parsed
+        return dense
     }
 
     // MARK: - Main entry point
