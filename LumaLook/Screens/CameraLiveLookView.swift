@@ -27,6 +27,9 @@ struct CameraLiveLookView: View {
     @State private var showSafeZone = false
     /// C6/C7 — manual exposure + white balance panel.
     @State private var showProPanel = false
+    /// C13 — live viewfinder scope (nil = off).
+    @State private var scopeMode: ScopeMode?
+    @State private var scopeImage: CGImage?
 
     /// Graded still capture — C5: shoots the FULL sensor resolution through
     /// AVCapturePhotoOutput and grades it with the live look (the old path
@@ -73,6 +76,10 @@ struct CameraLiveLookView: View {
             if showGrid {
                 RuleOfThirdsGrid()
                     .ignoresSafeArea()
+                    .transition(.opacity)
+                // C11 — gyro horizon level rides with the grid: line counter-
+                // rotates with roll, snaps green when level.
+                LevelIndicator()
                     .transition(.opacity)
             }
 
@@ -144,10 +151,38 @@ struct CameraLiveLookView: View {
                     .zIndex(50)
             }
 
+            // C13 — live mini-scope, bottom-left above the look strip.
+            if scopeMode != nil, let scopeImage {
+                Image(decorative: scopeImage, scale: 1)
+                    .resizable()
+                    .frame(width: 176, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(.white.opacity(0.25), lineWidth: 1))
+                    .overlay(alignment: .topLeading) {
+                        TechReadout(scopeMode?.rawValue.uppercased() ?? "", size: 8,
+                                    color: .white.opacity(0.8))
+                            .padding(4)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: .bottomLeading)
+                    .padding(.leading, 16)
+                    .padding(.bottom, 388)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+
             // Status pills float over the feed, top centre.
             VStack(spacing: 8) {
                 if camera.isRecording {
                     RecordingPill(start: recordStart ?? Date())
+                    // C12 — live mic meter rides under the REC pill: clipped or
+                    // dead audio is visible DURING the take, not after.
+                    InputMeterView(level: camera.audioLevel)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.4), in: Capsule())
+                        .transition(.opacity)
                 }
                 if let statusCaption {
                     TechReadout(statusCaption, size: 11)
@@ -244,11 +279,26 @@ struct CameraLiveLookView: View {
                 if assists.contains("guide916") { frameGuide = .vertical }
                 if assists.contains("guide239") { frameGuide = .cinemascope }
                 if assists.contains("safe") { showSafeZone = true }
+                if assists.contains("scope") { scopeMode = .waveform }
             }
             #endif
             thumbs.render(source: liveThumbSource, looks: MockData.looks, luts: favouriteLUTs.map { ($0, app.lutRepository.fileURL(for: $0)) })
         }
         .onDisappear { camera.stopSession() }
+        .task(id: scopeMode) {
+            // C13 render loop: ~5 Hz while a scope is up. The preview frame is
+            // ALREADY graded, so the scope gets a neutral LookState.
+            guard scopeMode != nil else { scopeImage = nil; return }
+            let neutral = LookState()
+            while !Task.isCancelled, let mode = scopeMode {
+                if let frame = camera.previewImage {
+                    scopeImage = await Scopes.render(frame: CIImage(cgImage: frame),
+                                                     state: neutral, mode: mode,
+                                                     size: CGSize(width: 176, height: 96))
+                }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil
         }
@@ -382,6 +432,23 @@ struct CameraLiveLookView: View {
                 flashCaption(showSafeZone ? "SAFE ZONE ON" : "SAFE ZONE OFF")
             })
             .sensoryFeedback(.selection, trigger: frameGuide)
+            // C13 — live scope: cycles waveform → histogram → false colour.
+            Button {
+                switch scopeMode {
+                case nil: scopeMode = .waveform
+                case .waveform: scopeMode = .histogram
+                case .histogram: scopeMode = .falseColor
+                default: scopeMode = nil
+                }
+                flashCaption(scopeMode.map { "SCOPE \($0.rawValue.uppercased())" } ?? "SCOPE OFF")
+            } label: {
+                Image(systemName: "waveform.path.ecg.rectangle")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(scopeMode != nil ? LumaTheme.accentBright : .white)
+                    .frame(width: 38, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
             // C8 — focus peaking assist.
             Button {
                 camera.peakingOn.toggle()

@@ -25,6 +25,9 @@ final class CameraController: NSObject, ObservableObject {
     /// C8/C9 — viewfinder assists (preview-only; never recorded).
     @Published var peakingOn = false
     @Published var zebrasOn = false
+    /// C12 — live mic level 0…1 for the HUD meter (dB-mapped, throttled).
+    @Published var audioLevel: Double = 0
+    private var audioLevelTick = 0   // mediaQueue only
 
     /// Live zoom readout for the HUD (1.0x / 2.0x / 3.0x cycle).
     @Published var zoomFactor: CGFloat = 1
@@ -690,6 +693,14 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
                        from connection: AVCaptureConnection) {
         if output === audioOutput {
             appendAudio(sampleBuffer)
+            // C12 — publish a throttled mic level (~8 Hz) from the channel's
+            // average power: -50 dB → 0, 0 dB → 1.
+            audioLevelTick += 1
+            if audioLevelTick % 5 == 0,
+               let power = connection.audioChannels.first?.averagePowerLevel {
+                let level = min(max((Double(power) + 50) / 50, 0), 1)
+                DispatchQueue.main.async { self.audioLevel = level }
+            }
             return
         }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }

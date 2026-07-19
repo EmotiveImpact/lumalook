@@ -136,6 +136,7 @@
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
 		9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */; };
 		9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */; };
+		9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */; };
 		A0576CA334B7E390B01D9BBE /* FS_MS4.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9AB35F2AD0526EF4380F835E /* FS_MS4.cube */; };
 		A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = FB86B09D858300B299D1B15F /* Warm_Cinematic_17.cube */; };
 		A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8AEF2B3B897BD002287240 /* ExportSheet.swift */; };
@@ -333,6 +334,7 @@
 		87C32E811BEC084ED5BD2821 /* FS_PX680C.cube */ = {isa = PBXFileReference; path = FS_PX680C.cube; sourceTree = "<group>"; };
 		87F176B33481AA29E661CF5E /* FS_TZ0.cube */ = {isa = PBXFileReference; path = FS_TZ0.cube; sourceTree = "<group>"; };
 		891A0BF1C013405CA3F546AF /* FS_MS8.cube */ = {isa = PBXFileReference; path = FS_MS8.cube; sourceTree = "<group>"; };
+		89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LevelIndicator.swift; sourceTree = "<group>"; };
 		89F752262798C945F44F00B2 /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
 		8AAD61FA876823D705F8CF79 /* LookLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookLibrary.swift; sourceTree = "<group>"; };
 		8B0D225A84F898394B902E73 /* FS_FN800.cube */ = {isa = PBXFileReference; path = FS_FN800.cube; sourceTree = "<group>"; };
@@ -657,6 +659,7 @@
 				65C7041305E116D6DDDA5DBA /* FrameGuidesOverlay.swift */,
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
 				8722C35F72247FE70F9AF07F /* InputMeterView.swift */,
+				89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
 				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
@@ -999,6 +1002,7 @@
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
+				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
 				4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
