@@ -105,7 +105,7 @@ struct ApplyLookView: View {
     }
 
     private var thumbStamp: String {
-        "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)"
+        "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)"
     }
 
     private var mediaKey: String {
@@ -175,8 +175,8 @@ struct ApplyLookView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task(id: thumbStamp) {
             thumbs.render(source: app.previewFrame,
-                          looks: MockData.looks,
-                          luts: app.lutRepository.luts.map { ($0, app.lutRepository.fileURL(for: $0)) })
+                          library: app.library.all,
+                          fileURL: { app.lutRepository.fileURL(for: $0) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
         .onDisappear { app.saveGradeSession() }
@@ -594,7 +594,7 @@ struct ApplyLookView: View {
                                     && app.selectedLUT?.id == saved.lutID
                                     && app.settings == saved.settings,
                                 badge: "SAVED",
-                                image: nil
+                                image: thumbs.images[LookThumbs.key(LibraryLook(saved: saved))]
                             ) {
                                 withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                                     app.select(look: LibraryLook(saved: saved))
@@ -611,7 +611,7 @@ struct ApplyLookView: View {
                             title: look.name,
                             grade: look.gradeTint,
                             selected: look.id == app.selectedLook.id && app.selectedLUT == nil,
-                            image: thumbs.images[LookThumbs.key(look: look)]
+                            image: thumbs.images[LookThumbs.key(LibraryLook(builtIn: look))]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                                 app.select(look: LibraryLook(builtIn: look))
@@ -629,7 +629,7 @@ struct ApplyLookView: View {
                             grade: Color(red: 0.3, green: 0.8, blue: 0.9),
                             selected: app.selectedLUT?.id == lut.id,
                             badge: lut.isLogTarget ? "LOG" : "LUT",
-                            image: thumbs.images[LookThumbs.key(lut: lut)]
+                            image: thumbs.images[LookThumbs.key(LibraryLook(lut: lut))]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                                 app.select(look: LibraryLook(lut: lut))

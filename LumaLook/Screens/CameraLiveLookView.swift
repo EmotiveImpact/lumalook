@@ -287,7 +287,8 @@ struct CameraLiveLookView: View {
                 if assists.contains("scope") { scopeMode = .waveform }
             }
             #endif
-            thumbs.render(source: liveThumbSource, looks: MockData.looks, luts: favouriteLUTs.map { ($0, app.lutRepository.fileURL(for: $0)) })
+            thumbs.render(source: liveThumbSource, library: cameraStripLooks,
+                          fileURL: { app.lutRepository.fileURL(for: $0) })
         }
         .onDisappear { camera.stopSession() }
         .task(id: scopeMode) {
@@ -315,7 +316,8 @@ struct CameraLiveLookView: View {
         .onReceive(camera.$previewImage) { frame in
             guard liveThumbSource == nil, let frame else { return }
             liveThumbSource = CIImage(cgImage: frame)
-            thumbs.render(source: liveThumbSource, looks: MockData.looks, luts: favouriteLUTs.map { ($0, app.lutRepository.fileURL(for: $0)) })
+            thumbs.render(source: liveThumbSource, library: cameraStripLooks,
+                          fileURL: { app.lutRepository.fileURL(for: $0) })
         }
     }
 
@@ -517,6 +519,13 @@ struct CameraLiveLookView: View {
         Array(app.lutRepository.luts.filter(\.isFavourite).prefix(8))
     }
 
+    /// What the camera strip renders thumbnails for — the built-ins plus the
+    /// favourited LUTs it shows (bounded, so live rendering stays cheap).
+    private var cameraStripLooks: [LibraryLook] {
+        MockData.looks.map { LibraryLook(builtIn: $0) }
+            + favouriteLUTs.map { LibraryLook(lut: $0) }
+    }
+
     private var looksRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
@@ -526,7 +535,7 @@ struct CameraLiveLookView: View {
                     } label: {
                         VStack(spacing: 6) {
                             Group {
-                                if let image = thumbs.images[LookThumbs.key(look: look)] {
+                                if let image = thumbs.images[LookThumbs.key(LibraryLook(builtIn: look))] {
                                     GradedThumb(image: image,
                                                 size: CGSize(width: 78, height: 78),
                                                 radius: 14,
@@ -556,7 +565,7 @@ struct CameraLiveLookView: View {
                     } label: {
                         VStack(spacing: 6) {
                             Group {
-                                if let image = thumbs.images[LookThumbs.key(lut: lut)] {
+                                if let image = thumbs.images[LookThumbs.key(LibraryLook(lut: lut))] {
                                     GradedThumb(image: image, size: CGSize(width: 78, height: 78),
                                                 radius: 14, selected: app.selectedLUT?.id == lut.id)
                                 } else {

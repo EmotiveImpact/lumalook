@@ -1186,6 +1186,9 @@ private struct EditorContent: View {
     let onCropClip: () -> Void
     /// When set, the looks strip grades THIS clip instead of the timeline.
     @State private var looksTargetClipID: UUID?
+    /// Real graded-frame thumbnails for the looks strip — same renderer as
+    /// ApplyLookView/camera, so a look finally previews identically everywhere.
+    @StateObject private var lookThumbs = LookThumbs()
     /// Transport readout mode: MM:SS:FF timecode vs plain MM:SS (long-press).
     @State private var showFrames = true
     /// Audio lane whose volume envelope is being edited (A4).
@@ -2387,7 +2390,7 @@ private struct EditorContent: View {
                             LookSectionDivider(title: group.section.title)
                         }
                         ForEach(group.looks) { look in
-                            LookStripCell(look: look, editor: editor,
+                            LookStripCell(look: look, editor: editor, thumbs: lookThumbs,
                                           targetClipID: looksTargetClipID)
                         }
                     }
@@ -2396,6 +2399,10 @@ private struct EditorContent: View {
                 .padding(.horizontal, 22)
             }
             .lumaEdgeFade()
+        }
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
+            lookThumbs.render(source: app.previewFrame, library: app.library.all,
+                              fileURL: { app.lutRepository.fileURL(for: $0) })
         }
     }
 
@@ -2843,6 +2850,7 @@ private struct LookSectionDivider: View {
 private struct LookStripCell: View {
     let look: LibraryLook
     @ObservedObject var editor: EditorState
+    @ObservedObject var thumbs: LookThumbs
     /// nil grades the whole timeline; set, it grades just that clip.
     var targetClipID: UUID? = nil
     @EnvironmentObject private var app: AppModel
@@ -2882,7 +2890,16 @@ private struct LookStripCell: View {
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 6) {
-                SceneThumb(scene: .forest, grade: tint, radius: 12, selected: isSelected)
+                Group {
+                    // Real graded frame once rendered; tint placeholder until.
+                    if let image = thumbs.images[LookThumbs.key(look)] {
+                        GradedThumb(image: image,
+                                    size: CGSize(width: 66, height: 56),
+                                    radius: 12, selected: isSelected)
+                    } else {
+                        SceneThumb(scene: .forest, grade: tint, radius: 12, selected: isSelected)
+                    }
+                }
                     .frame(width: 66, height: 56)
                     .overlay(alignment: .topLeading) {
                         if case .lut = look.source {

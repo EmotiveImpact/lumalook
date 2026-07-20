@@ -11,8 +11,9 @@ final class LookThumbs: ObservableObject {
     private var renderTask: Task<Void, Never>?
     private var lastStamp = ""
 
-    static func key(look: LookPreset) -> String { "look-\(look.id)" }
-    static func key(lut: LUTFile) -> String { "lut-\(lut.id)" }
+    /// The unified cache key — one scheme for every surface (`LibraryLook.id`,
+    /// which is stable across launches, unlike `LookPreset.id`).
+    static func key(_ look: LibraryLook) -> String { look.thumbKey }
 
     /// Real bundled photograph for the empty state before any media is
     /// selected — thumbnails are individually graded from day one.
@@ -30,37 +31,66 @@ final class LookThumbs: ObservableObject {
             .cropped(to: CGRect(x: 0, y: 0, width: 440, height: 440))
     }()
 
-    func render(source: CIImage?, looks: [LookPreset], luts: [(file: LUTFile, url: URL)]) {
+    /// One render job per library look, resolved on the main actor so the
+    /// detached render loop never touches the repository.
+    private struct Job {
+        let key: String
+        let recipe: LookRecipe?
+        let settings: LookSettings
+        let lutURL: URL?
+    }
+
+    /// Renders a thumbnail for EVERY kind of library look through the real
+    /// pipeline: builtIn → recipe, lut → cube, saved → recipe + the user's
+    /// saved settings + optional cube. `fileURL` resolves a LUT's cube path
+    /// (pass `lutRepository.fileURL(for:)`).
+    func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL) {
         let frame = source ?? Self.fallbackFrame
-        let stamp = "\(frame.extent)-\(source == nil)-\(looks.map(\.name).joined())-\(luts.count)"
+        let stamp = "\(frame.extent)-\(source == nil)-\(library.map(\.id).joined())"
         guard stamp != lastStamp else { return }
         lastStamp = stamp
+
+        var fullStrength = LookSettings()
+        fullStrength.intensity = 100
+        // Saved looks reference their cube by id — resolve against the
+        // library's own LUT entries.
+        let lutByID = Dictionary(
+            library.compactMap { look -> (UUID, LUTFile)? in
+                guard case .lut(let f) = look.source else { return nil }
+                return (f.id, f)
+            },
+            uniquingKeysWith: { a, _ in a })
+
+        let jobs: [Job] = library.map { look in
+            switch look.source {
+            case .builtIn(let p):
+                return Job(key: look.thumbKey, recipe: p.recipe,
+                           settings: fullStrength, lutURL: nil)
+            case .lut(let f):
+                return Job(key: look.thumbKey, recipe: nil,
+                           settings: fullStrength, lutURL: fileURL(f))
+            case .saved(let s):
+                let recipe = MockData.looks.first { $0.name == s.baseLookName }?.recipe
+                let url = s.lutID.flatMap { lutByID[$0] }.map(fileURL)
+                return Job(key: look.thumbKey, recipe: recipe,
+                           settings: s.settings, lutURL: url)
+            }
+        }
 
         renderTask?.cancel()
         renderTask = Task.detached(priority: .userInitiated) { [weak self] in
             let pipeline = LookPipeline.shared
-            var fullStrength = LookSettings()
-            fullStrength.intensity = 100
-
-            for look in looks {
+            for job in jobs {
                 if Task.isCancelled { return }
                 let state = LookState()
-                state.recipe = look.recipe
-                state.settings = fullStrength
-                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220) {
-                    let key = "look-\(look.id)"
-                    await MainActor.run { self?.images[key] = cg }
+                if let recipe = job.recipe { state.recipe = recipe }
+                state.settings = job.settings
+                if let url = job.lutURL {
+                    guard let parsed = try? pipeline.loadLUT(at: url) else { continue }
+                    state.lut = parsed
                 }
-            }
-            for lut in luts {
-                if Task.isCancelled { return }
-                guard let parsed = try? pipeline.loadLUT(at: lut.url) else { continue }
-                let state = LookState()
-                state.settings = fullStrength
-                state.lut = parsed
                 if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220) {
-                    let key = "lut-\(lut.file.id)"
-                    await MainActor.run { self?.images[key] = cg }
+                    await MainActor.run { self?.images[job.key] = cg }
                 }
             }
         }
