@@ -335,14 +335,16 @@ struct FilterPackDetailView: View {
                 if app.packStore.isInstalled(pack) {
                     // Use now — context aware: if a project is already open,
                     // jump to the editor (the looks are live in its strip);
-                    // else open the grade room, straight in when media is
-                    // chosen, otherwise via Select Clip.
+                    // media loaded → straight into the grade room; otherwise
+                    // land ON the library (Looks tab), where "installed —
+                    // in your library" is literally true.
                     if !app.editor.clips.isEmpty {
                         app.path = [.editor]
                     } else if app.selectedVideoURL != nil || app.selectedImage != nil {
                         app.path.append(.applyLook)
                     } else {
-                        app.path.append(.selectClip)
+                        app.path = []
+                        app.tab = .looks
                     }
                     LumaHaptics.shared.tap()
                 } else {
@@ -418,91 +420,27 @@ struct FilterPackDetailView: View {
     }
 }
 
-// MARK: - 11 Saved Looks
+// MARK: - 11 Looks tab — the Library
 
+/// The bottom-bar Looks tab IS the Look Library now (step 6): the same
+/// browser used by the grade room / camera / editor sheets, hosted full
+/// screen. Saved looks, signature presets, purchased packs, imports,
+/// favourites, recents, collections, search and import — one screen.
+/// (Replaces the old saved-looks-only list; delete/rename live in each
+/// tile's context menu, so the dead "Edit" button is gone.)
 struct SavedLooksView: View {
     @EnvironmentObject private var app: AppModel
     var isRoot: Bool = false
 
     var body: some View {
-        LumaScreen(title: "Saved Looks", trailingText: "Edit", showBack: !isRoot) {
-            SavedLooksList(store: app.store)
-            Spacer(minLength: 24)
-            SolidCTA(title: "Create New Look") {
-                app.path.append(.customLook)
-            }
+        ZStack {
+            LumaTheme.background.ignoresSafeArea()
+            LookBrowserSheet(context: .library,
+                             showsCreateCTA: true,
+                             showsBackButton: !isRoot)
         }
-    }
-}
-
-private struct SavedLooksList: View {
-    @EnvironmentObject private var app: AppModel
-    @ObservedObject var store: PersistenceStore
-
-    var body: some View {
-        content
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        let looks = store.savedLooks
-        if looks.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "paintpalette")
-                    .font(.system(size: 34))
-                    .foregroundStyle(LumaTheme.textMuted)
-                Text("No saved looks yet")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Text("Dial in a grade in Custom Look and save it.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(LumaTheme.textMuted)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 60)
-        } else {
-            VStack(spacing: 12) {
-                ForEach(Array(looks.enumerated()), id: \.element.id) { index, look in
-                    Button {
-                        app.select(look: LibraryLook(saved: look))
-                        app.path.append(.applyLook)
-                    } label: {
-                        HStack(spacing: 14) {
-                            SceneThumb(scene: MockScene.allCases[index % MockScene.allCases.count],
-                                       radius: 12)
-                                .frame(width: 92, height: 68)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(look.name)
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(.white)
-                                Text("Based on \(look.baseLookName) • \(look.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(LumaTheme.textMuted)
-                            }
-                            Spacer()
-                            Menu {
-                                Button("Apply") {
-                                    app.select(look: LibraryLook(saved: look))
-                                    app.path.append(.applyLook)
-                                }
-                                Button("Delete", role: .destructive) {
-                                    store.deleteLook(look.id)
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .rotationEffect(.degrees(90))
-                                    .foregroundStyle(LumaTheme.textSecondary)
-                                    .frame(width: 34, height: 44)
-                            }
-                        }
-                        .padding(12)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 18))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -1164,16 +1102,6 @@ struct AudioView: View {
             }
             .tint(LumaTheme.accent)
         }
-        .sheet(isPresented: $showExportQuality) {
-            exportQualitySheet
-                .presentationDetents([.height(240)])
-                .presentationBackground(LumaTheme.background)
-        }
-        .sheet(isPresented: $showAbout) {
-            aboutSheet
-                .presentationDetents([.medium])
-                .presentationBackground(LumaTheme.background)
-        }
         .onAppear {
             volume = app.editor.volume
             fadeIn = app.editor.fadeIn
@@ -1215,6 +1143,16 @@ struct SettingsSubscriptionView: View {
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
+        }
+        .sheet(isPresented: $showExportQuality) {
+            exportQualitySheet
+                .presentationDetents([.height(240)])
+                .presentationBackground(LumaTheme.background)
+        }
+        .sheet(isPresented: $showAbout) {
+            aboutSheet
+                .presentationDetents([.medium])
+                .presentationBackground(LumaTheme.background)
         }
         .onAppear {
             #if DEBUG

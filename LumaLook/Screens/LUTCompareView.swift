@@ -7,11 +7,17 @@ struct LUTCompareView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var renderer = CompareRenderer()
 
-    /// Original + favourites first, then the rest; grid stays digestible.
+    /// Original + the library's LUTs in the unified order — favourites first,
+    /// then the rest of the library sort (installed → imported); grid stays
+    /// digestible at 11.
     private var candidates: [(file: LUTFile, url: URL)?] {
-        let luts = app.lutRepository.luts
-            .sorted { ($0.isFavourite ? 0 : 1, $0.displayName) < ($1.isFavourite ? 0 : 1, $1.displayName) }
-            .prefix(11)
+        var seen = Set<UUID>()
+        var files: [LUTFile] = []
+        for look in app.library.looks(category: .favourites) + app.library.all {
+            guard case .lut(let f) = look.source, seen.insert(f.id).inserted else { continue }
+            files.append(f)
+        }
+        let luts = files.prefix(11)
             .map { (file: $0, url: app.lutRepository.fileURL(for: $0)) }
         return [nil] + luts.map { Optional($0) }
     }
@@ -40,7 +46,13 @@ struct LUTCompareView: View {
                         let isCurrent = candidate?.file.id == app.selectedLUT?.id
                             || (candidate == nil && app.selectedLUT == nil)
                         Button {
-                            app.selectedLUT = candidate?.file
+                            if let file = candidate?.file {
+                                // Through the one selection contract, so the
+                                // pick records as recently used.
+                                app.select(look: LibraryLook(lut: file))
+                            } else {
+                                app.selectedLUT = nil
+                            }
                             LumaHaptics.shared.tap()
                             dismiss()
                         } label: {

@@ -68,6 +68,21 @@ final class LookLibraryStore: ObservableObject {
         return PackCatalog.pack(id: id)?.name
     }
 
+    /// Built-in signature looks superseded by installable pack looks (gap 7):
+    /// built-in display name → the pack-look name/code that replaces it. Once
+    /// the matching pack LUT is installed the built-in is hidden, so the
+    /// library never shows visually-duplicate pairs with different pipelines.
+    private static let builtInReplacements: [String: String] = [
+        "KD2 · Golden Hour":       "KD2",
+        "KD52 · Cine Negative":    "KD52",
+        "CN83 · Teal & Orange":    "CN83",
+        "CN93 · Luxury Campaign":  "CN93",
+        "BW32 · Documentary Grit": "BW32",
+        "Neon Nights":             "Neon Nights",
+        "Night Drive":             "Night Drive",
+        "Afrobeats Glow":          "Afrobeats Glow",
+    ]
+
     /// Full library, ordered Saved → Signature → Installed(purchased) → Imported.
     var all: [LibraryLook] {
         var out: [LibraryLook] = []
@@ -76,7 +91,16 @@ final class LookLibraryStore: ObservableObject {
             look.isFavourite = favouriteIDs.contains(look.id)
             out.append(look)
         }
+        // Store-pack LUT names (not the factory seed pack) for duplicate
+        // suppression — "KD2 · Morning Gold" replaces "KD2 · Golden Hour".
+        let installedNames = luts.luts
+            .filter { $0.packID != nil && $0.packID != LUTRepository.bundledBasicsPackID }
+            .map(\.displayName)
         for p in MockData.looks {
+            if let code = Self.builtInReplacements[p.name],
+               installedNames.contains(where: { $0 == code || $0.hasPrefix(code + " ") }) {
+                continue
+            }
             var look = LibraryLook(builtIn: p)
             look.isFavourite = favouriteIDs.contains(look.id)
             out.append(look)

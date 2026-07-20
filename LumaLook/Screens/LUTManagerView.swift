@@ -1,11 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// My LUTs as a NATIVE inset-grouped List (Apple-native tranche 2): swipe
-/// to delete/favourite, native separators and grouping — the moment a
-/// screen becomes a list of records, it should feel like Settings does.
+/// LUT Files — the file-management back office for .cube records (step 6):
+/// import, rename, tags, collections, per-pack grouping. Browsing/applying
+/// looks lives in the Look Library (Looks tab); this screen manages the
+/// files behind them. NATIVE inset-grouped List: swipe to delete/favourite.
 struct LUTManagerView: View {
     @EnvironmentObject private var app: AppModel
+    @StateObject private var thumbs = LookThumbs()
     @State private var filter = "All"
     @State private var showImporter = false
     /// T2.7 — live search over names + tags.
@@ -17,11 +19,20 @@ struct LUTManagerView: View {
 
     private static let cubeType = UTType(filenameExtension: "cube") ?? .data
 
+    /// Recently USED LUTs from the library's cross-surface history — not
+    /// "last 3 imported", which is what this filter used to show.
+    private var recentLUTs: [LUTFile] {
+        app.library.recents.compactMap { look in
+            guard case .lut(let f) = look.source else { return nil }
+            return app.lutRepository.luts.first { $0.id == f.id }
+        }
+    }
+
     private var visibleLUTs: [LUTFile] {
         let base: [LUTFile]
         switch filter {
         case "Favorites": base = app.lutRepository.luts.filter(\.isFavourite)
-        case "Recents": base = Array(app.lutRepository.luts.prefix(3))
+        case "Recents": base = recentLUTs
         default: base = app.lutRepository.luts
         }
         guard !searchText.isEmpty else { return base }
@@ -65,7 +76,8 @@ struct LUTManagerView: View {
 
     @ViewBuilder
     private func lutRow(_ lut: LUTFile, _ index: Int) -> some View {
-        LUTRow(lut: lut, scene: MockScene.allCases[index % MockScene.allCases.count])
+        LUTRow(lut: lut,
+               image: thumbs.images[LookThumbs.key(LibraryLook(lut: lut))])
             .listRowBackground(LumaTheme.surface)
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) { app.lutRepository.delete(lut) } label: {
@@ -104,7 +116,7 @@ struct LUTManagerView: View {
     }
 
     var body: some View {
-        LumaScreen(title: "My LUTs", trailingIcon: "plus",
+        LumaScreen(title: "LUT Files", trailingIcon: "plus",
                    trailingAction: { showImporter = true }, showBack: true,
                    scrollable: false) {
             SegmentPills(options: ["All", "Favorites", "Recents"], selection: $filter)
@@ -113,6 +125,13 @@ struct LUTManagerView: View {
                 .padding(.horizontal, -22)   // the List brings its own insets
         }
         .searchable(text: $searchText, prompt: "Search LUTs and tags")
+        // Real rendered thumbnails (same renderer as every apply surface) —
+        // the rows used to show index-rotated stock art.
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)") {
+            thumbs.render(source: app.previewFrame,
+                          library: app.lutRepository.luts.map { LibraryLook(lut: $0) },
+                          fileURL: { app.lutRepository.fileURL(for: $0) })
+        }
         .alert("New Collection", isPresented: $showNewCollection) {
             TextField("Name", text: $newCollectionName)
             Button("Create") {
@@ -214,7 +233,8 @@ struct LUTManagerView: View {
 private struct LUTRow: View {
     @EnvironmentObject private var app: AppModel
     let lut: LUTFile
-    var scene: MockScene = .sunsetRoad
+    /// Live-rendered graded thumbnail (nil until the renderer lands it).
+    var image: CGImage? = nil
 
     private var agoText: String {
         let formatter = RelativeDateTimeFormatter()
@@ -224,8 +244,18 @@ private struct LUTRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            SceneThumb(scene: scene, radius: 8)
-                .frame(width: 56, height: 42)
+            Group {
+                if let image {
+                    GradedThumb(image: image, size: CGSize(width: 56, height: 42), radius: 8)
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(LumaTheme.surfaceStrong)
+                        .overlay(Image(systemName: "cube.transparent")
+                            .font(.system(size: 14))
+                            .foregroundStyle(LumaTheme.textMuted))
+                }
+            }
+            .frame(width: 56, height: 42)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(lut.displayName)
