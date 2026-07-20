@@ -152,6 +152,11 @@ final class LUTRepository: ObservableObject {
         }
     }
 
+    /// Pack id stamped on the factory-seeded bundle cubes so they read as the
+    /// "Basics" pack, not user imports (they'd otherwise pollute "Your
+    /// Imports" and be silently deletable with no in-app recovery).
+    static let bundledBasicsPackID = "bundled-basics"
+
     private func seedBundledLUTsIfNeeded() {
         guard luts.isEmpty else { return }
         let bundled = Bundle.main.urls(forResourcesWithExtension: "cube", subdirectory: nil) ?? []
@@ -160,7 +165,7 @@ final class LUTRepository: ObservableObject {
         for url in bundled
         where !url.lastPathComponent.hasPrefix("Identity")
             && !url.lastPathComponent.hasPrefix("FS_") {
-            _ = try? importLUT(from: url)
+            _ = try? importLUT(from: url, packID: Self.bundledBasicsPackID)
         }
     }
 }

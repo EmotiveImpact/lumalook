@@ -55,7 +55,7 @@ struct LUTManagerView: View {
             let installed = all.filter { $0.packID != nil }
             for (pid, luts) in Dictionary(grouping: installed, by: { $0.packID! })
                 .sorted(by: { $0.key < $1.key }) {
-                groups.append((pid, PackCatalog.pack(id: pid)?.name ?? "Installed Pack", luts))
+                groups.append((pid, LookLibraryStore.packDisplayName(id: pid) ?? "Installed Pack", luts))
             }
             let imports = all.filter { $0.packID == nil }
             if !imports.isEmpty { groups.append(("imports", "Your Imports", imports)) }

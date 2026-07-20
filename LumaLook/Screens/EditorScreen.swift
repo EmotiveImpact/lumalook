@@ -521,7 +521,7 @@ struct EditorTimelineView: View {
                     app.packStore.markInstalled(pack)
                     let lib = app.libraryLooks
                     let installed = lib.filter { $0.section == .installed }
-                    print("[LUMA] LIBLOOK installedCount=\(n) libraryTotal=\(lib.count) installedInLib=\(installed.count) sections=\(app.libraryLooksBySection.map { "\($0.section):\($0.looks.count)" })")
+                    print("[LUMA] LIBLOOK installedCount=\(n) libraryTotal=\(lib.count) installedInLib=\(installed.count) sections=\(app.libraryLooksBySection.map { "\($0.section):\($0.looks.count)" }) favourites=\(app.library.looks(category: .favourites).count) recents=\(app.library.recents.count)")
                     if let first = installed.first, let clip = editor.clips.first {
                         editor.setClipGrade(id: clip.id, first.clipGrade())
                         print("[LUMA] LIBLOOK applied='\(first.name)' lutID=\(first.clipGrade().lutID?.uuidString.prefix(8) ?? "nil")")

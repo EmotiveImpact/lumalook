@@ -205,6 +205,7 @@
 		E7F24CDC9DCE6379B075F31C /* FS_TM3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = CE43932D10683135B309ABE7 /* FS_TM3200.cube */; };
 		EA12744C42B2C5D1F18FF067 /* FS_MS15.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4F45BCF53A6C28BE655C5545 /* FS_MS15.cube */; };
 		EA898050E6980825658B5299 /* StickerBaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 519912139BCEF7E0ADB3279C /* StickerBaker.swift */; };
+		EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3086F042A1EBDF87C286F0 /* LookLibraryStore.swift */; };
 		EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5082DDECC065F7185E2AD705 /* MoreScreens.swift */; };
 		ECED4E0B9CD06827B3E0C4AA /* FS_PL672.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1A04F1F9F823E1A52448E291 /* FS_PL672.cube */; };
 		EE5F14B85BDABDCC7E000EF1 /* FS_DL3200.cube in Resources */ = {isa = PBXBuildFile; fileRef = 7F298D108110F6DD3E095A95 /* FS_DL3200.cube */; };
@@ -415,6 +416,7 @@
 		E4B9B8AF11ABC3CE95CFA59D /* AudioEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsPanel.swift; sourceTree = "<group>"; };
 		E4FF77FE3E2BBB2267FBEF59 /* ParticleRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticleRenderer.swift; sourceTree = "<group>"; };
 		E65F3D06E343A952A0D76E59 /* FocusPeakingRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusPeakingRenderer.swift; sourceTree = "<group>"; };
+		EC3086F042A1EBDF87C286F0 /* LookLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookLibraryStore.swift; sourceTree = "<group>"; };
 		EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLiveLookView.swift; sourceTree = "<group>"; };
 		EC61E2463280B4012F21305D /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		EC729D61ACA4ADA812F41B16 /* FS_XP200.cube */ = {isa = PBXFileReference; path = FS_XP200.cube; sourceTree = "<group>"; };
@@ -769,6 +771,7 @@
 			children = (
 				21139184E189E20DB4F5FBAA /* AppModel.swift */,
 				8AAD61FA876823D705F8CF79 /* LookLibrary.swift */,
+				EC3086F042A1EBDF87C286F0 /* LookLibraryStore.swift */,
 				EC61E2463280B4012F21305D /* MockData.swift */,
 				AA67D08986C4F054DEF14AB7 /* PersistenceStore.swift */,
 				CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */,
@@ -1020,6 +1023,7 @@
 				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
 				7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */,
 				4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */,
+				EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,

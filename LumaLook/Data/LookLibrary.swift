@@ -7,13 +7,21 @@ import Foundation
 /// Before this, each surface read a different slice (the editor saw only
 /// `MockData.looks.prefix(10)`), so everything the Store sold and every LUT the
 /// user imported was invisible exactly where they wanted to use it.
-struct LibraryLook: Identifiable {
+struct LibraryLook: Identifiable, Hashable {
     /// Stable across launches — `LookPreset.id` regenerates per launch, so a
     /// built-in is keyed by name; LUTs and saved looks by their persistent id.
     let id: String
     let name: String
     let section: Section
     let source: LookSource
+    /// Cross-source favourite (LUTs read `LUTFile.isFavourite`; built-in and
+    /// saved looks are favourited via `LookLibraryStore`).
+    var isFavourite: Bool = false
+    /// Display name of the source pack for `.installed` looks
+    /// ("Film Stocks 01", "Basics"), nil for everything else.
+    var packName: String? = nil
+    /// The one cache key every `LookThumbs` consumer uses.
+    var thumbKey: String { id }
 
     enum LookSource {
         case builtIn(LookPreset)
@@ -30,11 +38,16 @@ struct LibraryLook: Identifiable {
             switch self {
             case .saved:     return "Your Looks"
             case .builtIn:   return "Signature"
-            case .installed: return "Installed Packs"
-            case .imported:  return "Imported LUTs"
+            case .installed: return "Purchased"
+            case .imported:  return "Imported"
             }
         }
     }
+
+    /// Identity is the stable id; `isFavourite` participates in == so a
+    /// favourite toggle invalidates SwiftUI diffs, but not in hashing.
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.isFavourite == b.isFavourite }
+    func hash(into h: inout Hasher) { h.combine(id) }
 
     /// The ONE converter every apply-site uses. Setting `lutID` here is what
     /// makes installed/imported looks actually grade a clip — the engine
@@ -54,37 +67,13 @@ struct LibraryLook: Identifiable {
 
 extension AppModel {
     /// The unified library, ordered Saved → Built-in → Installed → Imported.
-    /// Reads the three live stores (`store`, `lutRepository`, `packStore`);
-    /// AppModel forwards their change notifications, so this stays current.
-    var libraryLooks: [LibraryLook] {
-        var out: [LibraryLook] = []
-
-        // Your saved looks first.
-        for s in store.savedLooks {
-            out.append(LibraryLook(id: "saved:\(s.id.uuidString)", name: s.name,
-                                   section: .saved, source: .saved(s)))
-        }
-        // The 10 built-in signature presets.
-        for p in MockData.looks {
-            out.append(LibraryLook(id: "builtin:\(p.name)", name: p.name,
-                                   section: .builtIn, source: .builtIn(p)))
-        }
-        // LUTs split by origin: pack-installed vs user-imported.
-        for f in lutRepository.luts {
-            let section: LibraryLook.Section = f.packID == nil ? .imported : .installed
-            out.append(LibraryLook(id: "lut:\(f.id.uuidString)", name: f.displayName,
-                                   section: section, source: .lut(f)))
-        }
-        return out
-    }
+    /// Thin forward to `LookLibraryStore` — kept during migration so existing
+    /// surfaces compile unchanged; new code should read `library` directly.
+    var libraryLooks: [LibraryLook] { library.all }
 
     /// Grouped for sectioned pickers: [(section, looks)] in display order,
     /// omitting empty sections.
     var libraryLooksBySection: [(section: LibraryLook.Section, looks: [LibraryLook])] {
-        let all = libraryLooks
-        return LibraryLook.Section.allCases.compactMap { sec in
-            let looks = all.filter { $0.section == sec }
-            return looks.isEmpty ? nil : (sec, looks)
-        }
+        library.bySection
     }
 }

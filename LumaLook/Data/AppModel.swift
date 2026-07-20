@@ -278,6 +278,10 @@ final class AppModel: ObservableObject {
     let exporter = VideoExporter()
     let store = PersistenceStore()
     let packStore = PackStore()
+    /// Unified Look Library — aggregates saved looks, built-ins, and LUTs with
+    /// cross-source favourites/recents/search. Constructed in init (after the
+    /// three stores above have their default values).
+    let library: LookLibraryStore
 
     /// Pack the Store is currently showing in Pack Detail.
     @Published var selectedPackID: String?
@@ -301,6 +305,7 @@ final class AppModel: ObservableObject {
     private var storeCancellables = Set<AnyCancellable>()
 
     init() {
+        library = LookLibraryStore(persistence: store, luts: lutRepository, packs: packStore)
         // Without an explicit .playback category, iOS mutes ALL app audio
         // whenever the ring/silent switch is on silent — the classic
         // "imported video has no sound" bug. Every media app sets this.
@@ -312,6 +317,7 @@ final class AppModel: ObservableObject {
         for publisher in [lutRepository.objectWillChange,
                           store.objectWillChange,
                           packStore.objectWillChange,
+                          library.objectWillChange,      // favourites/recents changes
                           exporter.objectWillChange] {   // export ring froze at 0% without this
             publisher
                 .sink { [weak self] _ in self?.objectWillChange.send() }
