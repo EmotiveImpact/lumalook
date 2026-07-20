@@ -95,10 +95,24 @@ struct SelectClipView: View {
             VStack(spacing: 0) {
                 Hairline()
                 HStack {
-                    Text(pickerItems.count > 1 ? "\(pickerItems.count) selected — batch"
-                         : (hasSelection ? "1 clip selected" : "No clip selected"))
+                    if isLoading {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.white)
+                            Text("Preparing…")
+                        }
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(hasSelection ? .white : LumaTheme.textMuted)
+                        .foregroundStyle(.white)
+                    } else if let loadError, !hasSelection {
+                        Text(loadError)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(LumaTheme.orange)
+                            .lineLimit(2)
+                    } else {
+                        Text(pickerItems.count > 1 ? "\(pickerItems.count) selected — batch"
+                             : (hasSelection ? "1 clip selected" : "No clip selected"))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(hasSelection ? .white : LumaTheme.textMuted)
+                    }
                     Spacer()
                     Button {
                         app.path.append(.applyLook)
@@ -121,31 +135,48 @@ struct SelectClipView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: pickerItems) { _, newItems in
-            guard let first = newItems.first else { return }
+            guard let first = newItems.first else {
+                // Deselecting in the picker clears our state too, so the
+                // status row and Next button never disagree with the grid.
+                app.selectedVideoURL = nil
+                app.selectedImage = nil
+                app.batchItems = []
+                return
+            }
             isLoading = true
             loadError = nil
             // First item previews; extras queue for batch grading (#10).
             app.batchItems = newItems.count > 1 ? newItems : []
             Task {
                 defer { isLoading = false }
-                do {
-                    if pickingPhotos {
-                        if let data = try await first.loadTransferable(type: Data.self),
-                           let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
-                            app.selectedImage = image
-                        } else {
-                            loadError = "Could not load that photo. Try another one."
-                        }
-                    } else if let video = try? await first.loadTransferable(type: PickedVideo.self) {
+                let isVideo = first.supportedContentTypes.contains {
+                    $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent)
+                }
+                if isVideo {
+                    if let video = try? await first.loadTransferable(type: PickedVideo.self) {
+                        app.selectedImage = nil
                         app.selectedVideoURL = video.url
-                    } else if let data = try await first.loadTransferable(type: Data.self),
-                              let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
-                        // "All" mode: the pick was a photo.
-                        app.selectedImage = image
+                    } else if let data = try? await first.loadTransferable(type: Data.self) {
+                        // Some assets refuse the file representation; write the
+                        // raw data out ourselves so the pick still succeeds.
+                        let ext = first.supportedContentTypes.first?.preferredFilenameExtension ?? "mov"
+                        let url = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("LumaLook_Picked_\(UUID().uuidString).\(ext)")
+                        do {
+                            try data.write(to: url)
+                            app.selectedImage = nil
+                            app.selectedVideoURL = url
+                        } catch {
+                            loadError = "Could not load that video. Try another one."
+                        }
                     } else {
-                        loadError = "Could not load that item. Try another one."
+                        loadError = "Could not load that video. Try another one."
                     }
-                } catch {
+                } else if let data = try? await first.loadTransferable(type: Data.self),
+                          let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
+                    app.selectedVideoURL = nil
+                    app.selectedImage = image
+                } else {
                     loadError = "Could not load that item. Try another one."
                 }
             }

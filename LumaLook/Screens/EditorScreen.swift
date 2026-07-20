@@ -1660,9 +1660,11 @@ private struct EditorContent: View {
                         .padding(10)
                     }
             } else {
-                HeroImage(photo: .coast)
+                Rectangle()
+                    .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.045)],
+                                         startPoint: .top, endPoint: .bottom))
                     .overlay {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 14) {
                             if isLoadingClip {
                                 ProgressView().tint(.white)
                                 Text("Loading clip…")
@@ -1670,24 +1672,27 @@ private struct EditorContent: View {
                                     .foregroundStyle(.white)
                             } else {
                                 Image(systemName: "film.stack")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(.white)
+                                    .font(.system(size: 34, weight: .light))
+                                    .foregroundStyle(LumaTheme.textMuted)
                                 Text("Start your edit")
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundStyle(.white)
+                                Text("Add footage to build your timeline")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(LumaTheme.textMuted)
                                 Button(action: onAdd) {
-                                    Text("Add a Clip")
+                                    Label("Add Video", systemImage: "plus")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.white)
-                                        .padding(.horizontal, 22)
-                                        .padding(.vertical, 12)
+                                        .padding(.horizontal, 24)
+                                        .padding(.vertical, 13)
                                         .background(LumaTheme.accent, in: Capsule())
                                 }
                                 .buttonStyle(.lumaPress)
+                                .padding(.top, 4)
                             }
                         }
                         .padding(22)
-                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 20))
                     }
             }
         }
