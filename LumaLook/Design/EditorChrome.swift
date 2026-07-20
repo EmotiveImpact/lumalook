@@ -166,7 +166,13 @@ private struct LumaToolSheetModifier<SheetContent: View>: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented, onDismiss: onDismiss) {
+        content
+            // A collapsed detent survived dismissal, so panels reopened
+            // half-open forever after. Every open starts at the default.
+            .onChange(of: isPresented) { _, showing in
+                if showing { detent = style.defaultDetent }
+            }
+            .sheet(isPresented: $isPresented, onDismiss: onDismiss) {
             sheetContent()
                 .presentationDetents(style.detents, selection: $detent)
                 .presentationDragIndicator(style.showsDragIndicator ? .visible : .hidden)
