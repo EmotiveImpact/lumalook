@@ -339,7 +339,17 @@ extension LUTParser {
                 ? "Not a HALD CLUT — a HALD PNG must be square with a cube-number side."
                 : "The colour data in this file could not be read."
         case .wrongEntryCount(let expected, let actual):
-            return "Truncated LUT — expected \(expected) entries, found \(actual)."
+            // Name the resolution that produced the expectation: "35937" alone
+            // is an internal cube of a number the user never typed, and needs
+            // digit grouping to be read at a glance.
+            let declared = Int(cbrt(Double(expected)).rounded())
+            if declared > 1, declared * declared * declared == expected {
+                return """
+                Truncated LUT — this file declares a \(declared)-point cube \
+                (\(expected.formatted()) entries) but contains \(actual.formatted()).
+                """
+            }
+            return "Truncated LUT — expected \(expected.formatted()) entries, found \(actual.formatted())."
         }
     }
 }

@@ -18,6 +18,42 @@ enum LookBrowserContext: Equatable {
     case library          // Looks tab: select, then route into a grade flow
 }
 
+// MARK: - Name splitting (shared by every look tile)
+
+extension LibraryLook {
+    /// Library names follow "CODE · Descriptive Name", which is systematically
+    /// wider than one grid column or strip tile — so the differentiating half
+    /// is the half that truncates ("KD52 · Cine N…"). Split the code off so
+    /// the descriptive half owns the label and the code rides the subtitle or
+    /// the badge. One helper, so the grid and the strip can never disagree.
+    var nameSplit: (title: String, code: String?) {
+        let parts = name.components(separatedBy: " · ")
+        guard parts.count == 2,
+              let code = parts.first, let rest = parts.last,
+              code.count <= 6, !code.contains(" "), !rest.isEmpty
+        else { return (name, nil) }
+        return (rest, code)
+    }
+}
+
+// MARK: - Bottom edge fade
+
+private extension View {
+    /// Vertical sibling of `.lumaEdgeFade()` for the look grid: a scrolling
+    /// grid that butts against a pinned footer must fade out, never present a
+    /// razor cut through the middle of a caption.
+    func lookGridBottomFade(_ height: CGFloat = 28) -> some View {
+        mask {
+            VStack(spacing: 0) {
+                Rectangle().fill(.black)
+                LinearGradient(colors: [.black, .black.opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: height)
+            }
+        }
+    }
+}
+
 // MARK: - Selection truth
 
 extension AppModel {
@@ -281,7 +317,10 @@ struct LookBrowserSheet: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                // Clears the pinned footer by more than one caption block, so
+                // a partly-scrolled row degrades into the fade below rather
+                // than being sliced through its own text.
+                .padding(.bottom, 44)
 
                 if visibleLooks.isEmpty {
                     emptyState
@@ -289,6 +328,7 @@ struct LookBrowserSheet: View {
             }
         }
         .frame(maxHeight: .infinity)
+        .lookGridBottomFade()
     }
 
     @ViewBuilder
@@ -329,7 +369,7 @@ struct LookBrowserSheet: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 16)
+        .padding(.bottom, 44)
     }
 
     private var emptyState: some View {
@@ -368,9 +408,13 @@ struct LookBrowserSheet: View {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { tapNone() }
             LumaHaptics.shared.tap()
         } label: {
-            VStack(spacing: 7) {
+            // Same skeleton as LookTile — leading alignment, 96pt thumb, the
+            // fixed two-line title box and a subtitle line — so the first grid
+            // row shares one baseline instead of centring the shorter cell.
+            VStack(alignment: .leading, spacing: 7) {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(LumaTheme.background)
+                    .frame(maxWidth: .infinity)
                     .frame(height: 96)
                     .overlay {
                         TechReadout(context == .camera ? "OFF" : "NONE", size: 10,
@@ -379,10 +423,19 @@ struct LookBrowserSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 14)
                         .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
                         .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.18)))
-                Text("Original")
-                    .font(.system(size: 12, weight: active ? .semibold : .regular))
-                    .foregroundStyle(active ? .white : LumaTheme.textSecondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Original")
+                        .font(.system(size: 12, weight: active ? .semibold : .medium))
+                        .foregroundStyle(active ? .white : LumaTheme.textSecondary)
+                        .lineLimit(2)
+                        .frame(height: 30, alignment: .top)
+                    Text("No look")
+                        .font(.system(size: 10))
+                        .foregroundStyle(LumaTheme.textMuted)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 2)
             }
         }
         .buttonStyle(.lumaPress)
@@ -465,6 +518,23 @@ struct LookBrowserSheet: View {
                 InlineSlider(title: "Intensity", value: intensity)
                     .padding(.horizontal, 22)
             }
+            // A2: hold-to-Compare and Apply-to-all sit directly under the
+            // slider. Each appears only when it can actually do something —
+            // Compare needs an intensity to stash (the editor sheet passes
+            // none), Apply-to-all needs more than one clip to apply to. A
+            // dead control is worse than an absent one.
+            if isSheet, intensity != nil || canApplyToAllClips {
+                HStack(spacing: 10) {
+                    if let intensity {
+                        compareButton(intensity)
+                    }
+                    if canApplyToAllClips {
+                        smallGhostButton(title: "Apply to all clips",
+                                         action: applyToAllClips)
+                    }
+                }
+                .padding(.horizontal, 22)
+            }
             if showsCreateCTA {
                 SolidCTA(title: "Create New Look") {
                     app.path.append(.customLook)
@@ -472,7 +542,69 @@ struct LookBrowserSheet: View {
                 .padding(.horizontal, 22)
             }
         }
-        .padding(.bottom, showsCreateCTA || intensity != nil ? 8 : 0)
+        .padding(.bottom, showsCreateCTA || intensity != nil || canApplyToAllClips ? 8 : 0)
+    }
+
+    /// Press-and-hold drops intensity to 0 and shows the ungraded frame, using
+    /// the same stash/restore the None tile uses; releasing restores it.
+    private func compareButton(_ intensity: Binding<Double>) -> some View {
+        let comparing = stashedIntensity != nil && intensity.wrappedValue == 0
+        return HStack(spacing: 6) {
+            Text("Compare")
+            Text("HOLD")
+                .font(.system(size: 8, weight: .heavy).monospaced())
+                .foregroundStyle(LumaTheme.textMuted)
+        }
+        .modifier(SmallGhostChrome(active: comparing))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard stashedIntensity == nil else { return }
+                    stashedIntensity = intensity.wrappedValue
+                    intensity.wrappedValue = 0
+                    LumaHaptics.shared.tap()
+                }
+                .onEnded { _ in
+                    guard let stash = stashedIntensity else { return }
+                    intensity.wrappedValue = stash
+                    stashedIntensity = nil
+                    LumaHaptics.shared.tap()
+                }
+        )
+    }
+
+    private func smallGhostButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .modifier(SmallGhostChrome(active: false))
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    /// Only meaningful in the editor, and only with clips to spread across.
+    private var canApplyToAllClips: Bool {
+        switch context {
+        case .editorClip, .editorTimeline:
+            return app.editor.clips.count > 1 && currentLook != nil
+        default:
+            return false
+        }
+    }
+
+    /// The library look currently applied in this context, if any.
+    private var currentLook: LibraryLook? {
+        app.library.all.first(where: isSelected)
+    }
+
+    private func applyToAllClips() {
+        guard let look = currentLook else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+            for clip in app.editor.clips {
+                app.select(look: look, forClip: clip.id)
+            }
+        }
+        LumaHaptics.shared.exportSuccess()
     }
 
     // MARK: Selection
@@ -509,7 +641,63 @@ struct LookBrowserSheet: View {
     }
 }
 
+// MARK: - Small ghost chrome
+
+/// The compact sibling of `GhostCTA` (58pt is far too tall for a half-sheet
+/// footer) — same material, same hairline, same corner radius, just sized for
+/// a two-up row under the intensity slider.
+private struct SmallGhostChrome: ViewModifier {
+    var active: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(active ? .white : LumaTheme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 12).fill(LumaTheme.accent.opacity(0.28))
+                } else {
+                    RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(.white.opacity(active ? 0.28 : 0.10), lineWidth: 1))
+            .animation(.spring(response: 0.25, dampingFraction: 0.85), value: active)
+    }
+}
+
 // MARK: - Grid tile
+
+/// `GradedThumb` sized by height only: the grid columns are `.flexible()`, so
+/// a hard-coded thumbnail width leaves the image narrower than its own caption
+/// and than the dashed None tile. Same chrome, width driven by the column.
+private struct FlexibleGradedThumb: View {
+    let image: CGImage
+    var height: CGFloat = 96
+    var radius: CGFloat = 14
+    var selected: Bool = false
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),
+                                  lineWidth: selected ? 2.5 : 1)
+            )
+            .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+    }
+}
 
 /// One look in the browser grid: live-graded thumbnail, badge, favourite star
 /// top-right, name + source line below.
@@ -529,18 +717,8 @@ struct LookTile: View {
         }
     }
 
-    /// Library names follow "CODE · Descriptive Name", which is systematically
-    /// wider than one 110pt grid column — so the differentiating half is the
-    /// half that truncates. Split the code off into the subtitle line and let
-    /// the descriptive half own the title (over two lines if it needs them).
-    private var split: (title: String, code: String?) {
-        let parts = look.name.components(separatedBy: " · ")
-        guard parts.count == 2,
-              let code = parts.first, let rest = parts.last,
-              code.count <= 6, !code.contains(" "), !rest.isEmpty
-        else { return (look.name, nil) }
-        return (rest, code)
-    }
+    /// Shared with `LookStripTile` — see `LibraryLook.nameSplit`.
+    private var split: (title: String, code: String?) { look.nameSplit }
 
     private var subtitle: String {
         let source = look.packName ?? look.section.title
@@ -553,9 +731,8 @@ struct LookTile: View {
             VStack(alignment: .leading, spacing: 7) {
                 Group {
                     if let image {
-                        GradedThumb(image: image,
-                                    size: CGSize(width: 110, height: 96),
-                                    radius: 14, selected: selected)
+                        FlexibleGradedThumb(image: image, height: 96,
+                                            radius: 14, selected: selected)
                     } else {
                         RoundedRectangle(cornerRadius: 14)
                             .fill(LumaTheme.surfaceStrong)
@@ -671,13 +848,17 @@ struct LookStripTile: View {
                     }
                 }
                 if showsName {
-                    Text(look.name)
+                    // Drop the "KD52 · " code prefix: in a 100pt tile it eats
+                    // the half of the name that actually tells looks apart
+                    // ("KD52 · Cine N…"), and the badge already carries source.
+                    Text(look.nameSplit.title)
                         .font(.system(size: size.width > 80 ? 13 : 12,
                                       weight: selected ? .semibold : .regular))
                         .foregroundStyle(selected ? .white
                                          : onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
                         .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.82)
                         .frame(width: size.width + 4)
                 }
             }

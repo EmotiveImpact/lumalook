@@ -4,7 +4,7 @@ struct LumaRootView: View {
     @EnvironmentObject private var app: AppModel
 
     var body: some View {
-        NavigationStack(path: $app.path) {
+        NavigationStack(path: stackPath) {
             rootScreen
                 .navigationDestination(for: LumaRoute.self) { route in
                     destination(for: route)
@@ -13,12 +13,15 @@ struct LumaRootView: View {
         // One fixed tab bar for the whole app: content scrolls under its glass,
         // and it slides away with a spring when a flow is pushed.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if app.path.isEmpty {
+            if stackPath.wrappedValue.isEmpty {
                 LumaTabBar()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: app.path.isEmpty)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86),
+                   value: stackPath.wrappedValue.isEmpty)
+        .onChange(of: app.path) { _, _ in claimTabRoutes() }
+        .onAppear { claimTabRoutes() }
         .tint(LumaTheme.purple)
         // Import confirmation banner (open-in-place .cube / ZIP packs).
         .overlay(alignment: .top) {
@@ -39,6 +42,40 @@ struct LumaRootView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.importToast != nil)
+    }
+
+    // MARK: Tab-owned destinations
+
+    /// Projects and Settings live in the tab bar, so they must exist in exactly
+    /// ONE presentation. Anything that pushes those routes (Home's gear, Home's
+    /// "See All", the empty editor's "or open a project") is re-routed to the
+    /// owning tab instead of being stacked with a back chevron and no tab bar.
+    private static let tabOwnedRoutes: [LumaRoute: LumaTab] = [
+        .projectLibrary: .projects,
+        .settings: .profile
+    ]
+
+    /// The path the NavigationStack actually renders: truncated at the first
+    /// tab-owned route so that route never animates in before `claimTabRoutes`
+    /// converts it into a tab switch (no push-then-pop flicker).
+    private var stackPath: Binding<[LumaRoute]> {
+        Binding {
+            let path = app.path
+            guard let cut = path.firstIndex(where: { Self.tabOwnedRoutes[$0] != nil })
+            else { return path }
+            return Array(path.prefix(cut))
+        } set: { newValue in
+            app.path = newValue
+        }
+    }
+
+    private func claimTabRoutes() {
+        guard let hit = app.path.first(where: { Self.tabOwnedRoutes[$0] != nil }),
+              let tab = Self.tabOwnedRoutes[hit] else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            app.path.removeAll()
+            app.tab = tab
+        }
     }
 
     @ViewBuilder

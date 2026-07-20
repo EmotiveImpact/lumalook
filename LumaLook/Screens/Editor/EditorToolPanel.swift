@@ -30,23 +30,39 @@ enum ToolPanelMetrics {
     /// Gap between the preview and the mini timeline strip.
     static let stripTopPadding: CGFloat = 10
 
-    /// Height `.lumaMedium` resolves to — the detent every tool panel opens at.
+    /// Height `.lumaMedium` resolves to — the detent most tool panels open at.
     /// Mirrors `LumaMediumDetent` in EditorChrome.swift; if that changes, this
     /// must follow.
     static let panelDetentHeight: CGFloat = 340
+    /// Height `.lumaSmall` resolves to, for panels whose controls fit it.
+    static let smallPanelDetentHeight: CGFloat = 280
+
+    /// Ceiling used only until the natural (uncompressed) preview height has
+    /// been measured. Opening a panel must never GROW the preview.
+    static let maxPreview: CGFloat = 330
 
     /// Preview height that exactly fills the space above an open panel.
     ///
     /// - Parameters:
-    ///   - spaceToScreenBottom: distance from the top of the editor's content
-    ///     area to the physical bottom of the screen (safe-area inset included,
-    ///     because detents are measured against the same edge).
+    ///   - spaceToPanelBaseline: distance from the top of the editor's content
+    ///     area to the edge a sheet detent is measured from — the SAFE-AREA
+    ///     bottom, not the physical screen bottom. Measuring to the physical
+    ///     bottom overstated the room by the home-indicator inset and pushed
+    ///     the mini strip under the sheet.
     ///   - headerHeight: measured height of the editor header row.
-    static func previewHeight(spaceToScreenBottom: CGFloat,
-                              headerHeight: CGFloat) -> CGFloat {
-        guard spaceToScreenBottom > 0 else { return compressedPreview }
-        let above = spaceToScreenBottom - panelDetentHeight - headerHeight
-        return max(minPreview, above - stripHeight - stripTopPadding)
+    ///   - panelHeight: the detent height the open panel actually uses.
+    ///   - naturalPreview: measured height the preview takes with no panel
+    ///     open; the compressed height is clamped to it so a panel always
+    ///     shrinks the preview instead of adding letterbox. 0 = not measured.
+    static func previewHeight(spaceToPanelBaseline: CGFloat,
+                              headerHeight: CGFloat,
+                              panelHeight: CGFloat = panelDetentHeight,
+                              naturalPreview: CGFloat = 0) -> CGFloat {
+        let ceiling = naturalPreview > 0 ? naturalPreview : maxPreview
+        guard spaceToPanelBaseline > 0 else { return min(compressedPreview, ceiling) }
+        let above = spaceToPanelBaseline - panelHeight - headerHeight
+        let fitted = above - stripHeight - stripTopPadding
+        return max(minPreview, min(fitted, ceiling))
     }
 }
 
@@ -58,9 +74,18 @@ struct ToolPanelHeaderHeightKey: PreferenceKey {
     }
 }
 
-/// Distance from the top of the editor content area to the bottom of the
-/// screen — the yardstick a sheet detent is measured against.
+/// Distance from the top of the editor content area to the safe-area bottom —
+/// the yardstick a sheet detent is measured against.
 struct ToolPanelSpaceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// Height the preview resolves to with NO panel open. The compressed height is
+/// clamped to this so opening a panel can only ever shrink the preview.
+struct NaturalPreviewHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())

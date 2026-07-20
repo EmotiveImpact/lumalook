@@ -57,28 +57,31 @@ struct AudioFocusView: View {
     }
 }
 
-/// The asset's waveform. Falls back to a soft flat pulse when the source has
-/// no precomputed samples (e.g. a clip's own audio).
+/// The asset's real waveform. When there are genuinely no samples — silent
+/// clip, or extraction still in flight — it draws a flat baseline rather than
+/// a synthetic sine: a fake waveform claims the asset has content it doesn't.
 private struct AudioFocusWaveform: View {
     let samples: [Float]
 
     var body: some View {
         Canvas { ctx, size in
+            guard !samples.isEmpty else {
+                let rect = CGRect(x: 0, y: size.height / 2 - 0.75,
+                                  width: size.width, height: 1.5)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 0.75),
+                         with: .color(.white.opacity(0.28)))
+                return
+            }
             let n = max(8, Int(size.width / 4))
-            let opacity = samples.isEmpty ? 0.22 : 0.85
             for i in 0..<n {
                 let frac = Double(i) / Double(n)
-                let value: CGFloat
-                if samples.isEmpty {
-                    value = 0.22 + 0.14 * CGFloat(abs(sin(frac * 26)))   // gentle placeholder
-                } else {
-                    value = CGFloat(abs(samples[min(samples.count - 1, Int(frac * Double(samples.count)))]))
-                }
+                let value = CGFloat(abs(samples[min(samples.count - 1,
+                                                    Int(frac * Double(samples.count)))]))
                 let h = max(2, value * size.height * 0.92)
                 let x = CGFloat(i) * size.width / CGFloat(n)
                 let rect = CGRect(x: x, y: (size.height - h) / 2, width: 2.6, height: h)
                 ctx.fill(Path(roundedRect: rect, cornerRadius: 1.3),
-                         with: .color(.white.opacity(opacity)))
+                         with: .color(.white.opacity(0.85)))
             }
         }
         .padding(.horizontal, 14)

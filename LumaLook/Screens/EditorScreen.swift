@@ -1248,18 +1248,38 @@ private struct EditorContent: View {
         showTrimPanel || showMusicPanel || showClipAudioPanel
             || showOverlayPanel || showSpeedPanel
     }
+    /// `.panel` sized to a two-control tool: same detent ladder, resting at
+    /// small so the sheet is the size of what's in it.
+    private static let compactPanel = LumaSheetStyle(
+        detents: [.lumaSmall, .lumaMedium, .large],
+        defaultDetent: .lumaSmall,
+        undimmedUpThrough: .lumaSmall
+    )
     /// Which music sub-tool the audio panel is showing (B3 chip row).
     @State private var musicSubTool: String = MusicSubTool.volume
     /// Measured chrome geometry, so the compressed preview can be sized to the
     /// space the open panel actually leaves instead of a guessed constant.
     @State private var headerHeight: CGFloat = 0
-    @State private var spaceToScreenBottom: CGFloat = 0
+    @State private var spaceToPanelBaseline: CGFloat = 0
+    /// Height the preview takes with no panel open — the ceiling B3's
+    /// "compresses the preview" requires.
+    @State private var naturalPreviewHeight: CGFloat = 0
 
-    /// Preview height while a tool panel is up: exactly the room above the
-    /// sheet, minus the header and the mini timeline strip.
+    /// The detent the currently-open panel rests at. Clip sound is a two-control
+    /// panel and opens at `.lumaSmall`, so the strip above it gets that room.
+    private var openPanelDetentHeight: CGFloat {
+        showClipAudioPanel ? ToolPanelMetrics.smallPanelDetentHeight
+                           : ToolPanelMetrics.panelDetentHeight
+    }
+
+    /// Preview height while a tool panel is up: the room above the sheet minus
+    /// the header and the mini timeline strip, never larger than the preview
+    /// was before the panel opened.
     private var compressedPreviewHeight: CGFloat {
-        ToolPanelMetrics.previewHeight(spaceToScreenBottom: spaceToScreenBottom,
-                                       headerHeight: headerHeight)
+        ToolPanelMetrics.previewHeight(spaceToPanelBaseline: spaceToPanelBaseline,
+                                       headerHeight: headerHeight,
+                                       panelHeight: openPanelDetentHeight,
+                                       naturalPreview: naturalPreviewHeight)
     }
 
     var body: some View {
@@ -1285,6 +1305,15 @@ private struct EditorContent: View {
                 .background(.black)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 10)
+                .background {
+                    // Records the UNcompressed height so the compressed one can
+                    // be clamped to it (a panel must shrink, never grow, the
+                    // preview — otherwise B3 inverts and black bars appear).
+                    GeometryReader { g in
+                        Color.clear.preference(key: NaturalPreviewHeightKey.self,
+                                               value: toolPanelOpen ? 0 : g.size.height)
+                    }
+                }
 
             if toolPanelOpen {
                 // Scrubbing stays possible while a value is tuned.
@@ -1323,18 +1352,27 @@ private struct EditorContent: View {
                     }
             }
         }
-        // Measures from the top of the content area to the PHYSICAL bottom of
-        // the screen (the probe ignores the bottom safe area, which sheet
-        // detents also include), so `compressedPreviewHeight` and the sheet
-        // agree on where the panel's top edge lands.
+        // Measures from the top of the content area to the SAFE-AREA bottom —
+        // the edge SwiftUI resolves a detent height against. The probe used to
+        // ignore the bottom safe area, which overstated the room by the
+        // home-indicator inset and left the mini strip cropped under the sheet.
         .background {
             GeometryReader { g in
                 Color.clear.preference(key: ToolPanelSpaceKey.self, value: g.size.height)
             }
-            .ignoresSafeArea(edges: .bottom)
         }
         .onPreferenceChange(ToolPanelHeaderHeightKey.self) { headerHeight = $0 }
-        .onPreferenceChange(ToolPanelSpaceKey.self) { spaceToScreenBottom = $0 }
+        .onPreferenceChange(ToolPanelSpaceKey.self) { spaceToPanelBaseline = $0 }
+        // Zero means "a panel is open, no fresh reading" — keep the last one.
+        .onPreferenceChange(NaturalPreviewHeightKey.self) { h in
+            if h > 0 { naturalPreviewHeight = h }
+        }
+        .onChange(of: showClipAudioPanel) { _, open in
+            if open { loadClipWaveformIfNeeded() }
+        }
+        .onChange(of: editor.selectedClipID) { _, _ in
+            if showClipAudioPanel { loadClipWaveformIfNeeded() }
+        }
         .animation(.spring(response: 0.32, dampingFraction: 0.88), value: toolPanelOpen)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
@@ -1387,7 +1425,11 @@ private struct EditorContent: View {
             AudioEffectsPanel(editor: editor, trackID: id) { effectsTrackID = nil }
                 .presentationDetents([.height(560), .large])
         }
-        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
+        // One slider and two buttons — ~150 pt of content. At the 340 pt medium
+        // detent it opened with a third of the sheet empty while cropping the
+        // mini strip above it, so it rests at `.lumaSmall` and can still be
+        // dragged up.
+        .lumaToolSheet(isPresented: $showClipAudioPanel, style: Self.compactPanel) {
             if let clip = editor.selectedClip {
                 ToolPanelScaffold(title: "Clip sound",
                                   subtitle: clip.hasAudio
@@ -1556,18 +1598,12 @@ private struct EditorContent: View {
                     }
                     .buttonStyle(.lumaPress)
                     ScrollView(.horizontal, showsIndicators: false) {
+                        // B2: Trim, Split, Duplicate, Speed and Delete are the
+                        // contextual CHIP row directly above this dock. They
+                        // used to be drawn here too, so the editor read as two
+                        // competing toolbars with "Split"/"Trim" twice, 13 pt
+                        // apart. The dock now carries only what the chips don't.
                         HStack(spacing: 2) {
-                    FlatTool(title: "Trim", icon: "scissors", selected: showTrimPanel) {
-                        guard let clip = editor.selectedClip else { return }
-                        trimStart = clip.trimStart
-                        trimEnd = clip.trimEnd
-                        showTrimPanel.toggle()
-                    }
-                    .frame(width: 58)
-                    FlatTool(title: "Split", icon: "square.split.2x1") {
-                        editor.splitAtPlayhead()
-                    }
-                    .frame(width: 58)
                     FlatTool(title: "Freeze", icon: "snowflake") {
                         LumaHaptics.shared.tap()
                         Task { await editor.freezeAtPlayhead() }
@@ -1585,11 +1621,6 @@ private struct EditorContent: View {
                     FlatTool(title: "Mirror", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right",
                              selected: editor.selectedClip?.isMirrored == true) {
                         editor.mirrorSelectedClip()
-                        LumaHaptics.shared.tap()
-                    }
-                    .frame(width: 58)
-                    FlatTool(title: "Duplicate", icon: "plus.square.on.square") {
-                        editor.duplicateSelected()
                         LumaHaptics.shared.tap()
                     }
                     .frame(width: 58)
@@ -1614,10 +1645,6 @@ private struct EditorContent: View {
                         }
                         .frame(width: 58)
                     }
-                    FlatTool(title: "Delete", icon: "trash") {
-                        editor.deleteSelected()
-                    }
-                    .frame(width: 58)
                     FlatTool(title: "Volume", icon: "speaker.wave.2",
                              selected: showClipAudioPanel) {
                         showClipAudioPanel.toggle()
@@ -1631,13 +1658,6 @@ private struct EditorContent: View {
                     .frame(width: 58)
                     kenBurnsMenu
                         .frame(width: 58)
-                    // Speed is a push-up panel now (B3), not a buried menu.
-                    FlatTool(title: editor.selectedClip.map { speedLabel($0.speed) } ?? "Speed",
-                             icon: "gauge.with.needle",
-                             selected: showSpeedPanel) {
-                        showSpeedPanel = true
-                    }
-                    .frame(width: 58)
                         }
                     }
                     // Matches the unselected dock: content fades under the
@@ -1834,8 +1854,11 @@ private struct EditorContent: View {
                     .font(.system(size: 13, weight: .bold))
             }
             .foregroundStyle(.white)
-            // Without this the trailing Spacer competes with the title for the
-            // flexible remainder and "New Project" ellipsises beside a gap.
+            // `layoutPriority` alone was not enough: a `lineLimit(1)` Text still
+            // reports a compressible ideal width, so the Spacer took the
+            // remainder and "New Project" ellipsised beside a gap. `fixedSize`
+            // makes the title claim its intrinsic width first.
+            .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(1)
             Spacer(minLength: 8)
             Button { editor.undo() } label: {
@@ -1965,11 +1988,32 @@ private struct EditorContent: View {
             let index = editor.clips.firstIndex(where: { $0.id == c.id })
             let name = index.map { "Clip \($0 + 1)" }
                 ?? c.url.deletingPathExtension().lastPathComponent
-            return (name,
-                    "Clip Audio · \(String(format: "%.1fs", c.timelineDuration))",
-                    "waveform", [])
+            // The duration is already in the panel header ("Clip sound 8.0s"),
+            // so the card carries the kind only. Real RMS samples, not the
+            // synthetic placeholder pulse the music panel never showed.
+            return (name, "Clip Audio", "waveform", clipWaveforms[c.id] ?? [])
         }
         return nil
+    }
+
+    /// Real waveforms for clips' own audio, extracted once per clip and kept
+    /// for the session — the music lane has always shown genuine RMS data and
+    /// the clip-sound card had no reason to differ.
+    @State private var clipWaveforms: [UUID: [Float]] = [:]
+
+    /// Extracts the selected clip's waveform off the main actor if it isn't
+    /// cached yet. Cheap no-op on every other call.
+    private func loadClipWaveformIfNeeded() {
+        guard let clip = editor.selectedClip, clip.hasAudio,
+              clipWaveforms[clip.id] == nil else { return }
+        let id = clip.id
+        let url = clip.url
+        Task {
+            let samples = await Task.detached(priority: .utility) {
+                EditorState.waveformSamples(url: url)
+            }.value
+            if !samples.isEmpty { clipWaveforms[id] = samples }
+        }
     }
 
     /// Cheap change key so the overlay animates in/out on panel toggles.
@@ -2015,6 +2059,10 @@ private struct EditorContent: View {
             }
             .foregroundStyle(.white)
             .disabled(editor.isEmpty)
+            // B1: disabled must READ disabled. `.lumaPress` does not dim on
+            // disable, so the play triangle was the brightest thing on an empty
+            // editor while doing nothing. Matches Export's treatment.
+            .opacity(editor.isEmpty ? 0.35 : 1)
             .sensoryFeedback(.selection, trigger: editor.currentTime)
             HStack(spacing: 14) {
                 Spacer(minLength: 0)
@@ -2046,6 +2094,7 @@ private struct EditorContent: View {
                 .disabled(editor.isEmpty)
             }
             .foregroundStyle(LumaTheme.textSecondary)
+            .opacity(editor.isEmpty ? 0.35 : 1)
             .frame(maxWidth: .infinity)
         }
     }

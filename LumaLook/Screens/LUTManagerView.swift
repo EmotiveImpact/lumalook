@@ -127,7 +127,7 @@ struct LUTManagerView: View {
         LumaScreen(title: "LUT Files", trailingIcon: "plus",
                    trailingAction: { showImporter = true }, showBack: true,
                    scrollable: false) {
-            SegmentPills(options: ["All", "Favourites", "Recents"], selection: $filter)
+            filterChips
 
             searchField
 
@@ -192,6 +192,59 @@ struct LUTManagerView: View {
         }
     }
 
+    /// Live count behind each filter, so the chips say what they'd show
+    /// before you tap them.
+    private func count(for option: String) -> Int {
+        switch option {
+        case "Favourites": return app.lutRepository.luts.filter(\.isFavourite).count
+        case "Recents":    return recentLUTs.count
+        default:           return app.lutRepository.luts.count
+        }
+    }
+
+    /// The same counted scrolling chips the Looks tab uses (LookBrowserSheet),
+    /// not a separate segmented control — these are two views onto one library
+    /// and must read as one system.
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(["All", "Favourites", "Recents"], id: \.self) { option in
+                    let selected = filter == option
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            filter = option
+                        }
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(option)
+                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                            Text("\(count(for: option))")
+                                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                .foregroundStyle(selected ? .white.opacity(0.85)
+                                                          : LumaTheme.textMuted)
+                        }
+                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selected {
+                                Capsule().fill(LumaTheme.accent)
+                            } else {
+                                Capsule().fill(LumaTheme.surface)
+                            }
+                        }
+                        .overlay(Capsule().strokeBorder(
+                            .white.opacity(selected ? 0.18 : 0.06), lineWidth: 1))
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .scrollClipDisabled()
+    }
+
     /// T2.7 search, rendered inline. `.searchable` needs a navigation bar and
     /// LumaScreen hides it, so the bar never appeared — same field treatment as
     /// LookBrowserSheet so the two library surfaces match.
@@ -223,27 +276,19 @@ struct LUTManagerView: View {
 
     private var listBody: some View {
         List {
-            Section {
-                Button {
-                    showImporter = true
-                } label: {
-                    Label("Import LUT", systemImage: "square.and.arrow.down")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LumaTheme.accentBright)
-                }
-                .listRowBackground(LumaTheme.surface)
-
-                if let importError {
+            if let importError {
+                Section {
                     Label(importError, systemImage: "exclamationmark.triangle")
                         .font(.subheadline)
                         .foregroundStyle(LumaTheme.orange)
                         .listRowBackground(LumaTheme.surface)
                 }
-            } footer: {
-                Text("You can also open .cube files or ZIP packs from the Files app — they import straight into this library.")
             }
 
             if visibleLUTs.isEmpty {
+                // Import lives in the header on every other state; the empty
+                // state is the one place it earns a second, labelled door,
+                // because there is nothing else on screen to act on.
                 Section {
                     VStack(spacing: 10) {
                         Image(systemName: "cube.transparent")
@@ -255,6 +300,19 @@ struct LUTManagerView: View {
                         Text("Import a .cube file to get started.")
                             .font(.subheadline)
                             .foregroundStyle(LumaTheme.textMuted)
+                        Button {
+                            showImporter = true
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Label("Import LUT", systemImage: "plus")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(LumaTheme.accent, in: Capsule())
+                        }
+                        .buttonStyle(.lumaPress)
+                        .padding(.top, 4)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 34)
@@ -271,9 +329,20 @@ struct LUTManagerView: View {
                     }
                 }
             }
+
+            // Kept as a closing note rather than a banner above the library —
+            // it explains a route into the app, it is not an action.
+            Section {
+                EmptyView()
+            } footer: {
+                Text("You can also open .cube files or ZIP packs from the Files app — they import straight into this library.")
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // LumaScreen's VStack already spaces this band; the List's own section
+        // inset on top of it read as a ~55pt void under the search field.
+        .contentMargins(.top, 0, for: .scrollContent)
     }
 }
 

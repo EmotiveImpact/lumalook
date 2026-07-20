@@ -216,6 +216,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 ForEach(packs) { pack in
                     PackTile(pack: pack, image: packThumbs.images[pack.id],
+                             photo: packThumbs.photos[pack.id] ?? pack.photo,
                              isNew: badged.contains(pack.id)) {
                         app.selectedPackID = pack.id
                         app.path.append(.filterPack)
@@ -231,7 +232,6 @@ struct HomeView: View {
 // MARK: - Recents rail
 
 private struct RecentsRail: View {
-    @EnvironmentObject private var app: AppModel
     @ObservedObject var store: PersistenceStore
     let hasRecents: Bool
 
@@ -252,22 +252,14 @@ private struct RecentsRail: View {
                 .padding(.horizontal, 20)
             }
         } else {
-            // No work yet: invite creation rather than render an empty rail
-            // or sample posters the user cannot actually open.
-            HStack(spacing: 10) {
-                InviteCard(icon: "plus", title: "Start a project",
-                           subtitle: "Add clips and edit") {
-                    app.editor.startNewProject()
-                    app.path.append(.editor)
-                    LumaHaptics.shared.tap()
-                }
-                InviteCard(icon: "camera.fill", title: "Shoot something",
-                           subtitle: "Record with a look") {
-                    app.path.append(.camera)
-                    LumaHaptics.shared.tap()
-                }
-            }
-            .padding(.horizontal, 20)
+            // No work yet. The previous invite cards restated the New project
+            // hero and the Camera tile verbatim, three cards higher up the
+            // page — which inverts the hero → tiles → recents hierarchy. One
+            // quiet line explains the empty rail without competing with them.
+            Text("Projects you edit show up here.")
+                .font(.system(size: 13))
+                .foregroundStyle(LumaTheme.textMuted)
+                .padding(.horizontal, 20)
         }
     }
 }
@@ -393,50 +385,14 @@ private struct GradeSessionPoster: View {
     }
 }
 
-private struct InviteCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
-                    .frame(width: 38, height: 38)
-                    .background(LumaTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12))
-                Spacer(minLength: 8)
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(LumaTheme.textMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .padding(12)
-            // Only two cards in the empty state — they share the row rather
-            // than sitting at poster width with a void beside them.
-            .frame(maxWidth: .infinity, minHeight: Poster.height, alignment: .topLeading)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: Poster.radius))
-            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                .foregroundStyle(LumaTheme.border))
-        }
-        .buttonStyle(.lumaPress)
-    }
-}
-
 // MARK: - Looks of the week
 
 private struct PackTile: View {
     let pack: LookPack
     let image: CGImage?
+    /// The frame this tile was graded on — assigned by `HomePackThumbs` so
+    /// neighbouring tiles never share a base image (see its `render`).
+    var photo: HeroPhoto
     var isNew: Bool = false
     let action: () -> Void
 
@@ -451,9 +407,9 @@ private struct PackTile: View {
                                 .scaledToFill()
                         }
                     } else {
-                        // Pipeline render pending — the pack's own hero photo
-                        // holds the frame rather than an empty box.
-                        HeroImage(photo: pack.photo, radius: 0)
+                        // Pipeline render pending — the tile's assigned hero
+                        // photo holds the frame rather than an empty box.
+                        HeroImage(photo: photo, radius: 0)
                     }
                 }
                 .frame(width: 96, height: 110)
@@ -573,19 +529,56 @@ private enum HomeFeatured {
 @MainActor
 private final class HomePackThumbs: ObservableObject {
     @Published private(set) var images: [String: CGImage] = [:]
+    /// The frame each pack was graded on, so the placeholder shown before the
+    /// pipeline finishes matches the frame that replaces it.
+    @Published private(set) var photos: [String: HeroPhoto] = [:]
     private var task: Task<Void, Never>?
     private var lastStamp = ""
+
+    /// Every frame the rails may draw from. The catalog only tags packs with
+    /// four of these, and reuses them, hence `assignedPhotos` below.
+    private static let allPhotos: [HeroPhoto] = [.golden, .coast, .desert, .neon, .night]
+
+    /// How many neighbours a frame must stay clear of. Roughly a screenful of
+    /// tiles, so two identical base images can never be visible together.
+    private static let separation = 4
+
+    /// A pack keeps its own hero photo unless one of the last `separation`
+    /// tiles already used it — then it takes the least-recently-used frame
+    /// instead. Grading two near-neutral looks on the same photo at 96x110
+    /// produced pixel-identical tiles (Film Stocks 01 / Mirrorless Sims,
+    /// Negative Set 01 / Negative Archive), which conveys nothing.
+    static func assignedPhotos(for packs: [LookPack]) -> [String: HeroPhoto] {
+        var out: [String: HeroPhoto] = [:]
+        var recent: [HeroPhoto] = []
+        for pack in packs {
+            let photo: HeroPhoto
+            if recent.contains(pack.photo),
+               let free = allPhotos.first(where: { !recent.contains($0) }) {
+                photo = free
+            } else {
+                photo = pack.photo
+            }
+            out[pack.id] = photo
+            recent.append(photo)
+            if recent.count > separation { recent.removeFirst() }
+        }
+        return out
+    }
 
     func render(_ packs: [LookPack]) {
         let stamp = packs.map(\.id).joined(separator: ",")
         guard stamp != lastStamp else { return }
         lastStamp = stamp
 
-        // Each pack is graded on ITS OWN hero photo (same rule as the Store's
-        // pack detail) — one shared frame made three warm packs identical.
+        // Each pack is graded on its OWN hero photo (same rule as the Store's
+        // pack detail), de-duplicated across neighbours so no two tiles on
+        // screen share a base image.
+        let assigned = Self.assignedPhotos(for: packs)
+        photos = assigned
         let jobs: [(id: String, look: PackLook, source: CIImage)] = packs.compactMap { pack in
             guard let look = pack.looks.first else { return nil }
-            return (pack.id, look, Self.source(for: pack))
+            return (pack.id, look, Self.source(for: assigned[pack.id] ?? pack.photo))
         }
         task?.cancel()
         task = Task.detached(priority: .utility) { [weak self] in
@@ -610,10 +603,10 @@ private final class HomePackThumbs: ObservableObject {
         }
     }
 
-    /// The pack's own photograph, scaled to preview size; falls back to the
+    /// The assigned photograph, scaled to preview size; falls back to the
     /// shared frame only when the asset is missing.
-    private static func source(for pack: LookPack) -> CIImage {
-        guard let ci = pack.photo.ciImage else { return LookThumbs.fallbackFrame }
+    private static func source(for photo: HeroPhoto) -> CIImage {
+        guard let ci = photo.ciImage else { return LookThumbs.fallbackFrame }
         let longest = max(ci.extent.width, ci.extent.height)
         guard longest > 440 else { return ci }
         let scale = 440 / longest

@@ -15,21 +15,11 @@ final class LookThumbs: ObservableObject {
     /// which is stable across launches, unlike `LookPreset.id`).
     static func key(_ look: LibraryLook) -> String { look.thumbKey }
 
-    /// Real bundled photograph for the empty state before any media is
-    /// selected — thumbnails are individually graded from day one.
-    static let fallbackFrame: CIImage = {
-        if let ci = HeroPhoto.golden.ciImage {
-            let longest = max(ci.extent.width, ci.extent.height)
-            let scale = longest > 440 ? 440 / longest : 1
-            return ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        }
-        let renderer = ImageRenderer(content: SceneArt(scene: .sunsetRoad)
-            .frame(width: 440, height: 440))
-        renderer.scale = 1
-        if let cg = renderer.cgImage { return CIImage(cgImage: cg) }
-        return CIImage(color: CIColor(red: 0.1, green: 0.1, blue: 0.13))
-            .cropped(to: CGRect(x: 0, y: 0, width: 440, height: 440))
-    }()
+    /// Reference swatch for the empty state before any media is selected —
+    /// thumbnails are individually graded from day one. `LookSwatch` owns the
+    /// frame itself: a wide-gamut photograph plus a skin/grey/highlight patch
+    /// band, so twelve different grades read as twelve different tiles.
+    static let fallbackFrame: CIImage = LookSwatch.referenceFrame
 
     /// One render job per library look, resolved on the main actor so the
     /// detached render loop never touches the repository.

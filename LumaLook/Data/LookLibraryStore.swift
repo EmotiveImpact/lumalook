@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreImage
 
 /// The one aggregation point for every look the user can apply — saved looks,
 /// built-in signature presets, installed pack LUTs, and imported LUTs — plus
@@ -227,4 +228,72 @@ final class LookLibraryStore: ObservableObject {
         guard let data = try? JSONEncoder().encode(payload) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
+}
+
+// MARK: - Reference swatch frame
+
+/// The frame every look thumbnail is graded through BEFORE the user loads
+/// their own media. A look grid is only useful if you can pick with your eyes
+/// rather than by name, and that requires a source frame that actually
+/// exercises a grade: neutral midtones, skin tone, a clean specular highlight
+/// and shadow detail that still holds separation. A single-hue blown-out
+/// sunset (the old default) clips the blue channel flat, so twelve very
+/// different grades all resolve to the same orange tile.
+///
+/// So the swatch is a wide-gamut photograph — sky blue, magenta cloud, green
+/// midtones, neutral water highlight, deep shadow — with a reference patch
+/// band composited along the bottom edge: shadow, mid grey, two skin tones and
+/// a highlight. A colour cast, a lifted black, a crushed highlight or a skin
+/// shift all become visible at 110pt, which is the whole point of the grid.
+enum LookSwatch {
+    /// Bottom band as a fraction of frame height.
+    private static let bandFraction: CGFloat = 0.15
+
+    /// sRGB reference patches, left → right.
+    private static let patchValues: [(CGFloat, CGFloat, CGFloat)] = [
+        (0.09, 0.09, 0.10),   // shadow — is black detail retained or crushed?
+        (0.46, 0.46, 0.46),   // 18% mid grey — reads any colour cast instantly
+        (0.86, 0.66, 0.55),   // light skin
+        (0.45, 0.30, 0.24),   // deep skin
+        (0.95, 0.95, 0.93),   // clean highlight — reads highlight rolloff
+    ]
+
+    private static func color(_ rgb: (CGFloat, CGFloat, CGFloat)) -> CIColor {
+        if let space = CGColorSpace(name: CGColorSpace.sRGB),
+           let c = CIColor(red: rgb.0, green: rgb.1, blue: rgb.2, colorSpace: space) {
+            return c
+        }
+        return CIColor(red: rgb.0, green: rgb.1, blue: rgb.2)
+    }
+
+    /// Rendered once; safe to hand straight to `LookThumbs.render(source:)`.
+    static let referenceFrame: CIImage = {
+        // Coast over golden: the golden hero is a single clipped hue, the
+        // coast frame spans blue → magenta → green → neutral → black.
+        guard let photo = HeroPhoto.coast.ciImage ?? HeroPhoto.golden.ciImage else {
+            return CIImage(color: CIColor(red: 0.1, green: 0.1, blue: 0.13))
+                .cropped(to: CGRect(x: 0, y: 0, width: 440, height: 300))
+        }
+        let longest = max(photo.extent.width, photo.extent.height)
+        let scale = longest > 440 ? 440 / longest : 1
+        let scaled = photo.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        // Normalise the origin so the band maths below is in frame space.
+        let base = scaled.transformed(by: CGAffineTransform(
+            translationX: -scaled.extent.minX, y: -scaled.extent.minY))
+        let size = base.extent.size
+        guard size.width > 1, size.height > 1 else { return base }
+
+        // CIImage is bottom-left origin, so y = 0 IS the bottom band.
+        let bandHeight = (size.height * bandFraction).rounded()
+        let patchWidth = size.width / CGFloat(patchValues.count)
+        var out = base
+        for (index, rgb) in patchValues.enumerated() {
+            let rect = CGRect(x: (CGFloat(index) * patchWidth).rounded(.down),
+                              y: 0,
+                              width: patchWidth.rounded(.up),
+                              height: bandHeight)
+            out = CIImage(color: color(rgb)).cropped(to: rect).composited(over: out)
+        }
+        return out.cropped(to: CGRect(origin: .zero, size: size))
+    }()
 }

@@ -18,7 +18,10 @@ enum LaneMetrics {
     static let ruler: CGFloat = 18
     static let video: CGFloat = 66
     static let overlay: CGFloat = 30
-    static let clipAudio: CGFloat = 14
+    /// The clip-audio lane used to be a 14 pt hairline: half the height of the
+    /// smallest other lane, unlabelled, and under the tap minimum even with hit
+    /// slop. It reads as a track now.
+    static let clipAudio: CGFloat = 26
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
     /// Dedicated row above the lane stack for the magnet toggle, so that
@@ -173,6 +176,7 @@ struct TimelineV2View: View {
                                         onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay,
                                         onRecordVoiceover: onRecordVoiceover)
                 }
+                addGutter
                 playhead
             }
         }
@@ -187,6 +191,54 @@ struct TimelineV2View: View {
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
+    }
+
+    /// The add affordances — "+ Overlay", the dashed Music / Voiceover rows and
+    /// "Add audio" — pinned to the timeline's leading edge OUTSIDE the
+    /// scroller.
+    ///
+    /// They used to be children of the scrolling content stack, so scrubbing a
+    /// few seconds forward carried every way of adding music, a voiceover or an
+    /// overlay off the left edge of the screen. They are viewport chrome, not
+    /// timeline content. This mirrors the content stack's vertical rhythm
+    /// exactly — real controls on the rows they own, non-hit-testing spacers
+    /// everywhere else — so the two layers can never drift apart.
+    private var addGutter: some View {
+        let missing = AudioLanePlan.missingKinds(editor.audioTracks)
+        return VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
+            gutterSpacer(LaneMetrics.ruler)
+            VStack(alignment: .leading, spacing: 4) {
+                gutterSpacer(LaneMetrics.video)
+                ForEach((0..<overlayLaneCount).reversed(), id: \.self) { _ in
+                    if editor.overlays.isEmpty {
+                        OverlayAddButton(action: onAddOverlay)
+                    } else {
+                        gutterSpacer(LaneMetrics.overlay)
+                    }
+                }
+                gutterSpacer(LaneMetrics.clipAudio)
+            }
+            ForEach(editor.audioTracks) { _ in
+                gutterSpacer(LaneMetrics.music)
+            }
+            ForEach(missing, id: \.self) { kind in
+                EmptyLaneRow(label: kind == .voice ? "Voiceover" : "Music",
+                             icon: kind.icon, height: LaneMetrics.music,
+                             width: 168,
+                             action: kind == .voice ? onRecordVoiceover : onAddMusic)
+            }
+            if missing.isEmpty {
+                AddAudioRow(action: onAddMusic)
+            }
+        }
+        .padding(.leading, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func gutterSpacer(_ height: CGFloat) -> some View {
+        Color.clear
+            .frame(height: height)
+            .allowsHitTesting(false)
     }
 
     /// Magnet toggle: when on, dragged bars snap to clip boundaries + playhead.
@@ -297,7 +349,8 @@ struct TimelineContentView: View {
                 ForEach((0..<overlayLaneCount).reversed(), id: \.self) { lane in
                     OverlayLane(editor: editor, metrics: metrics, snap: snap, magnetOn: magnetOn,
                                 lane: lane,
-                                onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
+                                onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay,
+                                showsAddPlaceholder: false)
                 }
                 ClipAudioLane(editor: editor, metrics: metrics,
                               onTapClipAudio: onTapClipAudio)
@@ -306,17 +359,21 @@ struct TimelineContentView: View {
                 MusicLane(editor: editor, metrics: metrics, track: track,
                           snap: snap, magnetOn: magnetOn, onTapMusic: onTapMusic)
             }
-            // B2: Music and Voiceover keep a labelled dashed row until a real
-            // track fills them, so all four lanes read at once.
-            let missing = AudioLanePlan.missingKinds(editor.audioTracks)
-            ForEach(missing, id: \.self) { kind in
-                EmptyLaneRow(label: kind == .voice ? "Voiceover" : "Music",
-                             icon: kind.icon, height: LaneMetrics.music,
-                             width: 168,
-                             action: kind == .voice ? onRecordVoiceover : onAddMusic)
+            // The Music / Voiceover placeholders and the "Add audio" row are
+            // ADD AFFORDANCES, not content: they belong to the viewport, not to
+            // a moment in time. They live in TimelineV2View's pinned gutter now
+            // — inside this stack they translated under the fixed playhead and
+            // were unreachable a few seconds into any edit. Only their heights
+            // are reserved here so the two layers stay in vertical lockstep.
+            ForEach(AudioLanePlan.missingKinds(editor.audioTracks), id: \.self) { _ in
+                Color.clear
+                    .frame(height: LaneMetrics.music)
+                    .allowsHitTesting(false)
             }
-            if missing.isEmpty {
-                AddAudioRow(action: onAddMusic)
+            if AudioLanePlan.missingKinds(editor.audioTracks).isEmpty {
+                Color.clear
+                    .frame(height: LaneMetrics.music)
+                    .allowsHitTesting(false)
             }
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
@@ -375,18 +432,31 @@ struct ClipAudioLane: View {
             ForEach(editor.clips) { clip in
                 Group {
                     if clip.hasAudio {
-                        RoundedRectangle(cornerRadius: 4)
+                        let w = max(metrics.x(for: clip.timelineDuration), 10)
+                        RoundedRectangle(cornerRadius: 6)
                             .fill(editor.muteAudio ? LumaTheme.surfaceStrong
                                                    : LumaTheme.teal.opacity(0.42))
+                            .overlay(RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(LumaTheme.teal.opacity(0.55), lineWidth: 1))
                             .overlay(alignment: .leading) {
-                                Image(systemName: editor.muteAudio ? "speaker.slash.fill" : "waveform")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.8))
-                                    .padding(.leading, 5)
+                                // A lane nobody can name is a rendering
+                                // artifact, not a track — label it wherever
+                                // there is room for the words.
+                                HStack(spacing: 4) {
+                                    Image(systemName: editor.muteAudio
+                                          ? "speaker.slash.fill" : "waveform")
+                                        .font(.system(size: 9, weight: .bold))
+                                    if w > 96 {
+                                        Text("Clip audio")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .foregroundStyle(.white.opacity(0.85))
+                                .padding(.leading, 6)
                             }
                             .padding(.horizontal, 1)
-                            // Generous hit slop: the lane is only 14 pt tall.
-                            .contentShape(Rectangle().inset(by: -8))
+                            .contentShape(Rectangle().inset(by: -9))
                             .onTapGesture { onTapClipAudio(clip.id) }
                     } else {
                         Color.clear
@@ -857,25 +927,19 @@ struct OverlayLane: View {
         editor.overlays.filter { $0.lane == lane }
     }
 
+    /// The "+ Overlay" placeholder is drawn by the timeline's PINNED gutter,
+    /// not here — inside the scrolling content it slid off-screen the moment
+    /// the user scrubbed forward. Set false wherever the gutter owns it.
+    var showsAddPlaceholder: Bool = true
+
     var body: some View {
         ZStack(alignment: .leading) {
             if editor.overlays.isEmpty {
-                Button(action: onAddOverlay) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .bold))
-                        Text("Overlay")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .frame(width: 110, height: LaneMetrics.overlay)
-                    .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                        .foregroundStyle(.white.opacity(0.18)))
-                    .contentShape(Rectangle())
+                if showsAddPlaceholder {
+                    OverlayAddButton(action: onAddOverlay)
+                } else {
+                    Color.clear.allowsHitTesting(false)
                 }
-                .buttonStyle(.lumaPress)
             } else {
                 ForEach(laneItems) { item in
                     OverlayBar(editor: editor, metrics: metrics, item: item,
@@ -885,6 +949,31 @@ struct OverlayLane: View {
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
                height: LaneMetrics.overlay, alignment: .leading)
+    }
+}
+
+/// The dashed "+ Overlay" affordance. Extracted so the pinned gutter and the
+/// lane itself draw exactly the same control.
+struct OverlayAddButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Overlay")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(LumaTheme.textSecondary)
+            .frame(width: 110, height: LaneMetrics.overlay)
+            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .foregroundStyle(.white.opacity(0.18)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -1074,15 +1163,24 @@ struct MusicLane: View {
             if music.isLooping {
                 Image(systemName: "repeat").font(.system(size: 9, weight: .heavy)).opacity(0.85)
             }
-            if barWidth > 90 {
+            // Chrome is dropped progressively as the bar narrows. At the old
+            // single 90 pt threshold a 2 s voiceover (100 pt) still tried to
+            // fit icon + title + duration, so the title cut to "Voi…" and the
+            // duration glyphs sat straight on the waveform bars.
+            if barWidth > 132 {
                 Text(music.title)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
-                Spacer(minLength: 2)
+            }
+            Spacer(minLength: 2)
+            if barWidth > 176 {
                 Text(String(format: "%.1fs", rendered))
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
-                    .opacity(0.8)
+                    // An opaque plate so the readout never overprints waveform.
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.black.opacity(0.45)))
             }
         }
         .foregroundStyle(.white)

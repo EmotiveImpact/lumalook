@@ -126,51 +126,65 @@ struct ExportSpecSheet: View {
     private static let frameRates = [24, 25, 30, 48, 60]
 
     var body: some View {
-        // Scrollable so the Export CTA is always reachable — cards + sliders +
-        // HDR + readouts + cube row exceed the panel's default detent.
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header
+        // The spec controls scroll; the Export CTA is PINNED below them. The
+        // stack measures ~470 pt against a 340 pt default detent, so a footer
+        // inside the ScrollView put the sheet's only primary action below the
+        // fold with nothing on screen to signal it was there (frame G1 wants
+        // the footer row as permanent chrome).
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    header
 
-                if let error = app.exportError {
-                    preflightBanner(error, tone: LumaTheme.orange)
-                } else if let warning = preflightWarning {
-                    preflightBanner(warning, tone: LumaTheme.gold)
+                    if let error = app.exportError {
+                        preflightBanner(error, tone: LumaTheme.orange)
+                    } else if let warning = preflightWarning {
+                        preflightBanner(warning, tone: LumaTheme.gold)
+                    }
+
+                    if !spec.audioOnly {
+                        resolutionCards
+                        sliderRow(label: "Frame rate", value: fpsIndexBinding,
+                                  range: 0...Double(Self.frameRates.count - 1),
+                                  readout: "\(spec.fps)")
+                        sliderRow(label: "Bitrate", value: bitrateIndexBinding,
+                                  range: 0...Double(ExportSpec.Bitrate.allCases.count - 1),
+                                  readout: spec.bitrate.rawValue.uppercased())
+                        hdrRow
+                        codecRow
+                    }
+
+                    deliveryReadout
+
+                    Hairline()
+
+                    Toggle(isOn: $spec.audioOnly) {
+                        Text("Audio only (M4A)")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    }
+                    .tint(LumaTheme.accentBright)
+
+                    if gradeCubeTitle != nil, !spec.audioOnly {
+                        cubeRow
+                    }
                 }
-
-                if !spec.audioOnly {
-                    resolutionCards
-                    sliderRow(label: "Frame rate", value: fpsIndexBinding,
-                              range: 0...Double(Self.frameRates.count - 1),
-                              readout: "\(spec.fps)")
-                    sliderRow(label: "Bitrate", value: bitrateIndexBinding,
-                              range: 0...Double(ExportSpec.Bitrate.allCases.count - 1),
-                              readout: spec.bitrate.rawValue.uppercased())
-                    hdrRow
-                    codecRow
-                }
-
-                deliveryReadout
-
-                Hairline()
-
-                Toggle(isOn: $spec.audioOnly) {
-                    Text("Audio only (M4A)")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                }
-                .tint(LumaTheme.accentBright)
-
-                if gradeCubeTitle != nil, !spec.audioOnly {
-                    cubeRow
-                }
-
-                footer
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 14)
+            .scrollBounceBehavior(.basedOnSize)
+
+            // Pinned action bar, on the sheet's own `LumaTheme.bar` fill so the
+            // scrolling spec controls read as passing under it.
+            VStack(spacing: 0) {
+                Hairline()
+                footer
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+            }
+            .background(LumaTheme.bar)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .task {
             spec = ExportSpec.from(rawValue: storedSpec)
             if let url = app.selectedVideoURL, gradeCubeTitle != nil {

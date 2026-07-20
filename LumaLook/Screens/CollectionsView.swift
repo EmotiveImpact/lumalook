@@ -58,6 +58,7 @@ struct CollectionsView: View {
         .background(LumaTheme.background.ignoresSafeArea())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear { selectDefaultIfNeeded() }
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
             thumbs.render(source: app.previewFrame, library: app.library.all,
                           fileURL: { app.lutRepository.fileURL(for: $0) })
@@ -105,14 +106,24 @@ struct CollectionsView: View {
     // MARK: Header
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            headerRow
+            // Own full-width row: sharing the title row with the Reorder and
+            // New pills squeezed this to a clipped "1 PI…".
+            TechReadout(readout, size: 9, color: LumaTheme.textMuted)
+                .padding(.leading, 50)   // aligns under the title, past BackArrow
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+    }
+
+    private var headerRow: some View {
         HStack(spacing: 10) {
             BackArrow()
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Collections")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-                TechReadout(readout, size: 8, color: LumaTheme.textMuted)
-            }
+            Text("Collections")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.white)
             Spacer()
             if !groups.isEmpty {
                 Button {
@@ -150,9 +161,6 @@ struct CollectionsView: View {
             }
             .buttonStyle(.lumaPress)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 12)
     }
 
     private var readout: String {
@@ -498,35 +506,54 @@ struct CollectionsView: View {
 
     // MARK: Footer
 
+    /// The screen's headline action, per §2 Unit 8 / mockup G3: a permanent
+    /// bottom element, never hidden behind a selection the user has not made
+    /// yet. Disabled-but-visible while no collection is chosen.
     @ViewBuilder
     private var footer: some View {
-        if let collection = selected {
-            let isPinned = collection.pinnedToCamera == true
+        if !groups.isEmpty {
+            let collection = selected
+            let isPinned = collection?.pinnedToCamera == true
             Button {
-                togglePin(collection)
+                if let collection { togglePin(collection) }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: isPinned ? "pin.slash" : "pin.fill")
+                    Image(systemName: collection == nil ? "pin"
+                                    : isPinned ? "pin.slash" : "pin.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text(isPinned
-                         ? "Unpin “\(collection.name)” from camera filmstrip"
-                         : "Pin “\(collection.name)” to camera filmstrip")
+                    Text(footerTitle(for: collection, isPinned: isPinned))
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
-                .foregroundStyle(isPinned ? LumaTheme.textSecondary : .white)
+                .foregroundStyle(collection == nil || isPinned ? LumaTheme.textSecondary : .white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
                 .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(
-                    isPinned ? LumaTheme.hairline : LumaTheme.accent.opacity(0.55), lineWidth: 1))
+                    collection == nil || isPinned
+                        ? LumaTheme.hairline : LumaTheme.accent.opacity(0.55), lineWidth: 1))
             }
             .buttonStyle(.lumaPress)
+            .disabled(collection == nil)
             .padding(.horizontal, 20)
             .padding(.bottom, 14)
             .padding(.top, 4)
         }
+    }
+
+    private func footerTitle(for collection: LUTCollection?, isPinned: Bool) -> String {
+        guard let collection else { return "Select a collection to pin" }
+        return isPinned
+            ? "Unpin “\(collection.name)” from camera filmstrip"
+            : "Pin “\(collection.name)” to camera filmstrip"
+    }
+
+    /// Arrive with the pinned collection (or the first one) already in hand so
+    /// the pin action is live, not a dead placeholder.
+    private func selectDefaultIfNeeded() {
+        guard selectedID == nil else { return }
+        selectedID = app.lutRepository.pinnedCollection?.id ?? groups.first?.collection.id
     }
 
     private func togglePin(_ collection: LUTCollection) {

@@ -214,20 +214,26 @@ struct BeforeAfterView: View {
     /// not the other way round.
     private var splitStage: some View {
         GeometryReader { geo in
+            // The divider and its labels belong to the PICTURE, not the stage.
+            // Spanning the full stage drew a hard white line straight through
+            // the COMPARE header and the bottom readout, and stranded the
+            // ORIGINAL/GRADED chips in the letterbox void above the frame.
+            let media = fittedRect(in: geo.size)
+            let labelY = max(media.minY + 18, 96)
             ZStack {
                 LookPreviewSurface(radius: 0, showsEmptyHint: false)
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 let x = geo.size.width * splitFraction
                 WipeHandle()
-                    .frame(height: geo.size.height)
-                    .position(x: x, y: geo.size.height / 2)
+                    .frame(height: media.height)
+                    .position(x: x, y: media.midY)
 
                 // Labels ride the handle so which side is which is never a guess.
                 wipeLabel("ORIGINAL", tint: .white.opacity(0.8))
-                    .position(x: max(56, x - 52), y: 96)
+                    .position(x: max(56, x - 52), y: labelY)
                 wipeLabel("GRADED", tint: LumaTheme.accentBright)
-                    .position(x: min(geo.size.width - 50, x + 50), y: 96)
+                    .position(x: min(geo.size.width - 50, x + 50), y: labelY)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -291,19 +297,51 @@ struct BeforeAfterView: View {
     /// Two panes off ONE reference frame: video pauses so both halves describe
     /// the same moment. Labelled as a frame comparison, not live playback.
     private var sideStage: some View {
-        HStack(spacing: 2) {
-            pane(originalPane, label: "ORIGINAL", tint: .white.opacity(0.8))
-            pane(gradedPane, label: "GRADED · \(Int(app.settings.intensity))%",
-                 tint: LumaTheme.accentBright)
+        // The pair is sized to the SOURCE, not to the stage — but WHICH way the
+        // pair stacks has to follow the source too. A landscape frame laid out
+        // as two side-by-side cards makes a 32:9 pair that width-fits down to
+        // postage stamps; stacked, each pane gets the full stage width and a
+        // grade is actually judgeable. Portrait sources take the mirror rule.
+        Group {
+            if sourceAspect >= 1 {
+                VStack(spacing: 6) {
+                    originalPaneView
+                    gradedPaneView
+                }
+                .aspectRatio(sourceAspect / 2, contentMode: .fit)
+            } else {
+                HStack(spacing: 6) {
+                    originalPaneView
+                    gradedPaneView
+                }
+                .aspectRatio(sourceAspect * 2, contentMode: .fit)
+            }
         }
-        // The pair is sized to the SOURCE, not to the stage: a landscape frame
-        // in two full-height portrait cards letterboxes into ~75% empty grey and
-        // floats the badges hundreds of points away from the pixels they label.
-        .aspectRatio(sourceAspect * 2, contentMode: .fit)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 78)
         .padding(.bottom, 44)
         .padding(.horizontal, 10)
+    }
+
+    private var originalPaneView: some View {
+        pane(originalPane, label: "ORIGINAL", tint: .white.opacity(0.8))
+    }
+
+    private var gradedPaneView: some View {
+        pane(gradedPane, label: "GRADED · \(Int(app.settings.intensity))%",
+             tint: LumaTheme.accentBright)
+    }
+
+    /// The rect the aspect-fitted media actually occupies inside `size`.
+    private func fittedRect(in size: CGSize) -> CGRect {
+        guard size.width > 1, size.height > 1 else { return CGRect(origin: .zero, size: size) }
+        var w = size.width
+        var h = size.width / sourceAspect
+        if h > size.height {
+            h = size.height
+            w = size.height * sourceAspect
+        }
+        return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2, width: w, height: h)
     }
 
     /// Width / height of the reference frame, defaulting to 16:9.

@@ -154,8 +154,11 @@ struct PaywallView: View {
             Button("Restore Purchases") {
                 Task { await storeService.restorePurchases() }
             }
-            Button("Terms") {}
-            Button("Privacy") {}
+            // Reachable Terms + Privacy on the purchase surface are required
+            // for auto-renewable subscriptions. Destinations live in LumaLegal
+            // so this footer and Settings' ABOUT rows cannot drift apart.
+            Button("Terms") { LumaLegal.open(LumaLegal.terms) }
+            Button("Privacy") { LumaLegal.open(LumaLegal.privacy) }
         }
         .font(.footnote)
         .foregroundStyle(LumaTheme.textSecondary)

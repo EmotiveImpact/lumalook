@@ -63,9 +63,15 @@ struct CameraLiveLookView: View {
         Task {
             let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
             guard status == .authorized || status == .limited else {
-                statusCaption = "Turn on Add Photos Only in Settings to save"
-                try? await Task.sleep(nanoseconds: 2_500_000_000)
-                if statusCaption?.hasPrefix("Allow Photos") == true { statusCaption = nil }
+                // Compare against the SAME literal we set — a prefix guard on
+                // different wording never matched, so the pill stayed pinned
+                // over the viewfinder forever.
+                let denied = "Turn on Add Photos Only in Settings to save"
+                withAnimation(.snappy(duration: 0.2)) { statusCaption = denied }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if statusCaption == denied {
+                    withAnimation(.easeOut(duration: 0.25)) { statusCaption = nil }
+                }
                 return
             }
             try? await PHPhotoLibrary.shared().performChanges {
@@ -595,6 +601,10 @@ struct CameraLiveLookView: View {
             }
             .padding(.horizontal, 20)
         }
+        // Every other horizontal strip in the app fades at its edges; without
+        // it the last tile is hard-cut by the screen edge and the All Looks
+        // tile past it reads as nothing at all.
+        .lumaEdgeFade(leading: 12, trailing: 12)
         .sensoryFeedback(.selection, trigger: app.selectedLook.id)
         .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
     }
@@ -755,7 +765,10 @@ struct CameraLiveLookView: View {
             .padding(.horizontal, 16)
         }
         .padding(.top, 10)
-        .padding(.bottom, 26)
+        // The background extends THROUGH the bottom safe area, so the home
+        // indicator inset already clears the chips — padding here stacks on
+        // top of it. Keep it symmetric with the 10pt above the grab handle.
+        .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .background { proPanelBackground }
         .overlay(alignment: .top) { Hairline() }

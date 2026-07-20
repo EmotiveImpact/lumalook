@@ -223,10 +223,22 @@ struct ApplyLookView: View {
         } message: {
             Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh — lower the intensity, or shoot Log for the intended result.")
         }
-        .lumaToolSheet(isPresented: $showLookBrowser, style: .tallPanel) {
+        // A2's contract is "preview stays visible above the sheet at all times",
+        // so the grade-room browser opens at MEDIUM (canvas still live and
+        // undimmed) and only grows if the user drags it up.
+        .lumaToolSheet(isPresented: $showLookBrowser, style: Self.lookBrowserSheetStyle) {
             LookBrowserSheet(context: .grade, intensity: $app.settings.intensity)
         }
     }
+
+    /// Look browser as presented from the grade room: same detent ladder as
+    /// `.tallPanel`, but it OPENS at medium so the fitted preview it is meant
+    /// to be previewing against is never buried.
+    private static let lookBrowserSheetStyle = LumaSheetStyle(
+        detents: [.lumaMedium, .lumaLarge, .large],
+        defaultDetent: .lumaMedium,
+        undimmedUpThrough: .lumaMedium
+    )
 
     // MARK: Media surface
 
@@ -689,7 +701,15 @@ struct ApplyLookView: View {
         .lumaEdgeFade()
     }
 
+    /// Strip id of the look that is currently applied, if it is in the strip at
+    /// all. Drives both the ring and the auto-scroll — a selected tile parked
+    /// off-screen reads as "nothing applied".
+    private var selectedStripID: String? {
+        app.library.stripLooks().first(where: { app.isCurrent($0) })?.id
+    }
+
     private var lookStrip: some View {
+        ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     // ORIGINAL: one tap to zero the grade, tap again to return.
@@ -716,6 +736,7 @@ struct ApplyLookView: View {
                                 app.select(look: look)
                             }
                         }
+                        .id(look.id)
                         .scrollTransition(.interactive) { content, phase in
                             content
                                 .scaleEffect(phase.isIdentity ? 1 : 0.9)
@@ -775,6 +796,17 @@ struct ApplyLookView: View {
             .lumaEdgeFade()
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+            .onAppear {
+                guard let id = selectedStripID else { return }
+                proxy.scrollTo(id, anchor: .center)
+            }
+            .onChange(of: selectedStripID) { _, new in
+                guard let new else { return }
+                withAnimation(.easeOut(duration: 0.28)) {
+                    proxy.scrollTo(new, anchor: .center)
+                }
+            }
+        }
     }
 }
 

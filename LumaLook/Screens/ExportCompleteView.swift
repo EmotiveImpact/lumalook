@@ -64,15 +64,40 @@ struct ExportCompleteView: View {
 
     /// There is no success to celebrate without a file (or an in-memory still)
     /// to show for it — every share affordance keys off this.
+    ///
+    /// A non-nil URL is NOT proof of a file: exports land in the temporary
+    /// directory, which iOS purges freely. Checking only the URL rendered a
+    /// teal "Export Complete!", a black media card and a ShareLink to nothing.
     private var hasArtefact: Bool {
-        app.lastExportURL != nil || app.lastExportImage != nil
+        app.lastExportImage != nil || shareableURL != nil
+    }
+
+    /// The exported file, only if it is still on disk. Every share affordance
+    /// (hero ShareLink, brand tiles, Save to Photos) reads this, never the
+    /// raw `app.lastExportURL`.
+    private var shareableURL: URL? {
+        guard let url = app.lastExportURL,
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    /// Same existence rule for the GIF — a separate artefact in the same
+    /// purgeable directory.
+    private var shareableGIFURL: URL? {
+        guard let url = app.lastExportGIFURL,
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
     }
 
     private var statusTint: Color { hasArtefact ? LumaTheme.teal : LumaTheme.orange }
 
     private var subtitle: String {
         guard hasArtefact else {
-            return "The exported file is no longer available on this device. Export again to save or share it."
+            // Distinguish "the render failed" from "the file was purged" —
+            // the generic line was shown for both.
+            return app.exportError == nil
+                ? "The exported file is no longer available on this device. Export again to save or share it."
+                : "The export didn't finish."
         }
         return app.lastExportSavedToPhotos ? "Saved to your photos" : "Ready to share below"
     }
@@ -80,23 +105,28 @@ struct ExportCompleteView: View {
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Button { goBack() } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 40, height: 40, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.lumaPress)
-                        .accessibilityLabel("Back")
-                        Spacer()
+            VStack(spacing: 0) {
+                // Lifted out of the ScrollView so the failure stack below can
+                // be vertically centred without dragging the Back chevron with
+                // it into the middle of the screen.
+                HStack {
+                    Button { goBack() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 6)
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("Back")
+                    Spacer()
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 6)
 
+                GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
                     ZStack {
                         Circle()
                             .fill(statusTint.opacity(0.13))
@@ -126,6 +156,24 @@ struct ExportCompleteView: View {
                         .foregroundStyle(LumaTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.top, 6)
+
+                    // The actual reason the export failed. It was collected in
+                    // `app.exportError` and then never shown anywhere, so the
+                    // user got a generic line for every distinct failure.
+                    if !hasArtefact, let reason = app.exportError {
+                        Text(reason)
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
+                            .background(LumaTheme.orange.opacity(0.14),
+                                        in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(LumaTheme.orange.opacity(0.45), lineWidth: 1))
+                            .padding(.top, 18)
+                    }
 
                     // Photos access denied/limited: the export still
                     // succeeded — explain and offer the one-tap fix.
@@ -200,7 +248,7 @@ struct ExportCompleteView: View {
                     // The hero CTA exists only when there is a file to hand to
                     // the share sheet. A violet full-width button that opens
                     // nothing is worse than no button at all.
-                    if let url = app.lastExportURL {
+                    if let url = shareableURL {
                         ShareLink(item: url) { shareLabel }
                             .buttonStyle(.lumaPress)
                             .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
@@ -225,7 +273,7 @@ struct ExportCompleteView: View {
                     // Brand tiles are real ShareLinks — the destination apps
                     // live in the system sheet. They were decorations before,
                     // which read as four tappable buttons that did nothing.
-                    if let url = app.lastExportURL {
+                    if let url = shareableURL {
                         HStack(spacing: 22) {
                             ForEach([BrandShareIcon.Kind.instagram, .tiktok, .youtube, .more],
                                     id: \.rawValue) { kind in
@@ -239,7 +287,7 @@ struct ExportCompleteView: View {
 
                     // The GIF is a separate artefact Photos won't take —
                     // it only ever leaves via the share sheet.
-                    if let gif = app.lastExportGIFURL {
+                    if let gif = shareableGIFURL {
                         ShareLink(item: gif) {
                             Label("Share GIF", systemImage: "square.stack.3d.down.forward")
                                 .font(.subheadline.weight(.semibold))
@@ -259,7 +307,7 @@ struct ExportCompleteView: View {
                     // Videos only: the still path saves its own UIImage, and
                     // Photos rejects the audio-only M4A outright.
                     if !app.lastExportSavedToPhotos, app.lastExportImage == nil,
-                       let url = app.lastExportURL, url.pathExtension.lowercased() == "mov" {
+                       let url = shareableURL, url.pathExtension.lowercased() == "mov" {
                         GhostCTA(title: isSavingToPhotos ? "Saving…" : "Save to Photos") {
                             guard !isSavingToPhotos else { return }
                             isSavingToPhotos = true
@@ -275,9 +323,17 @@ struct ExportCompleteView: View {
                     }
 
                     // Same source, new spec — straight back to the sheet the
-                    // user came from rather than out to Home.
-                    GhostCTA(title: "Export another") { goBack() }
-                        .padding(.top, 24)
+                    // user came from rather than out to Home. With no artefact
+                    // this is the ONLY thing worth doing, so it carries the
+                    // primary weight the (absent) share CTA would have had —
+                    // two identical grey ghosts named no recommended step.
+                    if hasArtefact {
+                        GhostCTA(title: "Export another") { goBack() }
+                            .padding(.top, 24)
+                    } else {
+                        SolidCTA(title: "Try Export Again", icon: "arrow.clockwise") { goBack() }
+                            .padding(.top, 26)
+                    }
 
                     // Grade → Edit bridge: carry the just-graded clip into the
                     // editor (with its look baked into the clip's grade) so the
@@ -311,13 +367,23 @@ struct ExportCompleteView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 40)
+                // The failure stack is short; top-aligned it left ~900 pt of
+                // empty canvas below and read as a half-loaded page. Give it a
+                // minimum of the container height and centre it. A *minimum*
+                // (not an exact frame) so it still scrolls at large text sizes.
+                // The success stack is tall already, so it stays top-aligned.
+                .frame(minHeight: hasArtefact ? nil : proxy.size.height,
+                       alignment: .center)
+                .frame(maxWidth: .infinity)
+                }
+                }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
         .sensoryFeedback(.success, trigger: celebrate)
         .onAppear {
-            if app.lastExportImage == nil, let url = app.lastExportURL {
+            if app.lastExportImage == nil, let url = shareableURL {
                 player = AVPlayer(url: url)
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.1)) {
@@ -330,7 +396,7 @@ struct ExportCompleteView: View {
             }
         }
         .task {
-            guard let url = app.lastExportURL, app.lastExportImage == nil else { return }
+            guard let url = shareableURL, app.lastExportImage == nil else { return }
             async let readout = ExportOutputInfo.load(url: url)
             async let frame = Self.posterFrame(url: url)
             info = await readout

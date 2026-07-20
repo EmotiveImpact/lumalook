@@ -38,8 +38,24 @@ struct LUTImportSheet: View {
     @State private var showNewCollection = false
     @State private var newCollectionName = ""
     @State private var saveError: String?
+    /// LUT_3D_SIZE as the file itself declares it — read even when validation
+    /// fails, so a rejected file still reports the resolution it claims (G2).
+    @State private var declaredSize: Int?
+    /// Measured heights of the three bands, summed into a content-sized detent.
+    @State private var headerHeight: CGFloat = 0
+    @State private var bodyHeight: CGFloat = 0
+    @State private var footerHeight: CGFloat = 0
 
     private var fileName: String { sourceURL.lastPathComponent }
+
+    /// G2 draws this as a content-height card, not a full-screen sheet: Save
+    /// sits just under the last field instead of across a void. Clamped so a
+    /// half-measured first frame can't collapse it, with `.large` still
+    /// available for long content and Dynamic Type.
+    private var contentDetentHeight: CGFloat {
+        let total = headerHeight + bodyHeight + footerHeight + 34  // home indicator
+        return min(max(total, 360), 760)
+    }
 
     private var sizeText: String {
         let bytes = inspection?.byteCount ?? 0
@@ -48,10 +64,16 @@ struct LUTImportSheet: View {
     }
 
     /// "33-point · 214 KB · Files" — resolution first, because that is what
-    /// tells a colourist whether the file is worth keeping.
+    /// tells a colourist whether the file is worth keeping. A rejected file
+    /// still shows the resolution it declares, marked as unverified, rather
+    /// than silently dropping the one fact that explains the failure.
     private var subtitleText: String {
         var parts: [String] = []
-        if let points = inspection?.pointCountText { parts.append(points) }
+        if let points = inspection?.pointCountText {
+            parts.append(points)
+        } else if let declaredSize {
+            parts.append("\(declaredSize)-point declared")
+        }
         parts.append(sizeText)
         parts.append(origin)
         return parts.joined(separator: " · ")
@@ -91,11 +113,12 @@ struct LUTImportSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 18)
+                .measureLumaImportHeight { bodyHeight = $0 }
             }
             footer
         }
         .background(LumaTheme.bar)
-        .presentationDetents([.large])
+        .presentationDetents([.height(contentDetentHeight), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(LumaTheme.bar)
         .task { await stageAndInspect() }
@@ -132,6 +155,7 @@ struct LUTImportSheet: View {
         .padding(.horizontal, 20)
         .padding(.top, 18)
         .padding(.bottom, 14)
+        .measureLumaImportHeight { headerHeight = $0 }
     }
 
     private var footer: some View {
@@ -150,6 +174,7 @@ struct LUTImportSheet: View {
         .padding(.bottom, 14)
         .background(LumaTheme.bar)
         .overlay(alignment: .top) { Hairline() }
+        .measureLumaImportHeight { footerHeight = $0 }
     }
 
     // MARK: File row + validation badge
@@ -411,6 +436,7 @@ struct LUTImportSheet: View {
         staged = destination
         name = Self.cleanedName(from: sourceURL)
 
+        declaredSize = Self.declaredCubeSize(at: destination)
         let result = LUTParser.inspect(url: destination)
         inspection = result
         guard result.isValid else { return }
@@ -443,6 +469,30 @@ struct LUTImportSheet: View {
         }.value
         originalImage = rendered.0
         gradedImage = rendered.1
+    }
+
+    /// The grid resolution the file *claims* in its own header, independent of
+    /// whether the body backs that claim up. A truncated cube still declares
+    /// LUT_3D_SIZE, and that number is the most useful thing the row can say
+    /// about a file the parser has just rejected.
+    static func declaredCubeSize(at url: URL) -> Int? {
+        // Only the header matters, so cap the read — a HALD PNG or a huge cube
+        // must not be pulled into memory twice just to render a subtitle.
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: 4096), !head.isEmpty,
+              let text = String(data: head, encoding: .utf8)
+                  ?? String(data: head, encoding: .isoLatin1)
+        else { return nil }
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.uppercased().hasPrefix("LUT_3D_SIZE") else { continue }
+            let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            if let size = tokens.dropFirst().compactMap({ Int($0) }).first, size > 0 {
+                return size
+            }
+        }
+        return nil
     }
 
     /// "bleach_bypass_v3.cube" → "Bleach Bypass V3". Same underscore rule the
@@ -482,6 +532,31 @@ struct LUTImportSheet: View {
             // say that rather than blaming the LUT.
             saveError = "Couldn't save to your library: \(error.localizedDescription)"
             LumaHaptics.shared.failure()
+        }
+    }
+}
+
+// MARK: - Content-height measurement
+
+private struct LumaImportHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private extension View {
+    /// Reports this band's laid-out height so the sheet can size its detent to
+    /// the content instead of stranding the CTA at the bottom of a full screen.
+    func measureLumaImportHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: LumaImportHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(LumaImportHeightKey.self) { height in
+            // Sub-point churn would re-key the detent every frame.
+            if height > 0 { onChange(height.rounded()) }
         }
     }
 }

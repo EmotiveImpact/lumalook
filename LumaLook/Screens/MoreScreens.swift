@@ -22,12 +22,14 @@ final class PackThumbs: ObservableObject {
         stamp = key
 
         // With real user media every tile shares one frame, so the grades are
-        // directly comparable. Without it each pack previews on its OWN hero
-        // photo — otherwise every row renders the same sunset and the store
-        // reads as one look repeated, and disagrees with each pack's detail hero.
+        // directly comparable. Without it each pack previews on a frame chosen
+        // by `previewPhoto` — the catalog hand-assigns the same hero to several
+        // packs, which made adjacent rows render the identical sunset and read
+        // as one stock photo repeated.
         let jobs: [(String, PackLook, CIImage)] = packs.compactMap { pack in
             guard let look = pack.looks.first else { return nil }
-            let frame = source ?? pack.photo.ciImage ?? LookThumbs.fallbackFrame
+            let frame = source ?? PackThumbs.previewPhoto(for: pack).ciImage
+                ?? LookThumbs.fallbackFrame
             return (pack.id, look, frame)
         }
         task?.cancel()
@@ -39,6 +41,20 @@ final class PackThumbs: ObservableObject {
                 await MainActor.run { self?.images[packID] = cg }
             }
         }
+    }
+
+    /// Photos in catalog order. The catalog assigns only five `HeroPhoto`
+    /// values across ten packs and repeats them non-adjacently-safely, so the
+    /// store derives its own rotation from the pack's position instead: with
+    /// five photos walked in sequence no two neighbouring rows can collide.
+    /// The pack-detail hero calls this too, so a tile and its detail screen
+    /// always show the same source frame.
+    static let previewPhotos: [HeroPhoto] = [.golden, .coast, .desert, .night, .neon]
+
+    static func previewPhoto(for pack: LookPack) -> HeroPhoto {
+        guard let idx = PackCatalog.packs.firstIndex(where: { $0.id == pack.id })
+        else { return pack.photo }
+        return previewPhotos[idx % previewPhotos.count]
     }
 
     /// The single grade entry point for every store surface (tiles, detail
@@ -98,16 +114,30 @@ enum StoreCategory: String, CaseIterable, Identifiable {
     }
 }
 
-/// The one place the store says "owned": teal "✓ In Library" once installed,
-/// the real StoreKit price otherwise. Used by both the rows and the featured
-/// banner so a pack never reads two different states on one screen.
+/// The one place the store says "owned". Four states, each visually distinct
+/// so the pill is never ambiguous: teal outlined "✓ In Library", a neutral
+/// "Free" chip, an accent-outlined "♛ Pro" BADGE for subscription-included
+/// packs, and a solid accent capsule reserved exclusively for real money.
+/// Used by the rows and the featured banner so a pack never reads two
+/// different states on one screen.
 struct PackStatePill: View {
     let pack: LookPack
     let installed: Bool
+    /// The formatted StoreKit price. Only rendered in the `.buy` state.
     let price: String
 
+    private enum State { case inLibrary, free, proIncluded, buy }
+
+    private var state: State {
+        if installed { return .inLibrary }
+        if pack.isFree { return .free }
+        if pack.isProIncluded { return .proIncluded }
+        return .buy
+    }
+
     var body: some View {
-        if installed {
+        switch state {
+        case .inLibrary:
             Label("In Library", systemImage: "checkmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(LumaTheme.teal)
@@ -115,14 +145,30 @@ struct PackStatePill: View {
                 .padding(.vertical, 7)
                 .background(LumaTheme.teal.opacity(0.14), in: Capsule())
                 .overlay(Capsule().strokeBorder(LumaTheme.teal.opacity(0.35), lineWidth: 1))
-        } else {
+        case .free:
+            Text("Free")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(LumaTheme.surfaceStrong, in: Capsule())
+        case .proIncluded:
+            // A badge, not a buy button: outlined and tinted rather than
+            // filled, so it cannot be mistaken for a price.
+            Label("Pro", systemImage: "crown.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(LumaTheme.accentBright)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(LumaTheme.accent.opacity(0.16), in: Capsule())
+                .overlay(Capsule().strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1))
+        case .buy:
             Text(price)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(pack.isFree ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                        : AnyShapeStyle(LumaTheme.accent), in: Capsule())
+                .background(LumaTheme.accent, in: Capsule())
         }
     }
 }
@@ -143,14 +189,35 @@ struct FilterStoreView: View {
         return .all
     }()
 
+    @State private var searching = false
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
+
+    private var isSearchActive: Bool {
+        searching && !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// The flagship recipe pack — looked up by id so catalog growth can't
     /// silently re-point the banner at a different pack.
     private var featured: LookPack {
         PackCatalog.pack(id: "cine-print-set-01") ?? PackCatalog.packs[0]
     }
 
+    /// Category first, then the free-text query across everything the user
+    /// could plausibly remember: the pack, its era tag, and the name or code
+    /// of any look inside it — 118 looks are not findable by scrolling.
     private var visiblePacks: [LookPack] {
-        PackCatalog.packs.filter { category.contains($0) }
+        let byCategory = PackCatalog.packs.filter { category.contains($0) }
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return byCategory }
+        return byCategory.filter { pack in
+            pack.name.lowercased().contains(needle)
+                || pack.eraTag.lowercased().contains(needle)
+                || pack.looks.contains {
+                    $0.name.lowercased().contains(needle)
+                        || $0.code.lowercased().contains(needle)
+                }
+        }
     }
 
     /// Chips only appear when the catalog actually has something in them.
@@ -173,16 +240,21 @@ struct FilterStoreView: View {
             LumaTheme.background.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
+                if searching { searchField }
                 chips
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
-                        if category == .all {
+                        // The banner is a browsing surface; while searching the
+                        // results are the only thing that matters.
+                        if category == .all && !isSearchActive {
                             SectionHeader(title: "Featured Pack")
                             featuredBanner
                         }
 
-                        SectionHeader(title: category == .all ? "All Packs"
-                                                              : "\(category.title) Packs")
+                        SectionHeader(title: isSearchActive
+                                      ? "\(visiblePacks.count) Result\(visiblePacks.count == 1 ? "" : "s")"
+                                      : category == .all ? "All Packs"
+                                                         : "\(category.title) Packs")
 
                         VStack(spacing: 10) {
                             ForEach(visiblePacks) { pack in
@@ -191,7 +263,9 @@ struct FilterStoreView: View {
                         }
 
                         if visiblePacks.isEmpty {
-                            Text("No packs in this category yet.")
+                            Text(isSearchActive
+                                 ? "No packs or looks match \"\(query)\"."
+                                 : "No packs in this category yet.")
                                 .font(.system(size: 14))
                                 .foregroundStyle(LumaTheme.textMuted)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -232,12 +306,61 @@ struct FilterStoreView: View {
                     BackArrow()
                 }
                 Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        searching.toggle()
+                        if !searching { query = "" }
+                    }
+                    searchFocused = searching
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Image(systemName: searching ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(searching ? LumaTheme.accentBright : .white)
+                        .frame(width: 40, height: 40, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(searching ? "Close search" : "Search the store")
             }
         }
         .frame(height: 52)
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(LumaTheme.textMuted)
+            TextField("Search packs and looks", text: $query)
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+                .tint(LumaTheme.accentBright)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .focused($searchFocused)
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(LumaTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 13)
+        .frame(height: 42)
+        .background(LumaTheme.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 
     private var chips: some View {
@@ -293,7 +416,7 @@ struct FilterStoreView: View {
                             .resizable()
                             .scaledToFill()
                     } else {
-                        HeroImage(photo: featured.photo)
+                        HeroImage(photo: PackThumbs.previewPhoto(for: featured))
                     }
                 }
                 .frame(height: 158)
@@ -377,7 +500,7 @@ private struct StoreRow: View {
                         GradedThumb(image: thumbnail,
                                     size: CGSize(width: 56, height: 56), radius: 12)
                     } else {
-                        HeroImage(photo: pack.photo, radius: 12)
+                        HeroImage(photo: PackThumbs.previewPhoto(for: pack), radius: 12)
                             .frame(width: 56, height: 56)
                     }
                 }
@@ -404,15 +527,51 @@ private struct StoreRow: View {
 
 struct BackArrow: View {
     @Environment(\.dismiss) private var dismiss
+    /// Over photography the bare glyph can land on near-white sky, so the
+    /// media placements get the mockup's circular chip behind it. Chrome
+    /// placements keep the naked glyph.
+    var onMedia: Bool = false
+
     var body: some View {
         Button { dismiss() } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40, alignment: .leading)
+            if onMedia {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .frame(width: 40, height: 40, alignment: .leading)
+            } else {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40, alignment: .leading)
+            }
         }
         .buttonStyle(.plain)
     }
+}
+
+/// The app's legal destinations, in one place so the paywall footer and the
+/// Settings ABOUT rows can never drift apart. Both are overridable from
+/// Info.plist (`LLPrivacyPolicyURL` / `LLTermsOfUseURL`) — set those to the
+/// real hosted documents before submission; `terms` otherwise falls back to
+/// Apple's standard EULA, which is the default agreement for apps that do not
+/// supply their own.
+enum LumaLegal {
+    static let privacy = url(forInfoKey: "LLPrivacyPolicyURL",
+                             fallback: "https://emotiveimpact.com/lumalook/privacy")
+    static let terms = url(forInfoKey: "LLTermsOfUseURL",
+                           fallback: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
+
+    private static func url(forInfoKey key: String, fallback: String) -> URL {
+        if let configured = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+           let url = URL(string: configured) { return url }
+        return URL(string: fallback)!
+    }
+
+    static func open(_ url: URL) { UIApplication.shared.open(url) }
 }
 
 // MARK: - 10 Filter Pack Detail
@@ -446,9 +605,12 @@ struct FilterPackDetailView: View {
         pack.looks.first { $0.code == selectedCode } ?? pack.looks[0]
     }
 
-    /// The hero photo the pack ships with, scaled for still rendering.
+    /// The frame this pack previews on — the same one its store tile used, so
+    /// tapping a row never swaps the photo out from under the user.
+    private var heroPhoto: HeroPhoto { PackThumbs.previewPhoto(for: pack) }
+
     private var heroSource: CIImage {
-        pack.photo.ciImage ?? LookThumbs.fallbackFrame
+        heroPhoto.ciImage ?? LookThumbs.fallbackFrame
     }
 
     /// A bundled frame deliberately DIFFERENT from the hero, used when the
@@ -456,7 +618,7 @@ struct FilterPackDetailView: View {
     /// pixel-identical copy of the hero 400pt above it and adds nothing.
     private var sampleFallbackSource: CIImage {
         let alternate: HeroPhoto
-        switch pack.photo {
+        switch heroPhoto {
         case .golden: alternate = .coast
         case .coast:  alternate = .desert
         case .desert: alternate = .night
@@ -487,14 +649,13 @@ struct FilterPackDetailView: View {
                         }
                         .padding(.top, 6)
 
-                        looksGrid
-
                         // The pack's technical claim belongs with the looks it
-                        // describes, not in the price row.
-                        TechReadout(pack.looks.contains { $0.cubeFile != nil }
-                                    ? "MEASURED FILM DATA"
-                                    : "BAKED 33-POINT CUBES",
-                                    size: 9, color: LumaTheme.textMuted)
+                        // describes — tight to the rail, not floating midway
+                        // between the rail and the sample panel.
+                        VStack(alignment: .leading, spacing: 6) {
+                            looksGrid
+                            TechReadout(techClaim, size: 9, color: LumaTheme.textMuted)
+                        }
 
                         tryOnPanel
 
@@ -525,6 +686,14 @@ struct FilterPackDetailView: View {
                             .ignoresSafeArea(edges: .bottom)
                     }
             }
+        }
+        // Anchored to the ZStack, which still respects the top safe area even
+        // though the scrolling hero inside it opts out — so the chevron clears
+        // the status bar without any hand-computed inset.
+        .overlay(alignment: .topLeading) {
+            BackArrow(onMedia: true)
+                .padding(.leading, 18)
+                .padding(.top, 6)
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -558,16 +727,19 @@ struct FilterPackDetailView: View {
                         .resizable()
                         .scaledToFill()
                 } else {
-                    HeroImage(photo: pack.photo)
+                    HeroImage(photo: heroPhoto)
                 }
             }
             .frame(height: 300)
             .frame(maxWidth: .infinity)
             .clipped()
-            // Starts high and reaches full background before the hero's bottom
-            // edge, so the photo dissolves into the page instead of ending in
-            // a hard full-width seam.
+            // Top scrim so the status bar, clock and back control stay legible
+            // over bright skies (.coast / .desert); then starts high and reaches
+            // full background before the hero's bottom edge, so the photo
+            // dissolves into the page instead of ending in a hard full-width seam.
             .overlay(LinearGradient(stops: [
+                .init(color: .black.opacity(0.38), location: 0.0),
+                .init(color: .clear, location: 0.28),
                 .init(color: .clear, location: 0.30),
                 .init(color: LumaTheme.background.opacity(0.55), location: 0.68),
                 .init(color: LumaTheme.background, location: 0.94)
@@ -585,16 +757,6 @@ struct FilterPackDetailView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 4)
-
-            VStack {
-                HStack {
-                    BackArrow()
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 62)   // hero ignores the top safe area
-                Spacer()
-            }
         }
         .frame(height: 300)
     }
@@ -686,20 +848,45 @@ struct FilterPackDetailView: View {
 
     // MARK: Price
 
-    /// Price only. The spec's rating/installs slot stays empty until there is
-    /// a real source for it — the technical readout moved up under the looks
-    /// rail rather than masquerading as social proof here.
+    /// What the pack technically is — shown under the looks rail it describes.
+    private var techClaim: String {
+        pack.looks.contains { $0.cubeFile != nil } ? "MEASURED FILM DATA"
+                                                   : "BAKED 33-POINT CUBES"
+    }
+
+    /// Two columns, per F2. The right slot carries a FACTUAL readout of what
+    /// the pack contains rather than an invented star rating — there is no
+    /// real ratings source, and fabricating social proof would be worse than
+    /// the void it replaces. The left never repeats the same word at two
+    /// sizes: the label names the axis, the value states it once.
     private var priceBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(pack.isFree ? "Included free"
-                 : pack.isProIncluded ? "Included with Pro" : "One-time purchase")
-                .font(.system(size: 12))
-                .foregroundStyle(LumaTheme.textSecondary)
-            Text(installed ? "In your library" : StoreNav.price(pack, storeService))
-                .font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(installed ? LumaTheme.teal : .white)
+        HStack(alignment: .lastTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(installed ? "Status"
+                     : pack.isFree ? "Price"
+                     : pack.isProIncluded ? "Subscription" : "One-time purchase")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                Text(installed ? "In your library"
+                     : pack.isFree ? "Free"
+                     : pack.isProIncluded ? "Included with Pro"
+                     : StoreNav.price(pack, storeService))
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundStyle(installed ? LumaTheme.teal : .white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 3) {
+                TechReadout("\(pack.looks.count) LOOKS", size: 11,
+                            color: LumaTheme.textSecondary)
+                TechReadout(pack.eraTag.uppercased(), size: 9,
+                            color: LumaTheme.textMuted)
+            }
+            .frame(maxWidth: 150, alignment: .trailing)
+            .multilineTextAlignment(.trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
         .padding(.top, 6)
     }
 
@@ -1165,16 +1352,20 @@ private struct ProjectList: View {
 
     var body: some View {
         List {
-            Section {
-                Button {
-                    app.editor.startNewProject()
-                    app.path.append(.editor)
-                } label: {
-                    Label("New Project", systemImage: "plus")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LumaTheme.accentBright)
+            // While there are no projects the empty state owns the screen and
+            // carries the only CTA — a "New Project" row here would be a second
+            // identical primary action a third of a screen away from the first.
+            if !store.projects.isEmpty {
+                Section {
+                    Button {
+                        startProject()
+                    } label: {
+                        Label("New Project", systemImage: "plus")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(LumaTheme.accentBright)
+                    }
+                    .listRowBackground(LumaTheme.surface)
                 }
-                .listRowBackground(LumaTheme.surface)
             }
 
             if !store.projects.isEmpty {
@@ -1229,20 +1420,23 @@ private struct ProjectList: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .scrollDisabled(store.projects.isEmpty)
-        // Centered in the space below the "New Project" row, not stacked flush
-        // under it — and carrying its own CTA so the empty screen has a target.
+        // With the row hidden the empty state simply centres in its container —
+        // no magic top padding compensating for chrome that is no longer there.
         .overlay {
             if store.projects.isEmpty {
                 LumaEmptyState(icon: "film.stack",
                                title: "No Projects Yet",
                                message: "Edits auto-save here as you work.",
                                actionTitle: "Start a Project") {
-                    app.editor.startNewProject()
-                    app.path.append(.editor)
+                    startProject()
                 }
-                .padding(.top, 88)   // clears the New Project row above
             }
         }
+    }
+
+    private func startProject() {
+        app.editor.startNewProject()
+        app.path.append(.editor)
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -1598,12 +1792,16 @@ struct AudioView: View {
 
 struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
+    @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
+    @Environment(\.requestReview) private var requestReview
     @State private var showPaywall = false
     @State private var showExportQuality = false
     @State private var showAbout = false
     @State private var showManageSubscriptions = false
     @State private var showLanguageNotice = false
+    @State private var showStorageDetail = false
+    @State private var lutBytes: Int64 = 0
     /// Same store the export spec sheet reads on appear — changing it here
     /// really changes the default the exporter uses.
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
@@ -1618,7 +1816,10 @@ struct SettingsSubscriptionView: View {
         }
         .sheet(isPresented: $showExportQuality) {
             exportQualitySheet
-                .presentationDetents([.height(240)])
+                // Three 52pt rows plus the header measure ~271pt at default
+                // type and more at larger sizes, so the sheet is medium and the
+                // content scrolls rather than clipping the last resolution.
+                .presentationDetents([.medium])
                 .presentationBackground(LumaTheme.background)
         }
         .sheet(isPresented: $showAbout) {
@@ -1639,6 +1840,19 @@ struct SettingsSubscriptionView: View {
         } message: {
             Text("iOS keeps per-app language under Settings › LumaLook. This will leave LumaLook.")
         }
+        // Plain facts about what the LUT library costs on disk — no "clean up"
+        // button, because every byte here is a look the user chose to keep and
+        // deleting them belongs in LUT Manager where they can see what goes.
+        .confirmationDialog("Storage", isPresented: $showStorageDetail,
+                            titleVisibility: .visible) {
+            Button("Manage Imported LUTs") { app.path.append(.lutManager) }
+            Button("Done", role: .cancel) { }
+        } message: {
+            Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in LumaLook's documents folder. Removing a LUT frees its space immediately.")
+        }
+        .task {
+            lutBytes = await Self.directorySize(of: app.lutRepository.lutFolderURL)
+        }
         .onAppear {
             #if DEBUG
             if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
@@ -1646,6 +1860,24 @@ struct SettingsSubscriptionView: View {
             }
             #endif
         }
+    }
+
+    private var lutStorageDescription: String {
+        ByteCountFormatter.string(fromByteCount: lutBytes, countStyle: .file)
+    }
+
+    /// Off the main actor — enumerating the LUT folder touches the filesystem.
+    private static func directorySize(of url: URL) async -> Int64 {
+        await Task.detached(priority: .utility) {
+            guard let files = FileManager.default.enumerator(
+                at: url, includingPropertiesForKeys: [.fileSizeKey]) else { return Int64(0) }
+            var total = Int64(0)
+            for case let file as URL in files {
+                let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+                total += Int64(size ?? 0)
+            }
+            return total
+        }.value
     }
 
     /// NATIVE inset-grouped List (Apple-native tranche 2).
@@ -1689,6 +1921,20 @@ struct SettingsSubscriptionView: View {
             }
             .listRowBackground(LumaTheme.surface)
 
+            Section("Storage") {
+                // LUTManagerView already exists but had no route from here.
+                settingsRow(icon: "square.stack.3d.down.right",
+                            title: "Imported LUTs",
+                            value: "\(app.lutRepository.luts.count)") {
+                    app.path.append(.lutManager)
+                }
+                settingsRow(icon: "internaldrive", title: "Storage Used",
+                            value: lutStorageDescription) {
+                    showStorageDetail = true
+                }
+            }
+            .listRowBackground(LumaTheme.surface)
+
             Section("About") {
                 settingsRow(icon: "questionmark.circle", title: "Help & Support") {
                     let subject = "LumaLook Support".addingPercentEncoding(
@@ -1696,6 +1942,20 @@ struct SettingsSubscriptionView: View {
                     if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
                         UIApplication.shared.open(url)
                     }
+                }
+                settingsRow(icon: "star", title: "Rate LumaLook",
+                            opensExternally: true) {
+                    requestReview()
+                }
+                // Auto-renewable subscriptions must expose both of these on a
+                // reachable surface — they are also linked from the paywall.
+                settingsRow(icon: "hand.raised", title: "Privacy Policy",
+                            opensExternally: true) {
+                    LumaLegal.open(LumaLegal.privacy)
+                }
+                settingsRow(icon: "doc.text", title: "Terms of Use",
+                            opensExternally: true) {
+                    LumaLegal.open(LumaLegal.terms)
                 }
                 settingsRow(icon: "info.circle", title: "About LumaLook",
                             value: "v\(Self.appVersion)") {
@@ -1749,6 +2009,7 @@ struct SettingsSubscriptionView: View {
     /// Default export resolution — writes into the same stored ExportSpec the
     /// export sheets load, so the choice sticks everywhere (codec/fps untouched).
     private var exportQualitySheet: some View {
+        ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 6) {
             Text("Export Quality")
                 .font(.system(size: 19, weight: .bold))
@@ -1769,7 +2030,7 @@ struct SettingsSubscriptionView: View {
                         Text(res.rawValue)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text(res == .uhd4K ? "3840×2160" : "1920×1080")
+                        Text(Self.pixelDimensions(res))
                             .font(.system(size: 12))
                             .foregroundStyle(LumaTheme.textMuted)
                         Spacer()
@@ -1789,7 +2050,18 @@ struct SettingsSubscriptionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 22)
         .padding(.top, 24)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .padding(.bottom, 24)
+        }
+    }
+
+    /// The 720p row previously reported "1920×1080" because the label was a
+    /// two-way ternary over a three-case enum.
+    private static func pixelDimensions(_ res: ExportSpec.Resolution) -> String {
+        switch res {
+        case .uhd4K:  return "3840×2160"
+        case .hd1080: return "1920×1080"
+        case .hd720:  return "1280×720"
+        }
     }
 
     // MARK: About
