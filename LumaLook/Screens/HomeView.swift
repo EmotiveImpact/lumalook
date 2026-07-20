@@ -38,6 +38,19 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         looksOfTheWeek
                     }
+
+                    // Second discovery row: without it Home ran out of content
+                    // a third of the way up a Pro Max, leaving dead black.
+                    if !morePacks.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeader(title: "More to explore", actionTitle: "Store") {
+                                app.tab = .store
+                                LumaHaptics.shared.tap()
+                            }
+                            .padding(.horizontal, 20)
+                            packRail(morePacks)
+                        }
+                    }
                 }
                 .padding(.top, 14)
                 .padding(.bottom, 28)
@@ -47,9 +60,9 @@ struct HomeView: View {
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showPaywall) { PaywallView() }
-        .onAppear { packThumbs.render(featuredPacks) }
+        .onAppear { packThumbs.render(featuredPacks + morePacks) }
         .onChange(of: app.packStore.installedPackIDs) { _, _ in
-            packThumbs.render(featuredPacks)
+            packThumbs.render(featuredPacks + morePacks)
         }
     }
 
@@ -168,19 +181,42 @@ struct HomeView: View {
 
     // MARK: Looks of the week
 
-    /// Real catalog packs, newest first, hiding what the user already owns —
-    /// a rail of packs they cannot act on is not discovery.
+    /// Packs the user does not already own — a rail of packs they cannot act
+    /// on is not discovery.
+    private var discoverablePacks: [LookPack] {
+        let unowned = PackCatalog.packs.filter { !app.packStore.isInstalled($0) }
+        return unowned.isEmpty ? PackCatalog.packs : unowned
+    }
+
+    /// Interleaved across pack families and rotated weekly, so the rail is
+    /// never one release cohort wearing six identical badges.
     private var featuredPacks: [LookPack] {
-        let ordered = HomeFeatured.newestFirst(PackCatalog.packs)
-        let unowned = ordered.filter { !app.packStore.isInstalled($0) }
-        return Array((unowned.isEmpty ? ordered : unowned).prefix(6))
+        HomeFeatured.weeklyRail(discoverablePacks, count: 6)
+    }
+
+    /// The tail of the shelf: everything the week's rail did not surface.
+    private var morePacks: [LookPack] {
+        let shown = Set(featuredPacks.map(\.id))
+        return Array(discoverablePacks.filter { !shown.contains($0.id) }.prefix(6))
+    }
+
+    /// NEW is capped so it still carries information.
+    private var newBadgeIDs: Set<String> {
+        Set(featuredPacks.prefix(HomeFeatured.newBadgeLimit)
+            .filter { HomeFeatured.isNew($0) }
+            .map(\.id))
     }
 
     private var looksOfTheWeek: some View {
+        packRail(featuredPacks, badged: newBadgeIDs)
+    }
+
+    private func packRail(_ packs: [LookPack], badged: Set<String> = []) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(featuredPacks) { pack in
-                    PackTile(pack: pack, image: packThumbs.images[pack.id]) {
+                ForEach(packs) { pack in
+                    PackTile(pack: pack, image: packThumbs.images[pack.id],
+                             isNew: badged.contains(pack.id)) {
                         app.selectedPackID = pack.id
                         app.path.append(.filterPack)
                         LumaHaptics.shared.tap()
@@ -375,13 +411,18 @@ private struct InviteCard: View {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(subtitle)
                     .font(.system(size: 11))
                     .foregroundStyle(LumaTheme.textMuted)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(12)
-            .frame(width: Poster.width, height: Poster.height, alignment: .topLeading)
+            // Only two cards in the empty state — they share the row rather
+            // than sitting at poster width with a void beside them.
+            .frame(maxWidth: .infinity, minHeight: Poster.height, alignment: .topLeading)
             .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: Poster.radius))
             .overlay(RoundedRectangle(cornerRadius: Poster.radius)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
@@ -396,6 +437,7 @@ private struct InviteCard: View {
 private struct PackTile: View {
     let pack: LookPack
     let image: CGImage?
+    var isNew: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -426,7 +468,7 @@ private struct PackTile: View {
             .frame(width: 96, height: 110)
             .clipShape(RoundedRectangle(cornerRadius: 13))
             .overlay(alignment: .topTrailing) {
-                if HomeFeatured.isNew(pack) {
+                if isNew {
                     TechReadout("NEW", size: 8, color: .white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -470,6 +512,59 @@ private enum HomeFeatured {
     static func newestFirst(_ packs: [LookPack]) -> [LookPack] {
         packs.filter { isNew($0) } + packs.filter { !isNew($0) }
     }
+
+    /// How many tiles may wear the badge. A rail where every tile is NEW
+    /// tells the user nothing — the badge only means something if it is rare.
+    static let newBadgeLimit = 2
+
+    /// The pack families the rail interleaves across, in shelf order. Reuses
+    /// the Store's own taxonomy so Home and Store agree on what a family is.
+    private static let families: [StoreCategory] =
+        [.film, .cinema, .mono, .instant, .camera, .originals]
+
+    static func family(of pack: LookPack) -> StoreCategory {
+        families.first { $0.contains(pack) } ?? .all
+    }
+
+    /// Stable per-week value so "Looks of the week" actually turns over on a
+    /// weekly cadence instead of being frozen to one release cohort.
+    static func weekSeed(_ date: Date = Date()) -> Int {
+        let calendar = Calendar(identifier: .gregorian)
+        let week = calendar.component(.weekOfYear, from: date)
+        let year = calendar.component(.yearForWeekOfYear, from: date)
+        return abs(year &* 53 &+ week)
+    }
+
+    /// One rail, interleaved across families and rotated weekly, so a single
+    /// release cohort can never take the whole shelf.
+    static func weeklyRail(_ packs: [LookPack], count: Int, on date: Date = Date()) -> [LookPack] {
+        var groups: [(family: StoreCategory, packs: [LookPack])] = []
+        for pack in newestFirst(packs) {
+            let family = family(of: pack)
+            if let index = groups.firstIndex(where: { $0.family == family }) {
+                groups[index].packs.append(pack)
+            } else {
+                groups.append((family, [pack]))
+            }
+        }
+        let seed = weekSeed(date)
+        let rotated = groups.map { group -> [LookPack] in
+            guard group.packs.count > 1 else { return group.packs }
+            let offset = seed % group.packs.count
+            return Array(group.packs[offset...]) + Array(group.packs[..<offset])
+        }
+        var out: [LookPack] = []
+        var round = 0
+        let deepest = rotated.map(\.count).max() ?? 0
+        while out.count < count && round < deepest {
+            for group in rotated where round < group.count {
+                out.append(group[round])
+                if out.count == count { break }
+            }
+            round += 1
+        }
+        return out
+    }
 }
 
 /// Renders one representative look per featured pack through the real
@@ -486,10 +581,12 @@ private final class HomePackThumbs: ObservableObject {
         guard stamp != lastStamp else { return }
         lastStamp = stamp
 
-        let jobs: [(id: String, look: PackLook)] = packs.compactMap { pack in
-            pack.looks.first.map { (pack.id, $0) }
+        // Each pack is graded on ITS OWN hero photo (same rule as the Store's
+        // pack detail) — one shared frame made three warm packs identical.
+        let jobs: [(id: String, look: PackLook, source: CIImage)] = packs.compactMap { pack in
+            guard let look = pack.looks.first else { return nil }
+            return (pack.id, look, Self.source(for: pack))
         }
-        let source = LookThumbs.fallbackFrame
         task?.cancel()
         task = Task.detached(priority: .utility) { [weak self] in
             for job in jobs {
@@ -506,11 +603,21 @@ private final class HomePackThumbs: ObservableObject {
                 var settings = LookSettings()
                 settings.intensity = 100
                 state.settings = settings
-                if let cg = LookPipeline.shared.gradedStill(source, state: state, maxDimension: 220) {
+                if let cg = LookPipeline.shared.gradedStill(job.source, state: state, maxDimension: 220) {
                     await MainActor.run { self?.images[job.id] = cg }
                 }
             }
         }
+    }
+
+    /// The pack's own photograph, scaled to preview size; falls back to the
+    /// shared frame only when the asset is missing.
+    private static func source(for pack: LookPack) -> CIImage {
+        guard let ci = pack.photo.ciImage else { return LookThumbs.fallbackFrame }
+        let longest = max(ci.extent.width, ci.extent.height)
+        guard longest > 440 else { return ci }
+        let scale = 440 / longest
+        return ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
     }
 }
 
@@ -529,12 +636,10 @@ private struct HomeHalfTile: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(iconTint)
                     .frame(height: 30)
-                    // Reference-style soft light pooled around the icon.
-                    .background(
-                        RadialGradient(colors: [iconTint.opacity(0.30), .clear],
-                                       center: .center, startRadius: 2, endRadius: 54)
-                            .frame(width: 110, height: 110)
-                    )
+                    // Light that radiates FROM the glyph. The old 110x110
+                    // radial was anchored to the icon at the tile's corner,
+                    // so the clip turned it into an off-centre smudge.
+                    .shadow(color: iconTint.opacity(0.45), radius: 10)
                 Spacer(minLength: 10)
                 Text(title)
                     .font(.system(size: 15, weight: .bold))

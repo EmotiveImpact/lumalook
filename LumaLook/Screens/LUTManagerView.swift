@@ -34,7 +34,7 @@ struct LUTManagerView: View {
     private var visibleLUTs: [LUTFile] {
         let base: [LUTFile]
         switch filter {
-        case "Favorites": base = app.lutRepository.luts.filter(\.isFavourite)
+        case "Favourites": base = app.lutRepository.luts.filter(\.isFavourite)
         case "Recents": base = recentLUTs
         default: base = app.lutRepository.luts
         }
@@ -54,7 +54,7 @@ struct LUTManagerView: View {
             return [("search", "Results", visibleLUTs)]
         }
         switch filter {
-        case "Favorites": return [("fav", "Favorites", visibleLUTs)]
+        case "Favourites": return [("fav", "Favourites", visibleLUTs)]
         case "Recents":   return [("rec", "Recents", visibleLUTs)]
         default:
             var groups: [(String, String, [LUTFile])] = []
@@ -94,7 +94,7 @@ struct LUTManagerView: View {
             }
             .swipeActions(edge: .leading) {
                 Button { app.lutRepository.toggleFavourite(lut) } label: {
-                    Label(lut.isFavourite ? "Unfavorite" : "Favorite",
+                    Label(lut.isFavourite ? "Unfavourite" : "Favourite",
                           systemImage: lut.isFavourite ? "star.slash" : "star")
                 }
                 .tint(LumaTheme.gold)
@@ -127,12 +127,13 @@ struct LUTManagerView: View {
         LumaScreen(title: "LUT Files", trailingIcon: "plus",
                    trailingAction: { showImporter = true }, showBack: true,
                    scrollable: false) {
-            SegmentPills(options: ["All", "Favorites", "Recents"], selection: $filter)
+            SegmentPills(options: ["All", "Favourites", "Recents"], selection: $filter)
+
+            searchField
 
             listBody
                 .padding(.horizontal, -22)   // the List brings its own insets
         }
-        .searchable(text: $searchText, prompt: "Search LUTs and tags")
         // Real rendered thumbnails (same renderer as every apply surface) —
         // the rows used to show index-rotated stock art.
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)") {
@@ -189,6 +190,35 @@ struct LUTManagerView: View {
             }
             #endif
         }
+    }
+
+    /// T2.7 search, rendered inline. `.searchable` needs a navigation bar and
+    /// LumaScreen hides it, so the bar never appeared — same field treatment as
+    /// LookBrowserSheet so the two library surfaces match.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(LumaTheme.textMuted)
+            TextField("Search LUTs and tags", text: $searchText)
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(LumaTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var listBody: some View {
@@ -306,7 +336,7 @@ private struct LUTRow: View {
                     }
                 }
                 Button("Rename…") { onRename(lut) }
-                Button(lut.isFavourite ? "Remove Favorite" : "Favorite") {
+                Button(lut.isFavourite ? "Remove Favourite" : "Favourite") {
                     app.lutRepository.toggleFavourite(lut)
                 }
                 Menu("Collections") {

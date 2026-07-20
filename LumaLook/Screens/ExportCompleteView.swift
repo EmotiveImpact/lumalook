@@ -59,6 +59,23 @@ struct ExportCompleteView: View {
     @State private var celebrate = 0
     @State private var info = ExportOutputInfo()
     @State private var isSavingToPhotos = false
+    /// Real first frame of the exported file, used while the player warms up.
+    @State private var poster: CGImage?
+
+    /// There is no success to celebrate without a file (or an in-memory still)
+    /// to show for it — every share affordance keys off this.
+    private var hasArtefact: Bool {
+        app.lastExportURL != nil || app.lastExportImage != nil
+    }
+
+    private var statusTint: Color { hasArtefact ? LumaTheme.teal : LumaTheme.orange }
+
+    private var subtitle: String {
+        guard hasArtefact else {
+            return "The exported file is no longer available on this device. Export again to save or share it."
+        }
+        return app.lastExportSavedToPhotos ? "Saved to your photos" : "Ready to share below"
+    }
 
     var body: some View {
         ZStack {
@@ -82,14 +99,14 @@ struct ExportCompleteView: View {
 
                     ZStack {
                         Circle()
-                            .fill(LumaTheme.teal.opacity(0.13))
+                            .fill(statusTint.opacity(0.13))
                             .frame(width: 128, height: 128)
                         Circle()
-                            .strokeBorder(LumaTheme.teal.opacity(0.35), lineWidth: 1)
+                            .strokeBorder(statusTint.opacity(0.35), lineWidth: 1)
                             .frame(width: 128, height: 128)
-                        Image(systemName: "checkmark")
+                        Image(systemName: hasArtefact ? "checkmark" : "exclamationmark.triangle")
                             .font(.system(size: 54, weight: .bold))
-                            .foregroundStyle(LumaTheme.teal)
+                            .foregroundStyle(statusTint)
                     }
                     .scaleEffect(appeared ? 1 : 0.4)
                     .opacity(appeared ? 1 : 0)
@@ -99,20 +116,20 @@ struct ExportCompleteView: View {
                     }, value: celebrate)
                     .padding(.top, 18)
 
-                    Text("Export Complete!")
+                    Text(hasArtefact ? "Export Complete!" : "Export Unavailable")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
                         .padding(.top, 22)
-                    Text(app.lastExportSavedToPhotos
-                         ? "Saved to your photos"
-                         : "Ready to share below")
+                    Text(subtitle)
                         .font(.system(size: 17))
                         .foregroundStyle(LumaTheme.textSecondary)
+                        .multilineTextAlignment(.center)
                         .padding(.top, 6)
 
                     // Photos access denied/limited: the export still
                     // succeeded — explain and offer the one-tap fix.
-                    if !app.lastExportSavedToPhotos {
+                    if hasArtefact, !app.lastExportSavedToPhotos {
                         VStack(spacing: 10) {
                             Text("LumaLook couldn't add this to your photo library. In Settings, choose \"Add Photos Only\" — that's the only access LumaLook ever asks for (it never reads your library, so iOS won't show a Full Access option).")
                                 .font(.footnote)
@@ -138,38 +155,41 @@ struct ExportCompleteView: View {
                         .padding(.top, 14)
                     }
 
-                    // Centered media card — video or graded photo.
-                    Group {
-                        if let image = app.lastExportImage {
-                            Image(decorative: image, scale: 1)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else if let player {
-                            VideoPlayer(player: player)
-                        } else {
-                            SceneArt(scene: .desert, grade: app.selectedLook.gradeTint, gradeOpacity: 0.2)
-                                .overlay(
-                                    Circle()
-                                        .fill(.black.opacity(0.45))
-                                        .frame(width: 64, height: 64)
-                                        .overlay(Image(systemName: "play.fill")
-                                            .font(.system(size: 24))
-                                            .foregroundStyle(.white))
-                                )
+                    // Centered media card — the frame that was actually
+                    // written. Never bundled art: with no artefact there is
+                    // no success state to illustrate.
+                    if hasArtefact {
+                        Group {
+                            if let image = app.lastExportImage {
+                                Image(decorative: image, scale: 1)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else if let player {
+                                VideoPlayer(player: player)
+                            } else if let poster {
+                                // Player not ready yet — the real first frame,
+                                // pulled off the exported file.
+                                Image(decorative: poster, scale: 1)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                LumaTheme.surface
+                                    .overlay(ProgressView().tint(LumaTheme.textMuted))
+                            }
                         }
+                        .frame(width: 250, height: 250)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .strokeBorder(
+                                    LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.03)],
+                                                   startPoint: .top, endPoint: .bottom),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
+                        .padding(.top, 26)
                     }
-                    .frame(width: 250, height: 250)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(
-                                LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.03)],
-                                               startPoint: .top, endPoint: .bottom),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
-                    .padding(.top, 26)
 
                     // Delivery spec of the file that was actually written.
                     if !info.readout.isEmpty {
@@ -177,18 +197,30 @@ struct ExportCompleteView: View {
                             .padding(.top, 14)
                     }
 
-                    Group {
-                        if let url = app.lastExportURL {
-                            ShareLink(item: url) {
-                                shareLabel
-                            }
-                        } else {
-                            Button { } label: { shareLabel }
+                    // The hero CTA exists only when there is a file to hand to
+                    // the share sheet. A violet full-width button that opens
+                    // nothing is worse than no button at all.
+                    if let url = app.lastExportURL {
+                        ShareLink(item: url) { shareLabel }
+                            .buttonStyle(.lumaPress)
+                            .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
+                            .padding(.top, 30)
+                    } else if hasArtefact {
+                        // Graded still held in memory but never written to
+                        // disk — say so instead of shipping a dead button.
+                        VStack(spacing: 8) {
+                            shareLabel
+                                .grayscale(1)
+                                .opacity(0.45)
+                            Text("This export isn't on disk, so it can't be shared. Export again to get a shareable file.")
+                                .font(.footnote)
+                                .foregroundStyle(LumaTheme.textMuted)
+                                .multilineTextAlignment(.center)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Sharing unavailable — this export isn't on disk")
+                        .padding(.top, 30)
                     }
-                    .buttonStyle(.lumaPress)
-                    .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
-                    .padding(.top, 30)
 
                     // Brand tiles are real ShareLinks — the destination apps
                     // live in the system sheet. They were decorations before,
@@ -291,13 +323,18 @@ struct ExportCompleteView: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.1)) {
                 appeared = true
             }
+            // Nothing to celebrate when nothing was produced.
+            guard hasArtefact else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 celebrate += 1
             }
         }
         .task {
             guard let url = app.lastExportURL, app.lastExportImage == nil else { return }
-            info = await ExportOutputInfo.load(url: url)
+            async let readout = ExportOutputInfo.load(url: url)
+            async let frame = Self.posterFrame(url: url)
+            info = await readout
+            poster = await frame
         }
         .onDisappear { player?.pause() }
     }
@@ -307,6 +344,15 @@ struct ExportCompleteView: View {
     /// user when the route was pushed onto `app.path` programmatically.
     private func goBack() {
         if !app.path.isEmpty { app.path.removeLast() } else { dismiss() }
+    }
+
+    /// First frame of the file that was actually written — a real poster, so
+    /// the card never has to fall back to bundled art.
+    private static func posterFrame(url: URL) async -> CGImage? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 750, height: 750)
+        return try? await generator.image(at: .zero).image
     }
 
     private var shareLabel: some View {

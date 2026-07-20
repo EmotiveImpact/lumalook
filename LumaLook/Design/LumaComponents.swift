@@ -587,3 +587,47 @@ extension Text {
                 .strokeBorder(border ? LumaTheme.accentBright : .white.opacity(0.12)))
     }
 }
+
+// MARK: - Empty state
+
+/// Shared "nothing here yet" block: icon, headline, one line of guidance and —
+/// crucially — an actual place to tap. An empty screen should always point
+/// somewhere. Center it in the space it owns; it sizes to its content.
+struct LumaEmptyState: View {
+    let icon: String
+    let title: String
+    var message: String? = nil
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 34))
+                .foregroundStyle(LumaTheme.textMuted)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(LumaTheme.textSecondary)
+            if let message {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(LumaTheme.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+            if let actionTitle, let action {
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 11)
+                        .background(LumaTheme.accent, in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .padding(.top, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+    }
+}

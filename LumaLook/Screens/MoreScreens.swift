@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import CoreImage
+import StoreKit
 import UIKit
 
 // MARK: - Store rendering support
@@ -16,17 +17,22 @@ final class PackThumbs: ObservableObject {
     private var stamp = ""
 
     func render(packs: [LookPack], source: CIImage?, maxDimension: CGFloat = 240) {
-        let frame = source ?? LookThumbs.fallbackFrame
-        let key = "\(frame.extent)-\(packs.map(\.id).joined())-\(Int(maxDimension))"
+        let key = "\(source?.extent.debugDescription ?? "pack-own-frames")-\(packs.map(\.id).joined())-\(Int(maxDimension))"
         guard key != stamp else { return }
         stamp = key
 
-        let jobs: [(String, PackLook)] = packs.compactMap { pack in
-            pack.looks.first.map { (pack.id, $0) }
+        // With real user media every tile shares one frame, so the grades are
+        // directly comparable. Without it each pack previews on its OWN hero
+        // photo — otherwise every row renders the same sunset and the store
+        // reads as one look repeated, and disagrees with each pack's detail hero.
+        let jobs: [(String, PackLook, CIImage)] = packs.compactMap { pack in
+            guard let look = pack.looks.first else { return nil }
+            let frame = source ?? pack.photo.ciImage ?? LookThumbs.fallbackFrame
+            return (pack.id, look, frame)
         }
         task?.cancel()
         task = Task.detached(priority: .userInitiated) { [weak self] in
-            for (packID, look) in jobs {
+            for (packID, look, frame) in jobs {
                 if Task.isCancelled { return }
                 guard let cg = PackThumbs.grade(look, on: frame,
                                                 maxDimension: maxDimension) else { continue }
@@ -445,6 +451,21 @@ struct FilterPackDetailView: View {
         pack.photo.ciImage ?? LookThumbs.fallbackFrame
     }
 
+    /// A bundled frame deliberately DIFFERENT from the hero, used when the
+    /// user has no media of their own — otherwise the try-on panel renders a
+    /// pixel-identical copy of the hero 400pt above it and adds nothing.
+    private var sampleFallbackSource: CIImage {
+        let alternate: HeroPhoto
+        switch pack.photo {
+        case .golden: alternate = .coast
+        case .coast:  alternate = .desert
+        case .desert: alternate = .night
+        case .night:  alternate = .neon
+        case .neon:   alternate = .golden
+        }
+        return alternate.ciImage ?? heroSource
+    }
+
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
@@ -468,11 +489,16 @@ struct FilterPackDetailView: View {
 
                         looksGrid
 
+                        // The pack's technical claim belongs with the looks it
+                        // describes, not in the price row.
+                        TechReadout(pack.looks.contains { $0.cubeFile != nil }
+                                    ? "MEASURED FILM DATA"
+                                    : "BAKED 33-POINT CUBES",
+                                    size: 9, color: LumaTheme.textMuted)
+
                         tryOnPanel
 
                         priceBlock
-
-                        installButton
 
                         Text(MockData.namingDisclaimer)
                             .font(.system(size: 11))
@@ -480,10 +506,25 @@ struct FilterPackDetailView: View {
                             .padding(.top, 10)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 24)
                 }
             }
             .ignoresSafeArea(edges: .top)
+            // The conversion lever is pinned, never scrolled off or drawn
+            // under the home indicator.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                installButton
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .background {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Rectangle().fill(LumaTheme.background.opacity(0.55)))
+                            .overlay(alignment: .top) { Hairline() }
+                            .ignoresSafeArea(edges: .bottom)
+                    }
+            }
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -523,8 +564,14 @@ struct FilterPackDetailView: View {
             .frame(height: 300)
             .frame(maxWidth: .infinity)
             .clipped()
-            .overlay(LinearGradient(colors: [.clear, LumaTheme.background],
-                                    startPoint: .center, endPoint: .bottom))
+            // Starts high and reaches full background before the hero's bottom
+            // edge, so the photo dissolves into the page instead of ending in
+            // a hard full-width seam.
+            .overlay(LinearGradient(stops: [
+                .init(color: .clear, location: 0.30),
+                .init(color: LumaTheme.background.opacity(0.55), location: 0.68),
+                .init(color: LumaTheme.background, location: 0.94)
+            ], startPoint: .top, endPoint: .bottom))
 
             VStack(alignment: .leading, spacing: 4) {
                 TechReadout("PACK · \(pack.looks.count) LOOKS", size: 9,
@@ -554,40 +601,47 @@ struct FilterPackDetailView: View {
 
     // MARK: Looks — every one previewed through the real pipeline
 
+    /// A single horizontal rail (F2), like every other look rail in the app —
+    /// no orphan row for 5 looks, and a fixed vertical cost for the 17- and
+    /// 22-look packs that would otherwise push the CTA screens away.
     private var looksGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
-                  spacing: 14) {
-            ForEach(pack.looks) { look in
-                Button {
-                    selectedCode = look.code
-                    LumaHaptics.shared.tap()
-                } label: {
-                    VStack(spacing: 6) {
-                        Group {
-                            if let cg = previews[look.code] {
-                                GradedThumb(image: cg,
-                                            size: CGSize(width: 74, height: 88),
-                                            radius: 12,
-                                            selected: look.code == activeLook.code)
-                            } else {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(LumaTheme.surfaceStrong)
-                                    .frame(height: 88)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(pack.looks) { look in
+                    Button {
+                        selectedCode = look.code
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        VStack(spacing: 6) {
+                            Group {
+                                if let cg = previews[look.code] {
+                                    GradedThumb(image: cg,
+                                                size: CGSize(width: 78, height: 96),
+                                                radius: 12,
+                                                selected: look.code == activeLook.code)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(LumaTheme.surfaceStrong)
+                                        .frame(width: 78, height: 96)
+                                }
                             }
+                            Text(look.name)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(look.code == activeLook.code
+                                                 ? .white : LumaTheme.textSecondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                                .minimumScaleFactor(0.7)
+                                .frame(width: 78, height: 26, alignment: .top)
                         }
-                        Text(look.name)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(look.code == activeLook.code
-                                             ? .white : LumaTheme.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.7)
-                            .frame(height: 26, alignment: .top)
                     }
+                    .buttonStyle(.lumaPress)
                 }
-                .buttonStyle(.lumaPress)
             }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 2)
         }
+        .lumaEdgeFade()
     }
 
     // MARK: Try before buy
@@ -632,23 +686,20 @@ struct FilterPackDetailView: View {
 
     // MARK: Price
 
+    /// Price only. The spec's rating/installs slot stays empty until there is
+    /// a real source for it — the technical readout moved up under the looks
+    /// rail rather than masquerading as social proof here.
     private var priceBlock: some View {
-        HStack(alignment: .lastTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pack.isFree ? "Included free"
-                     : pack.isProIncluded ? "Included with Pro" : "One-time purchase")
-                    .font(.system(size: 12))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Text(installed ? "In your library" : StoreNav.price(pack, storeService))
-                    .font(.system(size: 20, weight: .heavy))
-                    .foregroundStyle(installed ? LumaTheme.teal : .white)
-            }
-            Spacer()
-            TechReadout(pack.looks.contains { $0.cubeFile != nil }
-                        ? "MEASURED FILM DATA"
-                        : "BAKED 33-POINT CUBES",
-                        size: 9, color: LumaTheme.textMuted)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(pack.isFree ? "Included free"
+                 : pack.isProIncluded ? "Included with Pro" : "One-time purchase")
+                .font(.system(size: 12))
+                .foregroundStyle(LumaTheme.textSecondary)
+            Text(installed ? "In your library" : StoreNav.price(pack, storeService))
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundStyle(installed ? LumaTheme.teal : .white)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 6)
     }
 
@@ -835,7 +886,7 @@ struct FilterPackDetailView: View {
                 }
             }
         }
-        tryOnSource = heroSource
+        tryOnSource = sampleFallbackSource
         tryOnIsUserMedia = false
         renderTryOn()
     }
@@ -1126,24 +1177,7 @@ private struct ProjectList: View {
                 .listRowBackground(LumaTheme.surface)
             }
 
-            if store.projects.isEmpty {
-                Section {
-                    VStack(spacing: 10) {
-                        Image(systemName: "film.stack")
-                            .font(.system(size: 34))
-                            .foregroundStyle(LumaTheme.textMuted)
-                        Text("No Projects Yet")
-                            .font(.headline)
-                            .foregroundStyle(LumaTheme.textSecondary)
-                        Text("Edits auto-save here as you work.")
-                            .font(.subheadline)
-                            .foregroundStyle(LumaTheme.textMuted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-                    .listRowBackground(Color.clear)
-                }
-            } else {
+            if !store.projects.isEmpty {
                 Section {
                     ForEach(Array(store.projects.enumerated()), id: \.element.id) { index, project in
                         Button {
@@ -1194,6 +1228,21 @@ private struct ProjectList: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .scrollDisabled(store.projects.isEmpty)
+        // Centered in the space below the "New Project" row, not stacked flush
+        // under it — and carrying its own CTA so the empty screen has a target.
+        .overlay {
+            if store.projects.isEmpty {
+                LumaEmptyState(icon: "film.stack",
+                               title: "No Projects Yet",
+                               message: "Edits auto-save here as you work.",
+                               actionTitle: "Start a Project") {
+                    app.editor.startNewProject()
+                    app.path.append(.editor)
+                }
+                .padding(.top, 88)   // clears the New Project row above
+            }
+        }
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -1553,6 +1602,8 @@ struct SettingsSubscriptionView: View {
     @State private var showPaywall = false
     @State private var showExportQuality = false
     @State private var showAbout = false
+    @State private var showManageSubscriptions = false
+    @State private var showLanguageNotice = false
     /// Same store the export spec sheet reads on appear — changing it here
     /// really changes the default the exporter uses.
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
@@ -1575,6 +1626,19 @@ struct SettingsSubscriptionView: View {
                 .presentationDetents([.medium])
                 .presentationBackground(LumaTheme.background)
         }
+        .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+        // The row leaves the app, so it says so before it does.
+        .confirmationDialog("App Language", isPresented: $showLanguageNotice,
+                            titleVisibility: .visible) {
+            Button("Open iOS Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("iOS keeps per-app language under Settings › LumaLook. This will leave LumaLook.")
+        }
         .onAppear {
             #if DEBUG
             if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
@@ -1593,9 +1657,14 @@ struct SettingsSubscriptionView: View {
             }
 
             Section("Purchases") {
-                settingsRow(icon: "creditcard", title: "Subscription",
-                            value: storeService.isPro ? "Pro" : "Free") {
-                    showPaywall = true
+                // Only shown when there is a subscription to manage — while
+                // free, "Get Pro" in the card above is the single purchase CTA
+                // and a second row to the same paywall is just a decoy.
+                if storeService.isPro {
+                    settingsRow(icon: "creditcard", title: "Manage Subscription",
+                                value: "Pro") {
+                        showManageSubscriptions = true
+                    }
                 }
                 settingsRow(icon: "arrow.clockwise", title: "Restore Purchases") {
                     Task { await storeService.restorePurchases() }
@@ -1611,11 +1680,11 @@ struct SettingsSubscriptionView: View {
                 settingsRow(icon: "globe", title: "App Language",
                             value: Locale.current.localizedString(
                                 forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en")
-                                ?? "English") {
-                    // Per-app language lives in iOS Settings — deep-link there.
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
+                                ?? "English",
+                            opensExternally: true) {
+                    // Per-app language lives in iOS Settings — confirm first,
+                    // because unlike Export Quality above this leaves the app.
+                    showLanguageNotice = true
                 }
             }
             .listRowBackground(LumaTheme.surface)
@@ -1639,7 +1708,11 @@ struct SettingsSubscriptionView: View {
         .scrollContentBackground(.hidden)
     }
 
+    /// `opensExternally` swaps the chevron for the system "leaves the app"
+    /// glyph, so a row that ejects to iOS Settings never wears the same
+    /// affordance as one that opens an in-app sheet.
     private func settingsRow(icon: String, title: String, value: String? = nil,
+                             opensExternally: Bool = false,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -1656,7 +1729,7 @@ struct SettingsSubscriptionView: View {
                         .font(.body)
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
-                Image(systemName: "chevron.right")
+                Image(systemName: opensExternally ? "arrow.up.forward.app" : "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(LumaTheme.textMuted)
             }

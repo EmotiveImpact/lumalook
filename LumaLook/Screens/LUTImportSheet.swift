@@ -61,6 +61,11 @@ struct LUTImportSheet: View {
         inspection?.isValid == true && !name.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// A finished inspection that said no. Everything downstream of the verdict
+    /// (preview, name, collection) goes inert in this state — the sheet must
+    /// read as one unambiguous "rejected", not half-working.
+    private var isRejected: Bool { inspection?.isValid == false }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -71,7 +76,11 @@ struct LUTImportSheet: View {
                     formatBadges
                     splitPreview
                     nameField
+                        .opacity(isRejected ? 0.4 : 1)
+                        .allowsHitTesting(!isRejected)
                     collectionRow
+                        .opacity(isRejected ? 0.4 : 1)
+                        .allowsHitTesting(!isRejected)
                     if let saveError {
                         Label(saveError, systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote)
@@ -256,18 +265,24 @@ struct LUTImportSheet: View {
                         .offset(x: geo.size.width * split - 1)
                         .shadow(color: .black.opacity(0.5), radius: 3)
                 }
-                label("Original", alignment: .bottomLeading, bright: false)
-                label("Graded", alignment: .bottomTrailing, bright: true)
-                if gradedImage == nil {
-                    ProgressView().controlSize(.small).tint(LumaTheme.textMuted)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Three states, one of them terminal: still inspecting (spinner),
+                // rejected (static "no preview"), or previewable (the split).
+                if isRejected {
+                    noPreviewPlaceholder
+                } else {
+                    label("Original", alignment: .bottomLeading, bright: false)
+                    label("Graded", alignment: .bottomTrailing, bright: true)
+                    if gradedImage == nil {
+                        ProgressView().controlSize(.small).tint(LumaTheme.textMuted)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
             }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        guard gradedImage != nil, geo.size.width > 0 else { return }
+                        guard !isRejected, gradedImage != nil, geo.size.width > 0 else { return }
                         split = min(1, max(0, value.location.x / geo.size.width))
                     }
             )
@@ -275,6 +290,22 @@ struct LUTImportSheet: View {
         .frame(height: 150)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(LumaTheme.hairline))
+    }
+
+    /// The terminal state for a rejected file — static, so the panel stops
+    /// claiming work is still in flight under a stated failure.
+    private var noPreviewPlaceholder: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "slash.circle")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(LumaTheme.textMuted)
+            Text("No preview — this file can't be graded.")
+                .font(.system(size: 12))
+                .foregroundStyle(LumaTheme.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func label(_ text: String, alignment: Alignment, bright: Bool) -> some View {

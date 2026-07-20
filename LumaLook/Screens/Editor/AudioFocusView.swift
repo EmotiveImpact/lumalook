@@ -21,7 +21,7 @@ struct AudioFocusView: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(LumaTheme.accentBright)
                     .frame(width: 46, height: 46)
-                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+                    .background(Self.plate(cornerRadius: 13))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
@@ -35,12 +35,25 @@ struct AudioFocusView: View {
                 Spacer(minLength: 10)
                 AudioFocusWaveform(samples: samples)
                     .frame(width: 150, height: 46)
-                    .background(LumaTheme.surface.opacity(0.4), in: RoundedRectangle(cornerRadius: 11))
+                    .background(Self.plate(cornerRadius: 11))
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
             .padding(.bottom, 14)
         }
+    }
+
+    /// An OPAQUE tile. `LumaTheme.surface` is a translucent white, so over a
+    /// video frame these tiles picked up whatever colour happened to be behind
+    /// them (colour bars showed through and read as a render glitch). Backing
+    /// the surface with the solid bar colour makes the asset row read as chrome
+    /// regardless of the frame underneath.
+    private static func plate(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(LumaTheme.bar)
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).fill(LumaTheme.surface))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
     }
 }
 

@@ -1242,6 +1242,19 @@ private struct EditorContent: View {
         showTrimPanel || showMusicPanel || showClipAudioPanel
             || showOverlayPanel || showSpeedPanel
     }
+    /// Which music sub-tool the audio panel is showing (B3 chip row).
+    @State private var musicSubTool: String = MusicSubTool.volume
+    /// Measured chrome geometry, so the compressed preview can be sized to the
+    /// space the open panel actually leaves instead of a guessed constant.
+    @State private var headerHeight: CGFloat = 0
+    @State private var spaceToScreenBottom: CGFloat = 0
+
+    /// Preview height while a tool panel is up: exactly the room above the
+    /// sheet, minus the header and the mini timeline strip.
+    private var compressedPreviewHeight: CGFloat {
+        ToolPanelMetrics.previewHeight(spaceToScreenBottom: spaceToScreenBottom,
+                                       headerHeight: headerHeight)
+    }
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -1251,12 +1264,18 @@ private struct EditorContent: View {
                 .padding(.horizontal, 22)
                 .padding(.top, 6)
                 .padding(.bottom, 10)
+                .background {
+                    GeometryReader { g in
+                        Color.clear.preference(key: ToolPanelHeaderHeightKey.self,
+                                               value: g.size.height)
+                    }
+                }
 
             // B3: the preview compresses upward when a panel is open — it is
             // never covered, and the panel gets the whole area below it.
             preview
                 .frame(maxWidth: .infinity,
-                       maxHeight: toolPanelOpen ? ToolPanelMetrics.compressedPreview : .infinity)
+                       maxHeight: toolPanelOpen ? compressedPreviewHeight : .infinity)
                 .background(.black)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 10)
@@ -1265,7 +1284,8 @@ private struct EditorContent: View {
                 // Scrubbing stays possible while a value is tuned.
                 MiniTimelineStrip(editor: editor, zoom: timelineZoom)
                     .padding(.horizontal, 12)
-                    .padding(.top, 10)
+                    .padding(.top, ToolPanelMetrics.stripTopPadding)
+                // Collapses to zero once the preview is sized to the real gap.
                 Spacer(minLength: 0)
             } else {
                 transport
@@ -1297,6 +1317,18 @@ private struct EditorContent: View {
                     }
             }
         }
+        // Measures from the top of the content area to the PHYSICAL bottom of
+        // the screen (the probe ignores the bottom safe area, which sheet
+        // detents also include), so `compressedPreviewHeight` and the sheet
+        // agree on where the panel's top edge lands.
+        .background {
+            GeometryReader { g in
+                Color.clear.preference(key: ToolPanelSpaceKey.self, value: g.size.height)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .onPreferenceChange(ToolPanelHeaderHeightKey.self) { headerHeight = $0 }
+        .onPreferenceChange(ToolPanelSpaceKey.self) { spaceToScreenBottom = $0 }
         .animation(.spring(response: 0.32, dampingFraction: 0.88), value: toolPanelOpen)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
@@ -1320,11 +1352,18 @@ private struct EditorContent: View {
                 Color.clear.onAppear { showTrimPanel = false }
             }
         }
-        .lumaToolSheet(isPresented: $showMusicPanel, style: .tallPanel) {
+        // Both audio panels are `.panel`, not `.tallPanel`: at the 620 pt large
+        // detent there is physically no room left for the compressed preview
+        // AND the mini timeline strip that B3 requires. They open at 340 pt and
+        // can still be dragged to `.large` for the whole stack at once.
+        .lumaToolSheet(isPresented: $showMusicPanel, style: .panel) {
             if let music = editor.audioTracks.first(where: { $0.id == selectedAudioID })
                         ?? editor.audioTracks.first {
                 ToolPanelScaffold(title: "Audio · \(music.title)",
                                   subtitle: String(format: "%.1fs", music.timelineDuration),
+                                  chips: MusicSubTool.all,
+                                  selectedChip: musicSubTool,
+                                  onSelectChip: { musicSubTool = $0 },
                                   onDone: {
                                       withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
                                   }) {
@@ -1342,7 +1381,7 @@ private struct EditorContent: View {
             AudioEffectsPanel(editor: editor, trackID: id) { effectsTrackID = nil }
                 .presentationDetents([.height(560), .large])
         }
-        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .tallPanel) {
+        .lumaToolSheet(isPresented: $showClipAudioPanel, style: .panel) {
             if let clip = editor.selectedClip {
                 ToolPanelScaffold(title: "Clip sound",
                                   subtitle: clip.hasAudio
@@ -1595,6 +1634,9 @@ private struct EditorContent: View {
                     .frame(width: 58)
                         }
                     }
+                    // Matches the unselected dock: content fades under the
+                    // chrome instead of being sliced flat at the screen edge.
+                    .lumaEdgeFade(leading: 14, trailing: 14)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
@@ -1786,7 +1828,10 @@ private struct EditorContent: View {
                     .font(.system(size: 13, weight: .bold))
             }
             .foregroundStyle(.white)
-            Spacer()
+            // Without this the trailing Spacer competes with the title for the
+            // flexible remainder and "New Project" ellipsises beside a gap.
+            .layoutPriority(1)
+            Spacer(minLength: 8)
             Button { editor.undo() } label: {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 17, weight: .medium))
@@ -1908,7 +1953,13 @@ private struct EditorContent: View {
                     t.kind.icon, t.waveform)
         }
         if showClipAudioPanel, let c = editor.selectedClip {
-            return (c.url.deletingPathExtension().lastPathComponent,
+            // Photos-imported assets have UUID filenames, so the URL stem is a
+            // machine identifier, not a name. Title the clip by its position in
+            // the sequence — the thing the user can actually see on the strip.
+            let index = editor.clips.firstIndex(where: { $0.id == c.id })
+            let name = index.map { "Clip \($0 + 1)" }
+                ?? c.url.deletingPathExtension().lastPathComponent
+            return (name,
                     "Clip Audio · \(String(format: "%.1fs", c.timelineDuration))",
                     "waveform", [])
         }
@@ -2133,6 +2184,10 @@ private struct EditorContent: View {
                            selectedAudioID = id
                            showMusicPanel = true
                        },
+                       onTapClipAudio: { id in
+                           editor.selectedClipID = id
+                           showClipAudioPanel = true
+                       },
                        onTapTransition: { id in
                            transitionClipID = id
                        },
@@ -2156,9 +2211,35 @@ private struct EditorContent: View {
 
     // MARK: Music panel
 
+    /// B3 sub-tool chips for the audio panel. The panel shows ONE section at a
+    /// time, so a 340 pt sheet never has to hide half its controls behind a
+    /// scroll — and the chip row is a live control, not decoration.
+    enum MusicSubTool {
+        static let volume = "Volume"
+        static let fade = "Fade"
+        static let effects = "Effects"
+        static let beats = "Beats"
+        static let all = [volume, fade, effects, beats]
+    }
+
+    @ViewBuilder
     private func musicPanel(music: EditorState.MusicTrack) -> some View {
         VStack(spacing: 14) {
-            // Title, duration and Done live in ToolPanelScaffold.
+            switch musicSubTool {
+            case MusicSubTool.fade:      musicFadeSection(music: music)
+            case MusicSubTool.effects:   musicEffectsSection(music: music)
+            case MusicSubTool.beats:     musicBeatsSection(music: music)
+            default:                     musicVolumeSection(music: music)
+            }
+            musicTerminalActions(music: music)
+        }
+        .padding(16)
+        .lumaCard()
+    }
+
+    /// Volume: which lane the track lives in, and how loud it is.
+    private func musicVolumeSection(music: EditorState.MusicTrack) -> some View {
+        VStack(spacing: 14) {
             // Lane kind picker (colour/icon).
             HStack(spacing: 8) {
                 ForEach(AudioLaneKind.allCases, id: \.self) { kind in
@@ -2182,7 +2263,12 @@ private struct EditorContent: View {
                 get: { editor.audioTracks.first(where: { $0.id == music.id })?.volume ?? 100 },
                 set: { editor.setMusicVolume(id: music.id, $0) }
             )) { "\(Int($0))%" }
+        }
+    }
 
+    /// Fade: in/out lengths, curve shape, and the full envelope editor.
+    private func musicFadeSection(music: EditorState.MusicTrack) -> some View {
+        VStack(spacing: 14) {
             // Fades (A3) + curve shape.
             let live = { editor.audioTracks.first(where: { $0.id == music.id }) }
             InlineSlider(title: "Fade In", value: Binding(
@@ -2224,6 +2310,16 @@ private struct EditorContent: View {
                         }
                 }
                 .buttonStyle(.lumaPress)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// Effects: the EQ/reverb stack plus the two mix behaviours.
+    private func musicEffectsSection(music: EditorState.MusicTrack) -> some View {
+        let live = { editor.audioTracks.first(where: { $0.id == music.id }) }
+        return VStack(spacing: 14) {
+            HStack(spacing: 10) {
                 Button {
                     effectsTrackID = music.id
                     LumaHaptics.shared.tap()
@@ -2239,9 +2335,27 @@ private struct EditorContent: View {
                         }
                 }
                 .buttonStyle(.lumaPress)
+                Spacer(minLength: 0)
             }
 
-            // Beat detection + auto-cut (C6).
+            // Auto-duck (A5) + loop (A6) toggles.
+            HStack(spacing: 14) {
+                Toggle("Duck under voice", isOn: Binding(
+                    get: { live()?.duckingEnabled ?? false },
+                    set: { editor.setMusicDucking(id: music.id, $0) }))
+                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
+                Toggle("Loop", isOn: Binding(
+                    get: { live()?.isLooping ?? false },
+                    set: { editor.setMusicLooping(id: music.id, $0) }))
+                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
+                    .fixedSize()
+            }
+        }
+    }
+
+    /// Beats: detect the grid, then cut every clip to it (C6).
+    private func musicBeatsSection(music: EditorState.MusicTrack) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Button {
                     LumaHaptics.shared.tap()
@@ -2265,50 +2379,46 @@ private struct EditorContent: View {
                 }
                 .buttonStyle(.lumaPress)
             }
-
-            // Auto-duck (A5) + loop (A6) toggles.
-            HStack(spacing: 14) {
-                Toggle("Duck under voice", isOn: Binding(
-                    get: { live()?.duckingEnabled ?? false },
-                    set: { editor.setMusicDucking(id: music.id, $0) }))
-                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
-                Toggle("Loop", isOn: Binding(
-                    get: { live()?.isLooping ?? false },
-                    set: { editor.setMusicLooping(id: music.id, $0) }))
-                    .font(.system(size: 13, weight: .semibold)).tint(LumaTheme.accentBright)
-                    .fixedSize()
-            }
-            HStack(spacing: 12) {
-                Button {
-                    editor.setMusicMuted(id: music.id, !music.isMuted)
-                } label: {
-                    Label(music.isMuted ? "Unmute" : "Mute",
-                          systemImage: music.isMuted ? "speaker.slash.fill" : "speaker.wave.2")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(music.isMuted ? AnyShapeStyle(LumaTheme.accentDeep)
-                                                  : AnyShapeStyle(LumaTheme.surface),
-                                    in: RoundedRectangle(cornerRadius: 13))
-                }
-                .buttonStyle(.lumaPress)
-                Button {
-                    editor.removeAudioTrack(id: music.id)
-                    withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
-                } label: {
-                    Label("Remove", systemImage: "trash")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(LumaTheme.orange)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
-                }
-                .buttonStyle(.lumaPress)
-            }
+            Text(music.beatMarkers.isEmpty
+                 ? "Detect the beat grid, then cut every clip to it."
+                 : "\(music.beatMarkers.count) beats detected.")
+                .font(.system(size: 12))
+                .foregroundStyle(LumaTheme.textMuted)
         }
-        .padding(16)
-        .lumaCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Mute / Remove: terminal actions, visible from every sub-tool so the
+    /// track can always be silenced or dropped without hunting for a chip.
+    private func musicTerminalActions(music: EditorState.MusicTrack) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                editor.setMusicMuted(id: music.id, !music.isMuted)
+            } label: {
+                Label(music.isMuted ? "Unmute" : "Mute",
+                      systemImage: music.isMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(music.isMuted ? AnyShapeStyle(LumaTheme.accentDeep)
+                                              : AnyShapeStyle(LumaTheme.surface),
+                                in: RoundedRectangle(cornerRadius: 13))
+            }
+            .buttonStyle(.lumaPress)
+            Button {
+                editor.removeAudioTrack(id: music.id)
+                withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
+            } label: {
+                Label("Remove", systemImage: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LumaTheme.orange)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+            }
+            .buttonStyle(.lumaPress)
+        }
     }
 
     // MARK: Transition picker

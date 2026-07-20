@@ -21,6 +21,9 @@ enum LaneMetrics {
     static let clipAudio: CGFloat = 14
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
+    /// Dedicated row above the lane stack for the magnet toggle, so that
+    /// control never floats over the ruler or a clip's filmstrip.
+    static let magnetGutter: CGFloat = 30
 
     /// Total stack height. `audioRows` counts every row in the audio block —
     /// real tracks plus the dashed Music/Voiceover placeholders that keep the
@@ -117,6 +120,8 @@ struct TimelineV2View: View {
     @ObservedObject var editor: EditorState
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
+    /// Opens the Clip sound panel from the clip-audio lane.
+    let onTapClipAudio: (UUID) -> Void
     let onTapTransition: (UUID) -> Void
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
@@ -163,6 +168,7 @@ struct TimelineV2View: View {
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         snap: snap, magnetOn: magnetOn,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic,
+                                        onTapClipAudio: onTapClipAudio,
                                         onTapTransition: onTapTransition,
                                         onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay,
                                         onRecordVoiceover: onRecordVoiceover)
@@ -171,6 +177,11 @@ struct TimelineV2View: View {
             }
         }
         .frame(height: stackHeight)
+        // The magnet used to float over the lanes: a 30 pt button + 4 pt inset
+        // against an 18 pt ruler gutter dropped 16 pt onto the video clip.
+        // Reserve it a row of its own above the stack so it can never occlude
+        // clip content, whatever happens to scroll under it.
+        .padding(.top, editor.isEmpty ? 0 : LaneMetrics.magnetGutter)
         .overlay(alignment: .topTrailing) {
             if !editor.isEmpty { magnetButton }
         }
@@ -185,15 +196,16 @@ struct TimelineV2View: View {
             LumaHaptics.shared.tap()
         } label: {
             Image(systemName: "dot.squareshape.split.2x2")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(magnetOn ? .black : LumaTheme.textSecondary)
-                .frame(width: 30, height: 30)
+                .frame(width: 26, height: 26)
                 .background(magnetOn ? AnyShapeStyle(LumaTheme.accentBright)
                                      : AnyShapeStyle(.ultraThinMaterial),
                             in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .padding(.top, 4)
+        // Sits inside the reserved gutter, never over a lane.
+        .padding(.top, (LaneMetrics.magnetGutter - 26) / 2)
         .padding(.trailing, 8)
     }
 
@@ -259,6 +271,7 @@ struct TimelineContentView: View {
     let magnetOn: Bool
     let onAddMusic: () -> Void
     let onTapMusic: (UUID) -> Void
+    let onTapClipAudio: (UUID) -> Void
     let onTapTransition: (UUID) -> Void
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
@@ -286,7 +299,8 @@ struct TimelineContentView: View {
                                 lane: lane,
                                 onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
                 }
-                ClipAudioLane(editor: editor, metrics: metrics)
+                ClipAudioLane(editor: editor, metrics: metrics,
+                              onTapClipAudio: onTapClipAudio)
             }
             ForEach(editor.audioTracks) { track in
                 MusicLane(editor: editor, metrics: metrics, track: track,
@@ -352,6 +366,9 @@ struct TransitionChip: View {
 struct ClipAudioLane: View {
     @ObservedObject var editor: EditorState
     let metrics: TimelineMetrics
+    /// Opens the Clip sound panel for the tapped clip. The lane is drawn like
+    /// every other tappable track, so it has to answer like one.
+    let onTapClipAudio: (UUID) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -368,6 +385,9 @@ struct ClipAudioLane: View {
                                     .padding(.leading, 5)
                             }
                             .padding(.horizontal, 1)
+                            // Generous hit slop: the lane is only 14 pt tall.
+                            .contentShape(Rectangle().inset(by: -8))
+                            .onTapGesture { onTapClipAudio(clip.id) }
                     } else {
                         Color.clear
                     }
@@ -763,6 +783,10 @@ struct TimelineClipCell: View {
                 .padding(.vertical, 2)
                 .background(.black.opacity(0.55), in: Capsule())
                 .padding(4)
+                // A selected clip wears a 17 pt trim grip on its leading edge,
+                // which used to swallow the first characters ("8.0s" read as
+                // ".0s"). Clear the grip exactly when it is there.
+                .padding(.leading, selected ? 17 : 0)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -1066,10 +1090,15 @@ struct MusicLane: View {
         .frame(width: barWidth, height: LaneMetrics.music)
         .background {
             // Fill + real waveform (trimmed window of whole-file RMS buckets).
+            //
+            // A tinted WASH, not a solid fill: at full opacity the voiceover
+            // lane was white-on-mint at ~1.7:1 and unreadable. 0.28 over the
+            // dark timeline keeps the lane's colour identity while white glyphs
+            // clear 4.5:1 on every kind — the same treatment MiniAudioBar uses.
             ZStack {
                 RoundedRectangle(cornerRadius: 9)
                     .fill(music.isMuted ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                        : AnyShapeStyle(music.kind.tint))
+                                        : AnyShapeStyle(music.kind.tint.opacity(0.28)))
                 if !music.waveform.isEmpty {
                     WaveformBars(samples: music.waveform,
                                  windowStart: music.trimStart / max(music.assetDuration, 0.01),
@@ -1078,8 +1107,12 @@ struct MusicLane: View {
                 }
             }
         }
+        // The kind's colour now lives in the border, so a washed fill still
+        // identifies the lane at a glance.
         .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.12),
+            .strokeBorder(isDraggingBar ? LumaTheme.accentBright
+                                        : (music.isMuted ? .white.opacity(0.12)
+                                                         : music.kind.tint.opacity(0.6)),
                           lineWidth: isDraggingBar ? 2 : 1))
         .overlay(alignment: .leading) {
             // Beat markers (C6): 1-pt ticks at each detected beat.

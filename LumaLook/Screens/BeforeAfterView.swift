@@ -165,13 +165,21 @@ struct BeforeAfterView: View {
         .clipped()
         .overlay(alignment: .top) { topBar }
         .overlay(alignment: .bottomLeading) {
-            TechReadout("\(lookName) · \(Int(app.settings.intensity))%", size: 9,
-                        color: LumaTheme.accentBright)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(.black.opacity(0.5), in: Capsule())
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+            // One stack owns this anchor. The empty-state hint is folded in here
+            // rather than left inside LookPreviewSurface, where it composited on
+            // top of this readout.
+            VStack(alignment: .leading, spacing: 6) {
+                if app.player == nil && app.selectedImage == nil {
+                    EmptyMediaHint()
+                }
+                TechReadout("\(lookName) · \(Int(app.settings.intensity))%", size: 9,
+                            color: LumaTheme.accentBright)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.5), in: Capsule())
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
         }
     }
 
@@ -207,7 +215,7 @@ struct BeforeAfterView: View {
     private var splitStage: some View {
         GeometryReader { geo in
             ZStack {
-                LookPreviewSurface(radius: 0)
+                LookPreviewSurface(radius: 0, showsEmptyHint: false)
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 let x = geo.size.width * splitFraction
@@ -245,7 +253,7 @@ struct BeforeAfterView: View {
     // MARK: - Hold to flip
 
     private var flipStage: some View {
-        LookPreviewSurface(radius: 0)
+        LookPreviewSurface(radius: 0, showsEmptyHint: false)
             .overlay(alignment: .top) {
                 // The instruction IS the affordance — the point of this mode is
                 // that nothing about it is discovered by accident.
@@ -288,9 +296,21 @@ struct BeforeAfterView: View {
             pane(gradedPane, label: "GRADED · \(Int(app.settings.intensity))%",
                  tint: LumaTheme.accentBright)
         }
+        // The pair is sized to the SOURCE, not to the stage: a landscape frame
+        // in two full-height portrait cards letterboxes into ~75% empty grey and
+        // floats the badges hundreds of points away from the pixels they label.
+        .aspectRatio(sourceAspect * 2, contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 78)
         .padding(.bottom, 44)
         .padding(.horizontal, 10)
+    }
+
+    /// Width / height of the reference frame, defaulting to 16:9.
+    private var sourceAspect: CGFloat {
+        let extent = (app.previewFrame ?? LookThumbs.fallbackFrame).extent
+        guard !extent.isInfinite, extent.width > 1, extent.height > 1 else { return 16.0 / 9.0 }
+        return extent.width / extent.height
     }
 
     private func pane(_ image: CGImage?, label: String, tint: Color) -> some View {
@@ -365,33 +385,42 @@ struct BeforeAfterView: View {
             GradeOpacityRow(value: $app.settings.intensity)
                 .padding(.horizontal, 20)
 
-            HStack(spacing: 10) {
-                Button { dismiss() } label: {
-                    Text("Back to looks")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(.white.opacity(0.14), lineWidth: 1))
-                }
-                .buttonStyle(.lumaPress)
-                .frame(maxWidth: .infinity)
+            // Explicit fractional widths: an HStack cannot express the mockup's
+            // 1 : 1.4 split on its own, and giving the CTA `maxWidth: .infinity`
+            // plus `layoutPriority(1)` let it eat the whole row and collapse the
+            // ghost button to zero width.
+            GeometryReader { geo in
+                let gap: CGFloat = 10
+                let unit = max(0, (geo.size.width - gap) / 2.4)
+                HStack(spacing: gap) {
+                    Button { dismiss() } label: {
+                        Text("Back to looks")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(.white.opacity(0.14), lineWidth: 1))
+                            .contentShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.lumaPress)
+                    .frame(width: unit)
 
-                SolidCTA(title: "Apply & Export ›", height: 52) {
-                    // Commit the grade as compared: drop the wipe (it is preview
-                    // chrome, never baked) and open G1 with the same lookState.
-                    releaseHold()
-                    app.lookState.splitFraction = nil
-                    app.saveGradeSession()
-                    app.exportError = nil
-                    LumaHaptics.shared.tap()
-                    showExportSheet = true
+                    SolidCTA(title: "Apply & Export ›", height: 52) {
+                        // Commit the grade as compared: drop the wipe (it is preview
+                        // chrome, never baked) and open G1 with the same lookState.
+                        releaseHold()
+                        app.lookState.splitFraction = nil
+                        app.saveGradeSession()
+                        app.exportError = nil
+                        LumaHaptics.shared.tap()
+                        showExportSheet = true
+                    }
+                    .frame(width: unit * 1.4)
                 }
-                .frame(maxWidth: .infinity)
-                .layoutPriority(1)
             }
+            .frame(height: 52)
             .padding(.horizontal, 20)
         }
         .padding(.top, 14)

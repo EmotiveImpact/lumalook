@@ -13,11 +13,58 @@ import SwiftUI
 // each panel improvising it.
 // =============================================================================
 
-/// Compressed preview height while a tool panel is up. Matches the B3 frame:
-/// tall enough to judge a grade, short enough that the panel never covers it.
+/// Geometry of the B3 push-up frame.
+///
+/// The compressed preview used to be a CONSTANT, which is what broke B3 both
+/// ways: against a 620 pt sheet the preview and the whole mini strip ended up
+/// *behind* the panel, and against a 340 pt sheet a ~140 pt band of dead black
+/// opened up between the strip and the sheet. It is now derived from the space
+/// the open panel actually leaves, so the preview always ends exactly where the
+/// sheet begins — never covered, never floating above a gap.
 enum ToolPanelMetrics {
+    /// Fallback used before the geometry probe has reported (first frame only).
     static let compressedPreview: CGFloat = 236
+    /// Floor: below this the preview is too small to judge a grade in.
+    static let minPreview: CGFloat = 150
     static let stripHeight: CGFloat = 74
+    /// Gap between the preview and the mini timeline strip.
+    static let stripTopPadding: CGFloat = 10
+
+    /// Height `.lumaMedium` resolves to — the detent every tool panel opens at.
+    /// Mirrors `LumaMediumDetent` in EditorChrome.swift; if that changes, this
+    /// must follow.
+    static let panelDetentHeight: CGFloat = 340
+
+    /// Preview height that exactly fills the space above an open panel.
+    ///
+    /// - Parameters:
+    ///   - spaceToScreenBottom: distance from the top of the editor's content
+    ///     area to the physical bottom of the screen (safe-area inset included,
+    ///     because detents are measured against the same edge).
+    ///   - headerHeight: measured height of the editor header row.
+    static func previewHeight(spaceToScreenBottom: CGFloat,
+                              headerHeight: CGFloat) -> CGFloat {
+        guard spaceToScreenBottom > 0 else { return compressedPreview }
+        let above = spaceToScreenBottom - panelDetentHeight - headerHeight
+        return max(minPreview, above - stripHeight - stripTopPadding)
+    }
+}
+
+/// Measured height of the editor header row.
+struct ToolPanelHeaderHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// Distance from the top of the editor content area to the bottom of the
+/// screen — the yardstick a sheet detent is measured against.
+struct ToolPanelSpaceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 /// A read-and-scrub-only miniature of the timeline: the clip filmstrip plus

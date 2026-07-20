@@ -167,19 +167,25 @@ enum ProParameter: String, CaseIterable, Identifiable {
 struct ProReadout: View {
     let parameter: ProParameter
     let value: String
+    /// True when the camera is choosing this value itself. The concrete value
+    /// is still shown — it is what the dial points at — but dimmed and tagged,
+    /// so the readout and the dial can never state two different truths.
+    var auto: Bool = false
     let active: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 3) {
-                TechReadout(parameter.rawValue, size: 8,
+                TechReadout(auto ? "\(parameter.rawValue) A" : parameter.rawValue, size: 8,
                             color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
                 Text(value)
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(active ? LumaTheme.accentBright : .white)
+                    .opacity(auto ? 0.6 : 1)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .frame(minWidth: 54)
             .contentShape(Rectangle())
@@ -204,54 +210,55 @@ struct RulerDial: View {
     @State private var dragBase: Int?
 
     var body: some View {
-        GeometryReader { geo in
-            let centre = geo.size.width / 2
-            ZStack(alignment: .leading) {
-                HStack(spacing: 0) {
-                    ForEach(ticks.indices, id: \.self) { i in
-                        let current = i == index
-                        VStack(spacing: 5) {
-                            Rectangle()
-                                .fill(current ? AnyShapeStyle(LumaTheme.accentBright)
-                                              : AnyShapeStyle(Color.white.opacity(0.22)))
-                                .frame(width: current ? 2 : 1, height: current ? 15 : 9)
-                            Text(ticks[i])
-                                .font(.system(size: current ? 12 : 10,
-                                              weight: current ? .bold : .regular,
-                                              design: .monospaced))
-                                .monospacedDigit()
-                                .foregroundStyle(current ? .white : LumaTheme.textMuted)
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .frame(width: stride)
+        // No GeometryReader: the indicator is simply the ZStack's own centre
+        // and the tick rail is offset relative to that same centre, so the
+        // caret always lands on the row's horizontal midpoint — the readout
+        // row above and the dial can never disagree about where "centre" is.
+        ZStack {
+            HStack(spacing: 0) {
+                ForEach(ticks.indices, id: \.self) { i in
+                    let current = i == index
+                    VStack(spacing: 5) {
+                        Rectangle()
+                            .fill(current ? AnyShapeStyle(LumaTheme.accentBright)
+                                          : AnyShapeStyle(Color.white.opacity(0.22)))
+                            .frame(width: current ? 2 : 1, height: current ? 15 : 9)
+                        Text(ticks[i])
+                            .font(.system(size: current ? 12 : 10,
+                                          weight: current ? .bold : .regular,
+                                          design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(current ? .white : LumaTheme.textMuted)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
+                    .frame(width: stride)
                 }
-                .offset(x: centre - stride * (CGFloat(index) + 0.5))
-                .animation(.snappy(duration: 0.14), value: index)
-
-                Rectangle()
-                    .fill(LumaTheme.accentBright)
-                    .frame(width: 2, height: 8)
-                    .offset(x: centre - 1)
-                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onChanged { value in
-                        let base = dragBase ?? index
-                        if dragBase == nil { dragBase = index }
-                        let steps = Int((-value.translation.width / stride).rounded())
-                        let target = min(max(base + steps, 0), max(ticks.count - 1, 0))
-                        if target != index { onChange(target) }
-                    }
-                    .onEnded { _ in dragBase = nil }
-            )
+            // Distance from the rail's own centre to tick `index`.
+            .offset(x: stride * (CGFloat(ticks.count) / 2 - CGFloat(index) - 0.5))
+            .animation(.snappy(duration: 0.14), value: index)
+
+            Rectangle()
+                .fill(LumaTheme.accentBright)
+                .frame(width: 2, height: 8)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 38)
+        .clipped()
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    let base = dragBase ?? index
+                    if dragBase == nil { dragBase = index }
+                    let steps = Int((-value.translation.width / stride).rounded())
+                    let target = min(max(base + steps, 0), max(ticks.count - 1, 0))
+                    if target != index { onChange(target) }
+                }
+                .onEnded { _ in dragBase = nil }
+        )
         .sensoryFeedback(.selection, trigger: index)
     }
 }

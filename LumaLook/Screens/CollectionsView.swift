@@ -121,12 +121,20 @@ struct CollectionsView: View {
                     }
                     LumaHaptics.shared.tap()
                 } label: {
-                    Image(systemName: editMode == .active ? "checkmark" : "line.3.horizontal")
-                        .font(.system(size: 15, weight: .semibold))
+                    // Labelled so the only ≡ on screen is the live drag handle
+                    // the List itself supplies while reordering.
+                    Label(editMode == .active ? "Done" : "Reorder",
+                          systemImage: editMode == .active ? "checkmark" : "arrow.up.arrow.down")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(editMode == .active ? LumaTheme.accentBright : .white)
-                        .frame(width: 36, height: 34)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 11))
+                        .padding(.horizontal, 12)
+                        .frame(height: 34)
+                        .background(LumaTheme.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(
+                            editMode == .active ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
+                            lineWidth: 1))
                 }
+                .accessibilityLabel(editMode == .active ? "Done reordering" : "Reorder collections")
                 .buttonStyle(.lumaPress)
             }
             Button {
@@ -150,8 +158,11 @@ struct CollectionsView: View {
     private var readout: String {
         let n = groups.count
         let base = "\(n) COLLECTION\(n == 1 ? "" : "S")"
-        guard let pinned = app.lutRepository.pinnedCollection else { return base }
-        return "\(base) · \(pinned.name.uppercased()) ON CAMERA"
+        // Fixed-width tail: the collection name would be the first thing to get
+        // clipped by TechReadout's lineLimit(1). The pin glyph and the "pinned
+        // to camera" line on the card itself name which one it is.
+        guard app.lutRepository.pinnedCollection != nil else { return "\(base) · NONE PINNED" }
+        return "\(base) · 1 PINNED"
     }
 
     // MARK: List
@@ -221,11 +232,13 @@ struct CollectionsView: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    if editMode == .inactive {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isSelected ? LumaTheme.accentBright : LumaTheme.textMuted)
-                    }
+                    // Disclosure state only — the reorder handle is supplied by
+                    // the List in edit mode, so no decorative ≡ here.
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isSelected ? LumaTheme.accentBright : LumaTheme.textMuted)
+                        .rotationEffect(.degrees(isSelected ? 0 : -90))
+                        .opacity(editMode == .active ? 0 : 1)
                 }
             }
             .buttonStyle(.lumaPress)

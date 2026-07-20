@@ -64,6 +64,7 @@ struct LookBrowserSheet: View {
     var showsBackButton: Bool = false
 
     @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var category: LookLibraryStore.Category = .all
     @State private var search = ""
@@ -134,15 +135,61 @@ struct LookBrowserSheet: View {
                     select(LibraryLook(lut: imported), navigate: false)
                 }
             } label: {
-                Label("Import", systemImage: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(LumaTheme.accent, in: Capsule())
+                if isSheet {
+                    // Compact in the half-sheet: the header also has to carry
+                    // Open Library + Done (A2), so Import loses its word.
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(LumaTheme.accent, in: Circle())
+                } else {
+                    Label("Import", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(LumaTheme.accent, in: Capsule())
+                }
+            }
+            if isSheet {
+                // A2: the sheet must have a visible way out. `undimmedUpThrough`
+                // is below the detent this opens at, so tapping the preview
+                // behind does nothing — Done is the only discoverable exit.
+                Button {
+                    openLibrary()
+                } label: {
+                    Text("Open Library ↗")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(LumaTheme.accentBright)
+                }
+                .buttonStyle(.lumaPress)
+                Button {
+                    LumaHaptics.shared.tap()
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                }
+                .buttonStyle(.lumaPress)
             }
         }
         .padding(.horizontal, 20)
+    }
+
+    /// True when this browser is presented as a half-sheet over a live canvas
+    /// (grade / camera / editor) rather than hosted full-screen as the Looks tab.
+    private var isSheet: Bool { context != .library }
+
+    /// Leave the sheet for the full Looks library. The push has to wait for the
+    /// dismissal, otherwise the new screen lands *behind* the sheet.
+    private func openLibrary() {
+        LumaHaptics.shared.tap()
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            app.path.append(.savedLooks)
+        }
     }
 
     // MARK: Search
@@ -482,8 +529,23 @@ struct LookTile: View {
         }
     }
 
+    /// Library names follow "CODE · Descriptive Name", which is systematically
+    /// wider than one 110pt grid column — so the differentiating half is the
+    /// half that truncates. Split the code off into the subtitle line and let
+    /// the descriptive half own the title (over two lines if it needs them).
+    private var split: (title: String, code: String?) {
+        let parts = look.name.components(separatedBy: " · ")
+        guard parts.count == 2,
+              let code = parts.first, let rest = parts.last,
+              code.count <= 6, !code.contains(" "), !rest.isEmpty
+        else { return (look.name, nil) }
+        return (rest, code)
+    }
+
     private var subtitle: String {
-        look.packName ?? look.section.title
+        let source = look.packName ?? look.section.title
+        if let code = split.code { return "\(code) · \(source)" }
+        return source
     }
 
     var body: some View {
@@ -530,10 +592,16 @@ struct LookTile: View {
                     .buttonStyle(.plain)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(look.name)
+                    Text(split.title)
                         .font(.system(size: 12, weight: selected ? .semibold : .medium))
                         .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.9)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        // Two-line box keeps every grid row on the same baseline
+                        // whether a name wraps or not.
+                        .frame(height: 30, alignment: .top)
                     Text(subtitle)
                         .font(.system(size: 10))
                         .foregroundStyle(LumaTheme.textMuted)
@@ -558,6 +626,9 @@ struct LookStripTile: View {
     var radius: CGFloat = 16
     /// Camera-style label shadow over the viewfinder.
     var onMedia: Bool = false
+    /// Off for tiles too small to hold a real look name (the 52pt camera
+    /// filmstrip) — there the active name is carried by the mono readout.
+    var showsName: Bool = true
     let action: () -> Void
 
     private var badge: String? {
@@ -599,14 +670,16 @@ struct LookStripTile: View {
                             .padding(5)
                     }
                 }
-                Text(look.name)
-                    .font(.system(size: size.width > 80 ? 13 : 12,
-                                  weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? .white
-                                     : onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
-                    .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
-                    .lineLimit(1)
-                    .frame(width: size.width + 4)
+                if showsName {
+                    Text(look.name)
+                        .font(.system(size: size.width > 80 ? 13 : 12,
+                                      weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? .white
+                                         : onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
+                        .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
+                        .lineLimit(1)
+                        .frame(width: size.width + 4)
+                }
             }
         }
         .buttonStyle(.lumaPress)
@@ -618,6 +691,8 @@ struct AllLooksTile: View {
     var size: CGSize = CGSize(width: 96, height: 96)
     var radius: CGFloat = 16
     var onMedia: Bool = false
+    /// Matches `LookStripTile.showsName` so the camera strip stays captionless.
+    var showsName: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -636,12 +711,14 @@ struct AllLooksTile: View {
                     }
                     .overlay(RoundedRectangle(cornerRadius: radius)
                         .strokeBorder(.white.opacity(0.12), lineWidth: 1))
-                Text("All Looks")
-                    .font(.system(size: size.width > 80 ? 13 : 12))
-                    .foregroundStyle(onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
-                    .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
-                    .lineLimit(1)
-                    .frame(width: size.width + 4)
+                if showsName {
+                    Text("All Looks")
+                        .font(.system(size: size.width > 80 ? 13 : 12))
+                        .foregroundStyle(onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
+                        .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
+                        .lineLimit(1)
+                        .frame(width: size.width + 4)
+                }
             }
         }
         .buttonStyle(.lumaPress)

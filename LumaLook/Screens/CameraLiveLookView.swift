@@ -549,11 +549,17 @@ struct CameraLiveLookView: View {
             showLookBrowser = true
             LumaHaptics.shared.tap()
         } label: {
+            // The strip carries no per-tile names, so this line is the ONE
+            // name surface — it gets its own contrast carrier rather than
+            // relying on a scrim that has not ramped up yet at this height.
             TechReadout(strength == 0 ? "\(name) · OFF" : "\(name) · \(strength)%",
-                        size: 10, color: strength == 0 ? .white.opacity(0.55)
+                        size: 10, color: strength == 0 ? .white.opacity(0.7)
                                                        : LumaTheme.accentBright)
-                .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.55), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
     }
@@ -572,12 +578,17 @@ struct CameraLiveLookView: View {
                                   selected: app.isCurrent(look),
                                   size: CGSize(width: 52, height: 52),
                                   radius: 12,
-                                  onMedia: true) {
+                                  onMedia: true,
+                                  // D1 — no per-tile captions on the camera
+                                  // strip: 52pt fits no real look name, so the
+                                  // mono readout above is the single name surface.
+                                  showsName: false) {
                         app.select(look: look)
                         LumaHaptics.shared.tap()
                     }
                 }
-                AllLooksTile(size: CGSize(width: 52, height: 52), radius: 12, onMedia: true) {
+                AllLooksTile(size: CGSize(width: 52, height: 52), radius: 12, onMedia: true,
+                             showsName: false) {
                     showLookBrowser = true
                     LumaHaptics.shared.tap()
                 }
@@ -603,24 +614,18 @@ struct CameraLiveLookView: View {
             }
             LumaHaptics.shared.tap()
         } label: {
-            VStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.black.opacity(0.3))
-                    .frame(width: 78, height: 78)
-                    .overlay {
-                        TechReadout("OFF", size: 10,
-                                    color: active ? LumaTheme.accentBright : .white.opacity(0.7))
-                    }
-                    .overlay(RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
-                        .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.3)))
-                Text("Off")
-                    .font(.system(size: 12, weight: active ? .semibold : .regular))
-                    .foregroundStyle(active ? .white : .white.opacity(0.7))
-                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
-                    .lineLimit(1)
-                    .frame(width: 80)
-            }
+            // Same 52pt / radius-12 metrics as the look tiles beside it, and
+            // one OFF label rather than the word twice on one control.
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.black.opacity(0.3))
+                .frame(width: 52, height: 52)
+                .overlay {
+                    TechReadout("OFF", size: 10,
+                                color: active ? LumaTheme.accentBright : .white.opacity(0.7))
+                }
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
+                    .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.3)))
         }
         .buttonStyle(.lumaPress)
     }
@@ -671,9 +676,29 @@ struct CameraLiveLookView: View {
                 .frame(width: 38, height: 4)
 
             HStack {
-                Text("Pro controls")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                // D2 — a take can be started and stopped WITHOUT dismissing
+                // the exposure controls: the record control follows the panel
+                // into its header instead of disappearing with the shutter.
+                Button {
+                    camera.toggleRecording()
+                } label: {
+                    HStack(spacing: 7) {
+                        RoundedRectangle(cornerRadius: camera.isRecording ? 3 : 8)
+                            .fill(LumaTheme.recordRed)
+                            .frame(width: 16, height: 16)
+                        Text(camera.isRecording ? "STOP" : "REC")
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(.white.opacity(0.09), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
+                }
+                .buttonStyle(.lumaPress)
+                .animation(.spring(response: 0.3, dampingFraction: 0.72), value: camera.isRecording)
+                .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
                 Spacer()
                 Button("Auto all") {
                     autoAll()
@@ -696,6 +721,7 @@ struct CameraLiveLookView: View {
                 ForEach(ProParameter.allCases) { parameter in
                     ProReadout(parameter: parameter,
                                value: readout(for: parameter),
+                               auto: isAuto(parameter),
                                active: activeProParam == parameter) {
                         activeProParam = parameter
                         LumaHaptics.shared.tap()
@@ -731,10 +757,20 @@ struct CameraLiveLookView: View {
         .padding(.top, 10)
         .padding(.bottom, 26)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial, in: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
-        .background(LumaTheme.bar.opacity(0.78), in: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
+        .background { proPanelBackground }
         .overlay(alignment: .top) { Hairline() }
-        .clipShape(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
+    }
+
+    /// The panel fill runs all the way to the screen bottom (only the top
+    /// corners round) — the home indicator must never sit on raw live video.
+    /// The shape itself carries `ignoresSafeArea`, so the extension is filled
+    /// rather than clipped away.
+    private var proPanelBackground: some View {
+        let shape = UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22))
+        return ZStack {
+            shape.fill(LumaTheme.bar.opacity(0.78))
+            shape.fill(.ultraThinMaterial)
+        }
         .ignoresSafeArea(edges: .bottom)
     }
 
@@ -756,7 +792,10 @@ struct CameraLiveLookView: View {
     private static let isoStops: [Float] = [25, 32, 50, 64, 100, 125, 160, 200, 250, 320,
                                             400, 500, 640, 800, 1000, 1250, 1600, 2000,
                                             2500, 3200, 4000, 5000, 6400]
-    private static let shutterAngles: [Double] = [45, 90, 172.8, 180, 270, 360]
+    /// Ordered so faster shutters move RIGHT (1/30 → 1/240 at 30fps), matching
+    /// the D2 mockup. 172.8° is gone: at any frame rate it prints within a
+    /// frame or two of 180° and gave the user nothing to choose between.
+    private static let shutterAngles: [Double] = [360, 270, 180, 90, 45]
     private static let wbStops: [Float] = [2500, 2800, 3200, 3600, 4000, 4500, 5000,
                                            5600, 6500, 7500, 9000]
     private static let evStops: [Float] = [-2, -1.7, -1.3, -1, -0.7, -0.3, 0,
@@ -776,14 +815,27 @@ struct CameraLiveLookView: View {
         "1/\(Int((360.0 / max(angle, 1)) * Double(camera.spec.fps)))"
     }
 
+    /// True when the camera — not the user — is choosing this parameter. The
+    /// readout still prints the concrete value the dial points at; `auto` only
+    /// changes how it is presented.
+    private func isAuto(_ parameter: ProParameter) -> Bool {
+        switch parameter {
+        case .iso, .shutter: return !camera.manualExposure
+        case .wb:            return !camera.manualWB
+        case .ev, .focus:    return false
+        }
+    }
+
     private func readout(for parameter: ProParameter) -> String {
         switch parameter {
         case .iso:
-            return camera.manualExposure ? "\(Int(camera.currentISO))" : "AUTO"
+            // Always the value the dial is pointing at — an "AUTO" here while
+            // the dial highlighted a concrete stop was two truths at once.
+            return "\(Int(camera.currentISO > 0 ? camera.currentISO : 100))"
         case .shutter:
-            return camera.manualExposure ? shutterLabel(camera.shutterAngle) : "AUTO"
+            return shutterLabel(camera.shutterAngle)
         case .wb:
-            return camera.manualWB ? "\(Int(camera.wbTemperature))K" : "AUTO"
+            return "\(Int(camera.wbTemperature))K"
         case .ev:
             return String(format: "%+.1f", camera.evBias)
         case .focus:

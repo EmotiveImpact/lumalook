@@ -6,6 +6,10 @@ import AVKit
 struct LookPreviewSurface: View {
     @EnvironmentObject private var app: AppModel
     var radius: CGFloat = 18
+    /// Hosts that carry their own bottom-leading readout stack must switch this
+    /// off and place the hint themselves — otherwise two independent overlays
+    /// claim the same anchor and composite on top of each other.
+    var showsEmptyHint: Bool = true
 
     var body: some View {
         Group {
@@ -18,18 +22,27 @@ struct LookPreviewSurface: View {
             } else {
                 GradedHeroPreview()
                     .overlay(alignment: .bottomLeading) {
-                        Label("Preview — pick a clip to grade live", systemImage: "film")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.black.opacity(0.45), in: Capsule())
-                            .padding(10)
+                        if showsEmptyHint {
+                            EmptyMediaHint().padding(10)
+                        }
                     }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: radius))
         .overlay(RoundedRectangle(cornerRadius: radius).stroke(.white.opacity(0.06)))
+    }
+}
+
+/// The "no clip picked yet" pill. Shared so the surface and the hosts that
+/// place it inside their own readout stack render exactly one visual language.
+struct EmptyMediaHint: View {
+    var body: some View {
+        Label("Preview — pick a clip to grade live", systemImage: "film")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.85))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.45), in: Capsule())
     }
 }
 
@@ -221,8 +234,14 @@ struct ApplyLookView: View {
     @State private var eyedropping = false
     @State private var stashedIntensity: Double?
 
+    /// True while the stage is showing the bundled hero photo rather than the
+    /// user's own media.
+    private var hasRealMedia: Bool {
+        app.player != nil || app.selectedImage != nil
+    }
+
     private var mediaSurface: some View {
-        LookPreviewSurface(radius: 0)
+        LookPreviewSurface(radius: 0, showsEmptyHint: false)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
             .overlay {
@@ -293,6 +312,9 @@ struct ApplyLookView: View {
             .overlay(alignment: .top) { topBar }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 6) {
+                    if !hasRealMedia {
+                        EmptyMediaHint()
+                    }
                     if holdingOriginal {
                         TechReadout("ORIGINAL", size: 11)
                             .padding(.horizontal, 10)
@@ -836,9 +858,14 @@ extension ApplyLookView {
                          accented: false) {
                     showConversionPicker = true
                 }
+                // With a LUT loaded the slot owns the LUT's own opacity. With a
+                // preset look it is LABELLED with that look, so it must drive the
+                // look's strength — the same value the Opacity slider and the
+                // on-frame readout show. Two numbers for one look is a bug.
                 SlotCard(kind: "SLOT 2 · CREATIVE",
                          name: app.selectedLUT?.displayName ?? app.selectedLook.name,
-                         opacity: $app.creativeOpacity,
+                         opacity: app.selectedLUT != nil ? $app.creativeOpacity
+                                                         : $app.settings.intensity,
                          isActive: true,
                          accented: true) {
                     // Tap the creative slot to swap the look — opens the
@@ -976,7 +1003,9 @@ private struct SlotCard: View {
                     .foregroundStyle(isActive ? .white : LumaTheme.textMuted)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text("\(Int(opacity))%")
+                // An empty slot has no strength to report — an em dash matches
+                // the empty track and the muted "None" title.
+                Text(isActive ? "\(Int(opacity))%" : "—")
                     .font(.system(size: 10, weight: .bold).monospacedDigit())
                     .contentTransition(.numericText())
                     .foregroundStyle(isActive ? LumaTheme.accentBright : LumaTheme.textMuted)
