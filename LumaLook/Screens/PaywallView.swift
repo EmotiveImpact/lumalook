@@ -4,19 +4,22 @@ import StoreKit
 // MARK: - Paywall (C5)
 
 /// Pro paywall. Pricing locked: $24.99/yr with a 7-day free trial or
-/// $49.99 lifetime — no weekly/monthly tiers, matching the anti-subscription
+/// $119.99 lifetime, $9.99/mo — no WEEKLY tier, matching the anti-subscription
 /// wave in the LUT niche. Presented as a sheet from Settings, onboarding,
 /// premium looks, and pack purchases.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
 
-    private enum Plan { case yearly, lifetime }
+    private enum Plan { case yearly, monthly, lifetime }
     @State private var plan: Plan = .yearly
     @State private var purchased = false
 
     private var yearlyPrice: String {
         storeService.proYearly?.displayPrice ?? StoreService.LockedPricing.yearly
+    }
+    private var monthlyPrice: String {
+        storeService.proMonthly?.displayPrice ?? StoreService.LockedPricing.monthly
     }
     private var lifetimePrice: String {
         storeService.proLifetime?.displayPrice ?? StoreService.LockedPricing.lifetime
@@ -96,6 +99,31 @@ struct PaywallView: View {
         .lumaCard()
     }
 
+    private var selectedProduct: Product? {
+        switch plan {
+        case .yearly:   return storeService.proYearly
+        case .monthly:  return storeService.proMonthly
+        case .lifetime: return storeService.proLifetime
+        }
+    }
+
+    private var callToAction: String {
+        switch plan {
+        case .yearly:   return "Start 7-Day Free Trial"
+        case .monthly:  return "Subscribe Monthly"
+        case .lifetime: return "Get Lifetime Access"
+        }
+    }
+
+    /// Apple requires the renewing price and cadence next to a subscription CTA.
+    private var renewalNote: String? {
+        switch plan {
+        case .yearly:   return "Then \(yearlyPrice) per year. Cancel anytime."
+        case .monthly:  return "\(monthlyPrice) per month. Cancel anytime."
+        case .lifetime: return nil
+        }
+    }
+
     private var planPicker: some View {
         VStack(spacing: 10) {
             PaywallPlanRow(
@@ -104,6 +132,12 @@ struct PaywallView: View {
                 badge: "7-Day Free Trial",
                 selected: plan == .yearly
             ) { plan = .yearly }
+            PaywallPlanRow(
+                title: "Monthly",
+                price: "\(monthlyPrice) / month",
+                badge: nil,
+                selected: plan == .monthly
+            ) { plan = .monthly }
             PaywallPlanRow(
                 title: "Lifetime",
                 price: "\(lifetimePrice) once",
@@ -116,9 +150,7 @@ struct PaywallView: View {
     private var purchaseButton: some View {
         Button {
             Task {
-                let product = plan == .yearly ? storeService.proYearly
-                                              : storeService.proLifetime
-                guard let product else { return }
+                guard let product = selectedProduct else { return }
                 purchased = await storeService.purchase(product)
             }
         } label: {
@@ -126,7 +158,7 @@ struct PaywallView: View {
                 if storeService.purchaseInFlight {
                     ProgressView().tint(.white)
                 } else {
-                    Text(plan == .yearly ? "Start 7-Day Free Trial" : "Get Lifetime Access")
+                    Text(callToAction)
                         .font(.headline)
                 }
             }
@@ -136,11 +168,10 @@ struct PaywallView: View {
             .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 15))
         }
         .buttonStyle(.lumaPress)
-        .disabled(storeService.purchaseInFlight
-                  || (plan == .yearly ? storeService.proYearly : storeService.proLifetime) == nil)
+        .disabled(storeService.purchaseInFlight || selectedProduct == nil)
         .overlay(alignment: .bottom) {
-            if plan == .yearly {
-                Text("Then \(yearlyPrice) per year. Cancel anytime.")
+            if let note = renewalNote {
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(LumaTheme.textSecondary)
                     .offset(y: 22)
@@ -192,7 +223,7 @@ private struct PaywallFeatureRow: View {
 private struct PaywallPlanRow: View {
     let title: String
     let price: String
-    let badge: String
+    let badge: String?
     let selected: Bool
     let action: () -> Void
 
@@ -211,13 +242,15 @@ private struct PaywallPlanRow: View {
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
                 Spacer()
-                Text(badge)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(selected ? LumaTheme.accent : LumaTheme.surface,
-                                in: Capsule())
+                if let badge {
+                    Text(badge)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                    in: Capsule())
+                }
             }
             .padding(15)
             .background(LumaTheme.surface.opacity(selected ? 1 : 0.55),

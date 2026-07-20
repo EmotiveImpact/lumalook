@@ -1,14 +1,18 @@
 import Foundation
 import StoreKit
 
-/// StoreKit 2 storefront (C5). Pricing locked 2026-07: Pro $24.99/yr with a
-/// 7-day free trial, $49.99 lifetime, look packs $2.99–4.99. No weekly or
-/// monthly tiers — the LUT niche is mid-backlash against weekly subs.
+/// StoreKit 2 storefront (C5). Pricing set 2026-07: Pro $49.99/yr with a
+/// 7-day free trial, $9.99/mo, $119.99 lifetime, look packs $2.99–4.99.
+/// Deliberately no WEEKLY tier — the LUT niche is mid-backlash against weekly
+/// subs, and monthly converts the impulse buyer without the stigma. The ladder
+/// is self-anchoring: twelve months of monthly equals the lifetime price, and
+/// the annual lands at five, so the discount needs no explaining.
 @MainActor
 final class StoreService: ObservableObject {
 
     enum ProductID {
         static let proYearly = "com.emotiveimpact.lumalook.pro.yearly"
+        static let proMonthly = "com.emotiveimpact.lumalook.pro.monthly"
         static let proLifetime = "com.emotiveimpact.lumalook.pro.lifetime"
         static func pack(_ packID: String) -> String {
             "com.emotiveimpact.lumalook.pack.\(packID)"
@@ -19,12 +23,14 @@ final class StoreService: ObservableObject {
     /// products load (offline, review, fresh install). Real Product values
     /// replace these the moment StoreKit answers.
     enum LockedPricing {
-        static let yearly = "$24.99"
-        static let lifetime = "$49.99"
+        static let yearly = "$49.99"
+        static let monthly = "$9.99"
+        static let lifetime = "$119.99"
         static let trialDays = 7
     }
 
     @Published private(set) var proYearly: Product?
+    @Published private(set) var proMonthly: Product?
     @Published private(set) var proLifetime: Product?
     @Published private(set) var packProducts: [String: Product] = [:]  // packID → product
 
@@ -63,12 +69,13 @@ final class StoreService: ObservableObject {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
         let packIDs = PackCatalog.packs.filter { !$0.isFree }.map { ProductID.pack($0.id) }
-        let ids = [ProductID.proYearly, ProductID.proLifetime] + packIDs
+        let ids = [ProductID.proYearly, ProductID.proMonthly, ProductID.proLifetime] + packIDs
         do {
             let products = try await Product.products(for: ids)
             for product in products {
                 switch product.id {
                 case ProductID.proYearly: proYearly = product
+                case ProductID.proMonthly: proMonthly = product
                 case ProductID.proLifetime: proLifetime = product
                 default:
                     let packID = product.id.replacingOccurrences(
@@ -93,7 +100,7 @@ final class StoreService: ObservableObject {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
             switch transaction.productID {
-            case ProductID.proYearly, ProductID.proLifetime:
+            case ProductID.proYearly, ProductID.proMonthly, ProductID.proLifetime:
                 pro = true
             default:
                 if transaction.productID.hasPrefix("com.emotiveimpact.lumalook.pack.") {
