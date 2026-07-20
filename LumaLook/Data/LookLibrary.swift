@@ -65,6 +65,25 @@ struct LibraryLook: Identifiable, Hashable {
     }
 }
 
+extension LibraryLook {
+    /// Canonical constructors — the ONE id scheme, used by the store's
+    /// aggregation and by call sites that hold a raw model object.
+    /// (In an extension so the memberwise init survives.)
+    init(saved s: SavedLook, isFavourite: Bool = false) {
+        self.init(id: "saved:\(s.id.uuidString)", name: s.name,
+                  section: .saved, source: .saved(s), isFavourite: isFavourite)
+    }
+    init(builtIn p: LookPreset, isFavourite: Bool = false) {
+        self.init(id: "builtin:\(p.name)", name: p.name,
+                  section: .builtIn, source: .builtIn(p), isFavourite: isFavourite)
+    }
+    init(lut f: LUTFile, packName: String? = nil) {
+        self.init(id: "lut:\(f.id.uuidString)", name: f.displayName,
+                  section: f.packID == nil ? .imported : .installed,
+                  source: .lut(f), isFavourite: f.isFavourite, packName: packName)
+    }
+}
+
 extension AppModel {
     /// The unified library, ordered Saved → Built-in → Installed → Imported.
     /// Thin forward to `LookLibraryStore` — kept during migration so existing

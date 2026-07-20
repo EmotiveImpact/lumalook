@@ -522,7 +522,7 @@ struct CameraLiveLookView: View {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(MockData.looks) { look in
                     Button {
-                        app.selectedLook = look
+                        app.select(look: LibraryLook(builtIn: look))
                     } label: {
                         VStack(spacing: 6) {
                             Group {
@@ -551,7 +551,7 @@ struct CameraLiveLookView: View {
                 // framed through an imported/installed look, not just built-ins.
                 ForEach(favouriteLUTs) { lut in
                     Button {
-                        app.selectedLUT = lut
+                        app.select(look: LibraryLook(lut: lut))
                         LumaHaptics.shared.tap()
                     } label: {
                         VStack(spacing: 6) {

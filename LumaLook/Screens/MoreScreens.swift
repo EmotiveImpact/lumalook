@@ -463,7 +463,7 @@ private struct SavedLooksList: View {
             VStack(spacing: 12) {
                 ForEach(Array(looks.enumerated()), id: \.element.id) { index, look in
                     Button {
-                        app.applySavedLook(look)
+                        app.select(look: LibraryLook(saved: look))
                         app.path.append(.applyLook)
                     } label: {
                         HStack(spacing: 14) {
@@ -481,7 +481,7 @@ private struct SavedLooksList: View {
                             Spacer()
                             Menu {
                                 Button("Apply") {
-                                    app.applySavedLook(look)
+                                    app.select(look: LibraryLook(saved: look))
                                     app.path.append(.applyLook)
                                 }
                                 Button("Delete", role: .destructive) {

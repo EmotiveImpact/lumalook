@@ -246,7 +246,7 @@ private struct LUTRow: View {
             Spacer()
             Menu {
                 Button("Apply to Current Clip") {
-                    app.selectedLUT = lut
+                    app.select(look: LibraryLook(lut: lut))
                     // If nothing's loaded, pick media first (LUT stays selected)
                     // instead of landing on an empty grade room.
                     if app.selectedVideoURL != nil || app.selectedImage != nil {

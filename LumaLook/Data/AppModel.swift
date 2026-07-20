@@ -605,6 +605,34 @@ final class AppModel: ObservableObject {
         store.saveLook(look)
     }
 
+    // MARK: - Look selection (the ONE apply entry point)
+
+    /// THE apply entry point. Sets the global grade state (grade room +
+    /// camera preview) for any library look and records it as recently used.
+    /// Every surface routes here — do not set `selectedLook`/`selectedLUT`
+    /// directly from views.
+    func select(look: LibraryLook) {
+        switch look.source {
+        case .builtIn(let p): selectedLUT = nil; selectedLook = p
+        case .lut(let f):     selectedLUT = f          // remembered strength fires
+        case .saved(let s):   applySavedLook(s)
+        }
+        library.noteUsed(look)
+    }
+
+    /// Editor routing: nil clipID = timeline grade via `select(look:)`;
+    /// set = per-clip ClipGrade via the one `clipGrade()` converter.
+    func select(look: LibraryLook, forClip clipID: UUID?) {
+        if let clipID {
+            editor.setClipGrade(id: clipID, look.clipGrade())
+            library.noteUsed(look)
+        } else {
+            select(look: look)
+        }
+    }
+
+    /// Saved-branch implementation of `select(look:)` — views should call
+    /// `select(look:)` instead so recents record.
     func applySavedLook(_ saved: SavedLook) {
         if let base = MockData.looks.first(where: { $0.name == saved.baseLookName }) {
             selectedLook = base

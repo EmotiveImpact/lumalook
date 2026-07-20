@@ -597,7 +597,7 @@ struct ApplyLookView: View {
                                 image: nil
                             ) {
                                 withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                    app.applySavedLook(saved)
+                                    app.select(look: LibraryLook(saved: saved))
                                 }
                             }
                             .scrollTransition(.interactive) { content, phase in
@@ -614,8 +614,7 @@ struct ApplyLookView: View {
                             image: thumbs.images[LookThumbs.key(look: look)]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                app.selectedLUT = nil
-                                app.selectedLook = look
+                                app.select(look: LibraryLook(builtIn: look))
                             }
                         }
                         .scrollTransition(.interactive) { content, phase in
@@ -633,7 +632,7 @@ struct ApplyLookView: View {
                             image: thumbs.images[LookThumbs.key(lut: lut)]
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                app.selectedLUT = lut
+                                app.select(look: LibraryLook(lut: lut))
                             }
                         }
                         .scrollTransition(.interactive) { content, phase in

@@ -72,23 +72,17 @@ final class LookLibraryStore: ObservableObject {
     var all: [LibraryLook] {
         var out: [LibraryLook] = []
         for s in persistence.savedLooks {
-            let id = "saved:\(s.id.uuidString)"
-            out.append(LibraryLook(id: id, name: s.name, section: .saved,
-                                   source: .saved(s),
-                                   isFavourite: favouriteIDs.contains(id)))
+            var look = LibraryLook(saved: s)
+            look.isFavourite = favouriteIDs.contains(look.id)
+            out.append(look)
         }
         for p in MockData.looks {
-            let id = "builtin:\(p.name)"
-            out.append(LibraryLook(id: id, name: p.name, section: .builtIn,
-                                   source: .builtIn(p),
-                                   isFavourite: favouriteIDs.contains(id)))
+            var look = LibraryLook(builtIn: p)
+            look.isFavourite = favouriteIDs.contains(look.id)
+            out.append(look)
         }
         for f in luts.luts {
-            let section: LibraryLook.Section = f.packID == nil ? .imported : .installed
-            out.append(LibraryLook(id: "lut:\(f.id.uuidString)", name: f.displayName,
-                                   section: section, source: .lut(f),
-                                   isFavourite: f.isFavourite,
-                                   packName: f.packID.flatMap(Self.packDisplayName)))
+            out.append(LibraryLook(lut: f, packName: f.packID.flatMap(Self.packDisplayName)))
         }
         return out
     }

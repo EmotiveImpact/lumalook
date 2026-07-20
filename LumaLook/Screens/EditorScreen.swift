@@ -523,8 +523,8 @@ struct EditorTimelineView: View {
                     let installed = lib.filter { $0.section == .installed }
                     print("[LUMA] LIBLOOK installedCount=\(n) libraryTotal=\(lib.count) installedInLib=\(installed.count) sections=\(app.libraryLooksBySection.map { "\($0.section):\($0.looks.count)" }) favourites=\(app.library.looks(category: .favourites).count) recents=\(app.library.recents.count)")
                     if let first = installed.first, let clip = editor.clips.first {
-                        editor.setClipGrade(id: clip.id, first.clipGrade())
-                        print("[LUMA] LIBLOOK applied='\(first.name)' lutID=\(first.clipGrade().lutID?.uuidString.prefix(8) ?? "nil")")
+                        app.select(look: first, forClip: clip.id)
+                        print("[LUMA] LIBLOOK applied='\(first.name)' lutID=\(first.clipGrade().lutID?.uuidString.prefix(8) ?? "nil") recentsAfter=\(app.library.recents.count)")
                     }
                     for _ in 0..<40 where editor.isRebuilding { try? await Task.sleep(nanoseconds: 100_000_000) }
                     if env["LUMA_SEED_LIBLOOK"] == "strip" { showLooksStrip = true }
@@ -2875,17 +2875,10 @@ private struct LookStripCell: View {
 
     var body: some View {
         Button {
-            if let id = targetClipID {
-                // One converter for every source — this is what finally sets
-                // `lutID` for installed/imported looks so the clip grades.
-                editor.setClipGrade(id: id, look.clipGrade())
-            } else {
-                switch look.source {
-                case .builtIn(let p): app.selectedLUT = nil; app.selectedLook = p
-                case .lut(let f):     app.selectedLUT = f
-                case .saved(let s):   app.applySavedLook(s)
-                }
-            }
+            // One entry point for every source and target — sets `lutID` via
+            // clipGrade() for per-clip grades, global state otherwise, and
+            // records the look as recently used.
+            app.select(look: look, forClip: targetClipID)
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 6) {
