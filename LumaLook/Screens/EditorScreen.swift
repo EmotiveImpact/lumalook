@@ -1103,6 +1103,12 @@ struct EditorTimelineView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
+            if env["LUMA_SEED_EXPORTSHEET"] == "1" {
+                for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                showExportSheet = true
+            }
             if env["LUMA_SEED_PLAY"] == "1" || env["LUMA_SEED_EXPORT"] == "1" {
                 // Wait out the async rebuild before hitting play/export.
                 for _ in 0..<40 where editor.player == nil || editor.isRebuilding {
