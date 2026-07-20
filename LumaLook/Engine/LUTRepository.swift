@@ -117,6 +117,13 @@ final class LUTRepository: ObservableObject {
         return file
     }
 
+    /// Renames an imported LUT's display name (the stored file is untouched).
+    func rename(_ lut: LUTFile, to newName: String) {
+        guard let index = luts.firstIndex(where: { $0.id == lut.id }) else { return }
+        luts[index].displayName = newName
+        save()
+    }
+
     func toggleFavourite(_ lut: LUTFile) {
         guard let index = luts.firstIndex(where: { $0.id == lut.id }) else { return }
         luts[index].isFavourite.toggle()

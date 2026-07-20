@@ -76,15 +76,15 @@ struct ApplyLookView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
-    @State private var category =
-        ProcessInfo.processInfo.environment["LUMA_SEED_GRADECAT"] ?? "All"
     @State private var activeTool =
         ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Adjust"
     @State private var showLensPaywall = false
     @State private var mediaReadout: String?
     @State private var videoAspect: CGFloat?
-    @State private var showLUTImporter = false
-    @State private var lutImportError: String?
+    /// The unified look browser (step 4) — category chips, search, favourites
+    /// and import all live in the sheet now, not in the drawer.
+    @State private var showLookBrowser =
+        ProcessInfo.processInfo.environment["LUMA_SEED_BROWSER"] == "1"
     @State private var showLogExplainer = false
     @State private var stashedLookIntensity: Double?
     @State private var showConversionPicker = false
@@ -99,10 +99,6 @@ struct ApplyLookView: View {
     @State private var showExportSheet = false
     @State private var isExporting = false
     @State private var compareDuration: Double = 0
-
-    private var filteredLooks: [LookPreset] {
-        category == "All" ? MockData.looks : MockData.looks.filter { $0.category == category }
-    }
 
     private var thumbStamp: String {
         "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)"
@@ -240,21 +236,8 @@ struct ApplyLookView: View {
         } message: {
             Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh — lower the intensity, or shoot Log for the intended result.")
         }
-        .fileImporter(isPresented: $showLUTImporter,
-                      allowedContentTypes: [.data, .plainText, .png],
-                      allowsMultipleSelection: false) { result in
-            guard case .success(let urls) = result, let url = urls.first else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let imported = try app.lutRepository.importLUT(from: url)
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                    app.selectedLUT = imported
-                }
-                lutImportError = nil
-            } catch {
-                lutImportError = "Couldn't read that file as a .cube LUT."
-            }
+        .lumaToolSheet(isPresented: $showLookBrowser, style: .tallPanel) {
+            LookBrowserSheet(context: .grade, intensity: $app.settings.intensity)
         }
     }
 
@@ -430,19 +413,6 @@ struct ApplyLookView: View {
 
     private var drawer: some View {
         VStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(MockData.categories, id: \.self) { chip in
-                        Button { category = chip } label: {
-                            Chip(title: chip, selected: chip == category)
-                        }
-                        .buttonStyle(.lumaPress)
-                    }
-                }
-                .padding(.horizontal, 22)
-            }
-            .lumaEdgeFade()
-
             slotChain
 
             if activeTool == "Lens" {
@@ -600,59 +570,16 @@ struct ApplyLookView: View {
                             }
                         }
                     }
-                    if category == "Skin" {
-                        // Skin First: research-tuned presets for Black & deep
-                        // skin (LookSettings, no LUT — bakes cleanly).
-                        ForEach(SkinFirstPreset.allCases) { preset in
-                            LookThumbCell(
-                                title: preset.name,
-                                grade: Color(hex: preset.tintHex),
-                                selected: app.selectedLUT == nil && app.settings == preset.settings,
-                                image: nil
-                            ) {
-                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                    app.selectedLUT = nil
-                                    app.settings = preset.settings
-                                }
-                            }
-                            .scrollTransition(.interactive) { content, phase in
-                                content.scaleEffect(phase.isIdentity ? 1 : 0.9)
-                                    .opacity(phase.isIdentity ? 1 : 0.6)
-                            }
-                        }
-                    } else {
-                    // Your saved looks lead the default view (hidden when a
-                    // category chip narrows the strip).
-                    if category == "All" {
-                        ForEach(app.store.savedLooks) { saved in
-                            LookThumbCell(
-                                title: saved.name,
-                                grade: MockData.looks.first { $0.name == saved.baseLookName }?.gradeTint,
-                                selected: app.selectedLook.name == saved.baseLookName
-                                    && app.selectedLUT?.id == saved.lutID
-                                    && app.settings == saved.settings,
-                                badge: "SAVED",
-                                image: thumbs.images[LookThumbs.key(LibraryLook(saved: saved))]
-                            ) {
-                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                    app.select(look: LibraryLook(saved: saved))
-                                }
-                            }
-                            .scrollTransition(.interactive) { content, phase in
-                                content.scaleEffect(phase.isIdentity ? 1 : 0.9)
-                                    .opacity(phase.isIdentity ? 1 : 0.6)
-                            }
-                        }
-                    }
-                    ForEach(filteredLooks) { look in
-                        LookThumbCell(
-                            title: look.name,
-                            grade: look.gradeTint,
-                            selected: look.id == app.selectedLook.id && app.selectedLUT == nil,
-                            image: thumbs.images[LookThumbs.key(LibraryLook(builtIn: look))]
-                        ) {
+                    // The bounded library strip: recents → favourites → rest,
+                    // one shared tile, one selection truth. The full library
+                    // (chips, search, collections, import) is one tap away
+                    // behind the All Looks tile.
+                    ForEach(app.library.stripLooks()) { look in
+                        LookStripTile(look: look,
+                                      image: thumbs.images[look.thumbKey],
+                                      selected: app.isCurrent(look)) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                app.select(look: LibraryLook(builtIn: look))
+                                app.select(look: look)
                             }
                         }
                         .scrollTransition(.interactive) { content, phase in
@@ -661,23 +588,29 @@ struct ApplyLookView: View {
                                 .opacity(phase.isIdentity ? 1 : 0.6)
                         }
                     }
-                    ForEach(app.lutRepository.luts) { lut in
+                    // Skin First: research-tuned presets for Black & deep
+                    // skin (LookSettings, no LUT — bakes cleanly).
+                    ForEach(SkinFirstPreset.allCases) { preset in
                         LookThumbCell(
-                            title: lut.displayName,
-                            grade: Color(red: 0.3, green: 0.8, blue: 0.9),
-                            selected: app.selectedLUT?.id == lut.id,
-                            badge: lut.isLogTarget ? "LOG" : "LUT",
-                            image: thumbs.images[LookThumbs.key(LibraryLook(lut: lut))]
+                            title: preset.name,
+                            grade: Color(hex: preset.tintHex),
+                            selected: app.selectedLUT == nil && app.settings == preset.settings,
+                            badge: "SKIN",
+                            image: nil
                         ) {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                                app.select(look: LibraryLook(lut: lut))
+                                app.selectedLUT = nil
+                                app.settings = preset.settings
                             }
                         }
                         .scrollTransition(.interactive) { content, phase in
-                            content
-                                .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                            content.scaleEffect(phase.isIdentity ? 1 : 0.9)
                                 .opacity(phase.isIdentity ? 1 : 0.6)
                         }
+                    }
+                    AllLooksTile {
+                        showLookBrowser = true
+                        LumaHaptics.shared.tap()
                     }
                     // T2.4 — compare: same grade, different LUTs, side by side.
                     Button {
@@ -701,8 +634,6 @@ struct ApplyLookView: View {
                         }
                     }
                     .buttonStyle(.lumaPress)
-                    AddLUTTile { showLUTImporter = true }
-                    }
                 }
                 .padding(.vertical, 2)
                 .padding(.horizontal, 22)
@@ -925,7 +856,12 @@ extension ApplyLookView {
                          name: app.selectedLUT?.displayName ?? app.selectedLook.name,
                          opacity: $app.creativeOpacity,
                          isActive: true,
-                         accented: true) { }
+                         accented: true) {
+                    // Tap the creative slot to swap the look — opens the
+                    // unified browser (was a dead tap in the audit).
+                    showLookBrowser = true
+                    LumaHaptics.shared.tap()
+                }
             }
             // Blend mode for the creative LUT slot (only when a LUT is loaded).
             if app.selectedLUT != nil {
@@ -1116,33 +1052,6 @@ private struct OriginalTile: View {
                 Text("Original")
                     .font(.system(size: 13, weight: active ? .semibold : .regular))
                     .foregroundStyle(active ? .white : LumaTheme.textSecondary)
-            }
-        }
-        .buttonStyle(.lumaPress)
-    }
-}
-
-/// Strip-trailing import tile: .cube files land directly in the strip.
-private struct AddLUTTile: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.white.opacity(0.04))
-                    .frame(width: 96, height: 96)
-                    .overlay {
-                        Image(systemName: "plus")
-                            .font(.system(size: 22, weight: .light))
-                            .foregroundStyle(LumaTheme.accentBright)
-                    }
-                    .overlay(RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                        .foregroundStyle(.white.opacity(0.18)))
-                Text("Add LUT")
-                    .font(.system(size: 13))
-                    .foregroundStyle(LumaTheme.textSecondary)
             }
         }
         .buttonStyle(.lumaPress)

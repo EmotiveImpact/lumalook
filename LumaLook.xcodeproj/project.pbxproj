@@ -98,6 +98,7 @@
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
 		6D256DE46137863C52EA8993 /* click.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1769959689A6A4FB63FB2B2F /* click.m4a */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
+		703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */; };
 		7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3DD911A59C44434B989660EB /* FS_RIR400.cube */; };
 		7191972FF427F33077859C6F /* Scopes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8699231347E8D7AACDACC31 /* Scopes.swift */; };
 		731C9C361762A468317EB7ED /* FS_MS12.cube in Resources */ = {isa = PBXBuildFile; fileRef = D4DE7A157110C99E2B346F44 /* FS_MS12.cube */; };
@@ -262,6 +263,7 @@
 		2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneArt.swift; sourceTree = "<group>"; };
 		2FEE3CA6F94EFAAEA83C9A29 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		3147E19399C92E044FD19FA1 /* FontLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontLibrary.swift; sourceTree = "<group>"; };
+		33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookBrowserSheet.swift; sourceTree = "<group>"; };
 		3481632CC4B70ABB890BC517 /* FS_PT160V.cube */ = {isa = PBXFileReference; path = FS_PT160V.cube; sourceTree = "<group>"; };
 		3481F9BB808BEE8D58CED37F /* FS_KC64.cube */ = {isa = PBXFileReference; path = FS_KC64.cube; sourceTree = "<group>"; };
 		35D23AAB06F406BE71A9D491 /* FS_APX25.cube */ = {isa = PBXFileReference; path = FS_APX25.cube; sourceTree = "<group>"; };
@@ -460,6 +462,7 @@
 				5AA55F19B38C01C558951683 /* ExportCompleteView.swift */,
 				DD8AEF2B3B897BD002287240 /* ExportSheet.swift */,
 				9688DBD03E8614DC1F6D9E91 /* HomeView.swift */,
+				33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */,
 				389693E4BA9B199E03E6A812 /* LUTCompareView.swift */,
 				982FBAAA5098559374D20381 /* LUTManagerView.swift */,
 				5082DDECC065F7185E2AD705 /* MoreScreens.swift */,
@@ -1022,6 +1025,7 @@
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
 				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
 				7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */,
+				703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */,
 				4DE359436B4A1F0B2B24202A /* LookLibrary.swift in Sources */,
 				EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
