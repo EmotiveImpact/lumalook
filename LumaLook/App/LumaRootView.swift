@@ -6,17 +6,23 @@ struct LumaRootView: View {
     var body: some View {
         NavigationStack(path: stackPath) {
             rootScreen
+                // One fixed tab bar for the whole app: content scrolls under
+                // its glass, and it slides away with a spring when a flow is
+                // pushed. The inset MUST sit on the stack's ROOT CONTENT, not
+                // on the NavigationStack — a stack does not forward an outer
+                // safe-area inset to what it hosts, so from out here every
+                // tab's bottom control sat behind the bar (the Looks tab's
+                // Create New Look was ~90% covered, Settings' last rows were
+                // unreachable).
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if stackPath.wrappedValue.isEmpty {
+                        LumaTabBar()
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
                 .navigationDestination(for: LumaRoute.self) { route in
                     destination(for: route)
                 }
-        }
-        // One fixed tab bar for the whole app: content scrolls under its glass,
-        // and it slides away with a spring when a flow is pushed.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if stackPath.wrappedValue.isEmpty {
-                LumaTabBar()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.86),
                    value: stackPath.wrappedValue.isEmpty)

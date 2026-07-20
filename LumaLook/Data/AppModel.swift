@@ -456,6 +456,14 @@ final class AppModel: ObservableObject {
         }
         #endif
         #if DEBUG
+        // LUMA_TAB selects a ROOT tab. Distinct from LUMA_ROUTE, which pushes a
+        // screen and hides the tab bar: the tab-hosted variant of a screen has
+        // a tab bar eating its bottom safe area, so only this path can catch
+        // content hiding behind it.
+        if let tabName = ProcessInfo.processInfo.environment["LUMA_TAB"],
+           let seeded = LumaTab(rawValue: tabName) {
+            tab = seeded
+        }
         guard let route = ProcessInfo.processInfo.environment["LUMA_ROUTE"] else { return }
         let map: [String: [LumaRoute]] = [
             "selectClip": [.selectClip],
