@@ -190,6 +190,31 @@ struct ApplyLookView: View {
                 exportNow(spec: spec)
             }
         }
+        // C3 fix: export failures/refusals were set on `app.exportError` but
+        // never rendered here — the sheet closed and nothing happened. Same
+        // capsule style as the root import toast.
+        .overlay(alignment: .top) {
+            if let error = app.exportError, !isExporting {
+                Text(error)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .stroke(LumaTheme.orange.opacity(0.55), lineWidth: 1))
+                    .padding(.horizontal, 30)
+                    .padding(.top, 54)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(nanoseconds: 3_500_000_000)
+                        withAnimation(.easeOut(duration: 0.25)) { app.exportError = nil }
+                    }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.exportError != nil)
+        .onAppear { app.exportError = nil }   // never show a stale error from a previous flow
         .overlay {
             if isExporting {
                 ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
@@ -359,23 +384,36 @@ struct ApplyLookView: View {
                 }
             }
             Spacer()
-            if app.selectedLUT?.isLogTarget == true {
-                Button { showLogExplainer = true } label: {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color(red: 0.95, green: 0.64, blue: 0.36))
-                            .frame(width: 6, height: 6)
-                        TechReadout("LOG LUT", size: 9,
-                                    color: Color(red: 0.95, green: 0.64, blue: 0.36))
+            HStack(spacing: 6) {
+                if app.selectedLUT?.isLogTarget == true {
+                    Button { showLogExplainer = true } label: {
+                        HStack(spacing: 4) {
+                            Circle().fill(Color(red: 0.95, green: 0.64, blue: 0.36))
+                                .frame(width: 6, height: 6)
+                            TechReadout("LOG LUT", size: 9,
+                                        color: Color(red: 0.95, green: 0.64, blue: 0.36))
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.24), in: Capsule())
+                        .overlay(Capsule().strokeBorder(
+                            Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.65), lineWidth: 1))
                     }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.24), in: Capsule())
-                    .overlay(Capsule().strokeBorder(
-                        Color(red: 0.79, green: 0.42, blue: 0.12).opacity(0.65), lineWidth: 1))
+                    .buttonStyle(.lumaPress)
+                }
+                // C4 fix: the Before/After screen existed but nothing pushed it.
+                // The full-screen wipe compare (with its own export path) lives here.
+                Button {
+                    app.path.append(.beforeAfter)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Image(systemName: "rectangle.split.2x1")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40, alignment: .trailing)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
-            } else {
-                Color.clear.frame(width: 40, height: 40)
             }
         }
         .padding(.horizontal, 16)

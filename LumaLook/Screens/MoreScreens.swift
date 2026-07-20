@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import UIKit
 
 // MARK: - 09 Filter Store
 
@@ -1163,6 +1164,16 @@ struct AudioView: View {
             }
             .tint(LumaTheme.accent)
         }
+        .sheet(isPresented: $showExportQuality) {
+            exportQualitySheet
+                .presentationDetents([.height(240)])
+                .presentationBackground(LumaTheme.background)
+        }
+        .sheet(isPresented: $showAbout) {
+            aboutSheet
+                .presentationDetents([.medium])
+                .presentationBackground(LumaTheme.background)
+        }
         .onAppear {
             volume = app.editor.volume
             fadeIn = app.editor.fadeIn
@@ -1191,6 +1202,11 @@ struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
     @EnvironmentObject private var storeService: StoreService
     @State private var showPaywall = false
+    @State private var showExportQuality = false
+    @State private var showAbout = false
+    /// Same store the export spec sheet reads on appear — changing it here
+    /// really changes the default the exporter uses.
+    @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
 
     var body: some View {
         LumaScreen(title: "Settings", showBack: !isRoot, scrollable: false) {
@@ -1229,16 +1245,34 @@ struct SettingsSubscriptionView: View {
             .listRowBackground(LumaTheme.surface)
 
             Section("Preferences") {
-                settingsRow(icon: "4k.tv", title: "Export Quality", value: "1080p") {}
-                settingsRow(icon: "drop", title: "Watermark", value: "Off") {}
-                settingsRow(icon: "icloud", title: "iCloud Sync", value: "Off") {}
-                settingsRow(icon: "globe", title: "App Language", value: "English") {}
+                settingsRow(icon: "4k.tv", title: "Export Quality",
+                            value: ExportSpec.from(rawValue: storedSpec).resolution.rawValue) {
+                    showExportQuality = true
+                }
+                settingsRow(icon: "globe", title: "App Language",
+                            value: Locale.current.localizedString(
+                                forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en")
+                                ?? "English") {
+                    // Per-app language lives in iOS Settings — deep-link there.
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
             }
             .listRowBackground(LumaTheme.surface)
 
             Section("About") {
-                settingsRow(icon: "questionmark.circle", title: "Help & Support") {}
-                settingsRow(icon: "info.circle", title: "About LumaLook", value: "v1.0") {}
+                settingsRow(icon: "questionmark.circle", title: "Help & Support") {
+                    let subject = "LumaLook Support".addingPercentEncoding(
+                        withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+                    if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                settingsRow(icon: "info.circle", title: "About LumaLook",
+                            value: "v\(Self.appVersion)") {
+                    showAbout = true
+                }
             }
             .listRowBackground(LumaTheme.surface)
         }
@@ -1269,6 +1303,104 @@ struct SettingsSubscriptionView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Export quality
+
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+    static var appBuild: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+    }
+
+    /// Default export resolution — writes into the same stored ExportSpec the
+    /// export sheets load, so the choice sticks everywhere (codec/fps untouched).
+    private var exportQualitySheet: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Export Quality")
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.bottom, 2)
+            Text("Default resolution for every export. You can still change it per-export on the export sheet.")
+                .font(.system(size: 13))
+                .foregroundStyle(LumaTheme.textMuted)
+                .padding(.bottom, 10)
+            ForEach(ExportSpec.Resolution.allCases, id: \.rawValue) { res in
+                Button {
+                    var spec = ExportSpec.from(rawValue: storedSpec)
+                    spec.resolution = res
+                    storedSpec = spec.rawValue
+                    showExportQuality = false
+                } label: {
+                    HStack {
+                        Text(res.rawValue)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(res == .uhd4K ? "3840×2160" : "1920×1080")
+                            .font(.system(size: 12))
+                            .foregroundStyle(LumaTheme.textMuted)
+                        Spacer()
+                        if ExportSpec.from(rawValue: storedSpec).resolution == res {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(LumaTheme.accentBright)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 52)
+                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.top, 24)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    // MARK: About
+
+    private var aboutSheet: some View {
+        VStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(LumaTheme.accent)
+                .frame(width: 76, height: 76)
+                .overlay(Image(systemName: "camera.filters")
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(.white))
+                .padding(.top, 30)
+            Text("LumaLook")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(.white)
+            Text("Version \(Self.appVersion) (\(Self.appBuild))")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(LumaTheme.textSecondary)
+            Text("Cinematic looks, live LUT grading and video editing.\nMade by Emotive Impact.")
+                .font(.system(size: 14))
+                .foregroundStyle(LumaTheme.textMuted)
+                .multilineTextAlignment(.center)
+            Button {
+                let subject = "LumaLook Support".addingPercentEncoding(
+                    withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+                if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Contact — emotiveimpact@gmail.com", systemImage: "envelope")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 26)
+            .padding(.top, 8)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var subscriptionCard: some View {

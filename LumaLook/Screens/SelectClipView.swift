@@ -23,6 +23,7 @@ struct SelectClipView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isLoading = false
     @State private var loadError: String?
+    @State private var showInfo = false
 
     private var hasSelection: Bool {
         app.selectedVideoURL != nil || app.selectedImage != nil || pickerItems.count > 1
@@ -34,7 +35,8 @@ struct SelectClipView: View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                LumaScreenHeaderBar(title: "Select Clip", trailingIcon: "info.circle")
+                LumaScreenHeaderBar(title: "Select Clip", trailingIcon: "info.circle",
+                                    trailingAction: { showInfo = true })
 
                 VStack(spacing: 16) {
                     SegmentPills(options: ["All", "Video", "Photos"], selection: $mode)
@@ -134,6 +136,25 @@ struct SelectClipView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showInfo) {
+            VStack(alignment: .leading, spacing: 14) {
+                Label("What can I pick?", systemImage: "info.circle")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.top, 26)
+                Text("Pick any video or photo from your library — including HEVC, ProRes and Log footage. The first item you pick becomes the live grading preview.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                Text("Select up to 10 photos to batch-grade: one grade is dialled in on the first photo, then applied to the whole set on export. Items stored in iCloud may take a moment to download.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .presentationDetents([.height(300)])
+            .presentationBackground(LumaTheme.background)
+        }
         .onChange(of: pickerItems) { _, newItems in
             guard let first = newItems.first else {
                 // Deselecting in the picker clears our state too, so the

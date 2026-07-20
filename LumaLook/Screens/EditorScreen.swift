@@ -196,6 +196,8 @@ struct EditorTimelineView: View {
                 // was otherwise silently two screens away. The title menu's
                 // New Project stays one tap for a clean slate.
                 editor.load(project: last)
+                // H4 fix: say so — the silent resume read as "leftover content".
+                app.importToast = "Resumed \u{201C}\(last.title)\u{201D}"
             }
             applyDebugSeed()
             #if DEBUG
@@ -1638,6 +1640,9 @@ private struct EditorContent: View {
             .buttonStyle(.lumaPress)
             .conditionalEffect(.repeat(.shine, every: .seconds(4)), condition: !editor.isEmpty)
             .opacity(editor.isEmpty ? 0.4 : 1)
+            // H5 fix: looked disabled but still opened the export sheet on an
+            // empty timeline, erroring only after the user picked a spec.
+            .disabled(editor.isEmpty)
         }
     }
 
