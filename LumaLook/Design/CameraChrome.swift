@@ -108,6 +108,178 @@ struct LetterboxMattes: View {
     }
 }
 
+// MARK: - D1: capture format chip
+
+/// Top-left format signal: resolution · fps · codec, read straight off the
+/// active `CameraSpec` so the chip can never disagree with what is recorded.
+struct CaptureFormatChip: View {
+    let spec: CameraSpec
+
+    var body: some View {
+        TechReadout("\(spec.resolution.rawValue) · \(spec.fps) · \(spec.codec.rawValue)",
+                    size: 11, color: .white.opacity(0.9))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - D1: right-edge pro rail
+
+/// One 40pt translucent button on the viewfinder's right rail. The rail is
+/// the only control column over the feed, which is what keeps the centre
+/// two-thirds of the frame clear.
+struct ProRailButton<Label: View>: View {
+    var active: Bool = false
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .foregroundStyle(active ? LumaTheme.accentBright : .white)
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 13))
+                .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 13))
+                .overlay(RoundedRectangle(cornerRadius: 13)
+                    .strokeBorder(active ? LumaTheme.accent.opacity(0.55) : .white.opacity(0.1),
+                                  lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+// MARK: - D2: pro panel parts
+
+/// The five parameters the pro panel's shared dial can target.
+enum ProParameter: String, CaseIterable, Identifiable {
+    case iso = "ISO"
+    case shutter = "Shutter"
+    case wb = "WB"
+    case ev = "EV"
+    case focus = "Focus"
+
+    var id: String { rawValue }
+}
+
+/// One of the five pro readouts. Tapping it re-targets the shared dial —
+/// the readout row is a selector, not decoration.
+struct ProReadout: View {
+    let parameter: ProParameter
+    let value: String
+    let active: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                TechReadout(parameter.rawValue, size: 8,
+                            color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
+                Text(value)
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(active ? LumaTheme.accentBright : .white)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 54)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// Detented horizontal ruler: one shared dial that drives whichever pro
+/// parameter is active. Values are discrete stops (cine practice), the
+/// current one sits centred under the violet indicator, and a horizontal
+/// drag steps through them.
+struct RulerDial: View {
+    /// Tick labels, in order. The dial is index-based so any parameter —
+    /// ISO stops, shutter angles, kelvin, EV thirds — uses the same widget.
+    let ticks: [String]
+    let index: Int
+    let onChange: (Int) -> Void
+
+    /// Drag distance that advances one detent.
+    private let stride: CGFloat = 46
+    @State private var dragBase: Int?
+
+    var body: some View {
+        GeometryReader { geo in
+            let centre = geo.size.width / 2
+            ZStack(alignment: .leading) {
+                HStack(spacing: 0) {
+                    ForEach(ticks.indices, id: \.self) { i in
+                        let current = i == index
+                        VStack(spacing: 5) {
+                            Rectangle()
+                                .fill(current ? AnyShapeStyle(LumaTheme.accentBright)
+                                              : AnyShapeStyle(Color.white.opacity(0.22)))
+                                .frame(width: current ? 2 : 1, height: current ? 15 : 9)
+                            Text(ticks[i])
+                                .font(.system(size: current ? 12 : 10,
+                                              weight: current ? .bold : .regular,
+                                              design: .monospaced))
+                                .monospacedDigit()
+                                .foregroundStyle(current ? .white : LumaTheme.textMuted)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                        .frame(width: stride)
+                    }
+                }
+                .offset(x: centre - stride * (CGFloat(index) + 0.5))
+                .animation(.snappy(duration: 0.14), value: index)
+
+                Rectangle()
+                    .fill(LumaTheme.accentBright)
+                    .frame(width: 2, height: 8)
+                    .offset(x: centre - 1)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        let base = dragBase ?? index
+                        if dragBase == nil { dragBase = index }
+                        let steps = Int((-value.translation.width / stride).rounded())
+                        let target = min(max(base + steps, 0), max(ticks.count - 1, 0))
+                        if target != index { onChange(target) }
+                    }
+                    .onEnded { _ in dragBase = nil }
+            )
+        }
+        .frame(height: 38)
+        .sensoryFeedback(.selection, trigger: index)
+    }
+}
+
+/// Assist toggle chip (Zebras / Focus peaking / Grid / Level). Each one owns
+/// a real overlay renderer; there are no decorative chips in this row.
+struct CameraAssistChip: View {
+    let title: String
+    let on: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(on ? .black : .white.opacity(0.85))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(on ? AnyShapeStyle(LumaTheme.accentBright)
+                               : AnyShapeStyle(Color.white.opacity(0.09)),
+                            in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(on ? 0 : 0.12), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+        .sensoryFeedback(.selection, trigger: on)
+    }
+}
+
 // MARK: - Before/After wipe handle
 
 /// Industry-standard comparison wipe: a vertical hairline with a circular

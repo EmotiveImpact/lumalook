@@ -42,6 +42,7 @@
 		25D91202BA6C2E9F0CDD6D9C /* FS_SP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 55A66FB773AEE510A8E14555 /* FS_SP400.cube */; };
 		260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7AE2524F01E128404964986C /* hero_golden.jpg */; };
 		27E0CD8508585CEA30CB6937 /* FS_CP3510.cube in Resources */ = {isa = PBXBuildFile; fileRef = 222B4CF92F0A3A43A7CC2589 /* FS_CP3510.cube */; };
+		28EB20FD36E33D16C6DF53D2 /* EditorToolPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DD4DDD981844A8DA82DBE6 /* EditorToolPanel.swift */; };
 		2BF4BFEE36116C1A8F0B3013 /* FS_EK100.cube in Resources */ = {isa = PBXBuildFile; fileRef = 48B3A573684BF7B15A188E7D /* FS_EK100.cube */; };
 		2FA0ED139432AC2C5276397E /* EffectRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */; };
 		300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5611043AB9FCDC69CAE0C8B2 /* LumaRootView.swift */; };
@@ -97,6 +98,7 @@
 		6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1C28E748C160529C0841DB /* ApplyLookView.swift */; };
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
 		6D256DE46137863C52EA8993 /* click.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1769959689A6A4FB63FB2B2F /* click.m4a */; };
+		6E06B85F0F6CAD15B0CDA431 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8354830054679B8534BA10B /* CollectionsView.swift */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
 		703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */; };
 		7095FDC0A77C90BCA0C9ED9A /* FS_RIR400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 3DD911A59C44434B989660EB /* FS_RIR400.cube */; };
@@ -156,6 +158,7 @@
 		B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4925238BE17B8EA1C17C8EFF /* AudioEffectsRenderer.swift */; };
 		BAED802D59A26776874421CB /* FS_MS6.cube in Resources */ = {isa = PBXBuildFile; fileRef = BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */; };
 		BBB3750CC2EC3B5E8F4DEBCD /* FS_HPS800.cube in Resources */ = {isa = PBXBuildFile; fileRef = 02C6D5846347C786254AC84E /* FS_HPS800.cube */; };
+		BE83A421AC308AA8A22A9220 /* LUTImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */; };
 		BF8BB581CF07B507BD5FE445 /* LUTCompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 389693E4BA9B199E03E6A812 /* LUTCompareView.swift */; };
 		C07E9021B8EACADFCB81E9DA /* FS_PX70C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 9A7E3293C207A72249EEDE65 /* FS_PX70C.cube */; };
 		C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */; };
@@ -304,6 +307,7 @@
 		585AC072642EB31074E401C7 /* LumaLook.storekit */ = {isa = PBXFileReference; path = LumaLook.storekit; sourceTree = "<group>"; };
 		59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoudnessAnalyzer.swift; sourceTree = "<group>"; };
 		5AA55F19B38C01C558951683 /* ExportCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportCompleteView.swift; sourceTree = "<group>"; };
+		5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTImportSheet.swift; sourceTree = "<group>"; };
 		5C594D043EBDE22175C914E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
 		5F1F68DD59817F2629702B2B /* FS_CP2383.cube */ = {isa = PBXFileReference; path = FS_CP2383.cube; sourceTree = "<group>"; };
@@ -384,6 +388,7 @@
 		B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayEffectsPanel.swift; sourceTree = "<group>"; };
 		B147754600B3B5803C3E0583 /* ClipBaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipBaker.swift; sourceTree = "<group>"; };
 		B38478EF2EEA2A8135980EED /* FS_HP400.cube */ = {isa = PBXFileReference; path = FS_HP400.cube; sourceTree = "<group>"; };
+		B8354830054679B8534BA10B /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsView.swift; sourceTree = "<group>"; };
 		B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */ = {isa = PBXFileReference; path = FS_AV200.cube; sourceTree = "<group>"; };
 		B94FE99FD4878FE6FED713B8 /* ZebraRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZebraRenderer.swift; sourceTree = "<group>"; };
 		BA3FEC2FC4F95CCEF5BDEB8F /* FS_MS6.cube */ = {isa = PBXFileReference; path = FS_MS6.cube; sourceTree = "<group>"; };
@@ -405,6 +410,7 @@
 		CE43932D10683135B309ABE7 /* FS_TM3200.cube */ = {isa = PBXFileReference; path = FS_TM3200.cube; sourceTree = "<group>"; };
 		CF404D1CD17AE20761886DF1 /* FS_SP800.cube */ = {isa = PBXFileReference; path = FS_SP800.cube; sourceTree = "<group>"; };
 		D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorChrome.swift; sourceTree = "<group>"; };
+		D4DD4DDD981844A8DA82DBE6 /* EditorToolPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorToolPanel.swift; sourceTree = "<group>"; };
 		D4DE7A157110C99E2B346F44 /* FS_MS12.cube */ = {isa = PBXFileReference; path = FS_MS12.cube; sourceTree = "<group>"; };
 		D7804F266F5E284C813A5347 /* FS_MS5.cube */ = {isa = PBXFileReference; path = FS_MS5.cube; sourceTree = "<group>"; };
 		D815AF71877366D60E429A6F /* FS_CP2393.cube */ = {isa = PBXFileReference; path = FS_CP2393.cube; sourceTree = "<group>"; };
@@ -457,6 +463,7 @@
 				BE1C28E748C160529C0841DB /* ApplyLookView.swift */,
 				AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */,
 				EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */,
+				B8354830054679B8534BA10B /* CollectionsView.swift */,
 				55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */,
 				14D131E42DD31D663F90B81B /* EditorScreen.swift */,
 				5AA55F19B38C01C558951683 /* ExportCompleteView.swift */,
@@ -464,6 +471,7 @@
 				9688DBD03E8614DC1F6D9E91 /* HomeView.swift */,
 				33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */,
 				389693E4BA9B199E03E6A812 /* LUTCompareView.swift */,
+				5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */,
 				982FBAAA5098559374D20381 /* LUTManagerView.swift */,
 				5082DDECC065F7185E2AD705 /* MoreScreens.swift */,
 				9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */,
@@ -517,6 +525,7 @@
 				EDDE425D860F6D3DAEFA927C /* AudioFocusView.swift */,
 				64396F81CEBBC399754E9914 /* AudioLibrarySheet.swift */,
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
+				D4DD4DDD981844A8DA82DBE6 /* EditorToolPanel.swift */,
 				3DBC4F6939DD535E66444EAD /* MaskPanel.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
@@ -1001,12 +1010,14 @@
 				174C00CAB30D17873FD2F9D2 /* CaptionEngine.swift in Sources */,
 				9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */,
 				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
+				6E06B85F0F6CAD15B0CDA431 /* CollectionsView.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
 				0B9B56EF76DDB1F7FED0BF62 /* CompareRenderer.swift in Sources */,
 				30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */,
 				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
 				E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */,
+				28EB20FD36E33D16C6DF53D2 /* EditorToolPanel.swift in Sources */,
 				2FA0ED139432AC2C5276397E /* EffectRenderer.swift in Sources */,
 				6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */,
 				A1EA69C74C95CA89F115D8C2 /* ExportSheet.swift in Sources */,
@@ -1020,6 +1031,7 @@
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
 				BF8BB581CF07B507BD5FE445 /* LUTCompareView.swift in Sources */,
 				F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */,
+				BE83A421AC308AA8A22A9220 /* LUTImportSheet.swift in Sources */,
 				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
 				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
 				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,

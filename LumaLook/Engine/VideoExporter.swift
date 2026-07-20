@@ -26,8 +26,13 @@ enum VideoExportError: Error, LocalizedError {
 
 /// User-facing export options (queue #6). Remembered across sessions.
 struct ExportSpec: Equatable {
-    enum Resolution: String, CaseIterable { case hd1080 = "1080p", uhd4K = "4K" }
+    enum Resolution: String, CaseIterable { case hd1080 = "1080p", uhd4K = "4K", hd720 = "720p" }
     enum Codec: String, CaseIterable { case h264 = "H.264", hevc = "HEVC" }
+    /// Quality tier, not an absolute rate — AVAssetExportSession encodes at
+    /// its preset's native bitrate and only accepts a *ceiling*
+    /// (`fileLengthLimit`). High therefore means "no ceiling"; the lower
+    /// tiers are real size caps the encoder must fit inside.
+    enum Bitrate: String, CaseIterable { case low = "Low", medium = "Medium", high = "High" }
 
     var resolution: Resolution = .hd1080
     var codec: Codec = .hevc
@@ -36,6 +41,11 @@ struct ExportSpec: Equatable {
     var audioOnly: Bool = false
     /// F5 — also transcode the finished mov to an animated GIF.
     var alsoGIF: Bool = false
+    /// G1 — quality tier applied as a file-length ceiling.
+    var bitrate: Bitrate = .high
+    /// G1 — tag the output HLG instead of Rec.709. Only legal when
+    /// `HDRDelivery` says the source can carry it; see that type.
+    var hdr: Bool = false
 
     var presetName: String {
         switch (resolution, codec) {
@@ -43,24 +53,48 @@ struct ExportSpec: Equatable {
         case (.uhd4K, .h264): return AVAssetExportPreset3840x2160
         case (.hd1080, .hevc): return AVAssetExportPresetHEVC1920x1080
         case (.uhd4K, .hevc): return AVAssetExportPresetHEVC3840x2160
+        // No HEVC 720 preset exists; 720 is the "fast" tier and ships H.264.
+        case (.hd720, _): return AVAssetExportPreset1280x720
         }
     }
 
     /// Rough output size for the disk preflight (same bitrate model the
     /// spec sheet's estimate row shows the user).
     func estimatedMegabytes(durationSeconds: Double) -> Int {
-        let mbps: Double
-        switch (resolution, codec) {
-        case (.hd1080, .h264): mbps = 12
-        case (.hd1080, .hevc): mbps = 8
-        case (.uhd4K, .h264): mbps = 50
-        case (.uhd4K, .hevc): mbps = 28
-        }
-        return max(1, Int(durationSeconds * mbps / 8))
+        return max(1, Int(durationSeconds * megabitsPerSecond / 8))
     }
 
-    /// AppStorage-friendly encoding.
-    var rawValue: String { "\(resolution.rawValue)|\(codec.rawValue)|\(fps)" }
+    /// The bitrate the estimate and the file-length ceiling both derive from,
+    /// so the number shown in G1 and the number the encoder is held to can
+    /// never drift apart.
+    var megabitsPerSecond: Double {
+        let base: Double
+        switch (resolution, codec) {
+        case (.hd1080, .h264): base = 12
+        case (.hd1080, .hevc): base = 8
+        case (.uhd4K, .h264): base = 50
+        case (.uhd4K, .hevc): base = 28
+        case (.hd720, _): base = 5
+        }
+        switch bitrate {
+        case .low: return base * 0.40
+        case .medium: return base * 0.65
+        case .high: return base
+        }
+    }
+
+    /// Output ceiling in bytes, or nil at the High tier where the preset's
+    /// native rate already is the answer and a limit would only degrade it.
+    func fileLengthLimit(durationSeconds: Double) -> Int64? {
+        guard bitrate != .high, durationSeconds > 0 else { return nil }
+        return Int64(durationSeconds * megabitsPerSecond / 8 * 1_000_000)
+    }
+
+    /// AppStorage-friendly encoding. Fields 4+ were added later; readers that
+    /// only understand the first three still parse this string correctly.
+    var rawValue: String {
+        "\(resolution.rawValue)|\(codec.rawValue)|\(fps)|\(bitrate.rawValue)|\(hdr ? 1 : 0)"
+    }
     static func from(rawValue: String) -> ExportSpec {
         var spec = ExportSpec()
         if rawValue.uppercased().contains("AUDIO") { spec.audioOnly = true; return spec }
@@ -71,6 +105,8 @@ struct ExportSpec: Equatable {
             spec.codec = Codec(rawValue: parts[1]) ?? .hevc
             spec.fps = Int(parts[2]) ?? 30
         }
+        if parts.count >= 4 { spec.bitrate = Bitrate(rawValue: parts[3]) ?? .high }
+        if parts.count >= 5 { spec.hdr = parts[4] == "1" }
         return spec
     }
 }
@@ -134,7 +170,10 @@ final class VideoExporter: ObservableObject {
             let filtered = pipeline.apply(state: lookState, to: source, includeSplit: false)
             request.finish(with: filtered.cropped(to: request.sourceImage.extent), context: pipeline.context)
         }
-        composition.applySDRColorPolicy()
+        // HDR delivery is the ONLY case where the 709 tag is wrong: an HLG
+        // source passed through untouched must stay HLG or the grade is
+        // crushed on playback. Everything else is tone-mapped to Rec.709.
+        if spec.hdr { composition.applyHLGColorPolicy() } else { composition.applySDRColorPolicy() }
 
         return try await export(asset: asset, videoComposition: composition, audioMix: nil, spec: spec)
     }
@@ -182,6 +221,11 @@ final class VideoExporter: ObservableObject {
         // Pitch parity with the preview player item (C2): sped clips keep pitch.
         session.audioTimePitchAlgorithm = .spectral
         session.shouldOptimizeForNetworkUse = true
+        // Bitrate tier: the encoder is held to the same ceiling the sheet
+        // showed as "Est." High leaves it unset (preset native rate).
+        if let limit = spec.fileLengthLimit(durationSeconds: durationSeconds) {
+            session.fileLengthLimit = limit
+        }
 
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -258,5 +302,61 @@ final class VideoExporter: ObservableObject {
         } catch {
             return false
         }
+    }
+}
+
+// MARK: - G1 delivery helpers
+
+extension AVMutableVideoComposition {
+    /// Counterpart to `applySDRColorPolicy()` for the one supported HDR case:
+    /// an HLG source delivered without log conversion. Tagging BT.2020/HLG
+    /// keeps the wide-gamut transfer the source already carries.
+    func applyHLGColorPolicy() {
+        colorPrimaries = AVVideoColorPrimaries_ITU_R_2020
+        colorTransferFunction = AVVideoTransferFunction_ITU_R_2100_HLG
+        colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_2020
+    }
+}
+
+/// Whether an HDR (HLG) delivery is honest for a given source + spec.
+///
+/// LumaLook grades in Rec.709: `LogNormalizer` maps log/HDR sources down and
+/// `LookPipeline` works in sRGB. So HDR is only real when the source itself
+/// is HLG-tagged AND nothing is converting it away. Every other case returns
+/// a reason the sheet shows instead of offering a toggle that does nothing.
+enum HDRDelivery {
+    enum Availability: Equatable {
+        case available
+        case unavailable(String)
+
+        var isAvailable: Bool { self == .available }
+        var reason: String? {
+            if case .unavailable(let text) = self { return text }
+            return nil
+        }
+    }
+
+    /// True when the video track declares the ITU-R BT.2100 HLG transfer.
+    static func sourceIsHLG(url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let descs = try? await track.load(.formatDescriptions),
+              let desc = descs.first else { return false }
+        let ext = CMFormatDescriptionGetExtensions(desc) as? [String: Any]
+        let transfer = ext?[kCVImageBufferTransferFunctionKey as String] as? String
+        return transfer == (kCVImageBufferTransferFunction_ITU_R_2100_HLG as String)
+    }
+
+    static func availability(sourceIsHLG: Bool,
+                             logConversionActive: Bool,
+                             spec: ExportSpec,
+                             isTimeline: Bool) -> Availability {
+        if spec.audioOnly { return .unavailable("Audio-only exports carry no video track.") }
+        if isTimeline { return .unavailable("Timeline exports are composited in Rec.709.") }
+        if spec.codec != .hevc { return .unavailable("HDR delivery requires the H.265 codec.") }
+        if spec.resolution == .hd720 { return .unavailable("The 720 fast tier delivers H.264 Rec.709.") }
+        if !sourceIsHLG { return .unavailable("This clip is Rec.709 — there is no HDR to keep.") }
+        if logConversionActive { return .unavailable("Log conversion already maps this clip to Rec.709.") }
+        return .available
     }
 }

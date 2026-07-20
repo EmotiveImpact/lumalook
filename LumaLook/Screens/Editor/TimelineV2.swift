@@ -22,14 +22,35 @@ enum LaneMetrics {
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
 
-    /// Total stack height for N audio lanes (+1 row for the add button) and N
-    /// overlay lanes. The overlay lane is always present: bars when overlays
-    /// exist, a slim "+ Overlay" affordance when none do.
-    static func total(audioLanes: Int, overlayLanes: Int = 1) -> CGFloat {
-        let lanes = CGFloat(audioLanes + 1)   // + "Add audio" row
+    /// Total stack height. `audioRows` counts every row in the audio block —
+    /// real tracks plus the dashed Music/Voiceover placeholders that keep the
+    /// four-lane model visible before those lanes exist. The overlay lane is
+    /// always present: bars when overlays exist, a slim "+ Overlay" otherwise.
+    static func total(audioRows: Int, overlayLanes: Int = 1) -> CGFloat {
+        let lanes = CGFloat(max(1, audioRows))
         let overlayRows = CGFloat(max(1, overlayLanes))
         return ruler + spacing + video + 4 + overlayRows * (overlay + 4) + clipAudio
              + lanes * (music + spacing)
+    }
+}
+
+/// Which audio rows the stack renders: the real tracks, plus a dashed
+/// placeholder for each of Music / Voiceover that has no track yet. B1/B2
+/// both need the four-lane model on screen whether or not media exists.
+@MainActor
+enum AudioLanePlan {
+    static func missingKinds(_ tracks: [EditorState.MusicTrack]) -> [AudioLaneKind] {
+        var missing: [AudioLaneKind] = []
+        if !tracks.contains(where: { $0.kind == .music || $0.kind == .sfx }) { missing.append(.music) }
+        if !tracks.contains(where: { $0.kind == .voice }) { missing.append(.voice) }
+        return missing
+    }
+
+    /// Total rows including the trailing "Add audio" row, which only appears
+    /// once both placeholders are gone (they are the add affordance).
+    static func rowCount(_ tracks: [EditorState.MusicTrack]) -> Int {
+        let missing = missingKinds(tracks).count
+        return tracks.count + (missing > 0 ? missing : 1)
     }
 }
 
@@ -99,18 +120,31 @@ struct TimelineV2View: View {
     let onTapTransition: (UUID) -> Void
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
+    /// Starts a voiceover take from the empty Voiceover lane.
+    let onRecordVoiceover: () -> Void
+    /// Opens the add-clip picker from the empty Video lane (B1).
+    let onAddClip: () -> Void
+    /// Zoom (points per second) is owned by the editor so the transport's
+    /// zoom control and the scroller's pinch drive the same value.
+    @Binding var zoom: CGFloat
 
-    @State private var metrics = TimelineMetrics()
     @StateObject private var reorder = TimelineReorderState()
     @StateObject private var snap = SnapState()
     @AppStorage("timelineMagnet") private var magnetOn = true
+
+    /// Bridges the shared zoom scalar to the metrics struct the lanes read.
+    private var metrics: Binding<TimelineMetrics> {
+        Binding(get: { TimelineMetrics(pointsPerSecond: zoom) },
+                set: { zoom = $0.pointsPerSecond })
+    }
 
     /// One row per stacking lane in use (F0); always at least one.
     private var overlayLaneCount: Int {
         (editor.overlays.map(\.lane).max() ?? 0) + 1
     }
     private var stackHeight: CGFloat {
-        LaneMetrics.total(audioLanes: editor.audioTracks.count, overlayLanes: overlayLaneCount)
+        LaneMetrics.total(audioRows: AudioLanePlan.rowCount(editor.audioTracks),
+                          overlayLanes: overlayLaneCount)
     }
 
     var body: some View {
@@ -123,14 +157,15 @@ struct TimelineV2View: View {
             if editor.isEmpty {
                 emptyPlaceholder
             } else {
-                TimelineScroller(editor: editor, metrics: $metrics,
+                TimelineScroller(editor: editor, metrics: metrics,
                                  reorder: reorder,
                                  contentHeight: stackHeight) { m in
                     TimelineContentView(editor: editor, metrics: m, reorder: reorder,
                                         snap: snap, magnetOn: magnetOn,
                                         onAddMusic: onAddMusic, onTapMusic: onTapMusic,
                                         onTapTransition: onTapTransition,
-                                        onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay)
+                                        onAddOverlay: onAddOverlay, onTapOverlay: onTapOverlay,
+                                        onRecordVoiceover: onRecordVoiceover)
                 }
                 playhead
             }
@@ -176,16 +211,30 @@ struct TimelineV2View: View {
         .allowsHitTesting(false)
     }
 
+    /// B1: the empty timeline teaches its own anatomy. Four dashed, labelled
+    /// lanes in the same order and heights they take once populated, so the
+    /// multi-track model is learned before any media exists. Each lane is the
+    /// affordance that fills it.
     private var emptyPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(.ultraThinMaterial)
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                .foregroundStyle(.white.opacity(0.15)))
-            .overlay(Text("Timeline is empty")
-                .font(.system(size: 13))
-                .foregroundStyle(LumaTheme.textMuted))
-            .padding(.horizontal, 22)
+        VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
+            HStack {
+                Text("00:00.00")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(LumaTheme.textMuted)
+                Spacer()
+                TechReadout("TIMELINE", size: 9, color: LumaTheme.textMuted)
+            }
+            .frame(height: LaneMetrics.ruler)
+            EmptyLaneRow(label: "Video", icon: "film", height: LaneMetrics.video,
+                         action: onAddClip)
+            EmptyLaneRow(label: "Overlay · Text", icon: "rectangle.on.rectangle",
+                         height: LaneMetrics.overlay, action: onAddOverlay)
+            EmptyLaneRow(label: "Music", icon: "music.note",
+                         height: LaneMetrics.music, action: onAddMusic)
+            EmptyLaneRow(label: "Voiceover", icon: "mic.fill",
+                         height: LaneMetrics.music, action: onRecordVoiceover)
+        }
+        .padding(.horizontal, 20)
     }
 
     private struct Triangle: Shape {
@@ -213,10 +262,16 @@ struct TimelineContentView: View {
     let onTapTransition: (UUID) -> Void
     let onAddOverlay: () -> Void
     let onTapOverlay: (UUID) -> Void
+    let onRecordVoiceover: () -> Void
 
     /// One row per stacking lane in use (F0); always at least one.
     private var overlayLaneCount: Int {
         (editor.overlays.map(\.lane).max() ?? 0) + 1
+    }
+
+    private var stackHeight: CGFloat {
+        LaneMetrics.total(audioRows: AudioLanePlan.rowCount(editor.audioTracks),
+                          overlayLanes: overlayLaneCount)
     }
 
     var body: some View {
@@ -237,19 +292,28 @@ struct TimelineContentView: View {
                 MusicLane(editor: editor, metrics: metrics, track: track,
                           snap: snap, magnetOn: magnetOn, onTapMusic: onTapMusic)
             }
-            AddAudioRow(action: onAddMusic)
+            // B2: Music and Voiceover keep a labelled dashed row until a real
+            // track fills them, so all four lanes read at once.
+            let missing = AudioLanePlan.missingKinds(editor.audioTracks)
+            ForEach(missing, id: \.self) { kind in
+                EmptyLaneRow(label: kind == .voice ? "Voiceover" : "Music",
+                             icon: kind.icon, height: LaneMetrics.music,
+                             width: 168,
+                             action: kind == .voice ? onRecordVoiceover : onAddMusic)
+            }
+            if missing.isEmpty {
+                AddAudioRow(action: onAddMusic)
+            }
         }
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
-               height: LaneMetrics.total(audioLanes: editor.audioTracks.count,
-                                         overlayLanes: overlayLaneCount),
+               height: stackHeight,
                alignment: .leading)
         // Snap guide-line: a full-height accent rule at the snapped time.
         .overlay(alignment: .topLeading) {
             if let t = snap.snappedTime {
                 Rectangle()
                     .fill(LumaTheme.accentBright)
-                    .frame(width: 2, height: LaneMetrics.total(audioLanes: editor.audioTracks.count,
-                                                               overlayLanes: overlayLaneCount))
+                    .frame(width: 2, height: stackHeight)
                     .offset(x: metrics.x(for: t) - 1)
                     .allowsHitTesting(false)
             }
@@ -313,6 +377,45 @@ struct ClipAudioLane: View {
             }
         }
         .frame(height: LaneMetrics.clipAudio, alignment: .leading)
+    }
+}
+
+/// A dashed, labelled empty lane. Used by the empty timeline (B1) and by the
+/// Music/Voiceover rows that have no track yet (B2): the label teaches what
+/// the lane is for and the row itself is the control that fills it.
+struct EmptyLaneRow: View {
+    let label: String
+    let icon: String
+    let height: CGFloat
+    /// nil = stretch to the available width (empty timeline); a number pins
+    /// the row to a fixed width inside the scrolling content stack.
+    var width: CGFloat?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: height > 40 ? 12 : 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: height > 40 ? 12 : 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+            .foregroundStyle(LumaTheme.textSecondary)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: width == nil ? .infinity : nil)
+            .frame(width: width, height: height)
+            .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .foregroundStyle(.white.opacity(0.14)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
     }
 }
 
@@ -662,15 +765,25 @@ struct TimelineClipCell: View {
                 .padding(4)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            // Per-clip grade badge: this clip wears its own look.
-            if clip.grade != nil {
-                Image(systemName: "camera.filters")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(3)
-                    .background(LumaTheme.accent, in: Circle())
-                    .padding(4)
+        .overlay(alignment: .topLeading) {
+            // Per-clip look tag: the clip wears the name of its own grade, so
+            // a graded cut is identifiable at a glance (B2). Narrow cells fall
+            // back to the glyph alone.
+            if let grade = clip.grade {
+                HStack(spacing: 3) {
+                    Image(systemName: "camera.filters")
+                        .font(.system(size: 8, weight: .bold))
+                    if width > 92, let name = lookTag(grade) {
+                        Text(name)
+                            .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                            .lineLimit(1)
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2.5)
+                .background(LumaTheme.accent, in: Capsule())
+                .padding(4)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 10)
@@ -678,6 +791,15 @@ struct TimelineClipCell: View {
                     lineWidth: selected ? 2.5 : 1))
         .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+    }
+
+    /// Short tag for the clip's grade. A LUT-backed grade carries no preset
+    /// name, so it tags as "LUT" rather than an empty capsule.
+    private func lookTag(_ grade: ClipGrade) -> String? {
+        let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
+        if name.isEmpty { return grade.lutID == nil ? nil : "LUT" }
+        // Keep the distinctive part: "Kodak 2383" reads as "2383" at 8pt.
+        return String(name.split(separator: " ").last ?? "").uppercased()
     }
 
     /// Maps a tile position to its filmstrip frame (time-proportional),

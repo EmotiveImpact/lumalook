@@ -2,12 +2,63 @@ import SwiftUI
 import AVKit
 import Pow
 
+/// Real metadata read back off the file that was actually written — never the
+/// spec that was requested, so a preset the encoder substituted can't be
+/// reported as something it isn't.
+struct ExportOutputInfo: Equatable {
+    var dimensions: String?      // "3840 × 2160"
+    var duration: String?        // "00:18"
+    var fileSize: String?        // "142 MB"
+    var codec: String?           // "H.265"
+
+    /// Mono delivery line for the readout; nil components are simply omitted.
+    var readout: String {
+        [dimensions, duration, fileSize, codec].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    static func load(url: URL) async -> ExportOutputInfo {
+        var info = ExportOutputInfo()
+
+        let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+        if let bytes {
+            let mb = Double(bytes) / 1_000_000
+            info.fileSize = mb >= 1000 ? String(format: "%.1f GB", mb / 1000)
+                                       : String(format: "%.0f MB", mb)
+        }
+
+        let asset = AVURLAsset(url: url)
+        if let seconds = try? await asset.load(.duration).seconds, seconds.isFinite, seconds > 0 {
+            info.duration = String(format: "%02d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+        }
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
+            return info
+        }
+        if let size = try? await track.load(.naturalSize),
+           let transform = try? await track.load(.preferredTransform) {
+            // Portrait exports carry the rotation in the transform, so the
+            // natural size alone would report a landscape frame.
+            let oriented = size.applying(transform)
+            info.dimensions = "\(Int(abs(oriented.width))) × \(Int(abs(oriented.height)))"
+        }
+        if let descs = try? await track.load(.formatDescriptions), let desc = descs.first {
+            switch CMFormatDescriptionGetMediaSubType(desc) {
+            case kCMVideoCodecType_HEVC: info.codec = "H.265"
+            case kCMVideoCodecType_H264: info.codec = "H.264"
+            default: info.codec = nil
+            }
+        }
+        return info
+    }
+}
+
 struct ExportCompleteView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
     @State private var appeared = false
     @State private var celebrate = 0
+    @State private var info = ExportOutputInfo()
+    @State private var isSavingToPhotos = false
 
     var body: some View {
         ZStack {
@@ -15,7 +66,7 @@ struct ExportCompleteView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
                     HStack {
-                        Button { dismiss() } label: {
+                        Button { goBack() } label: {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white)
@@ -23,6 +74,7 @@ struct ExportCompleteView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.lumaPress)
+                        .accessibilityLabel("Back")
                         Spacer()
                     }
                     .padding(.horizontal, 22)
@@ -119,6 +171,12 @@ struct ExportCompleteView: View {
                     .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
                     .padding(.top, 26)
 
+                    // Delivery spec of the file that was actually written.
+                    if !info.readout.isEmpty {
+                        TechReadout(info.readout, size: 9, color: LumaTheme.textMuted)
+                            .padding(.top, 14)
+                    }
+
                     Group {
                         if let url = app.lastExportURL {
                             ShareLink(item: url) {
@@ -132,13 +190,62 @@ struct ExportCompleteView: View {
                     .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
                     .padding(.top, 30)
 
-                    HStack(spacing: 22) {
-                        BrandShareIcon(kind: .instagram)
-                        BrandShareIcon(kind: .tiktok)
-                        BrandShareIcon(kind: .youtube)
-                        BrandShareIcon(kind: .more)
+                    // Brand tiles are real ShareLinks — the destination apps
+                    // live in the system sheet. They were decorations before,
+                    // which read as four tappable buttons that did nothing.
+                    if let url = app.lastExportURL {
+                        HStack(spacing: 22) {
+                            ForEach([BrandShareIcon.Kind.instagram, .tiktok, .youtube, .more],
+                                    id: \.rawValue) { kind in
+                                ShareLink(item: url) { BrandShareIcon(kind: kind) }
+                                    .buttonStyle(.lumaPress)
+                                    .accessibilityLabel("Share to \(kind.rawValue)")
+                            }
+                        }
+                        .padding(.top, 22)
                     }
-                    .padding(.top, 22)
+
+                    // The GIF is a separate artefact Photos won't take —
+                    // it only ever leaves via the share sheet.
+                    if let gif = app.lastExportGIFURL {
+                        ShareLink(item: gif) {
+                            Label("Share GIF", systemImage: "square.stack.3d.down.forward")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        }
+                        .buttonStyle(.lumaPress)
+                        .padding(.top, 22)
+                    }
+
+                    // Retry Photos without leaving the screen — the export is
+                    // already on disk, only the library hand-off failed.
+                    // Videos only: the still path saves its own UIImage, and
+                    // Photos rejects the audio-only M4A outright.
+                    if !app.lastExportSavedToPhotos, app.lastExportImage == nil,
+                       let url = app.lastExportURL, url.pathExtension.lowercased() == "mov" {
+                        GhostCTA(title: isSavingToPhotos ? "Saving…" : "Save to Photos") {
+                            guard !isSavingToPhotos else { return }
+                            isSavingToPhotos = true
+                            Task {
+                                let saved = await app.exporter.saveToPhotos(url: url)
+                                app.lastExportSavedToPhotos = saved
+                                isSavingToPhotos = false
+                                if saved { LumaHaptics.shared.exportSuccess() }
+                                else { LumaHaptics.shared.failure() }
+                            }
+                        }
+                        .padding(.top, 24)
+                    }
+
+                    // Same source, new spec — straight back to the sheet the
+                    // user came from rather than out to Home.
+                    GhostCTA(title: "Export another") { goBack() }
+                        .padding(.top, 24)
 
                     // Grade → Edit bridge: carry the just-graded clip into the
                     // editor (with its look baked into the clip's grade) so the
@@ -188,7 +295,18 @@ struct ExportCompleteView: View {
                 celebrate += 1
             }
         }
+        .task {
+            guard let url = app.lastExportURL, app.lastExportImage == nil else { return }
+            info = await ExportOutputInfo.load(url: url)
+        }
         .onDisappear { player?.pause() }
+    }
+
+    /// Pops to whatever pushed this screen (the editor or the compare screen),
+    /// which is where "export another" belongs. `dismiss()` alone strands the
+    /// user when the route was pushed onto `app.path` programmatically.
+    private func goBack() {
+        if !app.path.isEmpty { app.path.removeLast() } else { dismiss() }
     }
 
     private var shareLabel: some View {

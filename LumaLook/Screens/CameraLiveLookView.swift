@@ -12,6 +12,8 @@ struct CameraLiveLookView: View {
     @StateObject private var thumbs = LookThumbs()
     @State private var liveThumbSource: CIImage?
     @State private var showGrid = false
+    /// D2 — the gyro horizon is its own assist now, independent of the grid.
+    @State private var showLevel = false
     @State private var recordStart: Date?
     @State private var statusCaption: String?
     @State private var stillSavedFlash = 0
@@ -25,8 +27,11 @@ struct CameraLiveLookView: View {
     /// C10 — aspect frame guide + social safe zone.
     @State private var frameGuide: FrameGuide = .off
     @State private var showSafeZone = false
-    /// C6/C7 — manual exposure + white balance panel.
+    /// C6/C7/D2 — manual exposure + white balance panel, now an in-frame
+    /// bottom-third overlay rather than a sheet (a sheet dims the subject).
     @State private var showProPanel = false
+    /// D2 — which of the five readouts the shared ruler dial is driving.
+    @State private var activeProParam: ProParameter = .shutter
     /// C13 — live viewfinder scope (nil = off).
     @State private var scopeMode: ScopeMode?
     @State private var scopeImage: CGImage?
@@ -82,8 +87,11 @@ struct CameraLiveLookView: View {
                 RuleOfThirdsGrid()
                     .ignoresSafeArea()
                     .transition(.opacity)
-                // C11 — gyro horizon level rides with the grid: line counter-
-                // rotates with roll, snaps green when level.
+            }
+            // C11 — gyro horizon level: line counter-rotates with roll,
+            // snaps green when level. D2 splits it off the grid so each
+            // assist chip owns exactly one overlay.
+            if showLevel {
                 LevelIndicator()
                     .transition(.opacity)
             }
@@ -107,17 +115,21 @@ struct CameraLiveLookView: View {
 
                 Spacer()
 
-                VStack(spacing: 14) {
-                    looksRow
-                    InlineSlider(title: "Intensity", value: $app.settings.intensity)
-                        .padding(.horizontal, 22)
-                    bottomControls
-                }
-                .padding(.top, 26)
-                .background {
-                    LinearGradient(colors: [.black.opacity(0), .black.opacity(0.55), .black.opacity(0.78)],
-                                   startPoint: .top, endPoint: .bottom)
-                        .ignoresSafeArea(edges: .bottom)
+                // D1 — the bottom cluster steps aside for the pro panel so
+                // the two never stack into two-thirds of the frame.
+                if !showProPanel {
+                    VStack(spacing: 12) {
+                        activeLookReadout
+                        looksRow
+                        bottomControls
+                    }
+                    .padding(.top, 26)
+                    .background {
+                        LinearGradient(colors: [.black.opacity(0), .black.opacity(0.55), .black.opacity(0.8)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .ignoresSafeArea(edges: .bottom)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
 
@@ -172,7 +184,7 @@ struct CameraLiveLookView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity,
                            alignment: .bottomLeading)
                     .padding(.leading, 16)
-                    .padding(.bottom, 388)
+                    .padding(.bottom, showProPanel ? 300 : 250)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -210,65 +222,29 @@ struct CameraLiveLookView: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .padding(.top, 58)
 
-            // Zoom / flip rail on the right, clear of the bottom cluster.
-            VStack(spacing: 10) {
-                Button {
-                    camera.cycleZoom()
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Text(String(format: "%.1fx", camera.zoomFactor))
-                        .font(.system(size: 15, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .frame(width: 54, height: 44)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.lumaPress)
-                Button {
-                    showProPanel = true
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Text("PRO")
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(camera.manualExposure || camera.manualWB
-                                         ? LumaTheme.accentBright : .white)
-                        .frame(width: 54, height: 40)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.lumaPress)
-                Button {
-                    camera.flipCamera()
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath.camera")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 54, height: 44)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.lumaPress)
-                .opacity(camera.isRecording ? 0.35 : 1)
-                .disabled(camera.isRecording)
+            // D1 — the pro rail: every viewfinder control lives on the right
+            // edge so nothing crosses the subject zone.
+            if !showProPanel {
+                proRail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .padding(.trailing, 12)
+                    .transition(.opacity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(.trailing, 14)
-            .padding(.bottom, 348)
+
+            // D2 — the pro panel is bottom-third chrome, not a sheet.
+            if showProPanel {
+                proPanel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(20)
+            }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showProPanel)
         // The full library over the viewfinder: opens at a mid detent so the
         // live feed stays visible, undimmed and interactive above the sheet —
         // pick a purchased pack look and frame the shot through it.
         .lumaToolSheet(isPresented: $showLookBrowser, style: .panel) {
             LookBrowserSheet(context: .camera, intensity: $app.settings.intensity)
-        }
-        .sheet(isPresented: $showProPanel) {
-            CameraProPanel(camera: camera)
-                .presentationDetents([.height(420), .large])
-                .presentationBackground(LumaTheme.background)
-                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showFormatSheet) {
             CameraFormatSheet(camera: camera)
@@ -296,6 +272,18 @@ struct CameraLiveLookView: View {
                 if assists.contains("guide239") { frameGuide = .cinemascope }
                 if assists.contains("safe") { showSafeZone = true }
                 if assists.contains("scope") { scopeMode = .waveform }
+                if assists.contains("grid") { showGrid = true }
+                if assists.contains("level") { showLevel = true }
+            }
+            // Verification: open D2 with a chosen active parameter,
+            // e.g. LUMA_SEED_CAMPRO=shutter (bare "1" defaults to shutter).
+            if let pro = ProcessInfo.processInfo.environment["LUMA_SEED_CAMPRO"] {
+                showProPanel = true
+                if let match = ProParameter.allCases.first(where: {
+                    $0.rawValue.lowercased() == pro.lowercased()
+                }) {
+                    activeProParam = match
+                }
             }
             #endif
             thumbs.render(source: liveThumbSource, library: cameraStripLooks,
@@ -322,6 +310,7 @@ struct CameraLiveLookView: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.85),
                    value: camera.lastRecordingURL != nil)
         .animation(.easeOut(duration: 0.15), value: showGrid)
+        .animation(.easeOut(duration: 0.15), value: showLevel)
         // Grade the look strip with a real frame from the live camera as
         // soon as one arrives.
         .onReceive(camera.$previewImage) { frame in
@@ -400,30 +389,28 @@ struct CameraLiveLookView: View {
         )
     }
 
-    // MARK: - Top icon strip
+    // MARK: - Top bar
 
+    /// D1 — the top bar carries identity only: the way out, the honest
+    /// capture-format signal, and the two framing assists that must stay one
+    /// tap away while composing. Everything else moved to the rail or D2.
     private var topStrip: some View {
-        HStack {
+        HStack(spacing: 10) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 40, height: 40, alignment: .leading)
+                    .frame(width: 32, height: 40, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
-            Spacer()
-            // Technical format readout, Blackmagic-style: mono caps, tracked.
             // Live from the ACTIVE spec (C3) — the HUD never lies. Tap to
             // change resolution / fps / codec.
             Button {
                 showFormatSheet = true
                 LumaHaptics.shared.tap()
             } label: {
-                TechReadout(camera.spec.hudLabel, size: 12, color: .white.opacity(0.85))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    .contentShape(Capsule())
+                CaptureFormatChip(spec: camera.spec)
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.lumaPress)
             .disabled(camera.isRecording)
@@ -467,47 +454,67 @@ struct CameraLiveLookView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
-            // C8 — focus peaking assist.
-            Button {
-                camera.peakingOn.toggle()
-                flashCaption(camera.peakingOn ? "PEAKING ON" : "PEAKING OFF")
-            } label: {
-                Image(systemName: "camera.metering.spot")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(camera.peakingOn ? LumaTheme.accentBright : .white)
-                    .frame(width: 38, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
-            .sensoryFeedback(.selection, trigger: camera.peakingOn)
-            // C9 — zebras (95 IRE clip warning).
-            Button {
-                camera.zebrasOn.toggle()
-                flashCaption(camera.zebrasOn ? "ZEBRA 95" : "ZEBRA OFF")
-            } label: {
-                Image(systemName: "line.diagonal")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(camera.zebrasOn ? LumaTheme.accentBright : .white)
-                    .frame(width: 38, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
-            .sensoryFeedback(.selection, trigger: camera.zebrasOn)
-            Button {
-                showGrid.toggle()
-                flashCaption(showGrid ? "GRID ON" : "GRID OFF")
-            } label: {
-                Image(systemName: "squareshape.split.3x3")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(showGrid ? LumaTheme.accentBright : .white)
-                    .frame(width: 40, height: 40, alignment: .trailing)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
-            .sensoryFeedback(.selection, trigger: showGrid)
         }
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+    }
+
+    // MARK: - D1: right-edge pro rail
+
+    private var proRail: some View {
+        VStack(spacing: 10) {
+            ProRailButton {
+                camera.cycleZoom()
+                LumaHaptics.shared.tap()
+            } label: {
+                Text(String(format: "%.1f×", camera.zoomFactor))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .monospacedDigit()
+            }
+            ProRailButton(active: camera.evBias != 0) {
+                openPro(.ev)
+            } label: {
+                Image(systemName: "plusminus.circle")
+                    .font(.system(size: 17, weight: .medium))
+            }
+            ProRailButton(active: camera.manualWB) {
+                openPro(.wb)
+            } label: {
+                Text("WB")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+            }
+            ProRailButton(active: camera.manualFocus) {
+                openPro(.focus)
+            } label: {
+                Image(systemName: "camera.aperture")
+                    .font(.system(size: 17, weight: .medium))
+            }
+            ProRailButton(active: camera.cameraPosition == .front) {
+                camera.flipCamera()
+                LumaHaptics.shared.tap()
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .opacity(camera.isRecording ? 0.35 : 1)
+            .disabled(camera.isRecording)
+            ProRailButton(active: camera.manualExposure || camera.manualWB || camera.manualFocus) {
+                openPro(camera.manualExposure ? .iso : .shutter)
+            } label: {
+                Text("PRO")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .tracking(1)
+            }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+    }
+
+    /// Opens D2 already targeting the parameter the rail button names, so a
+    /// rail tap lands on the control it advertises rather than a generic panel.
+    private func openPro(_ parameter: ProParameter) {
+        activeProParam = parameter
+        showProPanel = true
+        LumaHaptics.shared.tap()
     }
 
     /// Transient state caption (Halide-style contextual labeling): flashes
@@ -533,9 +540,27 @@ struct CameraLiveLookView: View {
         app.library.stripLooks()
     }
 
+    /// D1 — the active look reads as a cinema-monitor LUT line above the
+    /// filmstrip. Tapping it opens the browser, where intensity is set.
+    private var activeLookReadout: some View {
+        let name = app.selectedLUT?.displayName ?? app.selectedLook.name
+        let strength = Int(app.settings.intensity.rounded())
+        return Button {
+            showLookBrowser = true
+            LumaHaptics.shared.tap()
+        } label: {
+            TechReadout(strength == 0 ? "\(name) · OFF" : "\(name) · \(strength)%",
+                        size: 10, color: strength == 0 ? .white.opacity(0.55)
+                                                       : LumaTheme.accentBright)
+                .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+    }
+
     private var looksRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 // OFF leads the strip — shooting clean is one tap.
                 offTile
                 ForEach(cameraStripLooks) { look in
@@ -545,19 +570,19 @@ struct CameraLiveLookView: View {
                     LookStripTile(look: look,
                                   image: thumbs.images[look.thumbKey],
                                   selected: app.isCurrent(look),
-                                  size: CGSize(width: 78, height: 78),
-                                  radius: 14,
+                                  size: CGSize(width: 52, height: 52),
+                                  radius: 12,
                                   onMedia: true) {
                         app.select(look: look)
                         LumaHaptics.shared.tap()
                     }
                 }
-                AllLooksTile(size: CGSize(width: 78, height: 78), radius: 14, onMedia: true) {
+                AllLooksTile(size: CGSize(width: 52, height: 52), radius: 12, onMedia: true) {
                     showLookBrowser = true
                     LumaHaptics.shared.tap()
                 }
             }
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 20)
         }
         .sensoryFeedback(.selection, trigger: app.selectedLook.id)
         .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
@@ -602,46 +627,227 @@ struct CameraLiveLookView: View {
 
     // MARK: - Bottom controls
 
+    /// D1 — the shutter stays optically centred; the two secondary actions
+    /// (open footage, shoot a graded still) sit on the outside so the row
+    /// never grows a fourth control creeping toward the middle.
     private var bottomControls: some View {
-        HStack {
-            Button {
-                app.path = [.selectClip]
-            } label: {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 64, height: 56)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
-            }
-            .buttonStyle(.lumaPress)
-
-            Spacer()
-
+        ZStack {
             ShutterButton(isRecording: camera.isRecording) {
                 camera.toggleRecording()
             }
-
-            Spacer()
-
-            Button {
-                captureStill()
-            } label: {
-                Image(systemName: "camera")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 64, height: 56)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            HStack {
+                secondaryCaptureButton("photo.on.rectangle") { app.path = [.selectClip] }
+                Spacer()
+                secondaryCaptureButton("camera") { captureStill() }
             }
-            .buttonStyle(.lumaPress)
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 34)
         .padding(.bottom, 6)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
         .sensoryFeedback(.success, trigger: stillSavedFlash)
+    }
+
+    private func secondaryCaptureButton(_ symbol: String,
+                                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.white.opacity(0.1), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    // MARK: - D2: pro panel (bottom third only)
+
+    private var proPanel: some View {
+        VStack(spacing: 13) {
+            Capsule()
+                .fill(.white.opacity(0.22))
+                .frame(width: 38, height: 4)
+
+            HStack {
+                Text("Pro controls")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button("Auto all") {
+                    autoAll()
+                }
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(LumaTheme.accentBright)
+                .buttonStyle(.lumaPress)
+                Text("·").foregroundStyle(LumaTheme.textMuted)
+                Button("Close") {
+                    showProPanel = false
+                    LumaHaptics.shared.tap()
+                }
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(LumaTheme.accentBright)
+                .buttonStyle(.lumaPress)
+            }
+            .padding(.horizontal, 20)
+
+            HStack(spacing: 0) {
+                ForEach(ProParameter.allCases) { parameter in
+                    ProReadout(parameter: parameter,
+                               value: readout(for: parameter),
+                               active: activeProParam == parameter) {
+                        activeProParam = parameter
+                        LumaHaptics.shared.tap()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 14)
+
+            // One dial, re-targeted by the readout row above it.
+            RulerDial(ticks: dialTicks(for: activeProParam),
+                      index: dialIndex(for: activeProParam)) { newIndex in
+                applyDial(newIndex, to: activeProParam)
+            }
+            .padding(.horizontal, 20)
+
+            HStack(spacing: 8) {
+                CameraAssistChip(title: "Zebras", on: camera.zebrasOn) {
+                    camera.zebrasOn.toggle()
+                }
+                CameraAssistChip(title: "Focus peaking", on: camera.peakingOn) {
+                    camera.peakingOn.toggle()
+                }
+                CameraAssistChip(title: "Grid", on: showGrid) {
+                    showGrid.toggle()
+                }
+                CameraAssistChip(title: "Level", on: showLevel) {
+                    showLevel.toggle()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 10)
+        .padding(.bottom, 26)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
+        .background(LumaTheme.bar.opacity(0.78), in: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
+        .overlay(alignment: .top) { Hairline() }
+        .clipShape(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 22, topTrailing: 22)))
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    /// The escape hatch: everything back to automatic in one tap, including
+    /// the AE/AF lock, so no invisible manual state can survive it.
+    private func autoAll() {
+        camera.resetAutoExposure()
+        camera.resetAutoWB()
+        camera.resetAutoFocus()
+        camera.unlockAEAF()
+        flashCaption("AUTO ALL")
+        LumaHaptics.shared.tap()
+    }
+
+    // MARK: - D2: dial stops
+
+    /// Discrete stops, cine practice rather than continuous sliders — a
+    /// detented dial is what makes a value repeatable between takes.
+    private static let isoStops: [Float] = [25, 32, 50, 64, 100, 125, 160, 200, 250, 320,
+                                            400, 500, 640, 800, 1000, 1250, 1600, 2000,
+                                            2500, 3200, 4000, 5000, 6400]
+    private static let shutterAngles: [Double] = [45, 90, 172.8, 180, 270, 360]
+    private static let wbStops: [Float] = [2500, 2800, 3200, 3600, 4000, 4500, 5000,
+                                           5600, 6500, 7500, 9000]
+    private static let evStops: [Float] = [-2, -1.7, -1.3, -1, -0.7, -0.3, 0,
+                                           0.3, 0.7, 1, 1.3, 1.7, 2]
+    /// Index 0 is AF; the rest are normalised lens positions, near → far.
+    private static let focusStops: [Float] = stride(from: 0.0, through: 1.0, by: 0.1)
+        .map { Float($0) }
+
+    private var isoStopsInRange: [Float] {
+        let range = camera.isoRange
+        let inRange = Self.isoStops.filter { range.contains($0) }
+        return inRange.isEmpty ? Self.isoStops : inRange
+    }
+
+    /// Shutter speed implied by an angle at the current frame rate.
+    private func shutterLabel(_ angle: Double) -> String {
+        "1/\(Int((360.0 / max(angle, 1)) * Double(camera.spec.fps)))"
+    }
+
+    private func readout(for parameter: ProParameter) -> String {
+        switch parameter {
+        case .iso:
+            return camera.manualExposure ? "\(Int(camera.currentISO))" : "AUTO"
+        case .shutter:
+            return camera.manualExposure ? shutterLabel(camera.shutterAngle) : "AUTO"
+        case .wb:
+            return camera.manualWB ? "\(Int(camera.wbTemperature))K" : "AUTO"
+        case .ev:
+            return String(format: "%+.1f", camera.evBias)
+        case .focus:
+            return camera.manualFocus ? String(format: "%.1f", camera.lensPosition) : "AF"
+        }
+    }
+
+    private func dialTicks(for parameter: ProParameter) -> [String] {
+        switch parameter {
+        case .iso:     return isoStopsInRange.map { "\(Int($0))" }
+        case .shutter: return Self.shutterAngles.map(shutterLabel)
+        case .wb:      return Self.wbStops.map { "\(Int($0))K" }
+        case .ev:      return Self.evStops.map { String(format: "%+.1f", $0) }
+        case .focus:   return ["AF"] + Self.focusStops.map { String(format: "%.1f", $0) }
+        }
+    }
+
+    /// Nearest stop to the value currently in force, so the dial always opens
+    /// centred on what the camera is actually doing.
+    private func dialIndex(for parameter: ProParameter) -> Int {
+        func nearest<T: BinaryFloatingPoint>(_ value: T, in stops: [T]) -> Int {
+            stops.enumerated().min { abs($0.element - value) < abs($1.element - value) }?.offset ?? 0
+        }
+        switch parameter {
+        case .iso:
+            let stops = isoStopsInRange
+            let iso = camera.currentISO > 0 ? camera.currentISO : (stops.first ?? 100)
+            return nearest(iso, in: stops)
+        case .shutter:
+            return nearest(camera.shutterAngle, in: Self.shutterAngles)
+        case .wb:
+            return nearest(camera.wbTemperature, in: Self.wbStops)
+        case .ev:
+            return nearest(camera.evBias, in: Self.evStops)
+        case .focus:
+            guard camera.manualFocus else { return 0 }
+            return nearest(camera.lensPosition, in: Self.focusStops) + 1
+        }
+    }
+
+    /// Every dial move writes straight through to the controller — moving the
+    /// ISO or shutter stop is also what engages manual exposure, so there is
+    /// no separate AUTO/MANUAL switch to forget.
+    private func applyDial(_ index: Int, to parameter: ProParameter) {
+        switch parameter {
+        case .iso:
+            let stops = isoStopsInRange
+            guard stops.indices.contains(index) else { return }
+            camera.setManualExposure(iso: stops[index])
+        case .shutter:
+            guard Self.shutterAngles.indices.contains(index) else { return }
+            camera.setManualExposure(angle: Self.shutterAngles[index])
+        case .wb:
+            guard Self.wbStops.indices.contains(index) else { return }
+            camera.setWhiteBalance(temperature: Self.wbStops[index], tint: camera.wbTint)
+        case .ev:
+            guard Self.evStops.indices.contains(index) else { return }
+            camera.setEVBias(Self.evStops[index])
+        case .focus:
+            if index == 0 { camera.resetAutoFocus(); return }
+            let stops = Self.focusStops
+            guard stops.indices.contains(index - 1) else { return }
+            camera.setManualFocus(stops[index - 1])
+        }
     }
 
     @ViewBuilder
@@ -918,111 +1124,3 @@ private struct CameraFormatSheet: View {
     }
 }
 
-
-/// C6/C7 — the Pro panel: manual ISO / shutter angle / EV, and manual white
-/// balance. Every control writes through the controller, which clamps to the
-/// device's real ranges and logs what it applied.
-private struct CameraProPanel: View {
-    @ObservedObject var camera: CameraController
-    @Environment(\.dismiss) private var dismiss
-
-    private let angles: [Double] = [45, 90, 180, 270, 360]
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("Pro Controls")
-                        .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-                    Spacer()
-                    Button("Done") { dismiss() }
-                        .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.accentBright)
-                }
-
-                // — Exposure —
-                HStack {
-                    TechReadout("EXPOSURE", size: 10, color: LumaTheme.textMuted)
-                    Spacer()
-                    Button(camera.manualExposure ? "AUTO" : "MANUAL") {
-                        camera.manualExposure ? camera.resetAutoExposure()
-                                              : camera.setManualExposure()
-                        LumaHaptics.shared.tap()
-                    }
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(camera.manualExposure ? LumaTheme.gold : LumaTheme.teal)
-                }
-
-                if camera.manualExposure {
-                    InlineSlider(title: "ISO",
-                                 value: Binding(
-                                    get: { Double(camera.currentISO == 0 ? camera.isoRange.lowerBound : camera.currentISO) },
-                                    set: { camera.setManualExposure(iso: Float($0)) }),
-                                 range: Double(camera.isoRange.lowerBound)...Double(camera.isoRange.upperBound)) {
-                        "\(Int($0))"
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            TechReadout("SHUTTER ANGLE", size: 10, color: LumaTheme.textMuted)
-                            Spacer()
-                            TechReadout("1/\(Int(360.0 / max(camera.shutterAngle, 1) * Double(camera.spec.fps)))s",
-                                        size: 10, color: LumaTheme.textSecondary)
-                        }
-                        HStack(spacing: 8) {
-                            ForEach(angles, id: \.self) { angle in
-                                Button {
-                                    camera.setManualExposure(angle: angle)
-                                    LumaHaptics.shared.tap()
-                                } label: {
-                                    Text("\(Int(angle))°")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(camera.shutterAngle == angle ? .black : .white)
-                                        .padding(.horizontal, 12).padding(.vertical, 8)
-                                        .background(camera.shutterAngle == angle
-                                                    ? AnyShapeStyle(LumaTheme.accentBright)
-                                                    : AnyShapeStyle(LumaTheme.surface), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        Text("180° is the cinematic default — motion blur matched to \(camera.spec.fps) fps.")
-                            .font(.system(size: 11)).foregroundStyle(LumaTheme.textMuted)
-                    }
-                } else {
-                    InlineSlider(title: "EV",
-                                 value: Binding(get: { Double(camera.evBias) },
-                                                set: { camera.setEVBias(Float($0)) }),
-                                 range: -2...2) { String(format: "%+.1f", $0) }
-                }
-
-                Divider().overlay(LumaTheme.hairline)
-
-                // — White balance —
-                HStack {
-                    TechReadout("WHITE BALANCE", size: 10, color: LumaTheme.textMuted)
-                    Spacer()
-                    Button(camera.manualWB ? "AUTO" : "MANUAL") {
-                        camera.manualWB ? camera.resetAutoWB()
-                                        : camera.setWhiteBalance(temperature: camera.wbTemperature,
-                                                                 tint: camera.wbTint)
-                        LumaHaptics.shared.tap()
-                    }
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(camera.manualWB ? LumaTheme.gold : LumaTheme.teal)
-                }
-
-                if camera.manualWB {
-                    InlineSlider(title: "Temp",
-                                 value: Binding(get: { Double(camera.wbTemperature) },
-                                                set: { camera.setWhiteBalance(temperature: Float($0), tint: camera.wbTint) }),
-                                 range: 2500...9000) { "\(Int($0))K" }
-                    InlineSlider(title: "Tint",
-                                 value: Binding(get: { Double(camera.wbTint) },
-                                                set: { camera.setWhiteBalance(temperature: camera.wbTemperature, tint: Float($0)) }),
-                                 range: -50...50) { String(format: "%+.0f", $0) }
-                }
-            }
-            .padding(20)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-    }
-}

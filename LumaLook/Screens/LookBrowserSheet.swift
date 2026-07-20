@@ -36,14 +36,14 @@ extension AppModel {
 }
 
 extension LookLibraryStore {
-    /// The bounded strip every apply surface leads with: recently used first,
-    /// then favourites, then the rest of the library, deduped and capped so
-    /// thumbnail rendering stays cheap. The full library lives one tap away
-    /// behind the "All Looks" tile.
+    /// The bounded strip every apply surface leads with: the collection pinned
+    /// to the camera filmstrip (G3) first, then recently used, then favourites,
+    /// then the rest of the library, deduped and capped so thumbnail rendering
+    /// stays cheap. The full library lives one tap away behind "All Looks".
     func stripLooks(limit: Int = 14) -> [LibraryLook] {
         var seen = Set<String>()
         var out: [LibraryLook] = []
-        for look in recents + all.filter(\.isFavourite) + all {
+        for look in pinnedCollectionLooks + recents + all.filter(\.isFavourite) + all {
             guard out.count < limit else { break }
             guard seen.insert(look.id).inserted else { continue }
             out.append(look)
@@ -104,6 +104,14 @@ struct LookBrowserSheet: View {
             Button("Cancel", role: .cancel) { renameLUT = nil }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Store → Library hand-off (F1): an owned pack tapped in the store
+            // lands here already filtered to that pack. Consumed once.
+            guard let packName = app.libraryPackFilter else { return }
+            app.libraryPackFilter = nil
+            category = .purchased
+            search = packName
+        }
     }
 
     // MARK: Header
@@ -239,16 +247,29 @@ struct LookBrowserSheet: View {
     @ViewBuilder
     private var collectionsBody: some View {
         let groups = app.library.collectionGroups
-        if groups.isEmpty {
-            emptyState
-        } else {
-            VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
+            // Manage only from the full-screen Looks tab: from a sheet a push
+            // would land behind the sheet, which would be a dead tap.
+            if context == .library {
+                SectionHeader(title: "Collections", actionTitle: "Manage") {
+                    app.path.append(.collections)
+                    LumaHaptics.shared.tap()
+                }
+            }
+            if groups.isEmpty {
+                emptyState
+            } else {
                 ForEach(groups, id: \.collection.id) { group in
                     VStack(alignment: .leading, spacing: 10) {
-                        TechReadout("\(group.collection.name.uppercased()) · \(group.looks.count)",
-                                    size: 10, color: LumaTheme.textMuted)
+                        HStack(spacing: 6) {
+                            TechReadout("\(group.collection.name.uppercased()) · \(group.looks.count)",
+                                        size: 10, color: LumaTheme.textMuted)
+                            if group.collection.pinnedToCamera == true {
+                                TechReadout("PINNED", size: 9, color: LumaTheme.accentBright)
+                            }
+                        }
                         if group.looks.isEmpty {
-                            Text("Long-press any LUT to add it here.")
+                            Text("Long-press any look to add it here.")
                                 .font(.system(size: 12))
                                 .foregroundStyle(LumaTheme.textMuted)
                         } else {
@@ -259,9 +280,9 @@ struct LookBrowserSheet: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
         }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
     }
 
     private var emptyState: some View {
@@ -349,22 +370,23 @@ struct LookBrowserSheet: View {
             Label(app.library.isFavourite(look.id) ? "Unfavourite" : "Favourite",
                   systemImage: app.library.isFavourite(look.id) ? "star.slash" : "star")
         }
-        if case .lut(let f) = look.source {
-            if !app.lutRepository.collections.isEmpty {
-                Menu {
-                    ForEach(app.lutRepository.collections) { collection in
-                        let isIn = (f.collectionIDs ?? []).contains(collection.id)
-                        Button {
-                            app.lutRepository.toggle(f, in: collection)
-                        } label: {
-                            Label(collection.name,
-                                  systemImage: isIn ? "checkmark.circle.fill" : "folder")
-                        }
+        // Any library look can belong to a collection since G3, not just LUTs.
+        if !app.lutRepository.collections.isEmpty {
+            Menu {
+                ForEach(app.lutRepository.collections) { collection in
+                    let isIn = app.lutRepository.contains(lookID: look.id, in: collection.id)
+                    Button {
+                        app.lutRepository.toggleLook(id: look.id, in: collection.id)
+                    } label: {
+                        Label(collection.name,
+                              systemImage: isIn ? "checkmark.circle.fill" : "folder")
                     }
-                } label: {
-                    Label("Add to Collection", systemImage: "folder.badge.plus")
                 }
+            } label: {
+                Label("Add to Collection", systemImage: "folder.badge.plus")
             }
+        }
+        if case .lut(let f) = look.source {
             if f.packID == nil {
                 Button {
                     renameText = f.displayName
@@ -628,15 +650,17 @@ struct AllLooksTile: View {
 
 // MARK: - Import button
 
-/// The ONE LUT import door for browser surfaces — wraps the exact validation
-/// and repository call LUTManagerView's fileImporter used, so import logic
-/// exists once. Feedback lands on the app-wide import toast.
+/// The ONE LUT import door for browser surfaces. Picking a file no longer
+/// imports it: the file is handed to `LUTImportSheet` (G2), which validates,
+/// previews and names it before anything reaches the library. Feedback still
+/// lands on the app-wide import toast.
 struct LUTImportButton<Label: View>: View {
     var onImported: ((LUTFile) -> Void)? = nil
     @ViewBuilder let label: () -> Label
 
     @EnvironmentObject private var app: AppModel
     @State private var showImporter = false
+    @State private var picked: PickedFile?
 
     private static var cubeType: UTType { UTType(filenameExtension: "cube") ?? .data }
 
@@ -648,24 +672,19 @@ struct LUTImportButton<Label: View>: View {
             label()
         }
         .buttonStyle(.lumaPress)
+        .sheet(item: $picked) { file in
+            LUTImportSheet(sourceURL: file.url, origin: file.origin) { imported in
+                onImported?(imported)
+            }
+            .environmentObject(app)
+        }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [Self.cubeType, .plainText, .png, .data],
                       allowsMultipleSelection: false) { result in
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                let ext = url.pathExtension.lowercased()
-                guard ["cube", "3dl", "png"].contains(ext) else {
-                    app.importToast = "Choose a .cube, .3dl or HALD .png LUT."
-                    return
-                }
-                do {
-                    let file = try app.lutRepository.importLUT(from: url)
-                    app.importToast = "\(file.displayName) imported"
-                    onImported?(file)
-                } catch {
-                    app.importToast = "Couldn't read that file as a LUT."
-                }
+                picked = PickedFile(url: url)
             case .failure(let error):
                 app.importToast = error.localizedDescription
             }

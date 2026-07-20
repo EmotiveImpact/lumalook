@@ -731,6 +731,50 @@ final class CameraController: NSObject, ObservableObject {
         writerStarted = false
         outputURL = nil
     }
+
+    // MARK: - D2: manual focus (lens position)
+
+    /// false = continuous autofocus. The pro panel's Focus dial needs a real
+    /// lens-position write; without it the dial would be a placebo.
+    @Published var manualFocus = false
+    /// 0 = near, 1 = infinity — AVFoundation's normalised lens position.
+    @Published var lensPosition: Float = 0.5
+
+    func setManualFocus(_ position: Float) {
+        let clamped = min(max(position, 0), 1)
+        DispatchQueue.main.async {
+            self.manualFocus = true
+            self.lensPosition = clamped
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice,
+                  device.isFocusModeSupported(.locked) else {
+                print("[LUMA] FOCUS manual pos=\(clamped) (no device — sim)")
+                return
+            }
+            do {
+                try device.lockForConfiguration()
+                device.setFocusModeLocked(lensPosition: clamped, completionHandler: nil)
+                device.unlockForConfiguration()
+                print("[LUMA] FOCUS manual pos=\(clamped)")
+            } catch {}
+        }
+    }
+
+    func resetAutoFocus() {
+        DispatchQueue.main.async { self.manualFocus = false }
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                device.unlockForConfiguration()
+                print("[LUMA] FOCUS auto")
+            } catch {}
+        }
+    }
 }
 
 // MARK: - Frame processing

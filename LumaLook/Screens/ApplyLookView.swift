@@ -77,7 +77,7 @@ struct ApplyLookView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var activeTool =
-        ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Adjust"
+        ProcessInfo.processInfo.environment["LUMA_SEED_TOOL"] ?? "Opacity"
     @State private var showLensPaywall = false
     @State private var mediaReadout: String?
     @State private var videoAspect: CGFloat?
@@ -94,11 +94,11 @@ struct ApplyLookView: View {
     @AppStorage("lumalook.scopeMode") private var scopeModeRaw = ScopeMode.waveform.rawValue
     @State private var scopeImage: CGImage?
     private var scopeMode: ScopeMode { ScopeMode(rawValue: scopeModeRaw) ?? .waveform }
-    @State private var compareMode = false
-    @State private var wipeFraction: Double = 0.5
-    @State private var showExportSheet = false
-    @State private var isExporting = false
-    @State private var compareDuration: Double = 0
+    /// Ungraded thumbnail behind the corner Compare tile — press-and-hold on
+    /// the tile peeks the original without leaving the grade room. The FULL
+    /// compare surface (wipe / flip / side-by-side + export) is BeforeAfterView,
+    /// reached from the header Compare button and from Apply.
+    @State private var originalThumb: CGImage?
 
     private var thumbStamp: String {
         "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)"
@@ -159,14 +159,9 @@ struct ApplyLookView: View {
         // floats in a pinned bottom glass drawer. No page scroll.
         VStack(spacing: 0) {
             mediaSurface
-            if compareMode {
-                compareBar
-            } else {
-                drawer
-            }
+            drawer
         }
         .background(LumaTheme.background.ignoresSafeArea())
-        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: compareMode)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: thumbStamp) {
@@ -175,22 +170,15 @@ struct ApplyLookView: View {
                           fileURL: { app.lutRepository.fileURL(for: $0) })
         }
         .task(id: mediaKey) { await loadMediaReadout() }
+        .task(id: mediaKey) { renderOriginalThumb() }
         .onDisappear { app.saveGradeSession() }
         .sheet(isPresented: $showLensPaywall) { PaywallView() }
         .sheet(isPresented: $showCompareGrid) { LUTCompareView() }
-        .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
-            ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : compareDuration,
-                            gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
-                            lookState: app.lookState) { spec in
-                showExportSheet = false
-                exportNow(spec: spec)
-            }
-        }
         // C3 fix: export failures/refusals were set on `app.exportError` but
         // never rendered here — the sheet closed and nothing happened. Same
         // capsule style as the root import toast.
         .overlay(alignment: .top) {
-            if let error = app.exportError, !isExporting {
+            if let error = app.exportError {
                 Text(error)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -211,20 +199,6 @@ struct ApplyLookView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.exportError != nil)
         .onAppear { app.exportError = nil }   // never show a stale error from a previous flow
-        .overlay {
-            if isExporting {
-                ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
-                    .overlay(alignment: .top) {
-                        if let status = app.batchStatus {
-                            TechReadout(status, size: 11, color: .white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(.black.opacity(0.6), in: Capsule())
-                                .padding(.top, 90)
-                        }
-                    }
-            }
-        }
         .lumaToolSheet(isPresented: $showConversionPicker, style: .panel) {
             ScrollView {
                 conversionPicker.padding(.top, 18)
@@ -262,15 +236,7 @@ struct ApplyLookView: View {
             // the industry-standard before/after peek.
             .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
             } onPressingChanged: { pressing in
-                if pressing {
-                    if stashedIntensity == nil { stashedIntensity = app.settings.intensity }
-                    holdingOriginal = true
-                    app.settings.intensity = 0
-                } else if let stashed = stashedIntensity {
-                    app.settings.intensity = stashed
-                    stashedIntensity = nil
-                    holdingOriginal = false
-                }
+                peekOriginal(pressing)
             }
             .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
             // WB eyedropper: tap a neutral in the frame to balance to it.
@@ -297,13 +263,8 @@ struct ApplyLookView: View {
                     .transition(.opacity)
                 }
             }
-            .overlay {
-                if compareMode {
-                    compareOverlay
-                }
-            }
             .overlay(alignment: .topTrailing) {
-                if showScope, !compareMode {
+                if showScope {
                     scopeOverlay
                         .padding(.top, 104)
                         .padding(.trailing, 10)
@@ -311,17 +272,20 @@ struct ApplyLookView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                Button {
-                    showScope.toggle()
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Image(systemName: "waveform.path.ecg.rectangle")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(showScope ? LumaTheme.accentBright : .white.opacity(0.85))
-                        .frame(width: 38, height: 34)
-                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .trailing, spacing: 10) {
+                    Button {
+                        showScope.toggle()
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Image(systemName: "waveform.path.ecg.rectangle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(showScope ? LumaTheme.accentBright : .white.opacity(0.85))
+                            .frame(width: 38, height: 34)
+                            .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.lumaPress)
+                    compareTile
                 }
-                .buttonStyle(.lumaPress)
                 .padding(.trailing, 12)
                 .padding(.bottom, 12)
             }
@@ -336,6 +300,13 @@ struct ApplyLookView: View {
                             .background(.black.opacity(0.5), in: Capsule())
                             .transition(.opacity)
                     }
+                    // What is on the frame right now, in one line — the same
+                    // readout the compare screen carries.
+                    TechReadout("\((app.selectedLUT?.displayName ?? app.selectedLook.name).uppercased()) · \(Int(app.settings.intensity))%",
+                                size: 9, color: LumaTheme.accentBright)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.5), in: Capsule())
                     if let mediaReadout {
                         TechReadout(mediaReadout, size: 10, color: .white.opacity(0.65))
                             .padding(.horizontal, 10)
@@ -346,6 +317,67 @@ struct ApplyLookView: View {
                 .padding(12)
                 .animation(.easeOut(duration: 0.12), value: holdingOriginal)
             }
+    }
+
+    /// C1 corner Compare tile: the ungraded frame, pressed and held to peek the
+    /// original. This is the QUICK peek — deliberately gesture-only and local.
+    /// The header Compare button opens BeforeAfterView, the canonical
+    /// deep-compare surface (wipe / hold-to-flip / side-by-side + export).
+    private var compareTile: some View {
+        VStack(spacing: 0) {
+            Group {
+                if let originalThumb {
+                    Image(decorative: originalThumb, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    LumaTheme.surfaceStrong
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipped()
+            .overlay(alignment: .bottom) {
+                TechReadout("HOLD ⇢ ORIG", size: 7, color: .white.opacity(0.9))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.55))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(holdingOriginal ? .white : .white.opacity(0.4),
+                              lineWidth: holdingOriginal ? 2 : 1))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onLongPressGesture(minimumDuration: 0.12, maximumDistance: 40) {
+        } onPressingChanged: { pressing in
+            peekOriginal(pressing)
+        }
+        .accessibilityLabel("Hold to see the original")
+    }
+
+    /// Zeroes intensity while held and restores it on release — one stash so a
+    /// second press mid-peek can never strand the grade at 0.
+    private func peekOriginal(_ pressing: Bool) {
+        if pressing {
+            if stashedIntensity == nil { stashedIntensity = app.settings.intensity }
+            holdingOriginal = true
+            app.settings.intensity = 0
+        } else if let stashed = stashedIntensity {
+            app.settings.intensity = stashed
+            stashedIntensity = nil
+            holdingOriginal = false
+        }
+    }
+
+    /// Ungraded render of the current preview frame for the Compare tile.
+    private func renderOriginalThumb() {
+        let frame = app.previewFrame ?? LookThumbs.fallbackFrame
+        let extent = frame.extent
+        guard !extent.isInfinite, extent.width > 1, extent.height > 1 else {
+            originalThumb = nil
+            return
+        }
+        originalThumb = LookPipeline.shared.context.createCGImage(frame, from: extent)
     }
 
     private var topBar: some View {
@@ -384,17 +416,23 @@ struct ApplyLookView: View {
                     }
                     .buttonStyle(.lumaPress)
                 }
-                // C4 fix: the Before/After screen existed but nothing pushed it.
-                // The full-screen wipe compare (with its own export path) lives here.
+                // The canonical deep-compare surface. Labelled, not a bare icon,
+                // so the split between "hold the corner tile to peek" and "open
+                // the compare screen" is legible without discovery.
                 Button {
-                    app.path.append(.beforeAfter)
                     LumaHaptics.shared.tap()
+                    app.path.append(.beforeAfter)
                 } label: {
-                    Image(systemName: "rectangle.split.2x1")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40, alignment: .trailing)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 5) {
+                        Image(systemName: "rectangle.split.2x1")
+                            .font(.system(size: 13, weight: .semibold))
+                        TechReadout("COMPARE", size: 9, color: .white)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.black.opacity(0.45), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
                 }
                 .buttonStyle(.lumaPress)
             }
@@ -421,9 +459,13 @@ struct ApplyLookView: View {
                 lookStrip
             }
 
-            LumaDial(title: activeTool == "Adjust" ? "Intensity" : activeTool,
-                     value: dialBinding)
-                .padding(.horizontal, 22)
+            // The dial edits the ACTIVE effect. Opacity has its own pinned row
+            // above Apply, so showing the dial for it too would be two controls
+            // on one value.
+            if showsEffectDial {
+                LumaDial(title: activeTool, value: dialBinding)
+                    .padding(.horizontal, 22)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
@@ -439,8 +481,8 @@ struct ApplyLookView: View {
                         LumaHaptics.shared.tap()
                     }
                     .frame(width: 62)
-                    FlatTool(title: "Adjust", icon: "slider.horizontal.3", selected: activeTool == "Adjust") {
-                        activeTool = "Adjust"
+                    FlatTool(title: "Opacity", icon: "slider.horizontal.3", selected: !showsEffectDial) {
+                        activeTool = "Opacity"
                     }
                     .frame(width: 62)
                     FlatTool(title: "Lens", icon: "camera.aperture", selected: activeTool == "Lens") {
@@ -470,11 +512,12 @@ struct ApplyLookView: View {
             }
             .lumaEdgeFade(leading: 12, trailing: 12)
 
-            SolidCTA(title: "Apply Look", height: 52) {
-                enterCompare()
-            }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 6)
+            // Opacity sits directly above Apply — the two things every user
+            // touches last, pinned in the one-handed zone.
+            GradeOpacityRow(value: $app.settings.intensity)
+                .padding(.horizontal, 22)
+
+            applyRow
         }
         .padding(.top, 14)
         .background {
@@ -498,6 +541,75 @@ struct ApplyLookView: View {
         case "Lens": return $app.settings.lensAmount
         default: return $app.settings.intensity
         }
+    }
+
+    /// "Adjust" is the legacy value LUMA_SEED_TOOL may still pass for the
+    /// intensity tool; both mean "the pinned Opacity row owns this".
+    private var showsEffectDial: Bool {
+        activeTool != "Opacity" && activeTool != "Adjust"
+    }
+
+    // MARK: Apply — pinned, always enabled, never a dead end
+
+    /// The library entry matching the grade currently on screen, via the one
+    /// selection truth. nil only for a fully hand-built grade (Skin First
+    /// preset, custom settings) that no library look describes.
+    private var currentLibraryLook: LibraryLook? {
+        app.library.all.first { app.isCurrent($0) }
+    }
+
+    private var applyRow: some View {
+        HStack(spacing: 10) {
+            favouriteButton
+            SolidCTA(title: "Apply Look", height: 52) { applyAndAdvance() }
+        }
+        .padding(.horizontal, 22)
+        .padding(.bottom, 6)
+    }
+
+    /// One tap saves the look+opacity combo. For a LUT the opacity is real
+    /// stored state (`defaultOpacity`), so starring at 62% brings it back at
+    /// 62% from Favourites anywhere in the app.
+    private var favouriteButton: some View {
+        let look = currentLibraryLook
+        let on = look.map { app.library.isFavourite($0.id) } ?? false
+        return Button {
+            guard let look else { return }
+            if !on, case .lut(let file) = look.source {
+                app.lutRepository.setDefaults(for: file.id,
+                                              opacity: app.creativeOpacity,
+                                              blend: app.creativeBlend.rawValue)
+            }
+            app.library.toggleFavourite(look)
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: on ? "star.fill" : "star")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(on ? LumaTheme.gold : .white)
+                .frame(width: 56, height: 52)
+                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
+                    on ? LumaTheme.gold.opacity(0.55) : .white.opacity(0.14), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(look == nil)
+        .opacity(look == nil ? 0.4 : 1)
+        .accessibilityLabel(on ? "Remove from favourites" : "Save this look to favourites")
+    }
+
+    /// Apply is never disabled: the current look at the current opacity is
+    /// always a valid answer. With no media the forward move is the picker,
+    /// not a disabled button.
+    private func applyAndAdvance() {
+        LumaHaptics.shared.tap()
+        guard app.player != nil || app.selectedImage != nil else {
+            app.path = [.selectClip]
+            return
+        }
+        if let look = currentLibraryLook { app.library.noteUsed(look) }
+        app.saveGradeSession()
+        app.exportError = nil
+        app.path.append(.beforeAfter)      // C2 — compare, confirm, export
     }
 
     /// Lens picker strip: glass, not colour — swaps in for the look strip
@@ -706,134 +818,6 @@ extension ApplyLookView {
             guard let image = display.outputImage else { return nil }
             return LookPipeline.shared.context.createCGImage(image, from: image.extent)
         }.value
-    }
-}
-
-// MARK: - Compare mode (queue #7)
-
-extension ApplyLookView {
-    fileprivate func enterCompare() {
-        wipeFraction = 0.5
-        app.lookState.splitFraction = wipeFraction
-        compareMode = true
-        app.refreshPreviewFrame()
-        app.objectWillChange.send()
-        LumaHaptics.shared.tap()
-        Task {
-            if let url = app.selectedVideoURL,
-               let d = try? await AVURLAsset(url: url).load(.duration).seconds { compareDuration = d }
-        }
-    }
-
-    fileprivate func exitCompare() {
-        compareMode = false
-        app.lookState.splitFraction = nil
-        app.refreshPreviewFrame()
-        app.objectWillChange.send()
-    }
-
-    /// Wipe divider + grabber + corner labels, drag anywhere to move.
-    fileprivate var compareOverlay: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Divider + knob at the wipe position.
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: 2)
-                    .shadow(color: .black.opacity(0.7), radius: 5)
-                    .position(x: geo.size.width * wipeFraction, y: geo.size.height / 2)
-                Circle()
-                    .fill(.black.opacity(0.75))
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
-                    .overlay(
-                        HStack(spacing: 2) {
-                            Image(systemName: "chevron.left")
-                            Image(systemName: "chevron.right")
-                        }
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                    )
-                    .position(x: geo.size.width * wipeFraction, y: geo.size.height / 2)
-
-                TechReadout("ORIGINAL", size: 8, color: .white.opacity(0.9))
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(.black.opacity(0.5), in: Capsule())
-                    .position(x: 52, y: 66)
-                TechReadout("GRADED · \(Int(app.settings.intensity))%", size: 8,
-                            color: LumaTheme.accentBright)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(.black.opacity(0.5), in: Capsule())
-                    .position(x: geo.size.width - 74, y: 66)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { drag in
-                        wipeFraction = min(max(drag.location.x / geo.size.width, 0.05), 0.95)
-                        app.lookState.splitFraction = wipeFraction
-                        app.refreshPreviewFrame()
-                        app.objectWillChange.send()
-                    }
-            )
-        }
-    }
-
-    fileprivate var compareBar: some View {
-        HStack(spacing: 10) {
-            Button { exitCompare() } label: {
-                Text("CANCEL")
-                    .font(.system(size: 13, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1))
-            }
-            .buttonStyle(.lumaPress)
-            SolidCTA(title: "Use This Grade", height: 48) {
-                exitCompare()
-                showExportSheet = true
-            }
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .background {
-            ZStack(alignment: .top) {
-                Rectangle().fill(.ultraThinMaterial)
-                LumaTheme.background.opacity(0.45)
-            }
-            .ignoresSafeArea(edges: .bottom)
-        }
-    }
-
-    fileprivate func exportNow(spec: ExportSpec) {
-        guard app.player != nil || app.selectedImage != nil else {
-            app.exportError = "Pick a video or photo from your library first."
-            return
-        }
-        isExporting = true
-        Task {
-            if !app.batchItems.isEmpty {
-                // One grade across the whole set (queue #10).
-                let done = await app.runBatchExport(spec: spec)
-                isExporting = false
-                if done > 0 {
-                    LumaHaptics.shared.exportSuccess()
-                    app.path.append(.exportComplete)
-                }
-            } else {
-                let success = await app.exportCurrentVideo(spec: spec)
-                isExporting = false
-                if success {
-                    LumaHaptics.shared.exportSuccess()
-                    app.path.append(.exportComplete)
-                }
-            }
-        }
     }
 }
 
@@ -1097,5 +1081,35 @@ struct LookThumbCell: View {
             }
         }
         .buttonStyle(.lumaPress)
+    }
+}
+
+/// The pinned opacity row from C1/C2: label, track, mono value. Shared by the
+/// grade room and the compare screen so the control that decides how strong a
+/// look is looks and feels identical in both.
+struct GradeOpacityRow: View {
+    var title: String = "Opacity"
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...100
+
+    // Same 5-unit detents as LumaDial, so the two controls feel like one.
+    private var detent: Int { Int(value / 5) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(LumaTheme.textSecondary)
+                .frame(width: 62, alignment: .leading)
+            Slider(value: $value, in: range)
+                .tint(LumaTheme.accentBright)
+            Text("\(Int(value))")
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .contentTransition(.numericText())
+                .animation(.snappy(duration: 0.15), value: Int(value))
+                .foregroundStyle(.white)
+                .frame(width: 30, alignment: .trailing)
+        }
+        .sensoryFeedback(.selection, trigger: detent)
     }
 }

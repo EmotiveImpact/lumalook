@@ -440,6 +440,16 @@ final class AppModel: ObservableObject {
         if let packID = env["LUMA_SEED_PACK"], PackCatalog.pack(id: packID) != nil {
             selectedPackID = packID
         }
+        // Collections cell (G3): two populated collections, the second pinned
+        // to the camera filmstrip, so the strip ordering is verifiable headlessly.
+        if env["LUMA_SEED_COLLECTIONS"] == "1", lutRepository.collections.isEmpty {
+            let ids = library.all.map(\.id)
+            let sunset = lutRepository.createCollection(name: "Sunset Sessions", symbol: "sun.max")
+            let night = lutRepository.createCollection(name: "Night Shoots", symbol: "moon.stars")
+            for id in ids.prefix(4) { lutRepository.addLook(id: id, to: sunset.id) }
+            for id in ids.dropFirst(4).prefix(5) { lutRepository.addLook(id: id, to: night.id) }
+            lutRepository.setPinnedCollection(night.id)
+        }
         // Headless open-in-place check: LUMA_OPEN_FILE=<host path>.
         if let openPath = env["LUMA_OPEN_FILE"], FileManager.default.fileExists(atPath: openPath) {
             handleIncomingFile(url: URL(fileURLWithPath: openPath))
@@ -460,7 +470,8 @@ final class AppModel: ObservableObject {
             "savedLooks": [.savedLooks],
             "projectLibrary": [.projectLibrary],
             "settings": [.settings],
-            "customLook": [.selectClip, .applyLook, .customLook]
+            "customLook": [.selectClip, .applyLook, .customLook],
+            "collections": [.collections]
         ]
         if let target = map[route] {
             path = target
@@ -715,6 +726,11 @@ final class AppModel: ObservableObject {
         selectedLUT = nil
         settings = LookSettings()
     }
+
+    /// Store → Library hand-off (F1): the pack name the Looks tab should open
+    /// pre-filtered to. Set by the store when an owned pack is tapped, and
+    /// consumed + cleared by the look browser the first time it appears.
+    @Published var libraryPackFilter: String?
 }
 
 // MARK: - SDR colour policy (SPEC_ADDENDUM §3)

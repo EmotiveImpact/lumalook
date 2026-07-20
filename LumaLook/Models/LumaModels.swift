@@ -361,6 +361,15 @@ struct LUTCollection: Identifiable, Codable, Equatable {
     var name: String
     var symbol: String = "folder"
     var orderedLUTIDs: [UUID] = []
+    /// G3 — membership widened to any library look, stored as `LibraryLook.id`
+    /// strings. Optional-at-end so pre-G3 collections_index.json still decodes;
+    /// nil means "derive from orderedLUTIDs" (see LUTRepository.memberLookIDs).
+    /// `orderedLUTIDs` stays written for LUT members so LUTManagerView and any
+    /// older index reader keep working.
+    var orderedLookIDs: [String]? = nil
+    /// G3 — this collection is the camera filmstrip's shooting palette.
+    /// Exactly one collection carries it; LUTRepository enforces exclusivity.
+    var pinnedToCamera: Bool? = nil
 }
 
 struct ProjectItem: Identifiable, Hashable {
@@ -387,6 +396,7 @@ enum LumaRoute: Hashable {
     case cropFormat
     case audio
     case settings
+    case collections
 }
 
 enum LumaTab: String, CaseIterable {

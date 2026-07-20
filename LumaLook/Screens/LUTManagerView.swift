@@ -15,7 +15,10 @@ struct LUTManagerView: View {
     @State private var showNewCollection = false
     @State private var newCollectionName = ""
     @State private var importError: String?
-    @State private var importedName: String?
+    /// The picked file, held until the G2 import sheet validates and saves it.
+    @State private var pendingImport: PickedFile?
+    @State private var renaming: LUTFile?
+    @State private var renameText = ""
 
     private static let cubeType = UTType(filenameExtension: "cube") ?? .data
 
@@ -77,7 +80,12 @@ struct LUTManagerView: View {
     @ViewBuilder
     private func lutRow(_ lut: LUTFile, _ index: Int) -> some View {
         LUTRow(lut: lut,
-               image: thumbs.images[LookThumbs.key(LibraryLook(lut: lut))])
+               image: thumbs.images[LookThumbs.key(LibraryLook(lut: lut))],
+               onRename: { target in
+                   renameText = target.displayName
+                   renaming = target
+               },
+               onNewCollection: { showNewCollection = true })
             .listRowBackground(LumaTheme.surface)
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) { app.lutRepository.delete(lut) } label: {
@@ -143,28 +151,43 @@ struct LUTManagerView: View {
         } message: {
             Text("Group LUTs your way — long-press any LUT to add it.")
         }
+        .alert("Rename LUT", isPresented: Binding(get: { renaming != nil },
+                                                 set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                let name = renameText.trimmingCharacters(in: .whitespaces)
+                if let lut = renaming, !name.isEmpty { app.lutRepository.rename(lut, to: name) }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        // Picking a file no longer imports it — G2 validates and previews
+        // first, and only saves on the user's word.
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [Self.cubeType, .plainText, .png, .data],
                       allowsMultipleSelection: false) { result in
             importError = nil
-            importedName = nil
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                let ext = url.pathExtension.lowercased()
-                guard ["cube", "3dl", "png"].contains(ext) else {
-                    importError = "Choose a .cube, .3dl or HALD .png LUT."
-                    return
-                }
-                do {
-                    let file = try app.lutRepository.importLUT(from: url)
-                    importedName = file.displayName
-                } catch {
-                    importError = error.localizedDescription
-                }
+                pendingImport = PickedFile(url: url)
             case .failure(let error):
                 importError = error.localizedDescription
             }
+        }
+        .sheet(item: $pendingImport) { picked in
+            LUTImportSheet(sourceURL: picked.url, origin: picked.origin)
+                .environmentObject(app)
+        }
+        // Headless check of G2: LUMA_SEED_LUT_IMPORT=<path> opens the import
+        // sheet on that file straight from LUT Files.
+        .task {
+            #if DEBUG
+            if let path = ProcessInfo.processInfo.environment["LUMA_SEED_LUT_IMPORT"],
+               FileManager.default.fileExists(atPath: path) {
+                pendingImport = PickedFile(url: URL(fileURLWithPath: path), origin: "Files")
+            }
+            #endif
         }
     }
 
@@ -180,12 +203,6 @@ struct LUTManagerView: View {
                 }
                 .listRowBackground(LumaTheme.surface)
 
-                if let importedName {
-                    Label("\(importedName) imported", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(LumaTheme.teal)
-                        .listRowBackground(LumaTheme.surface)
-                }
                 if let importError {
                     Label(importError, systemImage: "exclamationmark.triangle")
                         .font(.subheadline)
@@ -235,6 +252,9 @@ private struct LUTRow: View {
     let lut: LUTFile
     /// Live-rendered graded thumbnail (nil until the renderer lands it).
     var image: CGImage? = nil
+    /// Rename is hosted by the parent (one alert, not one per row).
+    var onRename: (LUTFile) -> Void
+    var onNewCollection: () -> Void
 
     private var agoText: String {
         let formatter = RelativeDateTimeFormatter()
@@ -285,8 +305,21 @@ private struct LUTRow: View {
                         app.path.append(.selectClip)
                     }
                 }
+                Button("Rename…") { onRename(lut) }
                 Button(lut.isFavourite ? "Remove Favorite" : "Favorite") {
                     app.lutRepository.toggleFavourite(lut)
+                }
+                Menu("Collections") {
+                    ForEach(app.lutRepository.collections) { collection in
+                        let isIn = (lut.collectionIDs ?? []).contains(collection.id)
+                        Button {
+                            app.lutRepository.toggle(lut, in: collection)
+                        } label: {
+                            Label(collection.name,
+                                  systemImage: isIn ? "checkmark.circle.fill" : "folder")
+                        }
+                    }
+                    Button("New Collection…") { onNewCollection() }
                 }
                 Button("Delete", role: .destructive) {
                     app.lutRepository.delete(lut)

@@ -1,67 +1,92 @@
 import SwiftUI
 import AVKit
 
+// =============================================================================
+// C2 — Compare & confirm. The canonical deep-compare surface: three explicit
+// compare modes (no hidden gestures), opacity adjustable without leaving the
+// screen, and a footer that either goes back to browsing or chains straight
+// into the export sheet with the grade applied.
+//
+// Relationship to the grade room (C1): ApplyLookView's corner tile is the
+// QUICK peek — press and hold, local, gesture-only. This screen is where
+// comparing is a task with modes and an outcome. The grade room's header
+// Compare button and its Apply CTA both land here.
+// =============================================================================
+
 struct BeforeAfterView: View {
     @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    enum CompareMode: String, CaseIterable, Identifiable {
+        case split, flip, side
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .split: return "Split ⇔"
+            case .flip:  return "Hold to flip"
+            case .side:  return "Side by side"
+            }
+        }
+    }
+
+    @State private var mode: CompareMode = CompareMode(
+        rawValue: ProcessInfo.processInfo.environment["LUMA_SEED_COMPARE"] ?? "") ?? .split
     @State private var splitFraction: Double = 0.5
-    @State private var isExporting = false
-    @State private var showExportSheet = false
-    @State private var activeTool: String? = nil
+    @State private var holdingOriginal = false
+    @State private var stashedIntensity: Double?
+
+    // Side-by-side panes: one reference frame, rendered twice.
+    @State private var originalPane: CGImage?
+    @State private var gradedPane: CGImage?
+
+    // Playback
     @State private var isPlaying = true
     @State private var progress: Double = 0
     @State private var duration: Double = 1
     @State private var timeObserver: Any?
 
+    // Export
+    @State private var showExportSheet = false
+    @State private var isExporting = false
+
     private var hasRealMedia: Bool {
         app.player != nil || app.selectedImage != nil
     }
 
+    private var lookName: String {
+        (app.selectedLUT?.displayName ?? app.selectedLook.name).uppercased()
+    }
+
+    /// Everything that changes what the graded pane should look like.
+    private var gradeStamp: String {
+        "\(app.settings)-\(app.selectedLook.id)-\(app.selectedLUT?.id.uuidString ?? "")"
+        + "-\(app.conversionLUT?.id.uuidString ?? "")-\(Int(app.creativeOpacity))"
+        + "-\(Int(app.conversionOpacity))-\(app.previewFrame?.extent.debugDescription ?? "none")"
+    }
+
     var body: some View {
-        LumaScreen(title: "Before / After", trailingIcon: "square.and.arrow.up",
-                   trailingAction: { showExportSheet = true }) {
-            viewer
-
-            playbackBar
-
-            HStack(alignment: .top, spacing: 12) {
-                ToolTile(title: "Intensity", icon: "sparkles", selected: activeTool == "Intensity") {
-                    toggleTool("Intensity")
-                }
-                ToolTile(title: "Contrast", icon: "circle.lefthalf.filled", selected: activeTool == "Contrast") {
-                    toggleTool("Contrast")
-                }
-                ToolTile(title: "Warmth", icon: "thermometer.sun", selected: activeTool == "Warmth") {
-                    toggleTool("Warmth")
-                }
-                ToolTile(title: "Saturation", icon: "drop.halffull", selected: activeTool == "Saturation") {
-                    toggleTool("Saturation")
-                }
-                ToolTile(title: "More", icon: "ellipsis") {
-                    app.path.append(.customLook)
-                }
-            }
-
-            if let tool = activeTool {
-                Group {
-                    switch tool {
-                    case "Intensity": InlineSlider(title: "Intensity", value: $app.settings.intensity)
-                    case "Contrast": InlineSlider(title: "Contrast", value: $app.settings.contrast, range: -100...100)
-                    case "Warmth": InlineSlider(title: "Warmth", value: $app.settings.warmth, range: -100...100)
-                    case "Saturation": InlineSlider(title: "Saturation", value: $app.settings.saturation, range: -100...100)
-                    default: EmptyView()
-                    }
-                }
-                .transition(.opacity)
-            }
-
-            if let error = app.exportError {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundStyle(LumaTheme.orange)
-            }
-
-            SolidCTA(title: "Export") { showExportSheet = true }
-                .padding(.top, 2)
+        VStack(spacing: 0) {
+            stage
+            footer
+        }
+        .background(LumaTheme.background.ignoresSafeArea())
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            attachTimeObserver()
+            app.exportError = nil
+            applyMode(mode)
+        }
+        .onChange(of: mode) { _, new in applyMode(new) }
+        .task(id: "\(gradeStamp)|\(mode.rawValue)") {
+            guard mode == .side else { return }
+            renderPanes()
+        }
+        .onDisappear {
+            detachTimeObserver()
+            releaseHold()
+            app.lookState.splitFraction = nil
+            app.refreshPreviewFrame()
         }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : duration,
@@ -71,104 +96,337 @@ struct BeforeAfterView: View {
                 startExport(spec: spec)
             }
         }
-        .overlay {
-            if isExporting { exportOverlay }
-        }
-        .onAppear {
-            attachTimeObserver()
-            if hasRealMedia {
-                app.lookState.splitFraction = splitFraction
-                app.refreshPreviewFrame()
+        // Export failures/refusals surface here rather than dying with the sheet.
+        .overlay(alignment: .top) {
+            if let error = app.exportError, !isExporting {
+                Text(error)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16)
+                        .stroke(LumaTheme.orange.opacity(0.55), lineWidth: 1))
+                    .padding(.horizontal, 30)
+                    .padding(.top, 54)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(nanoseconds: 3_500_000_000)
+                        withAnimation(.easeOut(duration: 0.25)) { app.exportError = nil }
+                    }
             }
         }
-        .onDisappear {
-            detachTimeObserver()
-            app.lookState.splitFraction = nil
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.exportError != nil)
+        .overlay {
+            if isExporting {
+                ExportOverlay(progress: app.exporter.progress) { app.exporter.cancel() }
+                    .overlay(alignment: .top) {
+                        if let status = app.batchStatus {
+                            TechReadout(status, size: 11, color: .white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(.black.opacity(0.6), in: Capsule())
+                                .padding(.top, 90)
+                        }
+                    }
+            }
         }
     }
 
-    // MARK: - Viewer (draggable split wipe, SPEC_ADDENDUM §7)
+    // MARK: - Mode
 
-    @ViewBuilder
-    private var viewer: some View {
+    /// Each mode owns exactly one pipeline state, so switching can never leave
+    /// a stale wipe or a stashed intensity behind.
+    private func applyMode(_ new: CompareMode) {
+        releaseHold()
+        switch new {
+        case .split:
+            app.lookState.splitFraction = splitFraction
+        case .flip, .side:
+            app.lookState.splitFraction = nil
+        }
+        app.refreshPreviewFrame()
+        app.objectWillChange.send()
+    }
+
+    // MARK: - Stage
+
+    private var stage: some View {
+        ZStack {
+            Color.black
+            switch mode {
+            case .split: splitStage
+            case .flip:  flipStage
+            case .side:  sideStage
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .overlay(alignment: .top) { topBar }
+        .overlay(alignment: .bottomLeading) {
+            TechReadout("\(lookName) · \(Int(app.settings.intensity))%", size: 9,
+                        color: LumaTheme.accentBright)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(.black.opacity(0.5), in: Capsule())
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            Spacer()
+            TechReadout("COMPARE", size: 12, color: .white.opacity(0.85))
+            Spacer()
+            Color.clear.frame(width: 40, height: 40)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .background {
+            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    // MARK: - Split (wipe)
+
+    /// The pipeline composites ORIGINAL left of the divider and GRADED right
+    /// (`LookPipeline.apply`), so the labels are pinned to match the render,
+    /// not the other way round.
+    private var splitStage: some View {
         GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                if hasRealMedia {
-                    LookPreviewSurface(radius: 20)
-                } else {
-                    // Mock split comparison for the empty flow.
-                    HStack(spacing: 0) {
-                        SceneArt(scene: .coast)
-                            .frame(width: geo.size.width * splitFraction)
-                            .clipped()
-                        SceneArt(scene: .coast, grade: app.selectedLook.gradeTint, gradeOpacity: 0.35)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                }
+            ZStack {
+                LookPreviewSurface(radius: 0)
+                    .frame(width: geo.size.width, height: geo.size.height)
 
-                // Vertical wipe line + circular grabber at the split position.
                 let x = geo.size.width * splitFraction
                 WipeHandle()
                     .frame(height: geo.size.height)
                     .position(x: x, y: geo.size.height / 2)
 
-                // Mono caps state labels in the top corners — chrome stays
-                // hueless so it never biases the grade comparison.
-                HStack {
-                    wipeLabel("ORIGINAL")
-                    Spacer()
-                    wipeLabel("GRADED")
-                }
-                .padding(12)
+                // Labels ride the handle so which side is which is never a guess.
+                wipeLabel("ORIGINAL", tint: .white.opacity(0.8))
+                    .position(x: max(56, x - 52), y: 96)
+                wipeLabel("GRADED", tint: LumaTheme.accentBright)
+                    .position(x: min(geo.size.width - 50, x + 50), y: 96)
             }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         splitFraction = min(max(value.location.x / geo.size.width, 0.02), 0.98)
-                        if hasRealMedia {
-                            app.lookState.splitFraction = splitFraction
-                            app.refreshPreviewFrame()
-                        }
+                        app.lookState.splitFraction = splitFraction
+                        app.refreshPreviewFrame()
+                        app.objectWillChange.send()
                     }
             )
         }
-        .frame(height: 430)
     }
 
-    private func wipeLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .kerning(1.4)
-            .foregroundStyle(.white.opacity(0.85))
+    private func wipeLabel(_ text: String, tint: Color) -> some View {
+        TechReadout(text, size: 9, color: tint)
             .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(.black.opacity(0.45), in: Capsule())
+            .padding(.vertical, 4)
+            .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 7))
             .allowsHitTesting(false)
+    }
+
+    // MARK: - Hold to flip
+
+    private var flipStage: some View {
+        LookPreviewSurface(radius: 0)
+            .overlay(alignment: .top) {
+                // The instruction IS the affordance — the point of this mode is
+                // that nothing about it is discovered by accident.
+                TechReadout(holdingOriginal ? "ORIGINAL" : "PRESS AND HOLD TO FLIP",
+                            size: 9,
+                            color: holdingOriginal ? .white : .white.opacity(0.75))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.55), in: Capsule())
+                    .padding(.top, 92)
+            }
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 0.12, maximumDistance: 60) {
+            } onPressingChanged: { pressing in
+                if pressing { takeHold() } else { releaseHold() }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
+    }
+
+    private func takeHold() {
+        if stashedIntensity == nil { stashedIntensity = app.settings.intensity }
+        holdingOriginal = true
+        app.settings.intensity = 0
+    }
+
+    private func releaseHold() {
+        guard let stashed = stashedIntensity else { return }
+        app.settings.intensity = stashed
+        stashedIntensity = nil
+        holdingOriginal = false
+    }
+
+    // MARK: - Side by side
+
+    /// Two panes off ONE reference frame: video pauses so both halves describe
+    /// the same moment. Labelled as a frame comparison, not live playback.
+    private var sideStage: some View {
+        HStack(spacing: 2) {
+            pane(originalPane, label: "ORIGINAL", tint: .white.opacity(0.8))
+            pane(gradedPane, label: "GRADED · \(Int(app.settings.intensity))%",
+                 tint: LumaTheme.accentBright)
+        }
+        .padding(.top, 78)
+        .padding(.bottom, 44)
+        .padding(.horizontal, 10)
+    }
+
+    private func pane(_ image: CGImage?, label: String, tint: Color) -> some View {
+        ZStack {
+            LumaTheme.surfaceStrong
+            if let image {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
+        .overlay(alignment: .top) {
+            TechReadout(label, size: 8, color: tint)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.55), in: Capsule())
+                .padding(.top, 8)
+        }
+    }
+
+    /// Renders both panes from the reference frame. `previewFrame` is already
+    /// bounded to 480px; nothing here is clamped-to-extent, so the spatial ops
+    /// in the pipeline stay honest.
+    private func renderPanes() {
+        app.player?.pause()
+        isPlaying = false
+        let frame = app.previewFrame ?? LookThumbs.fallbackFrame
+        let extent = frame.extent
+        guard !extent.isInfinite, extent.width > 1, extent.height > 1 else {
+            originalPane = nil
+            gradedPane = nil
+            return
+        }
+        originalPane = LookPipeline.shared.context.createCGImage(frame, from: extent)
+        gradedPane = LookPipeline.shared.gradedStill(frame, state: app.lookState,
+                                                     includeSplit: false)
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        VStack(spacing: 12) {
+            if app.player != nil { transport }
+
+            HStack(spacing: 8) {
+                ForEach(CompareMode.allCases) { option in
+                    Button {
+                        LumaHaptics.shared.tap()
+                        withAnimation(.easeOut(duration: 0.18)) { mode = option }
+                    } label: {
+                        Text(option.title)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(mode == option ? .white : LumaTheme.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(mode == option ? AnyShapeStyle(LumaTheme.accent)
+                                                       : AnyShapeStyle(LumaTheme.surface),
+                                        in: Capsule())
+                            .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // Opacity stays live inside compare — no mode switch to tweak.
+            GradeOpacityRow(value: $app.settings.intensity)
+                .padding(.horizontal, 20)
+
+            HStack(spacing: 10) {
+                Button { dismiss() } label: {
+                    Text("Back to looks")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.white.opacity(0.14), lineWidth: 1))
+                }
+                .buttonStyle(.lumaPress)
+                .frame(maxWidth: .infinity)
+
+                SolidCTA(title: "Apply & Export ›", height: 52) {
+                    // Commit the grade as compared: drop the wipe (it is preview
+                    // chrome, never baked) and open G1 with the same lookState.
+                    releaseHold()
+                    app.lookState.splitFraction = nil
+                    app.saveGradeSession()
+                    app.exportError = nil
+                    LumaHaptics.shared.tap()
+                    showExportSheet = true
+                }
+                .frame(maxWidth: .infinity)
+                .layoutPriority(1)
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .background {
+            ZStack(alignment: .top) {
+                Rectangle().fill(LumaTheme.bar)
+                LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.03)],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 1)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     // MARK: - Playback
 
-    private var playbackBar: some View {
-        HStack(spacing: 14) {
+    private var transport: some View {
+        HStack(spacing: 12) {
             Button {
                 guard let player = app.player else { return }
                 if isPlaying { player.pause() } else { player.play() }
                 isPlaying.toggle()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
 
             Text(timeString(progress * duration))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.white)
-                .monospacedDigit()
                 .contentTransition(.numericText())
-                .animation(.snappy(duration: 0.2), value: progress)
 
             Slider(value: $progress, in: 0...1) { editing in
                 guard let player = app.player else { return }
@@ -183,14 +441,10 @@ struct BeforeAfterView: View {
             .tint(LumaTheme.accent)
 
             Text(timeString(duration))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
                 .foregroundStyle(LumaTheme.textSecondary)
-                .monospacedDigit()
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 8)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-        .opacity(app.player == nil ? 0.45 : 1)
+        .padding(.horizontal, 20)
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -220,53 +474,31 @@ struct BeforeAfterView: View {
         timeObserver = nil
     }
 
-    private func toggleTool(_ tool: String) {
-        withAnimation(.easeOut(duration: 0.15)) {
-            activeTool = activeTool == tool ? nil : tool
-        }
-    }
-
     // MARK: - Export
 
     private func startExport(spec: ExportSpec) {
         guard hasRealMedia else {
-            app.exportError = "Pick a video or photo from your library on the Select Clip screen to export."
+            app.exportError = "Pick a video or photo from your library first."
             return
         }
         isExporting = true
         Task {
-            let success = await app.exportCurrentVideo(spec: spec)
-            isExporting = false
-            if success {
-                app.path.append(.exportComplete)
-            }
-        }
-    }
-
-    private var exportOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.75).ignoresSafeArea()
-            VStack(spacing: 22) {
-                ZStack {
-                    Circle().stroke(LumaTheme.surfaceStrong, lineWidth: 8)
-                    Circle()
-                        .trim(from: 0, to: max(app.exporter.progress, 0.02))
-                        .stroke(LumaTheme.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeInOut, value: app.exporter.progress)
-                    Text("\(Int(app.exporter.progress * 100))%")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
+            // Batch grading (one look across a picked set) runs through the same
+            // exporter as a single clip; only the completion count differs.
+            if !app.batchItems.isEmpty {
+                let done = await app.runBatchExport(spec: spec)
+                isExporting = false
+                if done > 0 {
+                    LumaHaptics.shared.exportSuccess()
+                    app.path.append(.exportComplete)
                 }
-                .frame(width: 110, height: 110)
-
-                Text("Exporting your video…")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-
-                Button("Cancel") { app.exporter.cancel() }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
+            } else {
+                let success = await app.exportCurrentVideo(spec: spec)
+                isExporting = false
+                if success {
+                    LumaHaptics.shared.exportSuccess()
+                    app.path.append(.exportComplete)
+                }
             }
         }
     }

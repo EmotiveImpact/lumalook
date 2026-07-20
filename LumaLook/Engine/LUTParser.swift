@@ -248,3 +248,98 @@ enum LUTParser {
         return lut
     }
 }
+
+// MARK: - Pre-import inspection (G2)
+
+/// Read-only inspection used by the import sheet so a file can be validated
+/// and previewed BEFORE it is copied into the library. Shares the same
+/// content sniffing as `parseCubeFile` — detection must not drift between
+/// what the sheet reports and what the repository actually parses.
+extension LUTParser {
+    enum Format: String, CaseIterable, Hashable {
+        case cube = ".CUBE"
+        case threeDL = ".3DL"
+        case hald = "HALD PNG"
+    }
+
+    struct Inspection {
+        /// Format we recognised, or nil when the bytes match nothing we read.
+        let format: Format?
+        /// Parsed cube — non-nil exactly when the file is safe to import.
+        let lut: ParsedLUT?
+        /// Reader-facing reason the file cannot be imported.
+        let failure: String?
+        let byteCount: Int
+
+        var isValid: Bool { lut != nil }
+        /// "33-point" — the grid resolution users recognise from LUT vendors.
+        var pointCountText: String? { lut.map { "\($0.size)-point" } }
+    }
+
+    /// Sniffs `data`'s format without parsing it. Mirrors `parseCubeFile`'s
+    /// dispatch: PNG magic → HALD, first meaningful line of bare integers →
+    /// .3dl, any other text → .cube.
+    static func detectFormat(data: Data) -> Format? {
+        if data.count > 8, data.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]) { return .hald }
+        guard let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .isoLatin1) else { return nil }
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            if !tokens.isEmpty && tokens.allSatisfy({ Int($0) != nil }) { return .threeDL }
+            return .cube
+        }
+        return nil
+    }
+
+    static func inspect(url: URL) -> Inspection {
+        guard let data = try? Data(contentsOf: url) else {
+            return Inspection(format: nil, lut: nil,
+                              failure: "Couldn't read that file — it may have moved or be unreadable.",
+                              byteCount: 0)
+        }
+        let bytes = data.count
+        guard bytes > 0 else {
+            return Inspection(format: nil, lut: nil,
+                              failure: "The file is empty.", byteCount: 0)
+        }
+        guard let format = detectFormat(data: data) else {
+            return Inspection(format: nil, lut: nil,
+                              failure: "Not a recognised LUT — expected .cube, .3dl or a HALD PNG.",
+                              byteCount: bytes)
+        }
+        do {
+            let parsed = try parseCubeFile(at: url)
+            // A degenerate lattice parses but grades nothing; refuse it here
+            // rather than shipping an inert entry into the library.
+            guard parsed.size >= 2 else {
+                return Inspection(format: format, lut: nil,
+                                  failure: "Cube size \(parsed.size) — file appears truncated.",
+                                  byteCount: bytes)
+            }
+            return Inspection(format: format, lut: parsed, failure: nil, byteCount: bytes)
+        } catch let error as LUTParserError {
+            return Inspection(format: format, lut: nil,
+                              failure: readableReason(error, format: format), byteCount: bytes)
+        } catch {
+            return Inspection(format: format, lut: nil,
+                              failure: error.localizedDescription, byteCount: bytes)
+        }
+    }
+
+    private static func readableReason(_ error: LUTParserError, format: Format) -> String {
+        switch error {
+        case .missingSize:
+            return format == .threeDL
+                ? "No mesh header in this .3dl — the file appears truncated."
+                : "No LUT_3D_SIZE header — this .cube is truncated or not a LUT."
+        case .invalidData:
+            return format == .hald
+                ? "Not a HALD CLUT — a HALD PNG must be square with a cube-number side."
+                : "The colour data in this file could not be read."
+        case .wrongEntryCount(let expected, let actual):
+            return "Truncated LUT — expected \(expected) entries, found \(actual)."
+        }
+    }
+}

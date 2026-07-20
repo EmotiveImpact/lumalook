@@ -77,6 +77,7 @@ struct LumaRootView: View {
         case .cropFormat: CropFormatView()
         case .audio: AudioView()
         case .settings: SettingsSubscriptionView()
+        case .collections: CollectionsView()
         }
     }
 }

@@ -56,18 +56,7 @@ final class LUTRepository: ObservableObject {
     }
 
     func toggle(_ lut: LUTFile, in collection: LUTCollection) {
-        guard let li = luts.firstIndex(where: { $0.id == lut.id }),
-              let ci = collections.firstIndex(where: { $0.id == collection.id }) else { return }
-        var ids = luts[li].collectionIDs ?? []
-        if ids.contains(collection.id) {
-            ids.remove(collection.id)
-            collections[ci].orderedLUTIDs.removeAll { $0 == lut.id }
-        } else {
-            ids.insert(collection.id)
-            collections[ci].orderedLUTIDs.append(lut.id)
-        }
-        luts[li].collectionIDs = ids
-        saveCollections(); save()
+        toggleLook(id: "lut:\(lut.id.uuidString)", in: collection.id)
     }
 
     func setTags(_ tags: [String], for lut: LUTFile) {
@@ -79,6 +68,97 @@ final class LUTRepository: ObservableObject {
     /// Members of a collection in its stored order.
     func members(of collection: LUTCollection) -> [LUTFile] {
         collection.orderedLUTIDs.compactMap { id in luts.first { $0.id == id } }
+    }
+
+    // MARK: - G3 collections: widened membership, ordering, camera pin
+
+    /// A collection's members as `LibraryLook.id` strings, in stored order.
+    /// Pre-G3 indexes have no `orderedLookIDs`, so their LUT uuids are lifted
+    /// into the id scheme on read; the file itself migrates on the next write.
+    func memberLookIDs(of collection: LUTCollection) -> [String] {
+        collection.orderedLookIDs ?? collection.orderedLUTIDs.map { "lut:\($0.uuidString)" }
+    }
+
+    func contains(lookID: String, in collectionID: UUID) -> Bool {
+        guard let c = collections.first(where: { $0.id == collectionID }) else { return false }
+        return memberLookIDs(of: c).contains(lookID)
+    }
+
+    func addLook(id lookID: String, to collectionID: UUID) {
+        guard let ci = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        var ids = memberLookIDs(of: collections[ci])
+        guard !ids.contains(lookID) else { return }
+        ids.append(lookID)
+        writeMembers(ids, into: ci)
+        setCollectionBit(lookID, collectionID, member: true)
+        saveCollections(); save()
+    }
+
+    func removeLook(id lookID: String, from collectionID: UUID) {
+        guard let ci = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        var ids = memberLookIDs(of: collections[ci])
+        guard let at = ids.firstIndex(of: lookID) else { return }
+        ids.remove(at: at)
+        writeMembers(ids, into: ci)
+        setCollectionBit(lookID, collectionID, member: false)
+        saveCollections(); save()
+    }
+
+    func toggleLook(id lookID: String, in collectionID: UUID) {
+        if contains(lookID: lookID, in: collectionID) {
+            removeLook(id: lookID, from: collectionID)
+        } else {
+            addLook(id: lookID, to: collectionID)
+        }
+    }
+
+    func renameCollection(_ id: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[i].name = trimmed
+        saveCollections()
+    }
+
+    /// Display order of the collections list itself.
+    func moveCollections(fromOffsets source: IndexSet, toOffset destination: Int) {
+        collections.move(fromOffsets: source, toOffset: destination)
+        saveCollections()
+    }
+
+    /// The collection currently acting as the camera filmstrip palette.
+    var pinnedCollection: LUTCollection? {
+        collections.first { $0.pinnedToCamera == true }
+    }
+
+    /// Pins one collection to the camera filmstrip, unpinning any other.
+    /// Passing nil (or the already-pinned id) restores the default ordering.
+    func setPinnedCollection(_ id: UUID?) {
+        for i in collections.indices {
+            collections[i].pinnedToCamera = (collections[i].id == id) ? true : nil
+        }
+        saveCollections()
+    }
+
+    /// Canonical write: `orderedLookIDs` is the truth, `orderedLUTIDs` is kept
+    /// as its LUT-only projection so existing readers stay correct.
+    private func writeMembers(_ ids: [String], into index: Int) {
+        collections[index].orderedLookIDs = ids
+        collections[index].orderedLUTIDs = ids.compactMap(Self.lutID)
+    }
+
+    /// LUT files carry a reverse membership set used by the LUT manager's
+    /// filters — keep it in step for LUT members only.
+    private func setCollectionBit(_ lookID: String, _ collectionID: UUID, member: Bool) {
+        guard let uuid = Self.lutID(lookID),
+              let li = luts.firstIndex(where: { $0.id == uuid }) else { return }
+        var ids = luts[li].collectionIDs ?? []
+        if member { ids.insert(collectionID) } else { ids.remove(collectionID) }
+        luts[li].collectionIDs = ids
+    }
+
+    private static func lutID(_ lookID: String) -> UUID? {
+        guard lookID.hasPrefix("lut:") else { return nil }
+        return UUID(uuidString: String(lookID.dropFirst(4)))
     }
 
     func fileURL(for lut: LUTFile) -> URL {

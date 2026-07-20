@@ -99,133 +99,351 @@ enum GradeCubeBaker {
     }
 }
 
-// MARK: - Export spec sheet (queue #6 + #2-lite + #11)
+// MARK: - Export spec sheet (frame G1)
 
-/// Spec before render: resolution / codec / fps, live size estimate, the
-/// preview-parity trust line, and the .cube round-trip. Last spec sticks.
+/// Delivery spec before the render: resolution as three tap-cards, frame rate
+/// and bitrate as sliders with mono readouts, an HDR toggle that is only
+/// offered when the pipeline can honour it, a live size estimate, and the
+/// .cube round-trip. Reads and writes the same `lumalook.exportSpec` store
+/// the Settings "Export Quality" default writes, so the two never disagree.
 struct ExportSpecSheet: View {
     let durationSeconds: Double
     let gradeCubeTitle: String?        // nil = editor flow (no cube row)
     let lookState: LookState?
     let onExport: (ExportSpec) -> Void
 
+    @EnvironmentObject private var app: AppModel
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
     @AppStorage("lumalook.cubeSize") private var cubeSize = 33
     @State private var spec = ExportSpec()
     @State private var cubeURL: URL?
     @State private var isBaking = false
+    /// Resolved once per open from the source's format description.
+    @State private var sourceIsHLG = false
+
+    /// Discrete frame rates the slider snaps between — a continuous fps
+    /// slider produces rates no camera or platform actually uses.
+    private static let frameRates = [24, 25, 30, 48, 60]
 
     var body: some View {
-        // Scrollable so the Export CTA is always reachable — resolution/codec/
-        // fps + audio-only + Also-GIF + estimate + cube row exceed a short detent.
+        // Scrollable so the Export CTA is always reachable — cards + sliders +
+        // HDR + readouts + cube row exceed the panel's default detent.
         ScrollView {
-        VStack(spacing: 4) {
-            TechReadout("EXPORT", size: 10, color: LumaTheme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 6)
+            VStack(alignment: .leading, spacing: 14) {
+                header
 
-            specRow("Resolution", options: ExportSpec.Resolution.allCases.map(\.rawValue),
-                    selection: Binding(get: { spec.resolution.rawValue },
-                                       set: { spec.resolution = .init(rawValue: $0) ?? .hd1080 }))
-            Hairline()
-            specRow("Codec", options: ExportSpec.Codec.allCases.map(\.rawValue),
-                    selection: Binding(get: { spec.codec.rawValue },
-                                       set: { spec.codec = .init(rawValue: $0) ?? .hevc }))
-            Hairline()
-            specRow("Frame rate", options: ["24", "30", "60"],
-                    selection: Binding(get: { "\(spec.fps)" },
-                                       set: { spec.fps = Int($0) ?? 30 }))
+                if let error = app.exportError {
+                    preflightBanner(error, tone: LumaTheme.orange)
+                } else if let warning = preflightWarning {
+                    preflightBanner(warning, tone: LumaTheme.gold)
+                }
 
-            Hairline()
-            Toggle(isOn: $spec.audioOnly) {
-                Text("Audio only (M4A)")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-            }
-            .tint(LumaTheme.accentBright)
-            .padding(.vertical, 6)
+                if !spec.audioOnly {
+                    resolutionCards
+                    sliderRow(label: "Frame rate", value: fpsIndexBinding,
+                              range: 0...Double(Self.frameRates.count - 1),
+                              readout: "\(spec.fps)")
+                    sliderRow(label: "Bitrate", value: bitrateIndexBinding,
+                              range: 0...Double(ExportSpec.Bitrate.allCases.count - 1),
+                              readout: spec.bitrate.rawValue.uppercased())
+                    hdrRow
+                    codecRow
+                }
 
-            if !spec.audioOnly {
-                Toggle(isOn: $spec.alsoGIF) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Also save GIF")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                        Text("Looping, 12 fps, 480 px wide")
-                            .font(.system(size: 11)).foregroundStyle(LumaTheme.textMuted)
-                    }
+                deliveryReadout
+
+                Hairline()
+
+                Toggle(isOn: $spec.audioOnly) {
+                    Text("Audio only (M4A)")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                 }
                 .tint(LumaTheme.accentBright)
-                .padding(.vertical, 6)
-            }
 
-            HStack {
-                TechReadout(estimateLine, size: 9, color: LumaTheme.textMuted)
-                Spacer()
-                TechReadout("PREVIEW = EXPORT ✓", size: 9, color: LumaTheme.teal)
-            }
-            .padding(.top, 10)
+                if gradeCubeTitle != nil, !spec.audioOnly {
+                    cubeRow
+                }
 
-            if gradeCubeTitle != nil, !spec.audioOnly {
-                cubeRow
-                    .padding(.top, 10)
+                footer
             }
-
-            SolidCTA(title: spec.audioOnly ? "Export Audio" : "Export Video", height: 52) {
-                storedSpec = spec.rawValue
-                onExport(spec)
-            }
-            .padding(.top, 12)
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 18)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .onAppear { spec = ExportSpec.from(rawValue: storedSpec) }
-    }
-
-    private var estimateLine: String {
-        guard durationSeconds > 0 else { return "STILL IMAGE" }
-        let mbps: Double
-        switch (spec.resolution, spec.codec) {
-        case (.hd1080, .h264): mbps = 12
-        case (.uhd4K, .h264): mbps = 45
-        case (.hd1080, .hevc): mbps = 7
-        case (.uhd4K, .hevc): mbps = 28
+        .task {
+            spec = ExportSpec.from(rawValue: storedSpec)
+            if let url = app.selectedVideoURL, gradeCubeTitle != nil {
+                sourceIsHLG = await HDRDelivery.sourceIsHLG(url: url)
+            }
+            // A spec restored from storage can carry an HDR flag this source
+            // cannot honour; drop it rather than lying in the readout.
+            if !hdrAvailability.isAvailable { spec.hdr = false }
         }
-        let mb = durationSeconds * mbps / 8
-        let m = Int(durationSeconds) / 60, s = Int(durationSeconds) % 60
-        return String(format: "EST. %.0f MB · %02d:%02d", mb, m, s)
+        .onChange(of: hdrAvailability) { _, availability in
+            if !availability.isAvailable { spec.hdr = false }
+        }
     }
 
-    private func specRow(_ label: String, options: [String],
-                         selection: Binding<String>) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 14, weight: .semibold))
+    // MARK: Header
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Export")
+                .font(.system(size: 16, weight: .heavy))
                 .foregroundStyle(.white)
             Spacer()
+            TechReadout(sourceLine, size: 9, color: LumaTheme.textMuted)
+        }
+    }
+
+    /// "TRAVEL VLOG · 00:18" — confirms what is being exported, matching the
+    /// dimmed preview still visible behind the sheet.
+    private var sourceLine: String {
+        let title = gradeCubeTitle == nil ? app.editor.projectTitle : app.selectedLook.name
+        guard durationSeconds > 0 else { return title }
+        return "\(title) · \(clock(durationSeconds))"
+    }
+
+    private func clock(_ seconds: Double) -> String {
+        String(format: "%02d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+    }
+
+    // MARK: Resolution cards
+
+    private var resolutionCards: some View {
+        HStack(spacing: 8) {
+            resolutionCard(.uhd4K, title: "4K", sub: "2160p")
+            resolutionCard(.hd1080, title: "HD", sub: "1080p")
+            resolutionCard(.hd720, title: "720", sub: "Fast")
+        }
+        .sensoryFeedback(.selection, trigger: spec.resolution)
+    }
+
+    private func resolutionCard(_ resolution: ExportSpec.Resolution,
+                                title: String, sub: String) -> some View {
+        let selected = spec.resolution == resolution
+        return Button {
+            spec.resolution = resolution
+            // 720 is the fast tier and has no HEVC preset — keep the codec
+            // readout truthful about what will actually be written.
+            if resolution == .hd720 { spec.codec = .h264 }
+        } label: {
+            VStack(spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: selected ? .heavy : .bold))
+                    .foregroundStyle(selected ? LumaTheme.accentBright : .white)
+                TechReadout(sub, size: 9, color: selected ? LumaTheme.accentBright.opacity(0.8)
+                                                          : LumaTheme.textMuted)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(selected ? LumaTheme.accentSoft : LumaTheme.surface,
+                        in: RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13)
+                .strokeBorder(selected ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
+                              lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    // MARK: Sliders
+
+    private var fpsIndexBinding: Binding<Double> {
+        Binding(
+            get: { Double(Self.frameRates.firstIndex(of: spec.fps) ?? 2) },
+            set: { spec.fps = Self.frameRates[Int($0.rounded())] }
+        )
+    }
+
+    private var bitrateIndexBinding: Binding<Double> {
+        Binding(
+            get: { Double(ExportSpec.Bitrate.allCases.firstIndex(of: spec.bitrate) ?? 2) },
+            set: { spec.bitrate = ExportSpec.Bitrate.allCases[Int($0.rounded())] }
+        )
+    }
+
+    private func sliderRow(label: String, value: Binding<Double>,
+                           range: ClosedRange<Double>, readout: String) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 78, alignment: .leading)
+            Slider(value: value, in: range, step: 1)
+                .tint(LumaTheme.accent)
+            TechReadout(readout, size: 10, color: .white)
+                .frame(width: 62, alignment: .trailing)
+        }
+        .sensoryFeedback(.selection, trigger: readout)
+    }
+
+    // MARK: HDR
+
+    private var hdrAvailability: HDRDelivery.Availability {
+        HDRDelivery.availability(
+            sourceIsHLG: sourceIsHLG,
+            logConversionActive: app.conversionProfile != nil || app.conversionLUT != nil,
+            spec: spec,
+            isTimeline: gradeCubeTitle == nil)
+    }
+
+    private var hdrRow: some View {
+        let availability = hdrAvailability
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: $spec.hdr) {
+                Text("HDR (HLG)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(availability.isAvailable ? .white : LumaTheme.textMuted)
+            }
+            .tint(LumaTheme.accentBright)
+            .disabled(!availability.isAvailable)
+
+            if let reason = availability.reason {
+                Text(reason)
+                    .font(.system(size: 11))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(LumaTheme.hairline, lineWidth: 1))
+    }
+
+    // MARK: Codec
+
+    private var codecRow: some View {
+        HStack(spacing: 12) {
+            Text("Codec")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 78, alignment: .leading)
+            Spacer()
             HStack(spacing: 2) {
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        selection.wrappedValue = option
-                    } label: {
-                        Text(option)
+                ForEach(ExportSpec.Codec.allCases, id: \.rawValue) { codec in
+                    Button { spec.codec = codec } label: {
+                        Text(codecLabel(codec))
                             .font(.system(size: 12, weight: .bold).monospacedDigit())
-                            .foregroundStyle(selection.wrappedValue == option ? .white : LumaTheme.textSecondary)
+                            .foregroundStyle(spec.codec == codec ? .white : LumaTheme.textSecondary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
-                            .background(selection.wrappedValue == option
+                            .background(spec.codec == codec
                                         ? AnyShapeStyle(LumaTheme.accent)
                                         : AnyShapeStyle(.clear),
                                         in: RoundedRectangle(cornerRadius: 8))
                     }
                     .buttonStyle(.lumaPress)
+                    // 720 ships H.264 only — offering HEVC here would lie.
+                    .disabled(spec.resolution == .hd720 && codec == .hevc)
+                    .opacity(spec.resolution == .hd720 && codec == .hevc ? 0.35 : 1)
                 }
             }
             .padding(2)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
         }
-        .padding(.vertical, 7)
-        .sensoryFeedback(.selection, trigger: selection.wrappedValue)
+        .sensoryFeedback(.selection, trigger: spec.codec)
+    }
+
+    private func codecLabel(_ codec: ExportSpec.Codec) -> String {
+        codec == .hevc ? "H.265" : "H.264"
+    }
+
+    // MARK: Estimate + delivery spec
+
+    /// Live: recomputes on every resolution / bitrate / codec / fps change.
+    private var estimateLine: String {
+        if spec.audioOnly {
+            guard durationSeconds > 0 else { return "EST. —" }
+            // AAC stereo at the M4A preset's 128 kbps.
+            return String(format: "EST. %.0f MB", durationSeconds * 0.128 / 8)
+        }
+        guard durationSeconds > 0 else { return "STILL IMAGE" }
+        let mb = Double(spec.estimatedMegabytes(durationSeconds: durationSeconds))
+        return mb >= 1000
+            ? String(format: "EST. SIZE %.1f GB", mb / 1000)
+            : String(format: "EST. SIZE %.0f MB", mb)
+    }
+
+    private var deliverySpecLine: String {
+        if spec.audioOnly { return "AAC · M4A" }
+        let colour = spec.hdr ? "HLG" : "REC.709"
+        return "\(codecLabel(spec.codec)) · \(colour) · AAC"
+    }
+
+    private var deliveryReadout: some View {
+        HStack {
+            TechReadout(estimateLine, size: 9, color: LumaTheme.textSecondary)
+            Spacer()
+            TechReadout(deliverySpecLine, size: 9, color: LumaTheme.textMuted)
+        }
+    }
+
+    // MARK: Preflight
+
+    /// The exporter's own preflight throws on thermal/disk; surfacing the same
+    /// two conditions here means the user is warned before the long render,
+    /// not after it dies.
+    private var preflightWarning: String? {
+        if ProcessInfo.processInfo.thermalState == .critical {
+            return "Your iPhone is too hot to export safely. Let it cool down for a minute."
+        }
+        guard durationSeconds > 0, !spec.audioOnly else { return nil }
+        let needed = spec.estimatedMegabytes(durationSeconds: durationSeconds) + 200
+        let values = try? URL(fileURLWithPath: NSHomeDirectory())
+            .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let free = values?.volumeAvailableCapacityForImportantUsage else { return nil }
+        if free < Int64(needed) * 1_000_000 {
+            return "Not enough free space — this export needs about \(needed) MB. Try a lower resolution or bitrate."
+        }
+        return nil
+    }
+
+    private func preflightBanner(_ text: String, tone: Color) -> some View {
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(tone.opacity(0.5), lineWidth: 1))
+    }
+
+    // MARK: Footer
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            // GIF transcode is wired in the editor export path only; the grade
+            // flow would draw a control nothing reads, so it isn't drawn.
+            if !spec.audioOnly, gradeCubeTitle == nil {
+                Button {
+                    spec.alsoGIF.toggle()
+                    LumaHaptics.shared.tap()
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: "square.stack.3d.down.forward")
+                            .font(.system(size: 15, weight: .semibold))
+                        TechReadout("GIF", size: 9, color: spec.alsoGIF ? .white : LumaTheme.textSecondary)
+                    }
+                    .foregroundStyle(spec.alsoGIF ? .white : LumaTheme.textSecondary)
+                    .frame(width: 62, height: 52)
+                    .background(spec.alsoGIF ? LumaTheme.accentSoft : LumaTheme.surface,
+                                in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(spec.alsoGIF ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
+                                      lineWidth: 1))
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Also save a looping GIF")
+            }
+            SolidCTA(title: spec.audioOnly ? "Export audio" : "Export video", height: 52) {
+                storedSpec = spec.rawValue
+                app.exportError = nil
+                onExport(spec)
+            }
+        }
     }
 
     @ViewBuilder

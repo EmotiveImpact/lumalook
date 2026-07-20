@@ -2,181 +2,296 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
+/// E1 — create-first Home. Hierarchy is hero → two half-tiles → recents rail
+/// → discovery rail; every card lands on a real destination.
 struct HomeView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
+    @StateObject private var packThumbs = HomePackThumbs()
+    @State private var showPaywall = false
+
+    /// Recents are real only when the user has projects or saved grades.
+    /// `LUMA_SEED_HOMEEMPTY=1` forces the invite state so the empty rail can
+    /// be verified on a device that already has work in it.
+    private var hasRecents: Bool {
+        if ProcessInfo.processInfo.environment["LUMA_SEED_HOMEEMPTY"] == "1" { return false }
+        return !app.store.projects.isEmpty || !app.store.gradeSessions.isEmpty
+    }
 
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 26) {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
-                        HomeTile(title: "Apply a Look", subtitle: "Quickly color grade your footage",
-                                 icon: "camera.filters", gradient: LumaTheme.tilePurple,
-                                 iconTint: Color(red: 0.85, green: 0.78, blue: 1.0)) {
-                            app.path.append(.selectClip)
-                        }
-                        HomeTile(title: "Edit a Video", subtitle: "Edit clips, add music and create",
-                                 icon: "square.and.pencil", gradient: LumaTheme.tileTeal,
-                                 iconTint: Color(red: 0.55, green: 0.95, blue: 0.85)) {
-                            app.path.append(.editor)
-                        }
-                        HomeTile(title: "Camera", subtitle: "Shoot with live cinematic looks",
-                                 icon: "camera.fill", gradient: LumaTheme.tileAmber,
-                                 iconTint: .white) {
-                            app.path.append(.camera)
-                        }
-                        HomeTile(title: "Import LUT", subtitle: "Import .cube LUTs and apply",
-                                 icon: "square.and.arrow.down", gradient: LumaTheme.tileIndigo,
-                                 iconTint: Color(red: 0.72, green: 0.74, blue: 1.0)) {
-                            app.path.append(.lutManager)
-                        }
+                VStack(alignment: .leading, spacing: 22) {
+                    createBlock
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        recentsHeader
+                        RecentsRail(store: app.store, hasRecents: hasRecents)
                     }
 
-                    // "See All" only once REAL work exists — over the sample
-                    // cards it landed new users on an empty Projects screen.
-                    if app.store.projects.isEmpty && app.store.gradeSessions.isEmpty {
-                        SectionHeader(title: "Recent Projects")
-                            .padding(.top, 6)
-                    } else {
-                        SectionHeader(title: "Recent Projects", actionTitle: "See All") {
-                            app.path.append(.projectLibrary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "Looks of the week", actionTitle: "Store") {
+                            app.tab = .store
+                            LumaHaptics.shared.tap()
                         }
-                        .padding(.top, 6)
+                        .padding(.horizontal, 20)
+                        looksOfTheWeek
                     }
-
-                    RecentProjectsRow(store: app.store)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 16)
-                .padding(.bottom, 24)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
             }
         }
-        // STICKY header: the wordmark bar is pinned; tiles scroll under it.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            ZStack(alignment: .top) {
-                HStack {
-                    Button { app.path.append(.settings) } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(.white)
-                    }
-                    Spacer()
-                    Button { app.path.append(.settings) } label: {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(LumaTheme.gold)
-                    }
-                }
-                .padding(.top, 6)
-
-                VStack(spacing: 8) {
-                    LumaWordmark(size: 34)
-                    Text("Cinematic looks for your world")
-                        .font(.system(size: 15))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 22)
-            }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 10)
-            .background {
-                // Solid brand background so scrolling content passes under
-                // cleanly — no material, no seam.
-                LumaTheme.background.ignoresSafeArea(edges: .top)
-            }
-        }
+        // STICKY header: the wordmark bar is pinned; content scrolls under it.
+        .safeAreaInset(edge: .top, spacing: 0) { header }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .onAppear { packThumbs.render(featuredPacks) }
+        .onChange(of: app.packStore.installedPackIDs) { _, _ in
+            packThumbs.render(featuredPacks)
+        }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            LumaWordmark(size: 21)
+            Spacer(minLength: 8)
+            Button {
+                // Pro is a real state: subscribers manage it in Settings,
+                // everyone else gets the paywall.
+                if storeService.isPro { app.path.append(.settings) } else { showPaywall = true }
+                LumaHaptics.shared.tap()
+            } label: {
+                if storeService.isPro {
+                    HStack(spacing: 5) {
+                        Image(systemName: "crown.fill").font(.system(size: 12))
+                        TechReadout("PRO", size: 10, color: LumaTheme.gold)
+                    }
+                    .foregroundStyle(LumaTheme.gold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(LumaTheme.gold.opacity(0.14), in: Capsule())
+                    .overlay(Capsule().strokeBorder(LumaTheme.gold.opacity(0.35), lineWidth: 1))
+                } else {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(LumaTheme.gold)
+                        .frame(width: 38, height: 34)
+                }
+            }
+            .buttonStyle(.lumaPress)
+            Button { app.path.append(.settings) } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.lumaPress)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .background {
+            // Solid brand background so scrolling content passes under
+            // cleanly — no material, no seam.
+            LumaTheme.background.ignoresSafeArea(edges: .top)
+        }
+    }
+
+    // MARK: Create block — hero + two half-tiles
+
+    private var createBlock: some View {
+        VStack(spacing: 10) {
+            Button {
+                app.editor.startNewProject()
+                app.path.append(.editor)
+                LumaHaptics.shared.tap()
+            } label: {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("New project")
+                            .font(.system(size: 19, weight: .heavy))
+                            .foregroundStyle(.white)
+                        Text("Edit clips, music, looks")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 15))
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(LumaTheme.tilePurple, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(LumaTheme.accentBright.opacity(0.30), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
+            }
+            .buttonStyle(.lumaPress)
+
+            HStack(spacing: 10) {
+                HomeHalfTile(icon: "camera.fill", title: "Camera", subtitle: "Live looks",
+                             gradient: LumaTheme.tileAmber, iconTint: .white) {
+                    app.path.append(.camera)
+                }
+                HomeHalfTile(icon: "camera.filters", title: "Apply Look", subtitle: "Grade in 2 taps",
+                             gradient: LumaTheme.tileTeal,
+                             iconTint: Color(red: 0.55, green: 0.95, blue: 0.85)) {
+                    app.path.append(.selectClip)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    // MARK: Recents
+
+    /// "See All" only once REAL work exists — over the invite cards it landed
+    /// new users on an empty Projects screen.
+    @ViewBuilder private var recentsHeader: some View {
+        if hasRecents {
+            SectionHeader(title: "Recent projects", actionTitle: "See All") {
+                app.path.append(.projectLibrary)
+            }
+            .padding(.horizontal, 20)
+        } else {
+            SectionHeader(title: "Recent projects")
+                .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: Looks of the week
+
+    /// Real catalog packs, newest first, hiding what the user already owns —
+    /// a rail of packs they cannot act on is not discovery.
+    private var featuredPacks: [LookPack] {
+        let ordered = HomeFeatured.newestFirst(PackCatalog.packs)
+        let unowned = ordered.filter { !app.packStore.isInstalled($0) }
+        return Array((unowned.isEmpty ? ordered : unowned).prefix(6))
+    }
+
+    private var looksOfTheWeek: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(featuredPacks) { pack in
+                    PackTile(pack: pack, image: packThumbs.images[pack.id]) {
+                        app.selectedPackID = pack.id
+                        app.path.append(.filterPack)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
     }
 }
 
-private struct RecentProjectsRow: View {
+// MARK: - Recents rail
+
+private struct RecentsRail: View {
     @EnvironmentObject private var app: AppModel
     @ObservedObject var store: PersistenceStore
-
-    /// Reference-style sample projects shown until real ones exist — the
-    /// rich photography is what makes the reference Home feel finished.
-    private static let samples: [(title: String, duration: String, photo: HeroPhoto)] = [
-        ("Travel Vlog", "00:18", .golden),
-        ("Dreamscape", "00:34", .coast),
-        ("City Lights", "00:26", .night),
-    ]
+    let hasRecents: Bool
 
     var body: some View {
-        if store.projects.isEmpty && store.gradeSessions.isEmpty {
+        if hasRecents {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(Self.samples, id: \.title) { sample in
-                        Button {
-                            app.editor.startNewProject()
-                            app.path.append(.editor)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HeroImage(photo: sample.photo, radius: 14)
-                                    .frame(width: 164, height: 118)
-                                    .overlay(alignment: .topTrailing) {
-                                        Text("SAMPLE")
-                                            .font(.system(size: 8, weight: .heavy))
-                                            .tracking(1.2)
-                                            .foregroundStyle(.white.opacity(0.85))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(.black.opacity(0.45), in: Capsule())
-                                            .padding(6)
-                                    }
-                                    .overlay(RoundedRectangle(cornerRadius: 14)
-                                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
-                                Text(sample.title)
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                Text(sample.duration)
-                                    .font(.system(size: 14))
-                                    .monospacedDigit()
-                                    .foregroundStyle(LumaTheme.textMuted)
-                            }
-                            .frame(width: 164)
-                        }
-                        .buttonStyle(.lumaPress)
+                HStack(spacing: 10) {
+                    // Both are valid recents; the grade poster carries a badge
+                    // and a violet edge so it never reads as a project.
+                    ForEach(store.gradeSessions.prefix(3)) { session in
+                        GradeSessionPoster(session: session)
+                    }
+                    ForEach(Array(store.projects.prefix(6).enumerated()), id: \.element.id) { index, project in
+                        ProjectPoster(project: project, store: store,
+                                      fallback: MockScene.allCases[index % MockScene.allCases.count])
                     }
                 }
+                .padding(.horizontal, 20)
             }
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(store.gradeSessions.prefix(3)) { session in
-                        GradeSessionCard(session: session)
-                    }
-                    ForEach(Array(store.projects.prefix(5).enumerated()), id: \.element.id) { index, project in
-                        Button {
-                            app.editor.load(project: project)
-                            app.path.append(.editor)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ProjectThumb(project: project, store: store,
-                                             fallback: MockScene.allCases[index % MockScene.allCases.count])
-                                    .frame(width: 164, height: 118)
-                                Text(project.title)
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                Text(project.updatedAt.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(LumaTheme.textMuted)
-                            }
-                            .frame(width: 164)
-                        }
-                        .buttonStyle(.lumaPress)
-                    }
+            // No work yet: invite creation rather than render an empty rail
+            // or sample posters the user cannot actually open.
+            HStack(spacing: 10) {
+                InviteCard(icon: "plus", title: "Start a project",
+                           subtitle: "Add clips and edit") {
+                    app.editor.startNewProject()
+                    app.path.append(.editor)
+                    LumaHaptics.shared.tap()
+                }
+                InviteCard(icon: "camera.fill", title: "Shoot something",
+                           subtitle: "Record with a look") {
+                    app.path.append(.camera)
+                    LumaHaptics.shared.tap()
                 }
             }
+            .padding(.horizontal, 20)
         }
     }
 }
 
-/// A saved Apply-a-Look session in Recents: real media thumb + GRADE badge;
-/// tap restores the exact grade (queue #13).
-private struct GradeSessionCard: View {
+/// Poster geometry is shared by every recents card so the rail stays even.
+private enum Poster {
+    static let width: CGFloat = 124
+    static let height: CGFloat = 150
+    static let radius: CGFloat = 14
+
+    static func duration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+
+    /// Bottom scrim so white type survives a bright frame.
+    static var scrim: LinearGradient {
+        LinearGradient(colors: [.clear, .black.opacity(0.15), .black.opacity(0.78)],
+                       startPoint: .center, endPoint: .bottom)
+    }
+}
+
+private struct ProjectPoster: View {
+    @EnvironmentObject private var app: AppModel
+    let project: StoredProject
+    let store: PersistenceStore
+    var fallback: MockScene
+
+    var body: some View {
+        Button {
+            app.editor.load(project: project)
+            app.path.append(.editor)
+            LumaHaptics.shared.tap()
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                ProjectThumb(project: project, store: store, fallback: fallback)
+                    .frame(width: Poster.width, height: Poster.height)
+                Poster.scrim
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(project.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    TechReadout(Poster.duration(project.duration), size: 10,
+                                color: .white.opacity(0.75))
+                }
+                .padding(10)
+            }
+            .frame(width: Poster.width, height: Poster.height)
+            .clipShape(RoundedRectangle(cornerRadius: Poster.radius))
+            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// A saved Apply-a-Look session in Recents: real media frame + GRADE badge;
+/// tap restores the exact grade.
+private struct GradeSessionPoster: View {
     @EnvironmentObject private var app: AppModel
     let session: GradeSession
     @State private var thumb: CGImage?
@@ -184,8 +299,9 @@ private struct GradeSessionCard: View {
     var body: some View {
         Button {
             app.restoreGradeSession(session)
+            LumaHaptics.shared.tap()
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomLeading) {
                 Group {
                     if let thumb {
                         Color.clear.overlay {
@@ -197,29 +313,34 @@ private struct GradeSessionCard: View {
                         LumaTheme.surfaceStrong
                     }
                 }
-                .frame(width: 164, height: 118)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(alignment: .topTrailing) {
-                    TechReadout("GRADE", size: 8, color: .white.opacity(0.9))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(LumaTheme.accent.opacity(0.85), in: Capsule())
-                        .padding(6)
+                .frame(width: Poster.width, height: Poster.height)
+                Poster.scrim
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.baseLookName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(session.updatedAt.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
-                .overlay(RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1))
-                Text(session.baseLookName)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(session.updatedAt.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(size: 14))
-                    .foregroundStyle(LumaTheme.textMuted)
+                .padding(10)
             }
-            .frame(width: 164)
+            .frame(width: Poster.width, height: Poster.height)
+            .clipShape(RoundedRectangle(cornerRadius: Poster.radius))
+            .overlay(alignment: .topLeading) {
+                TechReadout("GRADE", size: 9, color: .white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(LumaTheme.accent, in: Capsule())
+                    .padding(8)
+            }
+            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
+                .strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1))
         }
         .buttonStyle(.lumaPress)
         .task {
+            guard thumb == nil else { return }
             let url = app.store.sessionMediaURL(session)
             if session.isVideo {
                 let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
@@ -236,54 +357,207 @@ private struct GradeSessionCard: View {
     }
 }
 
-private struct HomeTile: View {
+private struct InviteCard: View {
+    let icon: String
     let title: String
     let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(LumaTheme.accentBright)
+                    .frame(width: 38, height: 38)
+                    .background(LumaTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12))
+                Spacer(minLength: 8)
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(LumaTheme.textMuted)
+                    .lineLimit(1)
+            }
+            .padding(12)
+            .frame(width: Poster.width, height: Poster.height, alignment: .topLeading)
+            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: Poster.radius))
+            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .foregroundStyle(LumaTheme.border))
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+// MARK: - Looks of the week
+
+private struct PackTile: View {
+    let pack: LookPack
+    let image: CGImage?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                Group {
+                    if let image {
+                        Color.clear.overlay {
+                            Image(decorative: image, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                    } else {
+                        // Pipeline render pending — the pack's own hero photo
+                        // holds the frame rather than an empty box.
+                        HeroImage(photo: pack.photo, radius: 0)
+                    }
+                }
+                .frame(width: 96, height: 110)
+                Poster.scrim
+                Text(pack.name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .padding(8)
+            }
+            .frame(width: 96, height: 110)
+            .clipShape(RoundedRectangle(cornerRadius: 13))
+            .overlay(alignment: .topTrailing) {
+                if HomeFeatured.isNew(pack) {
+                    TechReadout("NEW", size: 8, color: .white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(LumaTheme.accent, in: Capsule())
+                        .padding(6)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 13)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// Which catalog packs count as "of the week". Release dates come from the
+/// shipping record (ROADMAP: the 102-stock film archive landed 2026-07-12);
+/// packs with no entry predate it and never read as new. The badge expires on
+/// its own after `newWindow`, so it can never go stale on the shelf.
+private enum HomeFeatured {
+    static let newWindow: TimeInterval = 30 * 24 * 3600
+
+    private static let released: [String: Date] = {
+        var out: [String: Date] = [:]
+        var components = DateComponents()
+        components.year = 2026; components.month = 7; components.day = 12
+        guard let filmArchiveDate = Calendar(identifier: .gregorian).date(from: components) else { return out }
+        for id in ["film-stocks-01", "film-neg-archive", "film-slide-archive",
+                   "film-mono-archive", "film-instant-lab", "film-mirrorless-sims"] {
+            out[id] = filmArchiveDate
+        }
+        return out
+    }()
+
+    static func isNew(_ pack: LookPack, on date: Date = Date()) -> Bool {
+        guard let released = released[pack.id] else { return false }
+        let age = date.timeIntervalSince(released)
+        return age >= 0 && age < newWindow
+    }
+
+    /// Newest release first, catalog order preserved inside each group.
+    static func newestFirst(_ packs: [LookPack]) -> [LookPack] {
+        packs.filter { isNew($0) } + packs.filter { !isNew($0) }
+    }
+}
+
+/// Renders one representative look per featured pack through the real
+/// pipeline onto the shared preview frame — the same source `LookThumbs`
+/// uses, so Home shows the grade, never stock art.
+@MainActor
+private final class HomePackThumbs: ObservableObject {
+    @Published private(set) var images: [String: CGImage] = [:]
+    private var task: Task<Void, Never>?
+    private var lastStamp = ""
+
+    func render(_ packs: [LookPack]) {
+        let stamp = packs.map(\.id).joined(separator: ",")
+        guard stamp != lastStamp else { return }
+        lastStamp = stamp
+
+        let jobs: [(id: String, look: PackLook)] = packs.compactMap { pack in
+            pack.looks.first.map { (pack.id, $0) }
+        }
+        let source = LookThumbs.fallbackFrame
+        task?.cancel()
+        task = Task.detached(priority: .utility) { [weak self] in
+            for job in jobs {
+                if Task.isCancelled { return }
+                let state = LookState()
+                if let cubeFile = job.look.cubeFile,
+                   let url = Bundle.main.url(
+                       forResource: (cubeFile as NSString).deletingPathExtension,
+                       withExtension: "cube") {
+                    state.lut = try? LookPipeline.shared.loadLUT(at: url)
+                } else {
+                    state.recipe = job.look.recipe
+                }
+                var settings = LookSettings()
+                settings.intensity = 100
+                state.settings = settings
+                if let cg = LookPipeline.shared.gradedStill(source, state: state, maxDimension: 220) {
+                    await MainActor.run { self?.images[job.id] = cg }
+                }
+            }
+        }
+    }
+}
+
+private struct HomeHalfTile: View {
     let icon: String
+    let title: String
+    let subtitle: String
     let gradient: LinearGradient
     var iconTint: Color = .white
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: icon)
-                    .font(.system(size: 30, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(iconTint)
-                    .frame(height: 44)
+                    .frame(height: 30)
                     // Reference-style soft light pooled around the icon.
                     .background(
-                        RadialGradient(colors: [iconTint.opacity(0.35), .clear],
-                                       center: .center, startRadius: 2, endRadius: 64)
-                            .frame(width: 130, height: 130)
+                        RadialGradient(colors: [iconTint.opacity(0.30), .clear],
+                                       center: .center, startRadius: 2, endRadius: 54)
+                            .frame(width: 110, height: 110)
                     )
-                Spacer(minLength: 2)
-                Text(title.uppercased())
-                    .font(.system(size: 17, weight: .heavy))
-                    .tracking(0.6)
+                Spacer(minLength: 10)
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.85)
                 Text(subtitle)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-            .background(gradient, in: RoundedRectangle(cornerRadius: 20))
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            .background(gradient, in: RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.02)],
+                        LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.02)],
                                        startPoint: .top, endPoint: .bottom),
                         lineWidth: 1
                     )
             )
-            .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
         }
         .buttonStyle(.lumaPress)
     }

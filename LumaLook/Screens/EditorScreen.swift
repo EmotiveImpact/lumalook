@@ -22,6 +22,7 @@ struct EditorTimelineView: View {
     @State private var trimStart: Double = 0
     @State private var trimEnd: Double = 1
     @State private var showLooksStrip = false
+    @State private var showSpeedPanel = false
     @State private var showMusicPanel = false
     @State private var showClipAudioPanel = false
     @State private var selectedAudioID: UUID?
@@ -53,6 +54,7 @@ struct EditorTimelineView: View {
                 trimStart: $trimStart,
                 trimEnd: $trimEnd,
                 showLooksStrip: $showLooksStrip,
+                showSpeedPanel: $showSpeedPanel,
                 showMusicPanel: $showMusicPanel,
                 showClipAudioPanel: $showClipAudioPanel,
                 selectedAudioID: $selectedAudioID,
@@ -63,6 +65,9 @@ struct EditorTimelineView: View {
                 exportError: exportError,
                 onBack: { dismiss() },
                 onAdd: { showAddPicker = true },
+                // B1: the second empty-state CTA — shoot straight into the
+                // live-look camera instead of leaving to find footage.
+                onRecord: { app.path.append(.camera) },
                 onAddOverlay: { showOverlayPicker = true },
                 onAddSticker: { showStickerLibrary = true },
                 onOpenMask: { showMaskPanel = true },
@@ -314,6 +319,32 @@ struct EditorTimelineView: View {
                         await editor.addAudioTrack(importedURL: imported,
                                                    title: url.deletingPathExtension().lastPathComponent)
                     }
+                }
+            }
+            // B2/B3 verification hooks. LUMA_SEED_SELECTCLIP=1 selects the
+            // first clip so the contextual action chips render;
+            // LUMA_SEED_TOOLPANEL=trim|speed|clipaudio|overlay opens that
+            // panel so the push-up layout can be captured headlessly.
+            if env["LUMA_SEED_SELECTCLIP"] == "1" || env["LUMA_SEED_TOOLPANEL"] != nil {
+                for _ in 0..<40 where editor.clips.isEmpty || editor.isRebuilding {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                editor.selectedClipID = editor.clips.first?.id
+            }
+            if let panel = env["LUMA_SEED_TOOLPANEL"] {
+                switch panel {
+                case "trim":
+                    if let clip = editor.selectedClip {
+                        trimStart = clip.trimStart
+                        trimEnd = clip.trimEnd
+                    }
+                    showTrimPanel = true
+                case "speed":     showSpeedPanel = true
+                case "clipaudio": showClipAudioPanel = true
+                case "overlay":
+                    selectedOverlayID = editor.overlays.first?.id
+                    showOverlayPanel = editor.overlays.first != nil
+                default: break
                 }
             }
             // Open an audio panel for verification: "music" → the music/clip
@@ -1164,6 +1195,7 @@ private struct EditorContent: View {
     @Binding var trimStart: Double
     @Binding var trimEnd: Double
     @Binding var showLooksStrip: Bool
+    @Binding var showSpeedPanel: Bool
     @Binding var showMusicPanel: Bool
     @Binding var showClipAudioPanel: Bool
     @Binding var selectedAudioID: UUID?
@@ -1174,6 +1206,7 @@ private struct EditorContent: View {
     let exportError: String?
     let onBack: () -> Void
     let onAdd: () -> Void
+    let onRecord: () -> Void
     let onAddOverlay: () -> Void
     let onAddSticker: () -> Void
     let onOpenMask: () -> Void
@@ -1199,6 +1232,16 @@ private struct EditorContent: View {
     @State private var envelopeTrackID: UUID?
     /// Audio lane whose effects are being edited (C1–C5).
     @State private var effectsTrackID: UUID?
+    /// Timeline zoom (points per second), shared by the transport's zoom
+    /// control and the scroller's pinch so they can't disagree.
+    @State private var timelineZoom: CGFloat = 50
+    /// B3: a tool panel is up, so the preview compresses and a mini timeline
+    /// strip takes over from the full stack. Strip-height pickers (looks,
+    /// transitions) sit below the preview already and are excluded.
+    private var toolPanelOpen: Bool {
+        showTrimPanel || showMusicPanel || showClipAudioPanel
+            || showOverlayPanel || showSpeedPanel
+    }
 
     var body: some View {
         // Editor-app composition (not a page): the preview flexes to fill,
@@ -1209,38 +1252,52 @@ private struct EditorContent: View {
                 .padding(.top, 6)
                 .padding(.bottom, 10)
 
+            // B3: the preview compresses upward when a panel is open — it is
+            // never covered, and the panel gets the whole area below it.
             preview
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity,
+                       maxHeight: toolPanelOpen ? ToolPanelMetrics.compressedPreview : .infinity)
                 .background(.black)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 10)
 
-            transport
-                .padding(.horizontal, 22)
-                .padding(.vertical, 8)
+            if toolPanelOpen {
+                // Scrubbing stays possible while a value is tuned.
+                MiniTimelineStrip(editor: editor, zoom: timelineZoom)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                Spacer(minLength: 0)
+            } else {
+                transport
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 8)
 
-            // Timeline V2: edge-to-edge so the fixed playhead sits at true
-            // screen centre and content scrolls under it.
-            timeline
-                .padding(.bottom, 10)
+                clipActionChips
 
-            if let exportError {
-                Text(exportError)
-                    .font(.system(size: 13))
-                    .foregroundStyle(LumaTheme.orange)
-                    .padding(.bottom, 6)
-                    .transition(.opacity)
-            }
+                // Timeline V2: edge-to-edge so the fixed playhead sits at true
+                // screen centre and content scrolls under it.
+                timeline
+                    .padding(.bottom, 10)
 
-            dock
-                .overlay(alignment: .top) {
-                    if editor.isRecordingVoiceover {
-                        InputMeterView(level: editor.inputLevel)
-                            .offset(y: -46)
-                            .transition(.opacity)
-                    }
+                if let exportError {
+                    Text(exportError)
+                        .font(.system(size: 13))
+                        .foregroundStyle(LumaTheme.orange)
+                        .padding(.bottom, 6)
+                        .transition(.opacity)
                 }
+
+                dock
+                    .overlay(alignment: .top) {
+                        if editor.isRecordingVoiceover {
+                            InputMeterView(level: editor.inputLevel)
+                                .offset(y: -46)
+                                .transition(.opacity)
+                        }
+                    }
+            }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.88), value: toolPanelOpen)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selectedClipID != nil)
         // One physical thump whenever the timeline structure changes
@@ -1251,12 +1308,14 @@ private struct EditorContent: View {
         // and scrubbable underneath while you trim, mix or pick a look.
         .lumaToolSheet(isPresented: $showTrimPanel, style: .panel) {
             if let clip = editor.selectedClip {
-                ScrollView {
+                ToolPanelScaffold(title: "Trim",
+                                  subtitle: "\(timeString(trimStart)) – \(timeString(trimEnd))",
+                                  onDone: {
+                                      editor.applyTrim(start: trimStart, end: trimEnd)
+                                      withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
+                                  }) {
                     trimPanel(clip: clip)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 18)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showTrimPanel = false }
             }
@@ -1264,12 +1323,13 @@ private struct EditorContent: View {
         .lumaToolSheet(isPresented: $showMusicPanel, style: .tallPanel) {
             if let music = editor.audioTracks.first(where: { $0.id == selectedAudioID })
                         ?? editor.audioTracks.first {
-                ScrollView {
+                ToolPanelScaffold(title: "Audio · \(music.title)",
+                                  subtitle: String(format: "%.1fs", music.timelineDuration),
+                                  onDone: {
+                                      withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
+                                  }) {
                     musicPanel(music: music)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 18)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showMusicPanel = false }
             }
@@ -1284,12 +1344,15 @@ private struct EditorContent: View {
         }
         .lumaToolSheet(isPresented: $showClipAudioPanel, style: .tallPanel) {
             if let clip = editor.selectedClip {
-                ScrollView {
+                ToolPanelScaffold(title: "Clip sound",
+                                  subtitle: clip.hasAudio
+                                      ? String(format: "%.1fs", clip.timelineDuration)
+                                      : "No sound on this clip",
+                                  onDone: {
+                                      withAnimation(.easeOut(duration: 0.15)) { showClipAudioPanel = false }
+                                  }) {
                     clipAudioPanel(clip: clip)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 18)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             } else {
                 Color.clear.onAppear { showClipAudioPanel = false }
             }
@@ -1297,12 +1360,14 @@ private struct EditorContent: View {
         .lumaToolSheet(isPresented: $showOverlayPanel, style: .panel) {
             if let overlay = editor.overlays.first(where: { $0.id == selectedOverlayID })
                           ?? editor.overlays.first {
-                OverlayPanel(editor: editor, overlayID: overlay.id) {
-                    withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = false }
+                ToolPanelScaffold(title: overlay.text == nil ? "Overlay" : "Text",
+                                  onDone: {
+                                      withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = false }
+                                  }) {
+                    OverlayPanel(editor: editor, overlayID: overlay.id) {
+                        withAnimation(.easeOut(duration: 0.15)) { showOverlayPanel = false }
+                    }
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 18)
-                .frame(maxHeight: .infinity, alignment: .top)
             } else {
                 Color.clear.onAppear { showOverlayPanel = false }
             }
@@ -1319,6 +1384,110 @@ private struct EditorContent: View {
             looksStrip
                 .padding(.top, 22)
                 .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .lumaToolSheet(isPresented: $showSpeedPanel, style: .panel) {
+            if let clip = editor.selectedClip {
+                speedPanel(clip: clip)
+            } else {
+                Color.clear.onAppear { showSpeedPanel = false }
+            }
+        }
+    }
+
+    // MARK: Clip action chips (B2)
+
+    /// Contextual chips over the timeline. They exist ONLY while a clip is
+    /// selected and vanish the moment it is deselected — the five actions a
+    /// selected clip actually implies, with delete last and in red.
+    @ViewBuilder
+    private var clipActionChips: some View {
+        if editor.selectedClipID != nil, !editor.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ClipActionChip(title: "Split", icon: "square.split.2x1") {
+                        editor.splitAtPlayhead()
+                    }
+                    ClipActionChip(title: "Duplicate", icon: "plus.square.on.square") {
+                        editor.duplicateSelected()
+                        LumaHaptics.shared.tap()
+                    }
+                    ClipActionChip(title: "Trim", icon: "scissors", selected: showTrimPanel) {
+                        guard let clip = editor.selectedClip else { return }
+                        trimStart = clip.trimStart
+                        trimEnd = clip.trimEnd
+                        showTrimPanel = true
+                    }
+                    ClipActionChip(title: editor.selectedClip.map { speedLabel($0.speed) } ?? "Speed",
+                                   icon: "gauge.with.needle",
+                                   selected: showSpeedPanel) {
+                        showSpeedPanel = true
+                    }
+                    ClipActionChip(title: "Delete", icon: "trash", destructive: true) {
+                        editor.deleteSelected()
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .lumaEdgeFade(leading: 12, trailing: 12)
+            .padding(.bottom, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    // MARK: Speed panel (B3 pattern)
+
+    /// Speed as a push-up panel rather than a buried menu: presets as chips,
+    /// ramps as chips, one Done. Every control writes through the same
+    /// `setClipSpeed` / `setSpeedRamp` the menu used.
+    private func speedPanel(clip: EditorState.Clip) -> some View {
+        ToolPanelScaffold(
+            title: "Speed",
+            subtitle: speedLabel(clip.speed) == "Speed" ? "Normal" : speedLabel(clip.speed),
+            onDone: { withAnimation(.easeOut(duration: 0.15)) { showSpeedPanel = false } }
+        ) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TechReadout("CONSTANT", size: 9, color: LumaTheme.textMuted)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
+                              spacing: 8) {
+                        ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], id: \.self) { speed in
+                            let on = editor.selectedClip?.speed == speed
+                            Button {
+                                editor.setClipSpeed(speed)
+                                LumaHaptics.shared.tap()
+                            } label: {
+                                Text(String(format: "%g×", speed))
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 40)
+                                    .background(on ? AnyShapeStyle(LumaTheme.accent)
+                                                   : AnyShapeStyle(LumaTheme.surface),
+                                                in: RoundedRectangle(cornerRadius: 11))
+                            }
+                            .buttonStyle(.lumaPress)
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    TechReadout("RAMP", size: 9, color: LumaTheme.textMuted)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(EditorState.SpeedRamp.allCases, id: \.self) { ramp in
+                                ToolPanelChip(title: ramp.label,
+                                              selected: editor.selectedClip?.speedRamp == ramp.rawValue) {
+                                    editor.setSpeedRamp(ramp)
+                                    LumaHaptics.shared.tap()
+                                }
+                            }
+                        }
+                        .padding(.vertical, 1)
+                    }
+                }
+                Text("Audio is pitch-preserved at every speed.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
         }
     }
 
@@ -1417,8 +1586,13 @@ private struct EditorContent: View {
                     .frame(width: 58)
                     kenBurnsMenu
                         .frame(width: 58)
-                    speedMenu
-                        .frame(width: 58)
+                    // Speed is a push-up panel now (B3), not a buried menu.
+                    FlatTool(title: editor.selectedClip.map { speedLabel($0.speed) } ?? "Speed",
+                             icon: "gauge.with.needle",
+                             selected: showSpeedPanel) {
+                        showSpeedPanel = true
+                    }
+                    .frame(width: 58)
                         }
                     }
                 }
@@ -1522,8 +1696,12 @@ private struct EditorContent: View {
                             showLooksStrip.toggle()
                         }
                         .frame(width: 58)
+                        .opacity(editor.isEmpty ? 0.35 : 1)
+                        .disabled(editor.isEmpty)
                         FlatTool(title: "Adjust", icon: "slider.horizontal.3", action: onOpenAdjust)
                             .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         adjustLayerMenu
                             .frame(width: 58)
                             .opacity(editor.isEmpty ? 0.35 : 1)
@@ -1548,6 +1726,8 @@ private struct EditorContent: View {
                         .disabled(editor.isEmpty)
                         FlatTool(title: "Audio", icon: "music.note", action: onOpenAudio)
                             .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                         FlatTool(title: "Template", icon: "wand.and.stars", action: onTemplates)
                             .frame(width: 62)
                             .opacity(editor.isEmpty ? 0.35 : 1)
@@ -1562,6 +1742,8 @@ private struct EditorContent: View {
                             .disabled(editor.isEmpty)
                         FlatTool(title: "Crop", icon: "crop", action: onOpenCrop)
                             .frame(width: 58)
+                            .opacity(editor.isEmpty ? 0.35 : 1)
+                            .disabled(editor.isEmpty)
                     }
                     .padding(.horizontal, 6)
                 }
@@ -1654,56 +1836,54 @@ private struct EditorContent: View {
     private var preview: some View {
         Group {
             if let player = editor.player {
+                // Fullscreen now lives in the transport row (B2) — the frame
+                // stays clean of floating chrome.
                 VideoPlayer(player: player)
                     .onDisappear { if editor.isPlaying { editor.togglePlayback() } }
-                    .overlay(alignment: .topTrailing) {
-                        Button {
-                            showFullscreenPreview = true
-                        } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(.black.opacity(0.45), in: Circle())
-                        }
-                        .buttonStyle(.lumaPress)
-                        .padding(10)
-                    }
             } else {
+                // B1: no placeholder art. Two equal-weight ways in — pick
+                // footage, or shoot it — on a dashed, obviously-empty stage.
                 Rectangle()
                     .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.045)],
                                          startPoint: .top, endPoint: .bottom))
                     .overlay {
-                        VStack(spacing: 14) {
+                        VStack(spacing: 20) {
                             if isLoadingClip {
                                 ProgressView().tint(.white)
                                 Text("Loading clip…")
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(.white)
                             } else {
-                                Image(systemName: "film.stack")
-                                    .font(.system(size: 34, weight: .light))
-                                    .foregroundStyle(LumaTheme.textMuted)
-                                Text("Start your edit")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(.white)
-                                Text("Add footage to build your timeline")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(LumaTheme.textMuted)
-                                Button(action: onAdd) {
-                                    Label("Add Video", systemImage: "plus")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 24)
-                                        .padding(.vertical, 13)
-                                        .background(LumaTheme.accent, in: Capsule())
+                                TechReadout("START YOUR EDIT", size: 10,
+                                            color: LumaTheme.textSecondary)
+                                HStack(spacing: 12) {
+                                    EmptyStateCTA(title: "Add video",
+                                                  caption: "Photos · Files",
+                                                  icon: "plus",
+                                                  filled: true,
+                                                  action: onAdd)
+                                    EmptyStateCTA(title: "Record",
+                                                  caption: "Live look camera",
+                                                  icon: "record.circle",
+                                                  filled: false,
+                                                  iconTint: LumaTheme.recordRed,
+                                                  action: onRecord)
+                                }
+                                Button {
+                                    app.path.append(.projectLibrary)
+                                } label: {
+                                    Text("or open a project")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(LumaTheme.accentBright)
                                 }
                                 .buttonStyle(.lumaPress)
-                                .padding(.top, 4)
                             }
                         }
                         .padding(22)
                     }
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
+                        .foregroundStyle(.white.opacity(0.16)))
             }
         }
         // Audio-editing focus: when a music/clip-audio panel is open, the
@@ -1742,50 +1922,88 @@ private struct EditorContent: View {
 
     // MARK: Transport
 
-    /// Timecode leading, play controls dead-centre, rebuild spinner trailing.
+    /// B2: one compact row. Mono position/duration leading, prev/play/next
+    /// dead-centre, fullscreen + zoom trailing. Frame-exact nudging moved onto
+    /// the prev/next buttons' long press so the row stays three controls wide.
     private var transport: some View {
         HStack(spacing: 0) {
             Text(readout(editor.currentTime))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(LumaTheme.textSecondary)
                 .monospacedDigit()
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Long-press toggles between MM:SS:FF and plain MM:SS.
                 .onLongPressGesture { showFrames.toggle(); LumaHaptics.shared.tap() }
-            HStack(spacing: 18) {
-                Button { editor.seekToBoundary(forward: false) } label: {
+            HStack(spacing: 22) {
+                Button {} label: {
                     Image(systemName: "backward.end.fill").font(.system(size: 15))
                 }
-                // Frame-exact nudge (−1 frame).
-                Button { editor.stepFrame(-1); LumaHaptics.shared.tap() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold))
-                }
+                .buttonStyle(LumaHoldButtonStyle(
+                    onTap: { editor.seekToBoundary(forward: false) },
+                    onHold: { editor.stepFrame(-1) }))
                 Button { editor.togglePlayback() } label: {
                     Image(systemName: editor.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 26))
+                        .font(.system(size: 24))
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: 30)
                 }
-                // Frame-exact nudge (+1 frame).
-                Button { editor.stepFrame(1); LumaHaptics.shared.tap() } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold))
-                }
-                Button { editor.seekToBoundary(forward: true) } label: {
+                .buttonStyle(.lumaPress)
+                Button {} label: {
                     Image(systemName: "forward.end.fill").font(.system(size: 15))
                 }
+                .buttonStyle(LumaHoldButtonStyle(
+                    onTap: { editor.seekToBoundary(forward: true) },
+                    onHold: { editor.stepFrame(1) }))
             }
             .foregroundStyle(.white)
-            .buttonStyle(.lumaPress)
             .disabled(editor.isEmpty)
             .sensoryFeedback(.selection, trigger: editor.currentTime)
-            HStack {
-                Spacer()
+            HStack(spacing: 14) {
+                Spacer(minLength: 0)
                 if editor.isRebuilding {
-                    ProgressView().tint(LumaTheme.textMuted).scaleEffect(0.8)
+                    ProgressView().tint(LumaTheme.textMuted).scaleEffect(0.7)
                 }
+                Button { showFullscreenPreview = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.lumaPress)
+                .disabled(editor.isEmpty)
+                // Zoom cycles the timeline scale; pinch on the scroller writes
+                // the same value, so the two never disagree.
+                Button {
+                    timelineZoom = nextZoom(after: timelineZoom)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 14, weight: .semibold))
+                        .overlay(alignment: .bottomTrailing) {
+                            Text(zoomLabel)
+                                .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                                .foregroundStyle(LumaTheme.accentBright)
+                                .offset(x: 10, y: 3)
+                        }
+                }
+                .buttonStyle(.lumaPress)
+                .disabled(editor.isEmpty)
             }
+            .foregroundStyle(LumaTheme.textSecondary)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// Zoom presets, cycled by the transport button and clamped to the same
+    /// range the pinch recogniser enforces.
+    private static let zoomSteps: [CGFloat] = [25, 50, 100, 200]
+
+    private func nextZoom(after current: CGFloat) -> CGFloat {
+        let next = Self.zoomSteps.first { $0 > current + 0.5 } ?? Self.zoomSteps[0]
+        return min(max(next, TimelineMetrics.minPPS), TimelineMetrics.maxPPS)
+    }
+
+    private var zoomLabel: String {
+        String(format: "%g", (timelineZoom / 50 * 10).rounded() / 10)
     }
 
     /// Transport readout: `MM:SS:FF / MM:SS:FF` when showFrames, else MM:SS.
@@ -1802,50 +2020,6 @@ private struct EditorContent: View {
         let s = Int(total) % 60
         let f = Int((total - floor(total)) / editor.frameDuration) % 30
         return String(format: "%02d:%02d:%02d", m, s, f)
-    }
-
-    private var speedMenu: some View {
-        Menu {
-            // Speed-ramp presets: variable-speed acceleration curves.
-            Menu("Speed Ramp") {
-                ForEach(EditorState.SpeedRamp.allCases, id: \.self) { ramp in
-                    Button {
-                        editor.setSpeedRamp(ramp)
-                        LumaHaptics.shared.tap()
-                    } label: {
-                        if editor.selectedClip?.speedRamp == ramp.rawValue {
-                            Label(ramp.label, systemImage: "checkmark")
-                        } else {
-                            Text(ramp.label)
-                        }
-                    }
-                }
-            }
-            // Continuous control: presets across the full 0.1×–4× range.
-            // Audio is always pitch-preserved (spectral) so speed changes
-            // never chipmunk the sound.
-            ForEach([0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0], id: \.self) { speed in
-                Button {
-                    editor.setClipSpeed(speed)
-                    LumaHaptics.shared.tap()
-                } label: {
-                    if editor.selectedClip?.speed == speed {
-                        Label(speedLabel(speed), systemImage: "checkmark")
-                    } else {
-                        Text(speedLabel(speed))
-                    }
-                }
-            }
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: "gauge.with.needle")
-                    .font(.system(size: 19, weight: .medium))
-                Text(editor.selectedClip.map { speedLabel($0.speed) } ?? "Speed")
-                    .font(.system(size: 13))
-            }
-            .foregroundStyle((editor.selectedClip?.speed ?? 1) != 1 ? LumaTheme.accentBright : LumaTheme.textSecondary)
-            .frame(maxWidth: .infinity)
-        }
     }
 
     private func speedLabel(_ speed: Double) -> String {
@@ -1966,37 +2140,25 @@ private struct EditorContent: View {
                        onTapOverlay: { id in
                            selectedOverlayID = id
                            showOverlayPanel = true
-                       })
+                       },
+                       onRecordVoiceover: {
+                           guard !editor.isRecordingVoiceover else {
+                               editor.stopVoiceover()
+                               LumaHaptics.shared.exportSuccess()
+                               return
+                           }
+                           editor.startVoiceover()
+                           LumaHaptics.shared.tap()
+                       },
+                       onAddClip: onAdd,
+                       zoom: $timelineZoom)
     }
 
     // MARK: Music panel
 
     private func musicPanel(music: EditorState.MusicTrack) -> some View {
         VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: music.kind.icon)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(music.kind.tint)
-                Text(music.title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer()
-                Text(String(format: "%.1fs", music.timelineDuration))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .monospacedDigit()
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { showMusicPanel = false }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-            }
+            // Title, duration and Done live in ToolPanelScaffold.
             // Lane kind picker (colour/icon).
             HStack(spacing: 8) {
                 ForEach(AudioLaneKind.allCases, id: \.self) { kind in
@@ -2245,25 +2407,7 @@ private struct EditorContent: View {
 
     private func clipAudioPanel(clip: EditorState.Clip) -> some View {
         VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(LumaTheme.teal)
-                Text(clip.hasAudio ? "Clip sound" : "Clip has no sound")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { showClipAudioPanel = false }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-            }
+            // Title and Done live in ToolPanelScaffold.
             InlineSlider(title: "Volume", value: Binding(
                 get: { editor.selectedClip?.volume ?? 100 },
                 set: { editor.setClipVolume(id: clip.id, $0) }
@@ -2310,16 +2454,7 @@ private struct EditorContent: View {
 
     private func trimPanel(clip: EditorState.Clip) -> some View {
         VStack(spacing: 14) {
-            HStack {
-                Text("Trim Clip")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Text("\(timeString(trimStart)) – \(timeString(trimEnd))")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
-                    .monospacedDigit()
-            }
+            // Title, range readout and Done (which applies) live in the scaffold.
             InlineSlider(title: "Start", value: $trimStart,
                          range: 0...max(clip.assetDuration - 0.2, 0.01)) { timeString($0) }
                 .onChange(of: trimStart) { _, new in
@@ -2330,31 +2465,18 @@ private struct EditorContent: View {
                 .onChange(of: trimEnd) { _, new in
                     if new < trimStart + 0.2 { trimStart = max(new - 0.2, 0) }
                 }
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
-                } label: {
-                    Text("Cancel")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
-                }
-                .buttonStyle(.lumaPress)
-                Button {
-                    editor.applyTrim(start: trimStart, end: trimEnd)
-                    withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
-                } label: {
-                    Text("Apply Trim")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 13))
-                }
-                .buttonStyle(.lumaPress)
+            // Cancel: leave without committing the drafted in/out points.
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { showTrimPanel = false }
+            } label: {
+                Text("Cancel")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
             }
+            .buttonStyle(.lumaPress)
         }
         .padding(16)
         .lumaCard()
@@ -2678,32 +2800,22 @@ private struct OverlayPanel: View {
     }()
 
     var body: some View {
-        // Scrollable: the text panel's controls (style, colour, animation,
-        // font/align/outline/box, position, size, opacity) exceed any single
-        // detent, so without this the lower half is clipped and unreachable.
-        ScrollView {
+        // The panel's own header and scroller now come from ToolPanelScaffold
+        // (B3) — nesting a second vertical ScrollView here would fight it.
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: overlay?.isImage == true ? "photo" : "rectangle.on.rectangle")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(LumaTheme.teal)
                 Text(overlay?.title.isEmpty == false ? overlay!.title : "Overlay")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Spacer()
                 Text(String(format: "%.1fs", overlay?.duration ?? 0))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(LumaTheme.textSecondary)
                     .monospacedDigit()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
             }
 
             if overlay?.text != nil {
@@ -2865,8 +2977,6 @@ private struct OverlayPanel: View {
         }
         .padding(16)
         .lumaCard()
-        }
-        .scrollBounceBehavior(.basedOnSize)
     }
 
     private func anchorButton(_ anchor: CGPoint) -> some View {

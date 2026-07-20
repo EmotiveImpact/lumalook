@@ -150,14 +150,11 @@ final class LookLibraryStore: ObservableObject {
     /// order, for the Collections category. Empty collections included so the
     /// user can see (and fill) them.
     var collectionGroups: [(collection: LUTCollection, looks: [LibraryLook])] {
-        let lutLooks = Dictionary(
-            all.compactMap { look -> (UUID, LibraryLook)? in
-                guard case .lut(let f) = look.source else { return nil }
-                return (f.id, look)
-            },
-            uniquingKeysWith: { a, _ in a })
+        // G3 widened membership: collections hold any library look, keyed by
+        // LibraryLook.id (LUT-only indexes are lifted by memberLookIDs).
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return luts.collections.map { collection in
-            (collection, collection.orderedLUTIDs.compactMap { lutLooks[$0] })
+            (collection, luts.memberLookIDs(of: collection).compactMap { byID[$0] })
         }
     }
 
