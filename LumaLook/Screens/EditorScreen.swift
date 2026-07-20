@@ -1188,6 +1188,8 @@ private struct EditorContent: View {
     let onCropClip: () -> Void
     /// When set, the looks strip grades THIS clip instead of the timeline.
     @State private var looksTargetClipID: UUID?
+    /// Full LookBrowserSheet over the strip (sheet-over-sheet).
+    @State private var showLookBrowser = false
     /// Real graded-frame thumbnails for the looks strip — same renderer as
     /// ApplyLookView/camera, so a look finally previews identically everywhere.
     @StateObject private var lookThumbs = LookThumbs()
@@ -2386,18 +2388,26 @@ private struct EditorContent: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    // The WHOLE library — Saved / Signature / Installed packs /
-                    // Imported LUTs — with a divider before each section so the
-                    // installed + imported looks are findable here, where you
-                    // actually apply them.
-                    ForEach(app.libraryLooksBySection, id: \.section) { group in
-                        if group.section != .saved {
-                            LookSectionDivider(title: group.section.title)
+                    // Per-clip target: None-first, so clearing the clip's
+                    // grade is as easy as applying one.
+                    if let clipID = looksTargetClipID {
+                        clipNoneTile(clipID: clipID)
+                    }
+                    // The library strip — recents → favourites → rest — with
+                    // the FULL library (chips, search, import) one tap away.
+                    ForEach(app.library.stripLooks()) { look in
+                        LookStripTile(look: look,
+                                      image: lookThumbs.images[look.thumbKey],
+                                      selected: stripSelected(look),
+                                      size: CGSize(width: 66, height: 56),
+                                      radius: 12) {
+                            app.select(look: look, forClip: looksTargetClipID)
+                            LumaHaptics.shared.tap()
                         }
-                        ForEach(group.looks) { look in
-                            LookStripCell(look: look, editor: editor, thumbs: lookThumbs,
-                                          targetClipID: looksTargetClipID)
-                        }
+                    }
+                    AllLooksTile(size: CGSize(width: 66, height: 56), radius: 12) {
+                        showLookBrowser = true
+                        LumaHaptics.shared.tap()
                     }
                 }
                 .padding(.vertical, 2)
@@ -2409,6 +2419,54 @@ private struct EditorContent: View {
             lookThumbs.render(source: app.previewFrame, library: app.library.all,
                               fileURL: { app.lutRepository.fileURL(for: $0) })
         }
+        // Sheet-over-sheet: the browser rides above the strip's tool sheet.
+        .lumaToolSheet(isPresented: $showLookBrowser, style: .tallPanel) {
+            LookBrowserSheet(context: looksTargetClipID.map { .editorClip($0) }
+                                ?? .editorTimeline)
+        }
+    }
+
+    /// One selection truth for the editor strip: per-clip grade when a clip
+    /// is targeted, global grade state otherwise.
+    private func stripSelected(_ look: LibraryLook) -> Bool {
+        if let id = looksTargetClipID {
+            guard let g = editor.clips.first(where: { $0.id == id })?.grade else { return false }
+            switch look.source {
+            case .builtIn(let p): return g.lutID == nil && g.baseLookName == p.name
+            case .lut(let f):     return g.lutID == f.id
+            case .saved(let s):   return g.baseLookName == s.baseLookName && g.lutID == s.lutID
+            }
+        }
+        return app.isCurrent(look)
+    }
+
+    /// Dashed None tile for a targeted clip — clears its grade so it follows
+    /// the timeline grade again.
+    private func clipNoneTile(clipID: UUID) -> some View {
+        let active = editor.clips.first(where: { $0.id == clipID })?.grade == nil
+        return Button {
+            editor.setClipGrade(id: clipID, nil)
+            LumaHaptics.shared.tap()
+        } label: {
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(LumaTheme.background)
+                    .frame(width: 66, height: 56)
+                    .overlay {
+                        TechReadout("NONE", size: 8,
+                                    color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
+                        .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.18)))
+                Text("None")
+                    .font(.system(size: 11))
+                    .foregroundStyle(active ? .white : LumaTheme.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 70)
+            }
+        }
+        .buttonStyle(.lumaPress)
     }
 
     /// CapCut-style "Edit": select the clip under the playhead so the
@@ -2834,98 +2892,6 @@ private struct OverlayPanel: View {
 }
 
 // MARK: - Cells
-
-/// A slim labelled divider between library sections in the horizontal strip.
-private struct LookSectionDivider: View {
-    let title: String
-    var body: some View {
-        VStack(spacing: 6) {
-            Rectangle().fill(LumaTheme.hairline).frame(width: 1, height: 44)
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(LumaTheme.textMuted)
-                .fixedSize()
-                .frame(width: 56)
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 2)
-    }
-}
-
-private struct LookStripCell: View {
-    let look: LibraryLook
-    @ObservedObject var editor: EditorState
-    @ObservedObject var thumbs: LookThumbs
-    /// nil grades the whole timeline; set, it grades just that clip.
-    var targetClipID: UUID? = nil
-    @EnvironmentObject private var app: AppModel
-
-    /// Thumbnail cast: built-in presets carry a tint; a saved look borrows its
-    /// base preset's; LUTs render neutral with a badge.
-    private var tint: Color? {
-        switch look.source {
-        case .builtIn(let p): return p.gradeTint
-        case .saved(let s):   return MockData.looks.first { $0.name == s.baseLookName }?.gradeTint
-        case .lut:            return nil
-        }
-    }
-
-    private var isSelected: Bool {
-        if let id = targetClipID {
-            guard let g = editor.clips.first(where: { $0.id == id })?.grade else { return false }
-            switch look.source {
-            case .builtIn(let p): return g.lutID == nil && g.baseLookName == p.name
-            case .lut(let f):     return g.lutID == f.id
-            case .saved(let s):   return g.baseLookName == s.baseLookName && g.lutID == s.lutID
-            }
-        }
-        switch look.source {
-        case .builtIn(let p): return app.selectedLUT == nil && app.selectedLook.name == p.name
-        case .lut(let f):     return app.selectedLUT?.id == f.id
-        case .saved:          return false
-        }
-    }
-
-    var body: some View {
-        Button {
-            // One entry point for every source and target — sets `lutID` via
-            // clipGrade() for per-clip grades, global state otherwise, and
-            // records the look as recently used.
-            app.select(look: look, forClip: targetClipID)
-            LumaHaptics.shared.tap()
-        } label: {
-            VStack(spacing: 6) {
-                Group {
-                    // Real graded frame once rendered; tint placeholder until.
-                    if let image = thumbs.images[LookThumbs.key(look)] {
-                        GradedThumb(image: image,
-                                    size: CGSize(width: 66, height: 56),
-                                    radius: 12, selected: isSelected)
-                    } else {
-                        SceneThumb(scene: .forest, grade: tint, radius: 12, selected: isSelected)
-                    }
-                }
-                    .frame(width: 66, height: 56)
-                    .overlay(alignment: .topLeading) {
-                        if case .lut = look.source {
-                            Text("LUT")
-                                .font(.system(size: 8, weight: .heavy))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4).padding(.vertical, 2)
-                                .background(LumaTheme.accent, in: Capsule())
-                                .padding(4)
-                        }
-                    }
-                Text(look.name)
-                    .font(.system(size: 11))
-                    .foregroundStyle(isSelected ? .white : LumaTheme.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 70)
-            }
-        }
-        .buttonStyle(.lumaPress)
-    }
-}
 
 // MARK: - Hex colours (text-layer swatches)
 

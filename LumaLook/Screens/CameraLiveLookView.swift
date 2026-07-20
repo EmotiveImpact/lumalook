@@ -30,6 +30,11 @@ struct CameraLiveLookView: View {
     /// C13 — live viewfinder scope (nil = off).
     @State private var scopeMode: ScopeMode?
     @State private var scopeImage: CGImage?
+    /// Unified look browser over the viewfinder (mid detent, undimmed).
+    @State private var showLookBrowser =
+        ProcessInfo.processInfo.environment["LUMA_SEED_BROWSER"] == "1"
+    /// OFF-tile stash so tapping OFF twice restores the previous strength.
+    @State private var stashedLookIntensity: Double?
 
     /// Graded still capture — C5: shoots the FULL sensor resolution through
     /// AVCapturePhotoOutput and grades it with the live look (the old path
@@ -252,6 +257,12 @@ struct CameraLiveLookView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 14)
             .padding(.bottom, 348)
+        }
+        // The full library over the viewfinder: opens at a mid detent so the
+        // live feed stays visible, undimmed and interactive above the sheet —
+        // pick a purchased pack look and frame the shot through it.
+        .lumaToolSheet(isPresented: $showLookBrowser, style: .panel) {
+            LookBrowserSheet(context: .camera, intensity: $app.settings.intensity)
         }
         .sheet(isPresented: $showProPanel) {
             CameraProPanel(camera: camera)
@@ -513,86 +524,80 @@ struct CameraLiveLookView: View {
 
     // MARK: - Looks
 
-    /// Favourited LUTs surfaced on the camera strip (bounded so thumbnail
-    /// rendering stays cheap; the live grade only ever applies the one).
-    private var favouriteLUTs: [LUTFile] {
-        Array(app.lutRepository.luts.filter(\.isFavourite).prefix(8))
-    }
-
-    /// What the camera strip renders thumbnails for — the built-ins plus the
-    /// favourited LUTs it shows (bounded, so live rendering stays cheap).
+    /// What the camera strip shows — the LIBRARY strip: recently used, then
+    /// favourites, then the rest (saved looks, installed pack LUTs and imports
+    /// included), bounded so live thumbnail rendering stays cheap. The full
+    /// library opens behind the All Looks tile, so every purchased pack is
+    /// reachable while framing a shot.
     private var cameraStripLooks: [LibraryLook] {
-        MockData.looks.map { LibraryLook(builtIn: $0) }
-            + favouriteLUTs.map { LibraryLook(lut: $0) }
+        app.library.stripLooks()
     }
 
     private var looksRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
-                ForEach(MockData.looks) { look in
-                    Button {
-                        app.select(look: LibraryLook(builtIn: look))
-                    } label: {
-                        VStack(spacing: 6) {
-                            Group {
-                                if let image = thumbs.images[LookThumbs.key(LibraryLook(builtIn: look))] {
-                                    GradedThumb(image: image,
-                                                size: CGSize(width: 78, height: 78),
-                                                radius: 14,
-                                                selected: look.id == app.selectedLook.id)
-                                } else {
-                                    SceneThumb(scene: .desert, grade: look.gradeTint, radius: 14,
-                                               selected: look.id == app.selectedLook.id)
-                                }
-                            }
-                            .frame(width: 78, height: 78)
-                            Text(look.name)
-                                .font(.system(size: 12, weight: look.id == app.selectedLook.id ? .semibold : .regular))
-                                .foregroundStyle(look.id == app.selectedLook.id ? .white : .white.opacity(0.7))
-                                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
-                                .lineLimit(1)
-                                .frame(width: 80)
-                        }
-                    }
-                    .buttonStyle(.lumaPress)
-                }
-                // Favourited LUTs ride the camera strip too, so a shot can be
-                // framed through an imported/installed look, not just built-ins.
-                ForEach(favouriteLUTs) { lut in
-                    Button {
-                        app.select(look: LibraryLook(lut: lut))
+                // OFF leads the strip — shooting clean is one tap.
+                offTile
+                ForEach(cameraStripLooks) { look in
+                    // Selection derives from ONE source of truth
+                    // (app.isCurrent) so a LUT and a built-in can never
+                    // highlight at the same time.
+                    LookStripTile(look: look,
+                                  image: thumbs.images[look.thumbKey],
+                                  selected: app.isCurrent(look),
+                                  size: CGSize(width: 78, height: 78),
+                                  radius: 14,
+                                  onMedia: true) {
+                        app.select(look: look)
                         LumaHaptics.shared.tap()
-                    } label: {
-                        VStack(spacing: 6) {
-                            Group {
-                                if let image = thumbs.images[LookThumbs.key(LibraryLook(lut: lut))] {
-                                    GradedThumb(image: image, size: CGSize(width: 78, height: 78),
-                                                radius: 14, selected: app.selectedLUT?.id == lut.id)
-                                } else {
-                                    SceneThumb(scene: .desert, grade: Color(red: 0.3, green: 0.8, blue: 0.9),
-                                               radius: 14, selected: app.selectedLUT?.id == lut.id)
-                                }
-                            }
-                            .frame(width: 78, height: 78)
-                            .overlay(alignment: .topLeading) {
-                                Text(lut.isLogTarget ? "LOG" : "LUT")
-                                    .font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
-                                    .padding(.horizontal, 4).padding(.vertical, 2)
-                                    .background(LumaTheme.accent, in: Capsule()).padding(5)
-                            }
-                            Text(lut.displayName)
-                                .font(.system(size: 12, weight: app.selectedLUT?.id == lut.id ? .semibold : .regular))
-                                .foregroundStyle(app.selectedLUT?.id == lut.id ? .white : .white.opacity(0.7))
-                                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
-                                .lineLimit(1).frame(width: 80)
-                        }
                     }
-                    .buttonStyle(.lumaPress)
+                }
+                AllLooksTile(size: CGSize(width: 78, height: 78), radius: 14, onMedia: true) {
+                    showLookBrowser = true
+                    LumaHaptics.shared.tap()
                 }
             }
             .padding(.horizontal, 22)
         }
         .sensoryFeedback(.selection, trigger: app.selectedLook.id)
+        .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+
+    /// Dashed OFF tile: zero the grade to shoot clean, tap again to restore.
+    private var offTile: some View {
+        let active = app.settings.intensity == 0
+        return Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                if active {
+                    app.settings.intensity = stashedLookIntensity ?? 75
+                    stashedLookIntensity = nil
+                } else {
+                    stashedLookIntensity = app.settings.intensity
+                    app.settings.intensity = 0
+                }
+            }
+            LumaHaptics.shared.tap()
+        } label: {
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.black.opacity(0.3))
+                    .frame(width: 78, height: 78)
+                    .overlay {
+                        TechReadout("OFF", size: 10,
+                                    color: active ? LumaTheme.accentBright : .white.opacity(0.7))
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
+                        .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.3)))
+                Text("Off")
+                    .font(.system(size: 12, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? .white : .white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                    .lineLimit(1)
+                    .frame(width: 80)
+            }
+        }
+        .buttonStyle(.lumaPress)
     }
 
     // MARK: - Bottom controls
