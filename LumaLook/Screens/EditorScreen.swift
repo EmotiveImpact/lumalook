@@ -188,6 +188,14 @@ struct EditorTimelineView: View {
             // Continuity: seed the timeline with the Apply-a-Look clip.
             if editor.isEmpty, let url = app.selectedVideoURL {
                 Task { await editor.addClip(from: url) }
+            } else if editor.isEmpty,
+                      ProcessInfo.processInfo.environment["LUMA_SEED_CLIP"] == nil,
+                      let last = app.store.projects.max(by: { $0.updatedAt < $1.updatedAt }) {
+                // Resume: cold-opening the editor picks up your last project
+                // instead of a fresh empty one — your edit from a minute ago
+                // was otherwise silently two screens away. The title menu's
+                // New Project stays one tap for a clean slate.
+                editor.load(project: last)
             }
             applyDebugSeed()
             #if DEBUG

@@ -311,7 +311,8 @@ final class AppModel: ObservableObject {
 
         for publisher in [lutRepository.objectWillChange,
                           store.objectWillChange,
-                          packStore.objectWillChange] {
+                          packStore.objectWillChange,
+                          exporter.objectWillChange] {   // export ring froze at 0% without this
             publisher
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &storeCancellables)

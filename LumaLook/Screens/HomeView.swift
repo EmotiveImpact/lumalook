@@ -33,10 +33,17 @@ struct HomeView: View {
                         }
                     }
 
-                    SectionHeader(title: "Recent Projects", actionTitle: "See All") {
-                        app.path.append(.projectLibrary)
+                    // "See All" only once REAL work exists — over the sample
+                    // cards it landed new users on an empty Projects screen.
+                    if app.store.projects.isEmpty && app.store.gradeSessions.isEmpty {
+                        SectionHeader(title: "Recent Projects")
+                            .padding(.top, 6)
+                    } else {
+                        SectionHeader(title: "Recent Projects", actionTitle: "See All") {
+                            app.path.append(.projectLibrary)
+                        }
+                        .padding(.top, 6)
                     }
-                    .padding(.top, 6)
 
                     RecentProjectsRow(store: app.store)
                 }

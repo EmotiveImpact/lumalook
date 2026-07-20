@@ -621,6 +621,12 @@ final class EditorState: ObservableObject {
 
     func saveProject() {
         guard !clips.isEmpty else { return }
+        // First save mints a unique name — three cards all called
+        // "New Project" with identical thumbnails read as data corruption.
+        if projectTitle == "New Project" {
+            let existing = store.projects.count
+            projectTitle = "Project \(existing + 1)"
+        }
         let stored = StoredProject(
             id: projectID, title: projectTitle,
             createdAt: projectCreatedAt, updatedAt: Date(),

@@ -268,6 +268,11 @@ struct CameraLiveLookView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            // Defensive: a restored/hot scene must never open ON the Pro sheet
+            // — a pro exposure panel over a black feed is the worst possible
+            // first frame of the camera (seen intermittently in audit).
+            showProPanel = false
+            showFormatSheet = false
             camera.lookState = app.lookState
             camera.requestAndStart()
             #if DEBUG

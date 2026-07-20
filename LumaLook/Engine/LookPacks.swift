@@ -612,6 +612,11 @@ enum PackInstaller {
     /// repository. Returns the number installed.
     @MainActor
     static func install(_ pack: LookPack, into repository: LUTRepository) -> Int {
+        // Re-installing must be a no-op: without this guard every duplicate
+        // code path (pack page + editor seed + restore) doubled the user's
+        // whole library, with mismatched thumbnails that read as corruption.
+        let existing = repository.luts.filter { $0.packID == pack.id }.count
+        if existing >= pack.looks.count { return existing }
         var installed = 0
         let tmp = FileManager.default.temporaryDirectory
         for look in pack.looks {

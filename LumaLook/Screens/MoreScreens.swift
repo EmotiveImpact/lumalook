@@ -799,7 +799,14 @@ private struct ProjectList: View {
                                         .font(.body.weight(.semibold))
                                         .foregroundStyle(.white)
                                         .lineLimit(1)
-                                    Text("\(project.updatedAt.formatted(date: .abbreviated, time: .omitted)) · \(timeString(project.duration)) · \(project.clips.count) clip\(project.clips.count == 1 ? "" : "s")")
+                                    Text({
+                                        var parts = ["\(project.updatedAt.formatted(date: .abbreviated, time: .omitted))",
+                                                     timeString(project.duration),
+                                                     "\(project.clips.count) clip\(project.clips.count == 1 ? "" : "s")"]
+                                        let audio = project.audioTracks?.count ?? 0
+                                        if audio > 0 { parts.append("\(audio) audio") }
+                                        return parts.joined(separator: " · ")
+                                    }())
                                         .font(.footnote)
                                         .foregroundStyle(LumaTheme.textMuted)
                                 }
