@@ -337,6 +337,9 @@ struct LUTFile: Identifiable, Codable, Hashable {
     /// preserves the purchased-pack identity. Optional-at-end → old
     /// luts_index.json decodes unchanged (nil).
     var packID: String? = nil
+    /// T2.7 — user tags + collection membership. Optional-at-end.
+    var tags: [String]? = nil
+    var collectionIDs: Set<UUID>? = nil
     var defaultBlend: String? = nil
 
     /// The #1 user mistake in the LUT ecosystem is applying a Log-input LUT
@@ -349,6 +352,15 @@ struct LUTFile: Identifiable, Codable, Hashable {
                        "log2", "log3", "logc", "_log", "-log", " log"]
         return markers.contains { name.contains($0) }
     }
+}
+
+/// T2.7 — a user-curated LUT collection (JSON-backed; no Core Data — a few
+/// hundred records sort instantly on the @Published array).
+struct LUTCollection: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var symbol: String = "folder"
+    var orderedLUTIDs: [UUID] = []
 }
 
 struct ProjectItem: Identifiable, Hashable {

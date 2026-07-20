@@ -3,6 +3,8 @@ import Foundation
 @MainActor
 final class LUTRepository: ObservableObject {
     @Published private(set) var luts: [LUTFile] = []
+    /// T2.7 — user collections, persisted beside the LUT index.
+    @Published private(set) var collections: [LUTCollection] = []
 
     private let folderName = "ImportedLUTs"
     private let indexFileName = "luts_index.json"
@@ -18,7 +20,65 @@ final class LUTRepository: ObservableObject {
 
     init() {
         load()
+        loadCollections()
         seedBundledLUTsIfNeeded()
+    }
+
+    // MARK: - T2.7 collections + tags
+
+    private var collectionsURL: URL {
+        lutFolderURL.appendingPathComponent("collections_index.json")
+    }
+
+    private func loadCollections() {
+        guard let data = try? Data(contentsOf: collectionsURL),
+              let decoded = try? JSONDecoder().decode([LUTCollection].self, from: data) else { return }
+        collections = decoded
+    }
+
+    private func saveCollections() {
+        guard let data = try? JSONEncoder().encode(collections) else { return }
+        try? data.write(to: collectionsURL, options: .atomic)
+    }
+
+    @discardableResult
+    func createCollection(name: String, symbol: String = "folder") -> LUTCollection {
+        let collection = LUTCollection(name: name, symbol: symbol)
+        collections.append(collection)
+        saveCollections()
+        return collection
+    }
+
+    func deleteCollection(_ id: UUID) {
+        collections.removeAll { $0.id == id }
+        for i in luts.indices { luts[i].collectionIDs?.remove(id) }
+        saveCollections(); save()
+    }
+
+    func toggle(_ lut: LUTFile, in collection: LUTCollection) {
+        guard let li = luts.firstIndex(where: { $0.id == lut.id }),
+              let ci = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        var ids = luts[li].collectionIDs ?? []
+        if ids.contains(collection.id) {
+            ids.remove(collection.id)
+            collections[ci].orderedLUTIDs.removeAll { $0 == lut.id }
+        } else {
+            ids.insert(collection.id)
+            collections[ci].orderedLUTIDs.append(lut.id)
+        }
+        luts[li].collectionIDs = ids
+        saveCollections(); save()
+    }
+
+    func setTags(_ tags: [String], for lut: LUTFile) {
+        guard let i = luts.firstIndex(where: { $0.id == lut.id }) else { return }
+        luts[i].tags = tags.isEmpty ? nil : tags
+        save()
+    }
+
+    /// Members of a collection in its stored order.
+    func members(of collection: LUTCollection) -> [LUTFile] {
+        collection.orderedLUTIDs.compactMap { id in luts.first { $0.id == id } }
     }
 
     func fileURL(for lut: LUTFile) -> URL {

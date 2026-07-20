@@ -8,16 +8,27 @@ struct LUTManagerView: View {
     @EnvironmentObject private var app: AppModel
     @State private var filter = "All"
     @State private var showImporter = false
+    /// T2.7 — live search over names + tags.
+    @State private var searchText = ""
+    @State private var showNewCollection = false
+    @State private var newCollectionName = ""
     @State private var importError: String?
     @State private var importedName: String?
 
     private static let cubeType = UTType(filenameExtension: "cube") ?? .data
 
     private var visibleLUTs: [LUTFile] {
+        let base: [LUTFile]
         switch filter {
-        case "Favorites": return app.lutRepository.luts.filter(\.isFavourite)
-        case "Recents": return Array(app.lutRepository.luts.prefix(3))
-        default: return app.lutRepository.luts
+        case "Favorites": base = app.lutRepository.luts.filter(\.isFavourite)
+        case "Recents": base = Array(app.lutRepository.luts.prefix(3))
+        default: base = app.lutRepository.luts
+        }
+        guard !searchText.isEmpty else { return base }
+        let q = searchText.lowercased()
+        return base.filter { lut in
+            lut.displayName.lowercased().contains(q)
+                || (lut.tags ?? []).contains { $0.lowercased().contains(q) }
         }
     }
 
@@ -25,12 +36,22 @@ struct LUTManagerView: View {
     /// (preserving the purchased-pack identity) with a "Your Imports" section
     /// for user `.cube` files; the other filters are one flat group.
     private var lutGroups: [(id: String, title: String, luts: [LUTFile])] {
+        if !searchText.isEmpty {
+            return [("search", "Results", visibleLUTs)]
+        }
         switch filter {
         case "Favorites": return [("fav", "Favorites", visibleLUTs)]
         case "Recents":   return [("rec", "Recents", visibleLUTs)]
         default:
             var groups: [(String, String, [LUTFile])] = []
             let all = app.lutRepository.luts
+            // Your collections lead — that's what curation is FOR.
+            for collection in app.lutRepository.collections {
+                let members = app.lutRepository.members(of: collection)
+                if !members.isEmpty {
+                    groups.append(("col-\(collection.id)", collection.name, members))
+                }
+            }
             let installed = all.filter { $0.packID != nil }
             for (pid, luts) in Dictionary(grouping: installed, by: { $0.packID! })
                 .sorted(by: { $0.key < $1.key }) {
@@ -58,6 +79,28 @@ struct LUTManagerView: View {
                 }
                 .tint(LumaTheme.gold)
             }
+            .contextMenu {
+                // T2.7 — collection membership.
+                if app.lutRepository.collections.isEmpty {
+                    Button { showNewCollection = true } label: {
+                        Label("New Collection…", systemImage: "folder.badge.plus")
+                    }
+                } else {
+                    ForEach(app.lutRepository.collections) { collection in
+                        let isIn = (lut.collectionIDs ?? []).contains(collection.id)
+                        Button {
+                            app.lutRepository.toggle(lut, in: collection)
+                        } label: {
+                            Label(collection.name,
+                                  systemImage: isIn ? "checkmark.circle.fill" : "folder")
+                        }
+                    }
+                    Divider()
+                    Button { showNewCollection = true } label: {
+                        Label("New Collection…", systemImage: "folder.badge.plus")
+                    }
+                }
+            }
     }
 
     var body: some View {
@@ -68,6 +111,18 @@ struct LUTManagerView: View {
 
             listBody
                 .padding(.horizontal, -22)   // the List brings its own insets
+        }
+        .searchable(text: $searchText, prompt: "Search LUTs and tags")
+        .alert("New Collection", isPresented: $showNewCollection) {
+            TextField("Name", text: $newCollectionName)
+            Button("Create") {
+                let name = newCollectionName.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { app.lutRepository.createCollection(name: name) }
+                newCollectionName = ""
+            }
+            Button("Cancel", role: .cancel) { newCollectionName = "" }
+        } message: {
+            Text("Group LUTs your way — long-press any LUT to add it.")
         }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [Self.cubeType, .plainText, .png, .data],

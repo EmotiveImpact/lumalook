@@ -88,6 +88,8 @@ struct ApplyLookView: View {
     @State private var showLogExplainer = false
     @State private var stashedLookIntensity: Double?
     @State private var showConversionPicker = false
+    /// T2.4 — side-by-side LUT compare grid.
+    @State private var showCompareGrid = false
     @AppStorage("lumalook.showScope") private var showScope = false
     @AppStorage("lumalook.scopeMode") private var scopeModeRaw = ScopeMode.waveform.rawValue
     @State private var scopeImage: CGImage?
@@ -179,6 +181,7 @@ struct ApplyLookView: View {
         .task(id: mediaKey) { await loadMediaReadout() }
         .onDisappear { app.saveGradeSession() }
         .sheet(isPresented: $showLensPaywall) { PaywallView() }
+        .sheet(isPresented: $showCompareGrid) { LUTCompareView() }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : compareDuration,
                             gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
@@ -639,6 +642,28 @@ struct ApplyLookView: View {
                                 .opacity(phase.isIdentity ? 1 : 0.6)
                         }
                     }
+                    // T2.4 — compare: same grade, different LUTs, side by side.
+                    Button {
+                        showCompareGrid = true
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        VStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(LumaTheme.surface)
+                                .frame(width: 96, height: 96)
+                                .overlay {
+                                    Image(systemName: "square.grid.2x2")
+                                        .font(.system(size: 26, weight: .medium))
+                                        .foregroundStyle(LumaTheme.accentBright)
+                                }
+                                .overlay(RoundedRectangle(cornerRadius: 16)
+                                    .stroke(.white.opacity(0.08)))
+                            Text("Compare")
+                                .font(.system(size: 12))
+                                .foregroundStyle(LumaTheme.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.lumaPress)
                     AddLUTTile { showLUTImporter = true }
                     }
                 }
