@@ -154,8 +154,6 @@ struct ExportSpecSheet: View {
                         codecRow
                     }
 
-                    deliveryReadout
-
                     Hairline()
 
                     Toggle(isOn: $spec.audioOnly) {
@@ -175,12 +173,18 @@ struct ExportSpecSheet: View {
             .scrollBounceBehavior(.basedOnSize)
 
             // Pinned action bar, on the sheet's own `LumaTheme.bar` fill so the
-            // scrolling spec controls read as passing under it.
+            // scrolling spec controls read as passing under it. The estimate +
+            // delivery spec live HERE, not in the ScrollView: they are G1's
+            // trust signal and must stay on screen while the user taps
+            // resolution or drags bitrate, at every detent the sheet offers.
             VStack(spacing: 0) {
                 Hairline()
+                deliveryReadout
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
                 footer
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
                     .padding(.bottom, 8)
             }
             .background(LumaTheme.bar)

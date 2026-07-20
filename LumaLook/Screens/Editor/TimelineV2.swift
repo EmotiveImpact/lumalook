@@ -155,6 +155,16 @@ struct TimelineV2View: View {
                           overlayLanes: overlayLaneCount)
     }
 
+    /// The "no media yet" placeholder must describe the WHOLE project, not
+    /// just the video track. Keying it off `editor.isEmpty` (= clips only)
+    /// meant a project that already carried music or overlays kept rendering
+    /// four dashed "add something" lanes, so that content was invisible,
+    /// unselectable and undeletable — and it let a contradictory state (a
+    /// live player + a non-zero duration + an "empty" timeline) reach screen.
+    private var projectIsEmpty: Bool {
+        editor.clips.isEmpty && editor.audioTracks.isEmpty && editor.overlays.isEmpty
+    }
+
     var body: some View {
         // `.top` centres the playhead horizontally over the scroller (whose
         // contentInset = viewport/2 puts the current frame at screen-centre).
@@ -162,7 +172,7 @@ struct TimelineV2View: View {
         // `.topTrailing` ZStack with the playhead is what jammed the playhead
         // to the right edge instead of the centre.
         ZStack(alignment: .top) {
-            if editor.isEmpty {
+            if projectIsEmpty {
                 emptyPlaceholder
             } else {
                 TimelineScroller(editor: editor, metrics: metrics,
@@ -185,9 +195,9 @@ struct TimelineV2View: View {
         // against an 18 pt ruler gutter dropped 16 pt onto the video clip.
         // Reserve it a row of its own above the stack so it can never occlude
         // clip content, whatever happens to scroll under it.
-        .padding(.top, editor.isEmpty ? 0 : LaneMetrics.magnetGutter)
+        .padding(.top, projectIsEmpty ? 0 : LaneMetrics.magnetGutter)
         .overlay(alignment: .topTrailing) {
-            if !editor.isEmpty { magnetButton }
+            if !projectIsEmpty { magnetButton }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
@@ -291,12 +301,23 @@ struct TimelineV2View: View {
             .frame(height: LaneMetrics.ruler)
             EmptyLaneRow(label: "Video", icon: "film", height: LaneMetrics.video,
                          action: onAddClip)
+            // Overlay / Music / Voiceover all need a base timeline to land on
+            // (`addOverlay`, `addTextOverlay` and `startVoiceover` all guard on
+            // `totalDuration > 0.4`, and `buildComposition` refuses to build
+            // without clips). They used to render at full weight and swallow
+            // the tap. They now say what is missing and take you there.
             EmptyLaneRow(label: "Overlay · Text", icon: "rectangle.on.rectangle",
-                         height: LaneMetrics.overlay, action: onAddOverlay)
+                         height: LaneMetrics.overlay,
+                         caption: "Add a clip first", isEnabled: false,
+                         action: onAddClip)
             EmptyLaneRow(label: "Music", icon: "music.note",
-                         height: LaneMetrics.music, action: onAddMusic)
+                         height: LaneMetrics.music,
+                         caption: "Add a clip first", isEnabled: false,
+                         action: onAddClip)
             EmptyLaneRow(label: "Voiceover", icon: "mic.fill",
-                         height: LaneMetrics.music, action: onRecordVoiceover)
+                         height: LaneMetrics.music,
+                         caption: "Add a clip first", isEnabled: false,
+                         action: onAddClip)
         }
         .padding(.horizontal, 20)
     }
@@ -480,6 +501,13 @@ struct EmptyLaneRow: View {
     /// nil = stretch to the available width (empty timeline); a number pins
     /// the row to a fixed width inside the scrolling content stack.
     var width: CGFloat?
+    /// Trailing note shown INSTEAD of the "+" when this lane cannot be filled
+    /// yet, e.g. "Add a clip first". Keeps the row honest about what it does.
+    var caption: String?
+    /// `false` dims the row the way an unavailable Export is dimmed. The row
+    /// stays tappable — its action routes to whatever unblocks it — so it is
+    /// never a control that silently does nothing.
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -491,11 +519,19 @@ struct EmptyLaneRow: View {
                     .font(.system(size: height > 40 ? 12 : 11, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(LumaTheme.textMuted)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(LumaTheme.textMuted)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(LumaTheme.textMuted)
+                }
             }
             .foregroundStyle(LumaTheme.textSecondary)
+            .opacity(isEnabled ? 1 : 0.45)
             .padding(.horizontal, 12)
             .frame(maxWidth: width == nil ? .infinity : nil)
             .frame(width: width, height: height)

@@ -68,7 +68,15 @@ struct EditorTimelineView: View {
                 // B1: the second empty-state CTA — shoot straight into the
                 // live-look camera instead of leaving to find footage.
                 onRecord: { app.path.append(.camera) },
-                onAddOverlay: { showOverlayPicker = true },
+                // An overlay/music track added before any clip exists is
+                // silently discarded: `addOverlay` guards on totalDuration and
+                // `buildComposition` refuses to build without clips, so the
+                // file was accepted, never composited, and never shown. Say so
+                // instead of taking the media and losing it.
+                onAddOverlay: {
+                    if editor.isEmpty { app.importToast = "Add a video clip first" }
+                    else { showOverlayPicker = true }
+                },
                 onAddSticker: { showStickerLibrary = true },
                 onOpenMask: { showMaskPanel = true },
                 onCaptions: {
@@ -82,7 +90,10 @@ struct EditorTimelineView: View {
                     }
                 },
                 onTemplates: { showTemplates = true },
-                onAddMusic: { showAudioSourceChooser = true },
+                onAddMusic: {
+                    if editor.isEmpty { app.importToast = "Add a video clip first" }
+                    else { showAudioSourceChooser = true }
+                },
                 onExport: { showExportSheet = true },
                 onOpenAudio: { app.path.append(.audio) },
                 onOpenCrop: { app.path.append(.cropFormat) },
@@ -2255,6 +2266,13 @@ private struct EditorContent: View {
                            guard !editor.isRecordingVoiceover else {
                                editor.stopVoiceover()
                                LumaHaptics.shared.exportSuccess()
+                               return
+                           }
+                           // `startVoiceover` needs picture to record against
+                           // (totalDuration > 0.4) and returns silently
+                           // otherwise — explain rather than swallow the tap.
+                           guard editor.totalDuration > 0.4 else {
+                               app.importToast = "Add a video clip first"
                                return
                            }
                            editor.startVoiceover()

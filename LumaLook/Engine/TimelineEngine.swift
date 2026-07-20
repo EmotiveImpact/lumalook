@@ -2790,7 +2790,19 @@ final class EditorState: ObservableObject {
         let resumeAt = keepPosition ? currentTime : 0
         detachObservers()
 
-        guard let built = try? await buildComposition() else {
+        let outcome = try? await buildComposition()
+        // A rebuild superseded by a newer one must NOT publish: `buildComposition`
+        // does not observe cancellation, so a slow build that finished after the
+        // rebuild that replaced it used to overwrite the fresh state — leaving a
+        // live `player` and a non-zero `totalDuration` beside empty `clips`. That
+        // contradictory state is what stranded a loaded project behind the empty
+        // timeline placeholder with Export disabled. The newer task owns the
+        // state; leave it alone.
+        if Task.isCancelled { return }
+        // `clips` is the source of truth: a composition can only be valid while
+        // clips exist, so reconcile unconditionally rather than trusting a build
+        // that may have raced a mutation.
+        guard let built = outcome, !clips.isEmpty else {
             player?.pause()
             player = nil
             totalDuration = 0

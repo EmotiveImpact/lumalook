@@ -46,6 +46,23 @@ struct EmptyMediaHint: View {
     }
 }
 
+/// The single source-resolution ladder for every RENDER SURFACE in the
+/// grade/compare flow — stage, corner compare tile, scope, side-by-side panes.
+/// They must all describe the same photograph: a stage showing the hero while
+/// the compare tile shows a different picture is not a before/after.
+///
+/// `LookSwatch.referenceFrame` (photo + calibration patch band) is deliberately
+/// NOT in this ladder: it exists so twelve look TILES read as twelve grades,
+/// and it must never reach a surface the user is judging their image on.
+enum GradeSourceFrame {
+    /// Decoded once — `HeroPhoto.ciImage` re-reads the file on every access.
+    private static let hero: CIImage? = HeroPhoto.golden.ciImage
+
+    @MainActor static func current(_ app: AppModel) -> CIImage {
+        app.previewFrame ?? app.selectedImage ?? hero ?? LookThumbs.fallbackFrame
+    }
+}
+
 /// Empty-state preview: the bundled hero photograph run through the LIVE
 /// grade, so the look responds in real time even before a clip is picked.
 struct GradedHeroPreview: View {
@@ -405,7 +422,9 @@ struct ApplyLookView: View {
 
     /// Ungraded render of the current preview frame for the Compare tile.
     private func renderOriginalThumb() {
-        let frame = app.previewFrame ?? LookThumbs.fallbackFrame
+        // Must be the ungraded twin of whatever LookPreviewSurface is showing —
+        // the tile's whole contract is "this is your frame, without the look".
+        let frame = GradeSourceFrame.current(app)
         let extent = frame.extent
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else {
             originalThumb = nil
@@ -848,7 +867,7 @@ extension ApplyLookView {
         }
         .task(id: "\(scopeStamp)|\(scopeModeRaw)|\(Int(scopeW))x\(Int(scopeH))") {
             guard showScope else { return }
-            scopeImage = await Scopes.render(frame: app.previewFrame ?? LookThumbs.fallbackFrame,
+            scopeImage = await Scopes.render(frame: GradeSourceFrame.current(app),
                                              state: app.lookState, mode: scopeMode,
                                              size: CGSize(width: scopeW, height: scopeH))
         }

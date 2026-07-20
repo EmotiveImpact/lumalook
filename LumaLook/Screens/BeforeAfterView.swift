@@ -61,7 +61,9 @@ struct BeforeAfterView: View {
     private var gradeStamp: String {
         "\(app.settings)-\(app.selectedLook.id)-\(app.selectedLUT?.id.uuidString ?? "")"
         + "-\(app.conversionLUT?.id.uuidString ?? "")-\(Int(app.creativeOpacity))"
-        + "-\(Int(app.conversionOpacity))-\(app.previewFrame?.extent.debugDescription ?? "none")"
+        // Keyed on the RESOLVED source, so swapping between the hero fallback
+        // and real media re-renders the panes instead of holding a stale pair.
+        + "-\(Int(app.conversionOpacity))-\(GradeSourceFrame.current(app).extent.debugDescription)"
     }
 
     var body: some View {
@@ -346,7 +348,7 @@ struct BeforeAfterView: View {
 
     /// Width / height of the reference frame, defaulting to 16:9.
     private var sourceAspect: CGFloat {
-        let extent = (app.previewFrame ?? LookThumbs.fallbackFrame).extent
+        let extent = GradeSourceFrame.current(app).extent
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else { return 16.0 / 9.0 }
         return extent.width / extent.height
     }
@@ -380,7 +382,9 @@ struct BeforeAfterView: View {
     private func renderPanes() {
         app.player?.pause()
         isPlaying = false
-        let frame = app.previewFrame ?? LookThumbs.fallbackFrame
+        // Same ladder Split and Flip resolve through (LookPreviewSurface), so
+        // all three modes compare the SAME photograph — distinct modes, one image.
+        let frame = GradeSourceFrame.current(app)
         let extent = frame.extent
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else {
             originalPane = nil

@@ -880,10 +880,18 @@ struct FilterPackDetailView: View {
             VStack(alignment: .trailing, spacing: 3) {
                 TechReadout("\(pack.looks.count) LOOKS", size: 11,
                             color: LumaTheme.textSecondary)
-                TechReadout(pack.eraTag.uppercased(), size: 9,
-                            color: LumaTheme.textMuted)
+                // Deliberately NOT TechReadout: that type hardcodes
+                // lineLimit(1), so the pack's only descriptive claim on this
+                // screen truncated mid-word ("INSPIRED BY HOLLY…"). Same
+                // instrument voice, but allowed to wrap onto a second line.
+                Text(pack.eraTag.uppercased())
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .kerning(1.2)
+                    .foregroundStyle(LumaTheme.textMuted)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: 150, alignment: .trailing)
+            .frame(maxWidth: 195, alignment: .trailing)
             .multilineTextAlignment(.trailing)
         }
         .frame(maxWidth: .infinity)
@@ -1802,6 +1810,13 @@ struct SettingsSubscriptionView: View {
     @State private var showLanguageNotice = false
     @State private var showStorageDetail = false
     @State private var lutBytes: Int64 = 0
+    /// Restore is a network round-trip that usually ends in "nothing to
+    /// restore" — it has to say so, or the row reads as dead.
+    @State private var restoring = false
+    @State private var restoreResult: String?
+    /// Shown when no mail client can take the mailto: — otherwise the only
+    /// support path in the app dead-ends silently.
+    @State private var showSupportFallback = false
     /// Same store the export spec sheet reads on appear — changing it here
     /// really changes the default the exporter uses.
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
@@ -1828,6 +1843,24 @@ struct SettingsSubscriptionView: View {
                 .presentationBackground(LumaTheme.background)
         }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+        // Every restore says what happened — success, nothing found, or error.
+        .alert("Restore Purchases", isPresented: Binding(
+            get: { restoreResult != nil },
+            set: { if !$0 { restoreResult = nil } })) {
+            Button("OK", role: .cancel) { restoreResult = nil }
+        } message: {
+            Text(restoreResult ?? "")
+        }
+        // Fallback when no mail client can take the mailto:.
+        .confirmationDialog("Help & Support", isPresented: $showSupportFallback,
+                            titleVisibility: .visible) {
+            Button("Copy Email Address") {
+                UIPasteboard.general.string = Self.supportAddress
+            }
+            Button("Done", role: .cancel) { }
+        } message: {
+            Text("No mail app is set up on this device. Email \(Self.supportAddress) from anywhere and we'll answer.")
+        }
         // The row leaves the app, so it says so before it does.
         .confirmationDialog("App Language", isPresented: $showLanguageNotice,
                             titleVisibility: .visible) {
@@ -1898,9 +1931,11 @@ struct SettingsSubscriptionView: View {
                         showManageSubscriptions = true
                     }
                 }
-                settingsRow(icon: "arrow.clockwise", title: "Restore Purchases") {
-                    Task { await storeService.restorePurchases() }
+                settingsRow(icon: "arrow.clockwise", title: "Restore Purchases",
+                            busy: restoring, showsAffordance: false) {
+                    performRestore()
                 }
+                .disabled(restoring)
             }
             .listRowBackground(LumaTheme.surface)
 
@@ -1936,12 +1971,9 @@ struct SettingsSubscriptionView: View {
             .listRowBackground(LumaTheme.surface)
 
             Section("About") {
-                settingsRow(icon: "questionmark.circle", title: "Help & Support") {
-                    let subject = "LumaLook Support".addingPercentEncoding(
-                        withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
-                    if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
-                        UIApplication.shared.open(url)
-                    }
+                settingsRow(icon: "questionmark.circle", title: "Help & Support",
+                            opensExternally: true) {
+                    openSupportMail()
                 }
                 settingsRow(icon: "star", title: "Rate LumaLook",
                             opensExternally: true) {
@@ -1971,8 +2003,13 @@ struct SettingsSubscriptionView: View {
     /// `opensExternally` swaps the chevron for the system "leaves the app"
     /// glyph, so a row that ejects to iOS Settings never wears the same
     /// affordance as one that opens an in-app sheet.
+    /// `showsAffordance: false` is for rows that perform work in place rather
+    /// than pushing or ejecting — a chevron there promises navigation that
+    /// never happens. `busy` swaps the trailing slot for a spinner.
     private func settingsRow(icon: String, title: String, value: String? = nil,
                              opensExternally: Bool = false,
+                             busy: Bool = false,
+                             showsAffordance: Bool = true,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -1989,12 +2026,59 @@ struct SettingsSubscriptionView: View {
                         .font(.body)
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
-                Image(systemName: opensExternally ? "arrow.up.forward.app" : "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(LumaTheme.textMuted)
+                if busy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(LumaTheme.textSecondary)
+                } else if showsAffordance {
+                    Image(systemName: opensExternally ? "arrow.up.forward.app" : "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(LumaTheme.textMuted)
+                }
             }
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Restore / support
+
+    /// Restore always ends in a spoken result. The common case is a free user
+    /// with nothing to restore, which previously produced no feedback at all.
+    private func performRestore() {
+        guard !restoring else { return }
+        restoring = true
+        storeService.lastError = nil
+        Task {
+            await storeService.restorePurchases()
+            restoring = false
+            if let error = storeService.lastError {
+                restoreResult = error
+                storeService.lastError = nil
+            } else if storeService.isPro {
+                restoreResult = "Pro restored. Every look is unlocked on this device."
+            } else if !storeService.ownedPackIDs.isEmpty {
+                restoreResult = "\(storeService.ownedPackIDs.count) purchased pack\(storeService.ownedPackIDs.count == 1 ? "" : "s") restored."
+            } else {
+                restoreResult = "No purchases to restore on this Apple Account."
+            }
+        }
+    }
+
+    private static let supportAddress = "emotiveimpact@gmail.com"
+
+    /// Gated on canOpenURL and on the open callback: the simulator, and any
+    /// device with Mail removed or unconfigured, silently swallowed this.
+    private func openSupportMail() {
+        let subject = "LumaLook Support".addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+        guard let url = URL(string: "mailto:\(Self.supportAddress)?subject=\(subject)"),
+              UIApplication.shared.canOpenURL(url) else {
+            showSupportFallback = true
+            return
+        }
+        UIApplication.shared.open(url) { opened in
+            if !opened { showSupportFallback = true }
+        }
     }
 
     // MARK: Export quality

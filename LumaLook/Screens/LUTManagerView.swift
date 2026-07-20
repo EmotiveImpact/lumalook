@@ -19,6 +19,9 @@ struct LUTManagerView: View {
     @State private var pendingImport: PickedFile?
     @State private var renaming: LUTFile?
     @State private var renameText = ""
+    /// Delete is confirmed, never one gesture — and only user imports can be
+    /// deleted at all (pack/bundled cubes have no in-app recovery).
+    @State private var deleting: LUTFile?
 
     private static let cubeType = UTType(filenameExtension: "cube") ?? .data
 
@@ -85,11 +88,17 @@ struct LUTManagerView: View {
                    renameText = target.displayName
                    renaming = target
                },
-               onNewCollection: { showNewCollection = true })
+               onNewCollection: { showNewCollection = true },
+               onDelete: { deleting = $0 })
             .listRowBackground(LumaTheme.surface)
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button(role: .destructive) { app.lutRepository.delete(lut) } label: {
-                    Label("Delete", systemImage: "trash")
+            // Only user imports are deletable, and never on a full swipe:
+            // bundled Basics can't be re-seeded and pack cubes belong to the
+            // pack, so a stray gesture would destroy them with no way back.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                if lut.packID == nil {
+                    Button(role: .destructive) { deleting = lut } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
             .swipeActions(edge: .leading) {
@@ -161,6 +170,18 @@ struct LUTManagerView: View {
                 renaming = nil
             }
             Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .confirmationDialog("Delete \(deleting?.displayName ?? "LUT")?",
+                            isPresented: Binding(get: { deleting != nil },
+                                                 set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let lut = deleting { app.lutRepository.delete(lut) }
+                deleting = nil
+            }
+            Button("Cancel", role: .cancel) { deleting = nil }
+        } message: {
+            Text("This removes the .cube file from your library. You'll need to import it again.")
         }
         // Picking a file no longer imports it — G2 validates and previews
         // first, and only saves on the user's word.
@@ -354,11 +375,20 @@ private struct LUTRow: View {
     /// Rename is hosted by the parent (one alert, not one per row).
     var onRename: (LUTFile) -> Void
     var onNewCollection: () -> Void
+    /// Delete is hosted by the parent so one confirmation covers swipe + menu.
+    var onDelete: (LUTFile) -> Void
 
+    /// Provenance, not a blanket "Imported" — the factory Basics cubes and
+    /// purchased pack cubes were never imported by the user, and saying so
+    /// contradicted the same file's subtitle in the Looks grid.
     private var agoText: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        return "Imported \(formatter.localizedString(for: lut.importedAt, relativeTo: Date()))"
+        let ago = formatter.localizedString(for: lut.importedAt, relativeTo: Date())
+        guard let packID = lut.packID else { return "Imported \(ago)" }
+        if packID == LUTRepository.bundledBasicsPackID { return "Included with LumaLook" }
+        if let name = LookLibraryStore.packDisplayName(id: packID) { return "From \(name)" }
+        return "Installed \(ago)"
     }
 
     var body: some View {
@@ -404,7 +434,9 @@ private struct LUTRow: View {
                         app.path.append(.selectClip)
                     }
                 }
-                Button("Rename…") { onRename(lut) }
+                if lut.packID == nil {
+                    Button("Rename…") { onRename(lut) }
+                }
                 Button(lut.isFavourite ? "Remove Favourite" : "Favourite") {
                     app.lutRepository.toggleFavourite(lut)
                 }
@@ -420,8 +452,16 @@ private struct LUTRow: View {
                     }
                     Button("New Collection…") { onNewCollection() }
                 }
-                Button("Delete", role: .destructive) {
-                    app.lutRepository.delete(lut)
+                // Same ownership rule as the Look Library's row menu: only
+                // your own imports can be deleted; pack cubes route to the
+                // pack, and bundled Basics offer nothing destructive at all.
+                if lut.packID == nil {
+                    Button("Delete", role: .destructive) { onDelete(lut) }
+                } else if lut.packID != LUTRepository.bundledBasicsPackID {
+                    Button {
+                        app.selectedPackID = lut.packID
+                        app.path.append(.filterPack)
+                    } label: { Label("View Pack…", systemImage: "square.grid.2x2") }
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
