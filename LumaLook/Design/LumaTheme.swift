@@ -12,6 +12,20 @@ enum LumaTheme {
     static let hairline = Color.white.opacity(0.08)
     static let border = Color.white.opacity(0.10)
 
+    // MARK: Elevation
+    // Depth on a near-black UI comes from VALUE, not from drawn outlines.
+    // A 1px stroke round every card reads as a cheap wireframe; a card that is
+    // simply a few percent lighter than the canvas reads as a physical layer.
+    /// Default card fill — one step above the canvas, no outline needed.
+    static let card = Color.white.opacity(0.075)
+    /// A card sitting on top of another card (nested rows, expanded sections).
+    static let cardRaised = Color.white.opacity(0.11)
+    /// Unselected chip / pill fill. Filled, never outlined.
+    static let chip = Color.white.opacity(0.085)
+    /// Shadow under an elevated card. Subtle — it should read as separation,
+    /// not as a drop-shadow effect.
+    static let cardShadow = Color.black.opacity(0.45)
+
     static let textPrimary = Color.white
     static let textSecondary = Color.white.opacity(0.62)
     static let textMuted = Color.white.opacity(0.38)

@@ -252,11 +252,9 @@ struct LUTManagerView: View {
                             if selected {
                                 Capsule().fill(LumaTheme.accent)
                             } else {
-                                Capsule().fill(LumaTheme.surface)
+                                Capsule().fill(LumaTheme.chip)
                             }
                         }
-                        .overlay(Capsule().strokeBorder(
-                            .white.opacity(selected ? 0.18 : 0.06), lineWidth: 1))
                     }
                     .buttonStyle(.lumaPress)
                 }
@@ -361,6 +359,11 @@ struct LUTManagerView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // The List sat under LumaScreen's 20pt stack spacing AND contributed
+        // its own ~35pt top inset, so a 2-item library opened with a band of
+        // empty black between the search field and the first group.
+        .listSectionSpacing(16)
+        .contentMargins(.top, 0, for: .scrollContent)
         // LumaScreen's VStack already spaces this band; the List's own section
         // inset on top of it read as a ~55pt void under the search field.
         .contentMargins(.top, 0, for: .scrollContent)

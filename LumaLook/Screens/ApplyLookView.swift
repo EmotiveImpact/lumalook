@@ -29,7 +29,8 @@ struct LookPreviewSurface: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: radius))
-        .overlay(RoundedRectangle(cornerRadius: radius).stroke(.white.opacity(0.06)))
+        // clipShape clips pixels, not touches.
+        .contentShape(RoundedRectangle(cornerRadius: radius))
     }
 }
 
@@ -640,9 +641,10 @@ struct ApplyLookView: View {
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(on ? LumaTheme.gold : .white)
                 .frame(width: 56, height: 52)
-                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
-                    on ? LumaTheme.gold.opacity(0.55) : .white.opacity(0.14), lineWidth: 1))
+                // Favourited reads as a gold-tinted FILL, not a gold ring.
+                .background(on ? AnyShapeStyle(LumaTheme.gold.opacity(0.18))
+                               : AnyShapeStyle(LumaTheme.cardRaised),
+                            in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.lumaPress)
         .disabled(look == nil)
@@ -689,11 +691,16 @@ struct ApplyLookView: View {
                                 .font(.system(size: 21, weight: .medium))
                                 .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
                                 .frame(width: 66, height: 50)
-                                .background(selected ? LumaTheme.accent : LumaTheme.surface,
+                                .background(selected ? AnyShapeStyle(LumaTheme.accent)
+                                                     : AnyShapeStyle(LumaTheme.card),
                                             in: RoundedRectangle(cornerRadius: 13))
-                                .overlay(RoundedRectangle(cornerRadius: 13)
-                                    .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.07),
-                                            lineWidth: selected ? 1.5 : 1))
+                                // MEANINGFUL: the selection ring only.
+                                .overlay {
+                                    if selected {
+                                        RoundedRectangle(cornerRadius: 13)
+                                            .stroke(LumaTheme.accentBright, lineWidth: 1.5)
+                                    }
+                                }
                                 .overlay(alignment: .topTrailing) {
                                     if locked {
                                         Image(systemName: "crown.fill")
@@ -800,8 +807,7 @@ struct ApplyLookView: View {
                                         .font(.system(size: 26, weight: .medium))
                                         .foregroundStyle(LumaTheme.accentBright)
                                 }
-                                .overlay(RoundedRectangle(cornerRadius: 16)
-                                    .stroke(.white.opacity(0.08)))
+
                             Text("Compare")
                                 .font(.system(size: 12))
                                 .foregroundStyle(LumaTheme.textSecondary)
@@ -857,8 +863,6 @@ extension ApplyLookView {
         }
         .padding(7)
         .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(.white.opacity(0.16), lineWidth: 1))
         // Tap the scope itself to cycle waveform → parade → vectorscope → histogram.
         .contentShape(Rectangle())
         .onTapGesture {
@@ -1072,12 +1076,9 @@ private struct SlotCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(accented ? AnyShapeStyle(LumaTheme.accent.opacity(0.12))
-                             : AnyShapeStyle(.white.opacity(0.04)),
+        .background(accented ? AnyShapeStyle(LumaTheme.accent.opacity(0.20))
+                             : AnyShapeStyle(LumaTheme.card),
                     in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11)
-            .strokeBorder(accented ? LumaTheme.accent.opacity(0.55) : .white.opacity(0.14),
-                          lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .gesture(

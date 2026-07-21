@@ -69,9 +69,13 @@ struct LUTCompareView: View {
                                 }
                                 .frame(height: 148)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14)
-                                    .stroke(isCurrent ? LumaTheme.accentBright : .white.opacity(0.08),
-                                            lineWidth: isCurrent ? 2 : 1))
+                                // MEANINGFUL: marks which candidate is live.
+                                .overlay {
+                                    if isCurrent {
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(LumaTheme.accentBright, lineWidth: 2)
+                                    }
+                                }
                                 Text(candidate?.file.displayName ?? "Original")
                                     .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
                                     .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)

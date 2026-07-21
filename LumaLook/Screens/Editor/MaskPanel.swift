@@ -135,8 +135,7 @@ private struct PositionPad: View {
             let p = CGPoint(x: center.x * geo.size.width, y: center.y * geo.size.height)
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(LumaTheme.surface)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(LumaTheme.hairline))
+                    .fill(LumaTheme.card)
                 Circle()
                     .fill(LumaTheme.accentBright)
                     .frame(width: 18, height: 18)

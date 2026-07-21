@@ -253,11 +253,16 @@ private struct PaywallPlanRow: View {
                 }
             }
             .padding(15)
-            .background(LumaTheme.surface.opacity(selected ? 1 : 0.55),
+            .background(selected ? LumaTheme.cardRaised : LumaTheme.card,
                         in: RoundedRectangle(cornerRadius: 15))
-            .overlay(RoundedRectangle(cornerRadius: 15)
-                .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.07),
-                        lineWidth: selected ? 1.5 : 1))
+            // MEANINGFUL: the chosen plan. Unselected plans step down in value
+            // instead of wearing a competing outline.
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(LumaTheme.accentBright, lineWidth: 1.5)
+                }
+            }
         }
         .buttonStyle(.lumaPress)
     }

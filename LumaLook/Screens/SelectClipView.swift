@@ -86,8 +86,6 @@ struct SelectClipView: View {
                     .photosPickerAccessoryVisibility(.hidden, edges: .all)
                     .frame(maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
                     .padding(.horizontal, 22)
                     .padding(.bottom, 8)
                 }

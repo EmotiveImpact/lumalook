@@ -226,11 +226,18 @@ extension View {
 /// content appears to slide out from under the chrome instead of being
 /// clipped by a hard edge (look strips, the timeline ruler, filmstrips).
 ///
-/// Implementation: the content is masked by an opaque rectangle from which
-/// two edge gradients are *punched out* with `.destinationOut`, flattened by
-/// a `compositingGroup` so the blend applies to the mask only. The mask is
-/// rasterized with `drawingGroup()` — it is static per size, and this keeps
-/// the per-frame cost flat while the scroller animates under it.
+/// Implementation: the mask is laid out DIRECTLY as the alpha ramp we want —
+/// a transparent-to-opaque gradient at the leading edge, an opaque middle that
+/// takes the remaining width, and an opaque-to-transparent gradient at the
+/// trailing edge.
+///
+/// The previous version tried to punch the fades out of an opaque `Rectangle()`
+/// with `.destinationOut`. That never produced a fade: the rectangle sat *under*
+/// the gradients in a `ZStack`, and the `drawingGroup()` rasterized the mask
+/// into its own buffer where the subtractive blend no longer composited against
+/// the rectangle — so the mask's alpha came out as 1 everywhere and rails just
+/// hard-cut a tile in half at the edge. Building the ramp positionally needs no
+/// blend mode, so there is nothing left to defeat.
 struct EdgeFadeMask: ViewModifier {
     /// Width of the leading fade. 0 disables it.
     var leading: CGFloat = 20
@@ -239,25 +246,19 @@ struct EdgeFadeMask: ViewModifier {
 
     func body(content: Content) -> some View {
         content.mask {
-            ZStack {
-                Rectangle()
-                HStack(spacing: 0) {
-                    if leading > 0 {
-                        LinearGradient(colors: [.black, .clear],
-                                       startPoint: .leading, endPoint: .trailing)
-                            .frame(width: leading)
-                    }
-                    Spacer(minLength: 0)
-                    if trailing > 0 {
-                        LinearGradient(colors: [.clear, .black],
-                                       startPoint: .leading, endPoint: .trailing)
-                            .frame(width: trailing)
-                    }
+            HStack(spacing: 0) {
+                if leading > 0 {
+                    LinearGradient(colors: [.clear, .black],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: leading)
                 }
-                .blendMode(.destinationOut)
+                Rectangle().fill(.black)
+                if trailing > 0 {
+                    LinearGradient(colors: [.black, .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: trailing)
+                }
             }
-            .compositingGroup()
-            .drawingGroup()
         }
     }
 }

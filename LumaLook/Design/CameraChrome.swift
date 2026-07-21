@@ -141,9 +141,12 @@ struct ProRailButton<Label: View>: View {
                 .frame(width: 40, height: 40)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 13))
                 .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 13))
-                .overlay(RoundedRectangle(cornerRadius: 13)
-                    .strokeBorder(active ? LumaTheme.accent.opacity(0.55) : .white.opacity(0.1),
-                                  lineWidth: 1))
+                // Active state reads as an accent tint over the glass, not a ring.
+                .overlay {
+                    if active {
+                        RoundedRectangle(cornerRadius: 13).fill(LumaTheme.accent.opacity(0.22))
+                    }
+                }
         }
         .buttonStyle(.lumaPress)
     }
@@ -280,7 +283,7 @@ struct CameraAssistChip: View {
                 .background(on ? AnyShapeStyle(LumaTheme.accentBright)
                                : AnyShapeStyle(Color.white.opacity(0.09)),
                             in: Capsule())
-                .overlay(Capsule().strokeBorder(.white.opacity(on ? 0 : 0.12), lineWidth: 1))
+
         }
         .buttonStyle(.lumaPress)
         .sensoryFeedback(.selection, trigger: on)

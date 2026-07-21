@@ -304,10 +304,8 @@ struct EmptyStateCTA: View {
             .frame(width: 138)
             .padding(.vertical, 18)
             .background(filled ? AnyShapeStyle(LumaTheme.accent)
-                               : AnyShapeStyle(LumaTheme.surface),
+                               : AnyShapeStyle(LumaTheme.cardRaised),
                         in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(.white.opacity(filled ? 0.18 : 0.10), lineWidth: 1))
         }
         .buttonStyle(.lumaPress)
     }
@@ -340,9 +338,8 @@ struct ClipActionChip: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
             .background(selected ? AnyShapeStyle(LumaTheme.accent)
-                                 : AnyShapeStyle(LumaTheme.surface),
+                                 : AnyShapeStyle(LumaTheme.chip),
                         in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.07), lineWidth: 1))
         }
         .buttonStyle(.lumaPress)
     }

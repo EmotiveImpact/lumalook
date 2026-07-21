@@ -916,9 +916,14 @@ struct TimelineClipCell: View {
                 .padding(4)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.08),
-                    lineWidth: selected ? 2.5 : 1))
+        // MEANINGFUL: which clip is selected. Unselected clips are separated
+        // by their own fill and the lane gaps, not by an outline each.
+        .overlay {
+            if selected {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(LumaTheme.accentBright, lineWidth: 2.5)
+            }
+        }
         .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }

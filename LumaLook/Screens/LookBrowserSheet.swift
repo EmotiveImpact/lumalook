@@ -359,11 +359,9 @@ struct LookBrowserSheet: View {
                             if category == cat {
                                 Capsule().fill(LumaTheme.accent)
                             } else {
-                                Capsule().fill(LumaTheme.surface)
+                                Capsule().fill(LumaTheme.chip)
                             }
                         }
-                        .overlay(Capsule().strokeBorder(
-                            .white.opacity(category == cat ? 0.18 : 0.06), lineWidth: 1))
                     }
                     .buttonStyle(.lumaPress)
                 }
@@ -785,11 +783,9 @@ private struct SmallGhostChrome: ViewModifier {
                 if active {
                     RoundedRectangle(cornerRadius: 12).fill(LumaTheme.accent.opacity(0.28))
                 } else {
-                    RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 12).fill(LumaTheme.chip)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(.white.opacity(active ? 0.28 : 0.10), lineWidth: 1))
             .animation(.spring(response: 0.25, dampingFraction: 0.85), value: active)
     }
 }
@@ -1032,8 +1028,7 @@ struct AllLooksTile: View {
                                 .foregroundStyle(LumaTheme.accentBright)
                         }
                     }
-                    .overlay(RoundedRectangle(cornerRadius: radius)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+
                 if showsName {
                     Text("All Looks")
                         .font(.system(size: size.width > 80 ? 13 : 12))

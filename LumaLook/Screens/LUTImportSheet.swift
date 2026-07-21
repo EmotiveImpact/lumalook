@@ -204,8 +204,7 @@ struct LUTImportSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(LumaTheme.hairline))
+        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 14))
     }
 
     @ViewBuilder
@@ -314,7 +313,6 @@ struct LUTImportSheet: View {
         }
         .frame(height: 150)
         .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(LumaTheme.hairline))
     }
 
     /// The terminal state for a rejected file — static, so the panel stops
@@ -361,8 +359,7 @@ struct LUTImportSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(LumaTheme.hairline))
+        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private var collectionRow: some View {
@@ -400,8 +397,7 @@ struct LUTImportSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(LumaTheme.hairline))
+        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private var selectedCollectionName: String {

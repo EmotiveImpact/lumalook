@@ -53,8 +53,7 @@ struct TemplateLibraryView: View {
                                 .foregroundStyle(LumaTheme.textMuted)
                         }
                         .padding(12)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(LumaTheme.hairline))
+                        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.lumaPress)
                     .disabled(editor.clips.isEmpty)

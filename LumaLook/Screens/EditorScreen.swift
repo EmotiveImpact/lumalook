@@ -1903,8 +1903,7 @@ private struct EditorContent: View {
                                        startPoint: .top, endPoint: .bottom),
                         in: RoundedRectangle(cornerRadius: 13)
                     )
-                    .overlay(RoundedRectangle(cornerRadius: 13)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 1))
+
             }
             .buttonStyle(.lumaPress)
             .conditionalEffect(.repeat(.shine, every: .seconds(4)), condition: !editor.isEmpty)
@@ -3176,9 +3175,11 @@ private struct OverlayPanel: View {
                 .overlay(Circle()
                     .fill(selected ? LumaTheme.accentBright : .white.opacity(0.45))
                     .frame(width: 5, height: 5))
-                .overlay(RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(selected ? LumaTheme.accent : .white.opacity(0.1),
-                                  lineWidth: 1))
+                .overlay {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 5).strokeBorder(LumaTheme.accent, lineWidth: 1)
+                    }
+                }
         }
         .buttonStyle(.lumaPress)
     }

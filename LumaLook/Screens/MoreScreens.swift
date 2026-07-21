@@ -143,8 +143,7 @@ struct PackStatePill: View {
                 .foregroundStyle(LumaTheme.teal)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(LumaTheme.teal.opacity(0.14), in: Capsule())
-                .overlay(Capsule().strokeBorder(LumaTheme.teal.opacity(0.35), lineWidth: 1))
+                .background(LumaTheme.teal.opacity(0.20), in: Capsule())
         case .free:
             Text("Free")
                 .font(.system(size: 13, weight: .bold))
@@ -153,15 +152,15 @@ struct PackStatePill: View {
                 .padding(.vertical, 8)
                 .background(LumaTheme.surfaceStrong, in: Capsule())
         case .proIncluded:
-            // A badge, not a buy button: outlined and tinted rather than
-            // filled, so it cannot be mistaken for a price.
+            // A badge, not a buy button: tinted rather than solid-filled, so
+            // it cannot be mistaken for a price. The tint alone does that job —
+            // it does not need a ring as well.
             Label("Pro", systemImage: "crown.fill")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(LumaTheme.accent.opacity(0.16), in: Capsule())
-                .overlay(Capsule().strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1))
+                .background(LumaTheme.accent.opacity(0.24), in: Capsule())
         case .buy:
             Text(price)
                 .font(.system(size: 13, weight: .bold))
@@ -357,8 +356,7 @@ struct FilterStoreView: View {
         }
         .padding(.horizontal, 13)
         .frame(height: 42)
-        .background(LumaTheme.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .background(LumaTheme.chip, in: Capsule())
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
@@ -390,11 +388,9 @@ struct FilterStoreView: View {
                             if category == cat {
                                 Capsule().fill(LumaTheme.accent)
                             } else {
-                                Capsule().fill(LumaTheme.surface)
+                                Capsule().fill(LumaTheme.chip)
                             }
                         }
-                        .overlay(Capsule().strokeBorder(
-                            .white.opacity(category == cat ? 0.18 : 0.06), lineWidth: 1))
                     }
                     .buttonStyle(.lumaPress)
                 }
@@ -422,6 +418,9 @@ struct FilterStoreView: View {
                 .frame(height: 158)
                 .frame(maxWidth: .infinity)
                 .clipped()
+                // Featured card is a Button — keep its touch region on the
+                // artwork rather than the overflowing scaledToFill bleed.
+                .contentShape(Rectangle())
                 .overlay(LinearGradient(colors: [.clear, .black.opacity(0.78)],
                                         startPoint: .center, endPoint: .bottom))
 
@@ -448,7 +447,6 @@ struct FilterStoreView: View {
             }
             .frame(height: 158)
             .clipShape(RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(LumaTheme.hairline))
         }
         .buttonStyle(.lumaPress)
     }
@@ -518,8 +516,7 @@ private struct StoreRow: View {
                               price: StoreNav.price(pack, storeService))
             }
             .padding(10)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(LumaTheme.hairline))
+            .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.lumaPress)
     }
@@ -742,6 +739,9 @@ struct FilterPackDetailView: View {
             .frame(height: 300)
             .frame(maxWidth: .infinity)
             .clipped()
+            // Hero overflows its frame; confine hit-testing so it cannot cover
+            // the back control or the controls sitting under it.
+            .contentShape(Rectangle())
             // Top scrim so the status bar, clock and back control stay legible
             // over bright skies (.coast / .desert); then starts high and reaches
             // full background before the hero's bottom edge, so the photo
@@ -832,6 +832,9 @@ struct FilterPackDetailView: View {
                 .frame(height: 132)
                 .frame(maxWidth: .infinity)
                 .clipped()
+                // Try-on preview sits directly above its controls — confine
+                // its touch region to the visible panel.
+                .contentShape(Rectangle())
                 .overlay(LinearGradient(colors: [.clear, .black.opacity(0.7)],
                                         startPoint: .center, endPoint: .bottom))
 
@@ -844,7 +847,6 @@ struct FilterPackDetailView: View {
             }
             .frame(height: 132)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(LumaTheme.hairline))
 
             Text(tryOnIsUserMedia
                  ? "Your most recent footage, graded with \(activeLook.name) before you buy."
@@ -983,8 +985,6 @@ struct FilterPackDetailView: View {
                             ? AnyShapeStyle(LumaTheme.teal.opacity(0.16))
                             : AnyShapeStyle(LumaTheme.accent),
                             in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(installed ? LumaTheme.teal.opacity(0.4) : .clear, lineWidth: 1))
             }
             .buttonStyle(.lumaPress)
             .disabled(storeService.purchaseInFlight)
@@ -1303,7 +1303,7 @@ struct CustomLookBuilderView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 52, height: 52)
-                        .background(Circle().stroke(.white.opacity(0.25), lineWidth: 1.5))
+                        .background(Circle().fill(LumaTheme.cardRaised))
                 }
                 .buttonStyle(.plain)
             }
@@ -1381,7 +1381,7 @@ private struct ProjectList: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(LumaTheme.accentBright)
                     }
-                    .listRowBackground(LumaTheme.surface)
+                    .listRowBackground(LumaTheme.card)
                 }
             }
 
@@ -1395,8 +1395,12 @@ private struct ProjectList: View {
                             HStack(spacing: 14) {
                                 ProjectThumb(project: project, store: store,
                                              fallback: MockScene.allCases[index % MockScene.allCases.count])
-                                    .frame(width: 92, height: 58)
-                                VStack(alignment: .leading, spacing: 3) {
+                                    // 92x58 + a wrapping subtitle pushed rows past
+                                    // 120pt — a project list that showed four items
+                                    // per screen. 72x44 with a single-line subtitle
+                                    // lands the row at ~60pt.
+                                    .frame(width: 72, height: 44)
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(project.title)
                                         .font(.body.weight(.semibold))
                                         .foregroundStyle(.white)
@@ -1411,16 +1415,18 @@ private struct ProjectList: View {
                                     }())
                                         .font(.footnote)
                                         .foregroundStyle(LumaTheme.textMuted)
+                                        // Metadata is a glanceable single line;
+                                        // wrapping it doubled every row's height.
+                                        .lineLimit(1)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundStyle(LumaTheme.textMuted)
                             }
-                            .padding(.vertical, 2)
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(LumaTheme.surface)
+                        .listRowBackground(LumaTheme.card)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 store.deleteProject(project.id)
@@ -1436,6 +1442,10 @@ private struct ProjectList: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // Match Settings: tight section gaps, no cavernous inset above the
+        // first section. See the note there.
+        .listSectionSpacing(18)
+        .contentMargins(.top, 2, for: .scrollContent)
         .scrollDisabled(store.projects.isEmpty)
         // With the row hidden the empty state simply centres in its container —
         // no magic top padding compensating for chrome that is no longer there.
@@ -1480,7 +1490,9 @@ struct ProjectThumb: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.06)))
+            // Thumb sits inside the project row's Button — the overflowing fill
+            // must not extend the row's touch target past its artwork.
+            .contentShape(RoundedRectangle(cornerRadius: 14))
         .task {
             guard thumbnail == nil, let first = project.clips.first else { return }
             let url = store.clipURL(for: first)
@@ -1623,7 +1635,7 @@ struct CropFormatView: View {
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 50, height: 50)
-                        .background(Circle().stroke(.white.opacity(0.25), lineWidth: 1.5))
+                        .background(Circle().fill(LumaTheme.cardRaised))
                 }
                 .buttonStyle(.plain)
             }
@@ -1927,7 +1939,7 @@ struct SettingsSubscriptionView: View {
         List {
             Section {
                 subscriptionCard
-                    .listRowBackground(LumaTheme.surface)
+                    .listRowBackground(LumaTheme.card)
             }
 
             Section("Purchases") {
@@ -1946,7 +1958,7 @@ struct SettingsSubscriptionView: View {
                 }
                 .disabled(restoring)
             }
-            .listRowBackground(LumaTheme.surface)
+            .listRowBackground(LumaTheme.card)
 
             Section("Preferences") {
                 settingsRow(icon: "4k.tv", title: "Export Quality",
@@ -1963,7 +1975,7 @@ struct SettingsSubscriptionView: View {
                     showLanguageNotice = true
                 }
             }
-            .listRowBackground(LumaTheme.surface)
+            .listRowBackground(LumaTheme.card)
 
             Section("Storage") {
                 // LUTManagerView already exists but had no route from here.
@@ -1977,7 +1989,7 @@ struct SettingsSubscriptionView: View {
                     showStorageDetail = true
                 }
             }
-            .listRowBackground(LumaTheme.surface)
+            .listRowBackground(LumaTheme.card)
 
             Section("About") {
                 settingsRow(icon: "questionmark.circle", title: "Help & Support",
@@ -2003,10 +2015,17 @@ struct SettingsSubscriptionView: View {
                     showAbout = true
                 }
             }
-            .listRowBackground(LumaTheme.surface)
+            .listRowBackground(LumaTheme.card)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // insetGrouped ships with ~35pt between sections and a deep inset above
+        // the first one. Stacked under LumaScreen's own header padding that left
+        // a hand's width of empty black under the title and made five short
+        // sections span two screens. 18pt reads as a deliberate group gap.
+        .listSectionSpacing(18)
+        .contentMargins(.top, 2, for: .scrollContent)
+        .environment(\.defaultMinListRowHeight, 52)
     }
 
     /// `opensExternally` swaps the chevron for the system "leaves the app"
@@ -2249,7 +2268,7 @@ private struct SettingsGroup: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 HStack(spacing: 14) {
                     Circle()
-                        .stroke(.white.opacity(0.35), lineWidth: 1.3)
+                        .fill(LumaTheme.cardRaised)
                         .frame(width: 34, height: 34)
                         .overlay(Image(systemName: row.icon)
                             .font(.system(size: 14, weight: .medium))

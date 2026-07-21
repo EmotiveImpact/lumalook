@@ -51,9 +51,7 @@ struct AudioFocusView: View {
     private static func plate(cornerRadius: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(LumaTheme.bar)
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).fill(LumaTheme.surface))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).fill(LumaTheme.card))
     }
 }
 

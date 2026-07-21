@@ -52,5 +52,10 @@ struct HeroImage: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: radius))
+            // The scaledToFill image overflows the frame it is given. clipShape
+            // hides the overflow but still hit-tests it, so a hero inside (or
+            // beside) a Button would steal taps from its neighbours. Match the
+            // touch region to the visible shape.
+            .contentShape(RoundedRectangle(cornerRadius: radius))
     }
 }

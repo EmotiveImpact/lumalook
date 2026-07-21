@@ -200,10 +200,12 @@ struct SceneThumb: View {
                         .padding(7)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: radius)
-                    .stroke(selected ? LumaTheme.accentBright : .white.opacity(0.06),
-                            lineWidth: selected ? 2.5 : 1)
-            )
+            // MEANINGFUL: the selected-look ring. Unselected tiles carry none.
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: radius)
+                        .stroke(LumaTheme.accentBright, lineWidth: 2.5)
+                }
+            }
     }
 }

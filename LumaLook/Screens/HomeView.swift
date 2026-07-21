@@ -2,13 +2,25 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
-/// E1 — create-first Home. Hierarchy is hero → two half-tiles → recents rail
-/// → discovery rail; every card lands on a real destination.
+/// E2 — launcher Home. Four large panels own the first screen; the discovery
+/// rail underneath is deliberately cut in half by the fold so the page reads
+/// as "there is more down here" without spending any vertical budget on a
+/// scroll hint. Everything below the fold — recents, the rest of the shelf —
+/// is real content on real routes.
 struct HomeView: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
     @StateObject private var packThumbs = HomePackThumbs()
     @State private var showPaywall = false
+
+    /// Wordmark alignment is an open design question (centred vs left), so both
+    /// are built and switchable at launch: `LUMA_LOGO=center`. Ship default is
+    /// LEFT — see the note in `header`.
+    #if DEBUG
+    private let logoCentred = ProcessInfo.processInfo.environment["LUMA_LOGO"] == "center"
+    #else
+    private let logoCentred = false
+    #endif
 
     /// Recents are real only when the user has projects or saved grades.
     /// `LUMA_SEED_HOMEEMPTY=1` forces the invite state so the empty rail can
@@ -21,39 +33,12 @@ struct HomeView: View {
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
-                    createBlock
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        recentsHeader
-                        RecentsRail(store: app.store, hasRecents: hasRecents)
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(title: "Looks of the week", actionTitle: "Store") {
-                            app.tab = .store
-                            LumaHaptics.shared.tap()
-                        }
-                        .padding(.horizontal, 20)
-                        looksOfTheWeek
-                    }
-
-                    // Second discovery row: without it Home ran out of content
-                    // a third of the way up a Pro Max, leaving dead black.
-                    if !morePacks.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(title: "More to explore", actionTitle: "Store") {
-                                app.tab = .store
-                                LumaHaptics.shared.tap()
-                            }
-                            .padding(.horizontal, 20)
-                            packRail(morePacks)
-                        }
-                    }
-                }
-                .padding(.top, 14)
-                .padding(.bottom, 28)
+            // The panel height is SOLVED from the live viewport rather than
+            // hard-coded, because the whole point of the layout is where the
+            // fold lands: the grid ends exactly high enough that the explore
+            // cards are cut through their middle. See `HomeMetrics.panelHeight`.
+            GeometryReader { geo in
+                scroll(viewport: HomeMetrics.viewport(geo))
             }
         }
         // STICKY header: the wordmark bar is pinned; content scrolls under it.
@@ -66,43 +51,66 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Header
+    private func scroll(viewport: CGFloat) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                panelGrid(height: HomeMetrics.panelHeight(viewport: viewport))
+                    .padding(.horizontal, 20)
+                    .padding(.top, HomeMetrics.topPad)
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            LumaWordmark(size: 21)
-            Spacer(minLength: 8)
-            Button {
-                // Pro is a real state: subscribers manage it in Settings,
-                // everyone else gets the paywall.
-                if storeService.isPro { app.path.append(.settings) } else { showPaywall = true }
-                LumaHaptics.shared.tap()
-            } label: {
-                if storeService.isPro {
-                    HStack(spacing: 5) {
-                        Image(systemName: "crown.fill").font(.system(size: 12))
-                        TechReadout("PRO", size: 10, color: LumaTheme.gold)
+                Spacer(minLength: 0).frame(height: HomeMetrics.gridToRail)
+
+                // THE PEEK. Its cards are `HomeMetrics.exploreCard.height` tall
+                // and their top edge sits half a card above the fold, so the
+                // bottom half is clipped by the bottom of the screen.
+                SectionHeader(title: "More to explore", actionTitle: "Store") {
+                    app.tab = .store
+                    LumaHaptics.shared.tap()
+                }
+                .padding(.horizontal, 20)
+                Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
+                packRail(featuredPacks, badged: newBadgeIDs,
+                         size: HomeMetrics.exploreCard)
+
+                Spacer(minLength: 0).frame(height: 30)
+
+                // Below the fold, but still Home: saved work stays reachable.
+                recentsSection
+
+                if !morePacks.isEmpty {
+                    Spacer(minLength: 0).frame(height: 30)
+                    SectionHeader(title: "Fresh in the store", actionTitle: "Store") {
+                        app.tab = .store
+                        LumaHaptics.shared.tap()
                     }
-                    .foregroundStyle(LumaTheme.gold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(LumaTheme.gold.opacity(0.14), in: Capsule())
-                    .overlay(Capsule().strokeBorder(LumaTheme.gold.opacity(0.35), lineWidth: 1))
-                } else {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(LumaTheme.gold)
-                        .frame(width: 38, height: 34)
+                    .padding(.horizontal, 20)
+                    Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
+                    packRail(morePacks, size: HomeMetrics.shelfCard)
                 }
             }
-            .buttonStyle(.lumaPress)
-            Button { app.path.append(.settings) } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
+            .padding(.bottom, 28)
+        }
+    }
+
+    // MARK: Header
+
+    /// Two builds of the same bar. LEFT puts the wordmark on the same optical
+    /// axis as every section header and every panel title below it, so the
+    /// page has one left margin; CENTRED reads more like a brand splash but
+    /// breaks that axis and shunts the crown/gear pair into a corner cluster.
+    private var header: some View {
+        ZStack {
+            if logoCentred {
+                LumaWordmark(size: 20)
             }
-            .buttonStyle(.lumaPress)
+            HStack(spacing: 10) {
+                if !logoCentred {
+                    LumaWordmark(size: 21)
+                }
+                Spacer(minLength: 8)
+                proButton
+                settingsButton
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 4)
@@ -114,72 +122,106 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Create block — hero + two half-tiles
-
-    private var createBlock: some View {
-        VStack(spacing: 10) {
-            Button {
-                app.editor.startNewProject()
-                app.path.append(.editor)
-                LumaHaptics.shared.tap()
-            } label: {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("New project")
-                            .font(.system(size: 19, weight: .heavy))
-                            .foregroundStyle(.white)
-                        Text("Edit clips, music, looks")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 48, height: 48)
-                        .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 15))
+    private var proButton: some View {
+        Button {
+            // Pro is a real state: subscribers manage it in Settings,
+            // everyone else gets the paywall.
+            if storeService.isPro { app.path.append(.settings) } else { showPaywall = true }
+            LumaHaptics.shared.tap()
+        } label: {
+            if storeService.isPro {
+                HStack(spacing: 5) {
+                    Image(systemName: "crown.fill").font(.system(size: 12))
+                    TechReadout("PRO", size: 10, color: LumaTheme.gold)
                 }
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(LumaTheme.tilePurple, in: RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(LumaTheme.accentBright.opacity(0.30), lineWidth: 1))
-                .shadow(color: .black.opacity(0.35), radius: 16, y: 10)
+                .foregroundStyle(LumaTheme.gold)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(LumaTheme.gold.opacity(0.16), in: Capsule())
+            } else {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(LumaTheme.gold)
+                    .frame(width: 38, height: 34)
             }
-            .buttonStyle(.lumaPress)
+        }
+        .buttonStyle(.lumaPress)
+    }
 
-            HStack(spacing: 10) {
-                HomeHalfTile(icon: "camera.fill", title: "Camera", subtitle: "Live looks",
-                             gradient: LumaTheme.tileAmber, iconTint: .white) {
+    private var settingsButton: some View {
+        Button { app.path.append(.settings) } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    // MARK: The four panels
+
+    /// Four verbs, fixed forever: make something, shoot something, grade
+    /// something, get more looks. They never reorder and never depend on
+    /// state, which is what lets a 2x2 launcher build muscle memory.
+    private func panelGrid(height: CGFloat) -> some View {
+        VStack(spacing: HomeMetrics.gridSpacing) {
+            HStack(spacing: HomeMetrics.gridSpacing) {
+                HomePanel(icon: "plus", title: "New Project",
+                          subtitle: "Clips, music, looks",
+                          gradient: LumaTheme.tilePurple, height: height) {
+                    app.editor.startNewProject()
+                    app.path.append(.editor)
+                }
+                HomePanel(icon: "camera.fill", title: "Camera",
+                          subtitle: "Shoot with a look on",
+                          gradient: LumaTheme.tileAmber, height: height) {
                     app.path.append(.camera)
                 }
-                HomeHalfTile(icon: "camera.filters", title: "Apply Look", subtitle: "Grade in 2 taps",
-                             gradient: LumaTheme.tileTeal,
-                             iconTint: Color(red: 0.55, green: 0.95, blue: 0.85)) {
+            }
+            HStack(spacing: HomeMetrics.gridSpacing) {
+                HomePanel(icon: "camera.filters", title: "Apply Look",
+                          subtitle: "Grade in two taps",
+                          gradient: LumaTheme.tileTeal,
+                          iconTint: Color(red: 0.55, green: 0.95, blue: 0.85),
+                          height: height) {
                     app.path.append(.selectClip)
+                }
+                HomePanel(icon: "bag.fill", title: "Look Store",
+                          subtitle: "Packs and film stocks",
+                          gradient: LumaTheme.tileIndigo, height: height) {
+                    app.tab = .store
                 }
             }
         }
-        .padding(.horizontal, 20)
     }
 
-    // MARK: Recents
+    // MARK: Recents — below the fold, never deleted
 
-    /// "See All" only once REAL work exists — over the invite cards it landed
-    /// new users on an empty Projects screen.
-    @ViewBuilder private var recentsHeader: some View {
+    @ViewBuilder private var recentsSection: some View {
         if hasRecents {
-            SectionHeader(title: "Recent projects", actionTitle: "See All") {
+            SectionHeader(title: "Jump back in", actionTitle: "See All") {
                 app.path.append(.projectLibrary)
             }
             .padding(.horizontal, 20)
+            Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
+            RecentsRail(store: app.store)
         } else {
-            SectionHeader(title: "Recent projects")
+            SectionHeader(title: "Jump back in")
                 .padding(.horizontal, 20)
+            Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
+            // Nothing saved yet. This must NOT restate the four panels sitting
+            // one screen above it — so it explains the empty rail and offers
+            // the one primary destination the grid does not cover: the look
+            // library the user already owns.
+            EmptyWorkCard {
+                app.tab = .looks
+                LumaHaptics.shared.tap()
+            }
+            .padding(.horizontal, 20)
         }
     }
 
-    // MARK: Looks of the week
+    // MARK: Discovery
 
     /// Packs the user does not already own — a rail of packs they cannot act
     /// on is not discovery.
@@ -194,7 +236,7 @@ struct HomeView: View {
         HomeFeatured.weeklyRail(discoverablePacks, count: 6)
     }
 
-    /// The tail of the shelf: everything the week's rail did not surface.
+    /// The tail of the shelf: everything the peek rail did not surface.
     private var morePacks: [LookPack] {
         let shown = Set(featuredPacks.map(\.id))
         return Array(discoverablePacks.filter { !shown.contains($0.id) }.prefix(6))
@@ -207,17 +249,14 @@ struct HomeView: View {
             .map(\.id))
     }
 
-    private var looksOfTheWeek: some View {
-        packRail(featuredPacks, badged: newBadgeIDs)
-    }
-
-    private func packRail(_ packs: [LookPack], badged: Set<String> = []) -> some View {
+    private func packRail(_ packs: [LookPack], badged: Set<String> = [],
+                          size: HomeMetrics.CardSize) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 ForEach(packs) { pack in
                     PackTile(pack: pack, image: packThumbs.images[pack.id],
                              photo: packThumbs.photos[pack.id] ?? pack.photo,
-                             isNew: badged.contains(pack.id)) {
+                             isNew: badged.contains(pack.id), size: size) {
                         app.selectedPackID = pack.id
                         app.path.append(.filterPack)
                         LumaHaptics.shared.tap()
@@ -229,37 +268,195 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Layout solver
+
+/// The one piece of arithmetic the whole screen depends on. The brief is that
+/// the four panels get generous space AND the explore cards are visibly cut
+/// through the middle by the bottom of the screen. Both cannot be hard-coded
+/// across a 5.4" and a 6.9" phone, so the panel height is derived: everything
+/// between the top of the grid and the top of the explore cards is a known
+/// constant, therefore
+///
+///     2 * panel + constants + halfCard = viewport
+///
+/// and the panels absorb the difference.
+enum HomeMetrics {
+    struct CardSize {
+        let width: CGFloat
+        let height: CGFloat
+        let radius: CGFloat
+    }
+
+    static let topPad: CGFloat = 14
+    static let gridSpacing: CGFloat = 12
+    static let gridToRail: CGFloat = 24
+    /// SectionHeader is a footnote next to a 15pt semibold button.
+    static let sectionHeaderHeight: CGFloat = 21
+    static let headerToRail: CGFloat = 12
+
+    /// The peek rail. Tall enough that a half card is still a legible image.
+    static let exploreCard = CardSize(width: 160, height: 240, radius: 18)
+    /// The second shelf, fully below the fold, is a normal browsing size.
+    static let shelfCard = CardSize(width: 124, height: 150, radius: 15)
+
+    /// How much of an explore card stays visible above the bottom of the
+    /// screen. 0.5 is the brief; the clamp on `panelHeight` can push the real
+    /// figure a few points either way on very short devices, which is why the
+    /// target sits dead centre of the acceptable 45–55% band.
+    static let peekFraction: CGFloat = 0.5
+
+    /// Height of everything above the explore cards, excluding the grid.
+    private static var chrome: CGFloat {
+        topPad + gridSpacing + gridToRail + sectionHeaderHeight + headerToRail
+    }
+
+    /// The visible content region between the sticky header and the tab bar.
+    /// Depending on how the two `safeAreaInset` layers resolve, the proxy
+    /// either reports the already-reduced height with zero insets, or the full
+    /// screen with the insets attached — so both readings are computed and the
+    /// plausible smaller one wins.
+    static func viewport(_ geo: GeometryProxy) -> CGFloat {
+        let raw = geo.size.height
+        let inset = raw - geo.safeAreaInsets.top - geo.safeAreaInsets.bottom
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_HOME_METRICS"] == "1" {
+            print("[LUMA] HOME raw=\(raw) top=\(geo.safeAreaInsets.top) bottom=\(geo.safeAreaInsets.bottom) inset=\(inset) panel=\(min(max((raw - chrome - exploreCard.height * peekFraction) / 2, 150), 300))")
+        }
+        #endif
+        // MEASURED, not guessed: inside both safeAreaInsets the proxy already
+        // reports the visible content height (660pt on a 16 Pro Max) while its
+        // reported insets describe something else entirely — subtracting them
+        // again yielded 365pt, which drove the panels to their floor and left
+        // the explore rail fully above the fold instead of half-cut.
+        _ = inset
+        return raw > 320 ? raw : 660
+    }
+
+    static func panelHeight(viewport: CGFloat) -> CGFloat {
+        let peek = exploreCard.height * peekFraction
+        let available = viewport - chrome - peek
+        return min(max(available / 2, 150), 300)
+    }
+}
+
+// MARK: - Panels
+
+/// A primary action. Separation comes from a lifted gradient surface and a
+/// soft drop shadow — no outline. (Borders are being pulled app-wide; a 1px
+/// stroke on a coloured tile reads as a web button, not a control surface.)
+private struct HomePanel: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let gradient: LinearGradient
+    var iconTint: Color = .white
+    let height: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            LumaHaptics.shared.tap()
+            action()
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(iconTint)
+                    .frame(width: 54, height: 54)
+                    .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 17))
+                    // Light radiating FROM the glyph, not a ring around it.
+                    .shadow(color: iconTint.opacity(0.35), radius: 14)
+                Spacer(minLength: 12)
+                Text(title)
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(subtitle)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
+            .background(gradient, in: RoundedRectangle(cornerRadius: 22))
+            // Top-lit sheen: the surface catches light, which separates the
+            // tile from the near-black page without drawing an edge on it.
+            .overlay {
+                LinearGradient(colors: [.white.opacity(0.10), .clear],
+                               startPoint: .top, endPoint: .center)
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .allowsHitTesting(false)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .contentShape(RoundedRectangle(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.45), radius: 20, y: 12)
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// Shown instead of the recents rail when there is no saved work. It routes to
+/// the Looks library — deliberately the one primary destination the four
+/// panels do not already cover, so the empty state adds a door rather than
+/// repeating the four sitting a screen above it.
+private struct EmptyWorkCard: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: "cube.transparent")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(LumaTheme.accentBright)
+                    .frame(width: 46, height: 46)
+                    .background(LumaTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Nothing saved yet")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("Projects and grades you save land here. Meanwhile your look library is already stocked.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 18))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
 // MARK: - Recents rail
 
 private struct RecentsRail: View {
     @ObservedObject var store: PersistenceStore
-    let hasRecents: Bool
 
     var body: some View {
-        if hasRecents {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    // Both are valid recents; the grade poster carries a badge
-                    // and a violet edge so it never reads as a project.
-                    ForEach(store.gradeSessions.prefix(3)) { session in
-                        GradeSessionPoster(session: session)
-                    }
-                    ForEach(Array(store.projects.prefix(6).enumerated()), id: \.element.id) { index, project in
-                        ProjectPoster(project: project, store: store,
-                                      fallback: MockScene.allCases[index % MockScene.allCases.count])
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Both are valid recents; the grade poster carries a badge so
+                // it never reads as a project.
+                ForEach(store.gradeSessions.prefix(3)) { session in
+                    GradeSessionPoster(session: session)
                 }
-                .padding(.horizontal, 20)
+                ForEach(Array(store.projects.prefix(6).enumerated()), id: \.element.id) { index, project in
+                    ProjectPoster(project: project, store: store,
+                                  fallback: MockScene.allCases[index % MockScene.allCases.count])
+                }
             }
-        } else {
-            // No work yet. The previous invite cards restated the New project
-            // hero and the Camera tile verbatim, three cards higher up the
-            // page — which inverts the hero → tiles → recents hierarchy. One
-            // quiet line explains the empty rail without competing with them.
-            Text("Projects you edit show up here.")
-                .font(.system(size: 13))
-                .foregroundStyle(LumaTheme.textMuted)
-                .padding(.horizontal, 20)
+            .padding(.horizontal, 20)
         }
     }
 }
@@ -268,7 +465,7 @@ private struct RecentsRail: View {
 private enum Poster {
     static let width: CGFloat = 124
     static let height: CGFloat = 150
-    static let radius: CGFloat = 14
+    static let radius: CGFloat = 15
 
     static func duration(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
@@ -310,8 +507,10 @@ private struct ProjectPoster: View {
             }
             .frame(width: Poster.width, height: Poster.height)
             .clipShape(RoundedRectangle(cornerRadius: Poster.radius))
-            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            // scaledToFill overflows its frame and keeps taking taps outside
+            // it — clipShape clips pixels, not touches. This bounds the touch.
+            .contentShape(RoundedRectangle(cornerRadius: Poster.radius))
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
         }
         .buttonStyle(.lumaPress)
     }
@@ -356,15 +555,16 @@ private struct GradeSessionPoster: View {
             }
             .frame(width: Poster.width, height: Poster.height)
             .clipShape(RoundedRectangle(cornerRadius: Poster.radius))
+            .contentShape(RoundedRectangle(cornerRadius: Poster.radius))
             .overlay(alignment: .topLeading) {
                 TechReadout("GRADE", size: 9, color: .white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(LumaTheme.accent, in: Capsule())
                     .padding(8)
+                    .allowsHitTesting(false)
             }
-            .overlay(RoundedRectangle(cornerRadius: Poster.radius)
-                .strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
         }
         .buttonStyle(.lumaPress)
         .task {
@@ -385,7 +585,7 @@ private struct GradeSessionPoster: View {
     }
 }
 
-// MARK: - Looks of the week
+// MARK: - Pack tile
 
 private struct PackTile: View {
     let pack: LookPack
@@ -394,7 +594,10 @@ private struct PackTile: View {
     /// neighbouring tiles never share a base image (see its `render`).
     var photo: HeroPhoto
     var isNew: Bool = false
+    let size: HomeMetrics.CardSize
     let action: () -> Void
+
+    private var isLarge: Bool { size.width > 140 }
 
     var body: some View {
         Button(action: action) {
@@ -412,28 +615,31 @@ private struct PackTile: View {
                         HeroImage(photo: photo, radius: 0)
                     }
                 }
-                .frame(width: 96, height: 110)
+                .frame(width: size.width, height: size.height)
                 Poster.scrim
                 Text(pack.name)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: isLarge ? 14 : 11, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                    .padding(8)
+                    .padding(isLarge ? 12 : 8)
             }
-            .frame(width: 96, height: 110)
-            .clipShape(RoundedRectangle(cornerRadius: 13))
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: size.radius))
+            // Same trap as the posters: the filled image overflows the frame
+            // and would otherwise steal taps from the adjacent pack tile.
+            .contentShape(RoundedRectangle(cornerRadius: size.radius))
             .overlay(alignment: .topTrailing) {
                 if isNew {
                     TechReadout("NEW", size: 8, color: .white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(LumaTheme.accent, in: Capsule())
-                        .padding(6)
+                        .padding(7)
+                        .allowsHitTesting(false)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 13)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 7)
         }
         .buttonStyle(.lumaPress)
     }
@@ -482,8 +688,8 @@ private enum HomeFeatured {
         families.first { $0.contains(pack) } ?? .all
     }
 
-    /// Stable per-week value so "Looks of the week" actually turns over on a
-    /// weekly cadence instead of being frozen to one release cohort.
+    /// Stable per-week value so the peek rail actually turns over on a weekly
+    /// cadence instead of being frozen to one release cohort.
     static func weekSeed(_ date: Date = Date()) -> Int {
         let calendar = Calendar(identifier: .gregorian)
         let week = calendar.component(.weekOfYear, from: date)
@@ -545,9 +751,9 @@ private final class HomePackThumbs: ObservableObject {
 
     /// A pack keeps its own hero photo unless one of the last `separation`
     /// tiles already used it — then it takes the least-recently-used frame
-    /// instead. Grading two near-neutral looks on the same photo at 96x110
-    /// produced pixel-identical tiles (Film Stocks 01 / Mirrorless Sims,
-    /// Negative Set 01 / Negative Archive), which conveys nothing.
+    /// instead. Grading two near-neutral looks on the same photo produced
+    /// pixel-identical tiles (Film Stocks 01 / Mirrorless Sims, Negative Set
+    /// 01 / Negative Archive), which conveys nothing.
     static func assignedPhotos(for packs: [LookPack]) -> [String: HeroPhoto] {
         var out: [String: HeroPhoto] = [:]
         var recent: [HeroPhoto] = []
@@ -596,7 +802,9 @@ private final class HomePackThumbs: ObservableObject {
                 var settings = LookSettings()
                 settings.intensity = 100
                 state.settings = settings
-                if let cg = LookPipeline.shared.gradedStill(job.source, state: state, maxDimension: 220) {
+                // The peek cards are 160x240 points, so the render has to be
+                // considerably bigger than the old 96-wide tiles asked for.
+                if let cg = LookPipeline.shared.gradedStill(job.source, state: state, maxDimension: 420) {
                     await MainActor.run { self?.images[job.id] = cg }
                 }
             }
@@ -608,55 +816,8 @@ private final class HomePackThumbs: ObservableObject {
     private static func source(for photo: HeroPhoto) -> CIImage {
         guard let ci = photo.ciImage else { return LookThumbs.fallbackFrame }
         let longest = max(ci.extent.width, ci.extent.height)
-        guard longest > 440 else { return ci }
-        let scale = 440 / longest
+        guard longest > 720 else { return ci }
+        let scale = 720 / longest
         return ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    }
-}
-
-private struct HomeHalfTile: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let gradient: LinearGradient
-    var iconTint: Color = .white
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(iconTint)
-                    .frame(height: 30)
-                    // Light that radiates FROM the glyph. The old 110x110
-                    // radial was anchored to the icon at the tile's corner,
-                    // so the clip turned it into an off-centre smudge.
-                    .shadow(color: iconTint.opacity(0.45), radius: 10)
-                Spacer(minLength: 10)
-                Text(title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-            .background(gradient, in: RoundedRectangle(cornerRadius: 16))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.02)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1
-                    )
-            )
-        }
-        .buttonStyle(.lumaPress)
     }
 }

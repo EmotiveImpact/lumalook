@@ -227,14 +227,9 @@ struct ExportCompleteView: View {
                         }
                         .frame(width: 250, height: 250)
                         .clipShape(RoundedRectangle(cornerRadius: 18))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .strokeBorder(
-                                    LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.03)],
-                                                   startPoint: .top, endPoint: .bottom),
-                                    lineWidth: 1
-                                )
-                        )
+                        // The shadow already lifts the preview off the canvas —
+                        // a rim on top of it just re-draws the edge.
+                        .contentShape(RoundedRectangle(cornerRadius: 18))
                         .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
                         .padding(.top, 26)
                     }
@@ -294,9 +289,7 @@ struct ExportCompleteView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                                .background(LumaTheme.cardRaised, in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(.lumaPress)
                         .padding(.top, 22)
@@ -432,14 +425,6 @@ struct ExportCompleteView: View {
                                startPoint: .top, endPoint: .bottom),
                 in: RoundedRectangle(cornerRadius: 16)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.0)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1
-                    )
-            )
             .shadow(color: LumaTheme.accent.opacity(0.35), radius: 16, y: 6)
     }
 }
@@ -455,17 +440,9 @@ struct BrandShareIcon: View {
     var body: some View {
         VStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)
+                .fill(LumaTheme.cardRaised)
                 .frame(width: 68, height: 68)
                 .overlay(glyph)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(
-                            LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.03)],
-                                           startPoint: .top, endPoint: .bottom),
-                            lineWidth: 1
-                        )
-                )
             Text(kind.rawValue)
                 .font(.system(size: 13))
                 .foregroundStyle(LumaTheme.textSecondary)

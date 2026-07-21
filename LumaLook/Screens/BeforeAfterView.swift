@@ -366,7 +366,6 @@ struct BeforeAfterView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .overlay(alignment: .top) {
             TechReadout(label, size: 8, color: tint)
                 .padding(.horizontal, 8)
@@ -414,9 +413,8 @@ struct BeforeAfterView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
                             .background(mode == option ? AnyShapeStyle(LumaTheme.accent)
-                                                       : AnyShapeStyle(LumaTheme.surface),
+                                                       : AnyShapeStyle(LumaTheme.chip),
                                         in: Capsule())
-                            .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
                     }
                     .buttonStyle(.lumaPress)
                 }
@@ -441,9 +439,7 @@ struct BeforeAfterView: View {
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
-                            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(.white.opacity(0.14), lineWidth: 1))
+                            .background(LumaTheme.cardRaised, in: RoundedRectangle(cornerRadius: 16))
                             .contentShape(RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.lumaPress)

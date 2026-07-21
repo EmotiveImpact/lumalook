@@ -140,10 +140,11 @@ struct CollectionsView: View {
                         .foregroundStyle(editMode == .active ? LumaTheme.accentBright : .white)
                         .padding(.horizontal, 12)
                         .frame(height: 34)
-                        .background(LumaTheme.surface, in: Capsule())
-                        .overlay(Capsule().strokeBorder(
-                            editMode == .active ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
-                            lineWidth: 1))
+                        // Active reordering is signalled by an accent FILL,
+                        // not by swapping one hairline for another.
+                        .background(editMode == .active ? AnyShapeStyle(LumaTheme.accentSoft)
+                                                        : AnyShapeStyle(LumaTheme.chip),
+                                    in: Capsule())
                 }
                 .accessibilityLabel(editMode == .active ? "Done reordering" : "Reorder collections")
                 .buttonStyle(.lumaPress)
@@ -256,12 +257,19 @@ struct CollectionsView: View {
             }
         }
         .padding(12)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
-            isTargeted ? LumaTheme.teal
-                : isSelected ? LumaTheme.accent.opacity(0.5) : LumaTheme.hairline,
-            lineWidth: isTargeted || isSelected ? 1.5 : 1))
-        .shadow(color: isSelected ? LumaTheme.accent.opacity(0.15) : .clear, radius: 12, y: 6)
+        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 16))
+        // MEANINGFUL strokes only: the teal drop-target ring and the accent
+        // selection ring. At rest the card carries no outline — it separates
+        // from the canvas by being lighter than it.
+        .overlay {
+            if isTargeted || isSelected {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(isTargeted ? LumaTheme.teal : LumaTheme.accent.opacity(0.5),
+                                  lineWidth: 1.5)
+            }
+        }
+        .shadow(color: isSelected ? LumaTheme.accent.opacity(0.15) : LumaTheme.cardShadow,
+                radius: isSelected ? 12 : 10, y: isSelected ? 6 : 4)
         .scaleEffect(isTargeted ? 1.02 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isTargeted)
         .dropDestination(for: String.self) { ids, _ in
@@ -319,6 +327,9 @@ struct CollectionsView: View {
                 .scaledToFill()
                 .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                // Mosaic cells sit inside the collection card's Button; the
+                // overflowing fill would otherwise hit-test outside the cover.
+                .contentShape(RoundedRectangle(cornerRadius: 6))
         } else if index < looks.count {
             RoundedRectangle(cornerRadius: 6)
                 .fill(LumaTheme.surfaceStrong)
@@ -476,8 +487,9 @@ struct CollectionsView: View {
         }
         .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: radius))
-        .overlay(RoundedRectangle(cornerRadius: radius)
-            .strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        // Look thumbs sit shoulder-to-shoulder in the "add looks" rail — the
+        // overflowing fill must not reach into the next tile's tap target.
+        .contentShape(RoundedRectangle(cornerRadius: radius))
     }
 
     // MARK: Empty state
@@ -529,10 +541,11 @@ struct CollectionsView: View {
                 .foregroundStyle(collection == nil || isPinned ? LumaTheme.textSecondary : .white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(
-                    collection == nil || isPinned
-                        ? LumaTheme.hairline : LumaTheme.accent.opacity(0.55), lineWidth: 1))
+                // Actionable = accent-tinted fill; inert = plain surface.
+                .background(collection == nil || isPinned
+                            ? AnyShapeStyle(LumaTheme.card)
+                            : AnyShapeStyle(LumaTheme.accentSoft),
+                            in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.lumaPress)
             .disabled(collection == nil)

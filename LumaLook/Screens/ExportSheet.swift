@@ -256,11 +256,16 @@ struct ExportSpecSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(selected ? LumaTheme.accentSoft : LumaTheme.surface,
+            .background(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card),
                         in: RoundedRectangle(cornerRadius: 13))
-            .overlay(RoundedRectangle(cornerRadius: 13)
-                .strokeBorder(selected ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
-                              lineWidth: 1))
+            // MEANINGFUL: only the chosen option is ringed. The rest are plain
+            // fills, so the selection is the one line on the screen.
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: 13)
+                        .strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1)
+                }
+            }
         }
         .buttonStyle(.lumaPress)
     }
@@ -325,8 +330,7 @@ struct ExportSpecSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(LumaTheme.hairline, lineWidth: 1))
+        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 13))
     }
 
     // MARK: Codec
@@ -424,9 +428,7 @@ struct ExportSpecSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(tone.opacity(0.5), lineWidth: 1))
+            .background(tone.opacity(0.20), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: Footer
@@ -447,11 +449,9 @@ struct ExportSpecSheet: View {
                     }
                     .foregroundStyle(spec.alsoGIF ? .white : LumaTheme.textSecondary)
                     .frame(width: 62, height: 52)
-                    .background(spec.alsoGIF ? LumaTheme.accentSoft : LumaTheme.surface,
+                    .background(spec.alsoGIF ? AnyShapeStyle(LumaTheme.accentSoft)
+                                             : AnyShapeStyle(LumaTheme.card),
                                 in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(spec.alsoGIF ? LumaTheme.accent.opacity(0.55) : LumaTheme.hairline,
-                                      lineWidth: 1))
                 }
                 .buttonStyle(.lumaPress)
                 .accessibilityLabel("Also save a looping GIF")

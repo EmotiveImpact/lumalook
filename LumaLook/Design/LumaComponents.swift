@@ -21,27 +21,35 @@ extension ButtonStyle where Self == LumaPressStyle {
 
 // MARK: - Card depth
 
-/// Dark-UI depth trick: a top-lit hairline gradient instead of a flat border.
+/// Cards separate from the canvas by ELEVATION, not by an outline.
+///
+/// Before: `LumaTheme.surface` + a 1px `strokeBorder` gradient. On a #0A0D14
+/// canvas every card, row, chip and tile ended up ringed in grey — dozens of
+/// competing lines per screen, which is what made the UI read as a wireframe.
+/// After: a slightly lighter fill (`LumaTheme.card`) plus a soft downward
+/// shadow. The eye reads the value step as "this is closer to me" the same way
+/// it reads a real surface, and the screen goes quiet because nothing is
+/// outlined. Raised cards (a card on a card) get one more value step instead of
+/// a heavier line.
 struct LumaCardChrome: ViewModifier {
     var cornerRadius: CGFloat = 16
+    /// Set when this card sits on top of another card and needs one more step.
+    var raised: Bool = false
+    /// Cards inside an already-shadowed container skip the shadow so the
+    /// shadows don't stack into a grey haze.
+    var shadow: Bool = true
 
     func body(content: Content) -> some View {
         content
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.13), .white.opacity(0.03)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1
-                    )
-            )
+            .background(raised ? LumaTheme.cardRaised : LumaTheme.card,
+                        in: RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: shadow ? LumaTheme.cardShadow : .clear, radius: 10, y: 4)
     }
 }
 
 extension View {
-    func lumaCard(cornerRadius: CGFloat = 16) -> some View {
-        modifier(LumaCardChrome(cornerRadius: cornerRadius))
+    func lumaCard(cornerRadius: CGFloat = 16, raised: Bool = false, shadow: Bool = true) -> some View {
+        modifier(LumaCardChrome(cornerRadius: cornerRadius, raised: raised, shadow: shadow))
     }
 }
 
@@ -230,14 +238,8 @@ struct SolidCTA: View {
                                startPoint: .top, endPoint: .bottom),
                 in: RoundedRectangle(cornerRadius: 16)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.0)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1
-                    )
-            )
+            // The glow carries the elevation; a drawn rim on top of a filled
+            // accent button just reads as another line.
             .shadow(color: fill.opacity(0.35), radius: 16, y: 6)
         }
         .buttonStyle(.lumaPress)
@@ -256,15 +258,9 @@ struct GhostCTA: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(
-                            LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.04)],
-                                           startPoint: .top, endPoint: .bottom),
-                            lineWidth: 1
-                        )
-                )
+                // Filled, not outlined: the secondary action is a lighter
+                // surface next to the accent-filled primary.
+                .background(LumaTheme.cardRaised, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.lumaPress)
     }
@@ -282,14 +278,10 @@ struct Chip: View {
             .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
-            .background {
-                if selected {
-                    Capsule().fill(LumaTheme.accent)
-                } else {
-                    Capsule().fill(.ultraThinMaterial)
-                }
-            }
-            .overlay(Capsule().strokeBorder(.white.opacity(selected ? 0.18 : 0.07), lineWidth: 1))
+            // Selected = accent fill. Unselected = a subtle surface fill.
+            // Neither is outlined — the value difference already separates them.
+            .background(Capsule().fill(selected ? AnyShapeStyle(LumaTheme.accent)
+                                                : AnyShapeStyle(LumaTheme.chip)))
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
@@ -321,10 +313,9 @@ struct SegmentPills: View {
                                     .fill(LumaTheme.accent)
                                     .matchedGeometryEffect(id: "segment.pill", in: ns)
                             } else {
-                                Capsule().fill(.ultraThinMaterial)
+                                Capsule().fill(LumaTheme.chip)
                             }
                         }
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.06), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -407,21 +398,19 @@ struct ToolTile: View {
         Button { action?() } label: {
             VStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(.ultraThinMaterial))
+                    .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card))
                     .frame(height: 62)
                     .overlay(Image(systemName: icon)
                         .font(.system(size: 21, weight: .medium))
                         .foregroundStyle(selected ? LumaTheme.accentBright : .white))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(
-                                selected
-                                    ? AnyShapeStyle(LumaTheme.accent)
-                                    : AnyShapeStyle(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)],
-                                                                   startPoint: .top, endPoint: .bottom)),
-                                lineWidth: selected ? 1.5 : 1
-                            )
-                    )
+                    // MEANINGFUL stroke: the selection ring. Unselected tiles
+                    // carry no outline at all — they are just a lighter surface.
+                    .overlay {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(LumaTheme.accent, lineWidth: 1.5)
+                        }
+                    }
                 Text(title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
@@ -583,8 +572,13 @@ extension Text {
             .padding(.vertical, 8)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(border ? LumaTheme.accentBright : .white.opacity(0.12)))
+            // Only the "called out" variant draws a rim — that one means
+            // something. The plain pill relies on its fill.
+            .overlay {
+                if border {
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(LumaTheme.accentBright)
+                }
+            }
     }
 }
 
