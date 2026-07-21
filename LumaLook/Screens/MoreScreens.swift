@@ -1941,9 +1941,23 @@ struct SettingsSubscriptionView: View {
             // the list on purpose: a preview buried under About is a preview
             // nobody opens.
             Section("Design Lab") {
-                settingsRow(icon: "sparkles", title: "Grade Room Preview",
-                            value: "New") {
-                    app.path.append(.ldDemo)
+                settingsRow(icon: "sparkles", title: "Grade Room") {
+                    app.path.append(.ldGrade)
+                }
+                settingsRow(icon: "square.grid.2x2", title: "Look Library") {
+                    app.path.append(.ldLibrary)
+                }
+                settingsRow(icon: "camera", title: "Camera") {
+                    app.path.append(.ldCamera)
+                }
+                settingsRow(icon: "timeline.selection", title: "Video Editor") {
+                    app.path.append(.ldEditor)
+                }
+                settingsRow(icon: "bag", title: "Look Store") {
+                    app.path.append(.ldStore)
+                }
+                settingsRow(icon: "square.and.arrow.up", title: "Export") {
+                    app.path.append(.ldExport)
                 }
             }
 

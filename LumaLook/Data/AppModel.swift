@@ -480,7 +480,12 @@ final class AppModel: ObservableObject {
             "settings": [.settings],
             "customLook": [.selectClip, .applyLook, .customLook],
             "collections": [.collections],
-            "ldDemo": [.ldDemo]
+            "ldGrade": [.ldGrade],
+            "ldLibrary": [.ldLibrary],
+            "ldCamera": [.ldCamera],
+            "ldEditor": [.ldEditor],
+            "ldStore": [.ldStore],
+            "ldExport": [.ldExport]
         ]
         if let target = map[route] {
             path = target

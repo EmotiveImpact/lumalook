@@ -121,7 +121,12 @@ struct LumaRootView: View {
         case .audio: AudioView()
         case .settings: SettingsSubscriptionView()
         case .collections: CollectionsView()
-        case .ldDemo: LDGradeDemoView()
+        case .ldGrade: LDGradeDemoView()
+        case .ldLibrary: LDLibraryDemoView()
+        case .ldCamera: LDCameraDemoView()
+        case .ldEditor: LDEditorDemoView()
+        case .ldStore: LDStoreDemoView()
+        case .ldExport: LDExportDemoView()
         }
     }
 }
