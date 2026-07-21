@@ -479,7 +479,8 @@ final class AppModel: ObservableObject {
             "projectLibrary": [.projectLibrary],
             "settings": [.settings],
             "customLook": [.selectClip, .applyLook, .customLook],
-            "collections": [.collections]
+            "collections": [.collections],
+            "ldDemo": [.ldDemo]
         ]
         if let target = map[route] {
             path = target

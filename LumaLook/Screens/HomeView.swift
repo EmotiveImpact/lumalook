@@ -60,33 +60,32 @@ struct HomeView: View {
 
                 Spacer(minLength: 0).frame(height: HomeMetrics.gridToRail)
 
-                // THE PEEK. Its cards are `HomeMetrics.exploreCard.height` tall
-                // and their top edge sits half a card above the fold, so the
-                // bottom half is clipped by the bottom of the screen.
+                // Order is deliberate: your own work first, then what is new,
+                // then the wider catalogue to browse. One card metric across
+                // all three rails — differing sizes per rail is what made the
+                // page read as assembled rather than designed.
+                recentsSection
+
+                if !morePacks.isEmpty {
+                    Spacer(minLength: 0).frame(height: 28)
+                    SectionHeader(title: "Fresh this week", actionTitle: "Store") {
+                        app.tab = .store
+                        LumaHaptics.shared.tap()
+                    }
+                    .padding(.horizontal, 20)
+                    Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
+                    packRail(morePacks, badged: newBadgeIDs, size: HomeMetrics.railCard)
+                }
+
+                Spacer(minLength: 0).frame(height: 28)
+
                 SectionHeader(title: "More to explore", actionTitle: "Store") {
                     app.tab = .store
                     LumaHaptics.shared.tap()
                 }
                 .padding(.horizontal, 20)
                 Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
-                packRail(featuredPacks, badged: newBadgeIDs,
-                         size: HomeMetrics.exploreCard)
-
-                Spacer(minLength: 0).frame(height: 30)
-
-                // Below the fold, but still Home: saved work stays reachable.
-                recentsSection
-
-                if !morePacks.isEmpty {
-                    Spacer(minLength: 0).frame(height: 30)
-                    SectionHeader(title: "Fresh in the store", actionTitle: "Store") {
-                        app.tab = .store
-                        LumaHaptics.shared.tap()
-                    }
-                    .padding(.horizontal, 20)
-                    Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
-                    packRail(morePacks, size: HomeMetrics.shelfCard)
-                }
+                packRail(featuredPacks, size: HomeMetrics.railCard)
             }
             .padding(.bottom, 28)
         }
@@ -293,7 +292,9 @@ enum HomeMetrics {
     static let headerToRail: CGFloat = 12
 
     /// The peek rail. Tall enough that a half card is still a legible image.
-    static let exploreCard = CardSize(width: 160, height: 240, radius: 18)
+    static let exploreCard = CardSize(width: 124, height: 164, radius: 14)
+    /// THE rail card. Every rail on Home uses this one metric.
+    static let railCard = CardSize(width: 124, height: 164, radius: 14)
     /// The second shelf, fully below the fold, is a normal browsing size.
     static let shelfCard = CardSize(width: 124, height: 150, radius: 15)
 
@@ -336,7 +337,7 @@ enum HomeMetrics {
     /// than it is tall and the rails below get the room they earn.
     static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat {
         let column = width > 0 ? (width - 40 - gridSpacing) / 2 : 170
-        return min(max(column * 0.78, 116), 150)
+        return min(max(column * 0.62, 104), 128)
     }
 }
 
@@ -463,9 +464,11 @@ private struct RecentsRail: View {
 
 /// Poster geometry is shared by every recents card so the rail stays even.
 private enum Poster {
+    // Matches HomeMetrics.railCard exactly: every rail on Home shares one
+    // card metric, so the page reads as designed rather than assembled.
     static let width: CGFloat = 124
-    static let height: CGFloat = 150
-    static let radius: CGFloat = 15
+    static let height: CGFloat = 164
+    static let radius: CGFloat = 14
 
     static func duration(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))

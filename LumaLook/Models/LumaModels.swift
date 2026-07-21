@@ -397,6 +397,7 @@ enum LumaRoute: Hashable {
     case audio
     case settings
     case collections
+    case ldDemo
 }
 
 enum LumaTab: String, CaseIterable {

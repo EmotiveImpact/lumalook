@@ -908,7 +908,7 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 struct FilteredCameraPreview: View {
     @ObservedObject var camera: CameraController
     /// C1 — tap-to-focus: called with (unit point in IMAGE space, raw view
-    /// point). Unit accounts for the aspect-fill crop, so the sensor is
+    /// point). Unit accounts for how the frame is fitted, so the sensor is
     /// focused where the user actually touched the picture.
     var onTapUnit: ((CGPoint, CGPoint) -> Void)? = nil
     /// C1 — long-press AE/AF lock.
@@ -917,11 +917,23 @@ struct FilteredCameraPreview: View {
     var body: some View {
         GeometryReader { geo in
             if let frame = camera.previewImage {
+                // WYSIWYG: capture is 9:16 and the screen is taller, so
+                // aspect-FILL cropped ~18% off each side of the frame that was
+                // actually being recorded — you framed a shot and the file
+                // contained more than you saw. FIT letterboxes instead, so the
+                // viewfinder is the recording. Chrome then sits on the mattes
+                // rather than over the picture, which is the whole point of a
+                // clean viewfinder.
+                let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
+                let s = min(geo.size.width / iw, geo.size.height / ih)
+                let fitted = CGSize(width: iw * s, height: ih * s)
+                let originX = (geo.size.width - fitted.width) / 2
+                let originY = (geo.size.height - fitted.height) / 2
+
                 Image(decorative: frame, scale: 1)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
                     .contentShape(Rectangle())
                     .gesture(
                         // Long-press wins over tap; tap fires on release.
@@ -930,13 +942,12 @@ struct FilteredCameraPreview: View {
                             .exclusively(before: SpatialTapGesture()
                                 .onEnded { value in
                                     let p = value.location
-                                    let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
-                                    let s = max(geo.size.width / iw, geo.size.height / ih)
-                                    let offX = (iw * s - geo.size.width) / 2
-                                    let offY = (ih * s - geo.size.height) / 2
+                                    // Invert the FIT mapping: taps on a matte
+                                    // clamp to the nearest edge of the image
+                                    // rather than focusing off-frame.
                                     let unit = CGPoint(
-                                        x: min(max((p.x + offX) / s / iw, 0), 1),
-                                        y: min(max((p.y + offY) / s / ih, 0), 1))
+                                        x: min(max((p.x - originX) / fitted.width, 0), 1),
+                                        y: min(max((p.y - originY) / fitted.height, 0), 1))
                                     onTapUnit?(unit, p)
                                 })
                     )

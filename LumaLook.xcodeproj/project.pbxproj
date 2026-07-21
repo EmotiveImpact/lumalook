@@ -139,6 +139,7 @@
 		948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */; };
 		951ED3C908AFE99C2BBD7E51 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2AADF6FACE440408D32E9797 /* manifest.json */; };
 		9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */; };
+		9C1394003D510A0272E9D18C /* LDGradeDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3B79FE7B25C2B42EA462F9 /* LDGradeDemoView.swift */; };
 		9C5F5865ECC8E1A6C9DF1FF4 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */; };
 		9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64726FDAFBBA3599E08CB2D7 /* ChromaKeyFilter.swift */; };
 		9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */; };
@@ -404,6 +405,7 @@
 		C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipView.swift; sourceTree = "<group>"; };
 		C6D8B84208BCDA1900855A3E /* FS_MS7.cube */ = {isa = PBXFileReference; path = FS_MS7.cube; sourceTree = "<group>"; };
 		C8422267EA494F98D1964261 /* TemplateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateModels.swift; sourceTree = "<group>"; };
+		CB3B79FE7B25C2B42EA462F9 /* LDGradeDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LDGradeDemoView.swift; sourceTree = "<group>"; };
 		CB4B390C2B844DF4DFCF5822 /* hero_neon.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_neon.jpg; sourceTree = "<group>"; };
 		CBD94C74B308262B83000612 /* FS_TZ0C.cube */ = {isa = PBXFileReference; path = FS_TZ0C.cube; sourceTree = "<group>"; };
 		CCBE18C61CAB58BEF60FE7BA /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
@@ -469,6 +471,7 @@
 				5AA55F19B38C01C558951683 /* ExportCompleteView.swift */,
 				DD8AEF2B3B897BD002287240 /* ExportSheet.swift */,
 				9688DBD03E8614DC1F6D9E91 /* HomeView.swift */,
+				CB3B79FE7B25C2B42EA462F9 /* LDGradeDemoView.swift */,
 				33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */,
 				389693E4BA9B199E03E6A812 /* LUTCompareView.swift */,
 				5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */,
@@ -1029,6 +1032,7 @@
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
+				9C1394003D510A0272E9D18C /* LDGradeDemoView.swift in Sources */,
 				BF8BB581CF07B507BD5FE445 /* LUTCompareView.swift in Sources */,
 				F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */,
 				BE83A421AC308AA8A22A9220 /* LUTImportSheet.swift in Sources */,
