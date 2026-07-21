@@ -228,14 +228,13 @@ struct TimelineV2View: View {
             ForEach(missing, id: \.self) { kind in
                 EmptyLaneRow(label: kind == .voice ? "Voiceover" : "Music",
                              icon: kind.icon, height: LaneMetrics.music,
-                             width: 168,
                              action: kind == .voice ? onRecordVoiceover : onAddMusic)
             }
             if missing.isEmpty {
                 AddAudioRow(action: onAddMusic)
             }
         }
-        .padding(.leading, 12)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -530,13 +529,18 @@ struct AddAudioRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .bold))
+                Image(systemName: "music.note")
+                    .font(.system(size: 11, weight: .semibold))
                 Text("Add audio")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 0)
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
             }
+            .padding(.horizontal, 11)
             .foregroundStyle(LumaTheme.textSecondary)
-            .frame(width: 150, height: LaneMetrics.music)
+            .frame(maxWidth: .infinity, minHeight: LaneMetrics.music,
+                   maxHeight: LaneMetrics.music, alignment: .leading)
             .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
@@ -986,13 +990,21 @@ struct OverlayAddButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
+                Image(systemName: "square.2.layers.3d.top.filled")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("Overlay & text")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 0)
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Overlay")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
             }
+            .padding(.horizontal, 11)
             .foregroundStyle(LumaTheme.textSecondary)
-            .frame(width: 110, height: LaneMetrics.overlay)
+            // Full width, because the playhead is CENTRE-FIXED: a fixed-width
+            // chip pinned to the leading edge sits alone in the empty left half
+            // at t = 0, reading as a stray button rather than an empty track.
+            .frame(maxWidth: .infinity, minHeight: LaneMetrics.overlay,
+                   maxHeight: LaneMetrics.overlay, alignment: .leading)
             .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
