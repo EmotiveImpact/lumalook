@@ -459,14 +459,23 @@ struct LDCameraDemoView: View {
         let name = app.selectedLUT?.displayName ?? app.selectedLook.name
         let strength = Int(app.settings.intensity.rounded())
         return HStack {
-            TechReadout(strength == 0 ? "\(name) · OFF" : "\(name) · \(strength)%",
-                        size: 10, color: .white.opacity(strength == 0 ? 0.45 : 0.85))
+            HStack(spacing: 6) {
+                Text(name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(strength == 0 ? 0.5 : 0.95))
+                    .lineLimit(1)
+                Text(strength == 0 ? "Off" : "\(strength)%")
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
             Spacer(minLength: 0)
             Button {
                 showLookBrowser = true
                 LumaHaptics.shared.tap()
             } label: {
-                TechReadout("ALL LOOKS", size: 9, color: .white.opacity(0.5))
+                Text("All looks")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
@@ -568,11 +577,14 @@ struct LDCameraDemoView: View {
     /// taps deep inside a browser sheet.
     private var intensityRow: some View {
         HStack(spacing: 12) {
-            TechReadout("STRENGTH", size: 9, color: .white.opacity(0.38))
+            Text("Strength")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
             Slider(value: $app.settings.intensity, in: 0...100)
                 .tint(.white.opacity(0.85))
-            TechReadout("\(Int(app.settings.intensity.rounded()))%", size: 10,
-                        color: .white.opacity(0.8))
+            Text("\(Int(app.settings.intensity.rounded()))%")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, alignment: .trailing)
         }
         .padding(.horizontal, 18)
@@ -583,62 +595,104 @@ struct LDCameraDemoView: View {
     private var toolRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                tool("arrow.up.left.and.arrow.down.right", "ZOOM",
-                     on: camera.zoomFactor != 1) {
+                // Exposure tools show their VALUE, not a glyph. A thermometer
+                // does not tell you the white balance is 5600K; "5600K" does.
+                // The number is the better icon, and it is live.
+                valueTool(String(format: "%.1f×", camera.zoomFactor), "Zoom",
+                          on: camera.zoomFactor != 1) {
                     camera.cycleZoom()
                     LumaHaptics.shared.tap()
                 }
-                tool("slider.horizontal.3", "PRO", on: panel == .pro) {
+                valueTool(readout(for: .iso), "ISO", on: camera.manualExposure) {
+                    openPro(.iso)
+                }
+                valueTool(readout(for: .shutter), "Shutter", on: camera.manualExposure) {
+                    openPro(.shutter)
+                }
+                valueTool(readout(for: .ev), "Exposure", on: camera.evBias != 0) {
+                    openPro(.ev)
+                }
+                valueTool(readout(for: .wb), "White bal.", on: camera.manualWB) {
+                    openPro(.wb)
+                }
+                valueTool(readout(for: .focus), "Focus", on: camera.manualFocus) {
+                    openPro(.focus)
+                }
+
+                toolDivider
+
+                tool("slider.horizontal.3", "Pro", on: panel == .pro) {
                     if panel == .pro { panel = .none }
                     else { openPro(camera.manualExposure ? .iso : .shutter) }
                 }
-                tool("circle.lefthalf.filled", "ISO", on: camera.manualExposure) {
-                    openPro(.iso)
-                }
-                tool("camera.shutter.button", "SHUTTER", on: camera.manualExposure) {
-                    openPro(.shutter)
-                }
-                tool("plusminus.circle", "EV", on: camera.evBias != 0) { openPro(.ev) }
-                tool("thermometer.medium", "WB", on: camera.manualWB) { openPro(.wb) }
-                tool("camera.aperture", "FOCUS", on: camera.manualFocus) { openPro(.focus) }
-                tool("arrow.triangle.2.circlepath", "FLIP",
+                tool("arrow.triangle.2.circlepath", "Flip",
                      on: camera.cameraPosition == .front,
                      enabled: !camera.isRecording) {
                     camera.flipCamera()
                     LumaHaptics.shared.tap()
                 }
-                tool("rectangle.dashed", frameGuide == .off ? "GUIDES" : frameGuide.label,
+                tool("rectangle.dashed", frameGuide == .off ? "Guides" : frameGuide.label,
                      on: frameGuide != .off) {
                     let all = FrameGuide.allCases
                     let idx = (all.firstIndex(of: frameGuide)! + 1) % all.count
                     frameGuide = all[idx]
-                    flash(frameGuide == .off ? "GUIDES OFF" : "GUIDE \(frameGuide.label)")
+                    flash(frameGuide == .off ? "Guides off" : "Guide \(frameGuide.label)")
                 }
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
                     showSafeZone.toggle()
-                    flash(showSafeZone ? "SAFE ZONE ON" : "SAFE ZONE OFF")
+                    flash(showSafeZone ? "Safe zone on" : "Safe zone off")
                 })
-                tool("waveform.path.ecg.rectangle", "SCOPE", on: scopeMode != nil) {
+                tool("waveform.path.ecg.rectangle", "Scope", on: scopeMode != nil) {
                     cycleScope()
                 }
-                tool("light.beacon.max", "ZEBRA", on: camera.zebrasOn) {
+                tool("light.beacon.max", "Zebras", on: camera.zebrasOn) {
                     camera.zebrasOn.toggle()
-                    flash(camera.zebrasOn ? "ZEBRAS ON" : "ZEBRAS OFF")
+                    flash(camera.zebrasOn ? "Zebras on" : "Zebras off")
                 }
-                tool("camera.metering.spot", "PEAK", on: camera.peakingOn) {
+                tool("camera.metering.spot", "Peaking", on: camera.peakingOn) {
                     camera.peakingOn.toggle()
-                    flash(camera.peakingOn ? "PEAKING ON" : "PEAKING OFF")
+                    flash(camera.peakingOn ? "Peaking on" : "Peaking off")
                 }
-                tool("grid", "GRID", on: showGrid) { showGrid.toggle() }
-                tool("level", "LEVEL", on: showLevel) { showLevel.toggle() }
-                tool("rectangle.on.rectangle", "FORMAT", on: panel == .format) {
+                tool("grid", "Grid", on: showGrid) { showGrid.toggle() }
+                tool("level", "Level", on: showLevel) { showLevel.toggle() }
+                tool("rectangle.on.rectangle", "Format", on: panel == .format) {
                     panel = panel == .format ? .none : .format
                 }
-                tool("a.circle", "AUTO", on: false) { autoAll() }
+                tool("a.circle", "Auto all", on: false) { autoAll() }
             }
             .padding(.horizontal, 16)
         }
         .lumaEdgeFade(leading: 16, trailing: 16)
+    }
+
+    private var toolDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.12))
+            .frame(width: 1, height: 26)
+            .padding(.horizontal, 6)
+    }
+
+    /// The instrument cluster: a live value in mono, its name beneath in plain
+    /// sentence case. Weight and contrast do the work that 8pt tracked caps
+    /// at 42% white could not.
+    private func valueTool(_ value: String, _ label: String, on: Bool,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(value)
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .foregroundStyle(on ? .white : .white.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+            }
+            .frame(width: 68, height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
     }
 
     private func tool(_ symbol: String, _ label: String, on: Bool,
@@ -648,12 +702,15 @@ struct LDCameraDemoView: View {
                 Image(systemName: symbol)
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
-                TechReadout(label, size: 8, color: on ? .white : .white.opacity(0.42))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
             }
             // No box, no chip, no pill — separation is by value alone. An
             // engaged tool is simply brighter than a resting one.
             .foregroundStyle(on ? .white : .white.opacity(0.5))
-            .frame(width: 62, height: 46)
+            .frame(width: 68, height: 46)
             .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
