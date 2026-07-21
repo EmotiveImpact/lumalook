@@ -68,7 +68,7 @@ struct HomeView: View {
 
                 if !morePacks.isEmpty {
                     Spacer(minLength: 0).frame(height: 28)
-                    SectionHeader(title: "Fresh this week", actionTitle: "Store") {
+                    HomeSectionHeader(title: "Fresh this week", actionTitle: "Store") {
                         app.tab = .store
                         LumaHaptics.shared.tap()
                     }
@@ -79,7 +79,7 @@ struct HomeView: View {
 
                 Spacer(minLength: 0).frame(height: 28)
 
-                SectionHeader(title: "More to explore", actionTitle: "Store") {
+                HomeSectionHeader(title: "More to explore", actionTitle: "Store") {
                     app.tab = .store
                     LumaHaptics.shared.tap()
                 }
@@ -121,40 +121,48 @@ struct HomeView: View {
         }
     }
 
+    /// Pro is a real state: subscribers manage it in Settings, everyone else
+    /// gets the paywall. Monochrome — a gold crown is chrome wearing colour
+    /// that belongs to the footage. Subscribed, the control says so in words;
+    /// unsubscribed it is one quiet glyph.
     private var proButton: some View {
         Button {
-            // Pro is a real state: subscribers manage it in Settings,
-            // everyone else gets the paywall.
             if storeService.isPro { app.path.append(.settings) } else { showPaywall = true }
             LumaHaptics.shared.tap()
         } label: {
             if storeService.isPro {
                 HStack(spacing: 5) {
                     Image(systemName: "crown.fill").font(.system(size: 12))
-                    TechReadout("PRO", size: 10, color: LumaTheme.gold)
+                    Text("Pro")
+                        .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(LumaTheme.gold)
-                .padding(.horizontal, 10)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 11)
                 .padding(.vertical, 6)
-                .background(LumaTheme.gold.opacity(0.16), in: Capsule())
+                .background(LumaTheme.surfaceStrong, in: Capsule())
+                .contentShape(Capsule())
             } else {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(LumaTheme.gold)
+                Image(systemName: "crown")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.8))
                     .frame(width: 38, height: 34)
+                    .contentShape(Rectangle())
             }
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(storeService.isPro ? "Pro — manage subscription" : "Get Pro")
     }
 
     private var settingsButton: some View {
         Button { app.path.append(.settings) } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(.white.opacity(0.8))
                 .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel("Settings")
     }
 
     // MARK: The four panels
@@ -192,14 +200,14 @@ struct HomeView: View {
 
     @ViewBuilder private var recentsSection: some View {
         if hasRecents {
-            SectionHeader(title: "Jump back in", actionTitle: "See All") {
+            HomeSectionHeader(title: "Jump back in", actionTitle: "See all") {
                 app.path.append(.projectLibrary)
             }
             .padding(.horizontal, 20)
             Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
             RecentsRail(store: app.store)
         } else {
-            SectionHeader(title: "Jump back in")
+            HomeSectionHeader(title: "Jump back in")
                 .padding(.horizontal, 20)
             Spacer(minLength: 0).frame(height: HomeMetrics.headerToRail)
             // Nothing saved yet. This must NOT restate the four panels sitting
@@ -258,6 +266,57 @@ struct HomeView: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Home chrome
+
+/// Home's own rail heading. The shared `SectionHeader` sets the title in
+/// tracked-out UPPERCASE at 62% white with a violet action beside it — caps
+/// and tracking make a heading read as a system label rather than a voice, and
+/// the violet is chrome wearing colour that belongs to the pack art. Here the
+/// title is sentence case at near-full white and the action is a quiet grey
+/// word: hierarchy by weight and value, not by hue.
+private struct HomeSectionHeader: View {
+    let title: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let actionTitle {
+                Button { action?() } label: {
+                    Text(actionTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
+            }
+        }
+    }
+}
+
+/// A stamp on a poster — NEW, GRADE. Filled, never outlined: on this page a
+/// stroke means selection and nothing else. White on black rather than a
+/// violet or gold pill, so the only colour on a tile is the picture's own,
+/// and so the stamp survives a bright frame and a dark one alike.
+private struct PosterStamp: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.black)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.white, in: Capsule())
     }
 }
 
@@ -402,9 +461,9 @@ private struct EmptyWorkCard: View {
             HStack(spacing: 14) {
                 Image(systemName: "cube.transparent")
                     .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(LumaTheme.accentBright)
+                    .foregroundStyle(.white.opacity(0.9))
                     .frame(width: 46, height: 46)
-                    .background(LumaTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+                    .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 14))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Nothing saved yet")
                         .font(.system(size: 15, weight: .semibold))
@@ -494,8 +553,12 @@ private struct ProjectPoster: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    TechReadout(Poster.duration(project.duration), size: 10,
-                                color: .white.opacity(0.75))
+                    // A duration is a NUMBER, so it keeps the mono face — but
+                    // plainly, without the tracked-out caps treatment that made
+                    // every small readout on the page look timid.
+                    Text(Poster.duration(project.duration))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
                 .padding(10)
             }
@@ -542,7 +605,7 @@ private struct GradeSessionPoster: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Text(session.updatedAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 .padding(10)
@@ -551,10 +614,7 @@ private struct GradeSessionPoster: View {
             .clipShape(RoundedRectangle(cornerRadius: Poster.radius))
             .contentShape(RoundedRectangle(cornerRadius: Poster.radius))
             .overlay(alignment: .topLeading) {
-                TechReadout("GRADE", size: 9, color: .white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(LumaTheme.accent, in: Capsule())
+                PosterStamp(text: "Grade")
                     .padding(8)
                     .allowsHitTesting(false)
             }
@@ -625,10 +685,7 @@ private struct PackTile: View {
             .contentShape(RoundedRectangle(cornerRadius: size.radius))
             .overlay(alignment: .topTrailing) {
                 if isNew {
-                    TechReadout("NEW", size: 8, color: .white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(LumaTheme.accent, in: Capsule())
+                    PosterStamp(text: "New")
                         .padding(7)
                         .allowsHitTesting(false)
                 }

@@ -107,10 +107,10 @@ struct GradedThumb: View {
             .contentShape(RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),
+                    .strokeBorder(selected ? .white : .white.opacity(0.08),
                                   lineWidth: selected ? 2.5 : 1)
             )
-            .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
+            .shadow(color: selected ? .black.opacity(0.6) : .clear, radius: 8)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }

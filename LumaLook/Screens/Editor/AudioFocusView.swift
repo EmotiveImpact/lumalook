@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// When an audio panel is open, the preview area shows the AUDIO ASSET — its
-/// waveform, name, kind and duration — as the focus, so the controls in the
-/// sheet below clearly belong to it instead of floating over an unrelated
-/// video frame. The video sits dimmed behind this scrim.
+/// When an audio tool is open, a card pinned to the TOP of the preview names
+/// the audio asset being edited — its waveform, name, kind and duration — so
+/// the controls below clearly belong to it. It is a band, not a scrim: the
+/// image stays the interface and is never covered.
 struct AudioFocusView: View {
     let title: String
     let subtitle: String
@@ -11,36 +11,30 @@ struct AudioFocusView: View {
     let samples: [Float]
 
     var body: some View {
-        // Top-anchored: the preview frame extends behind the sheet, so the
-        // VISIBLE band is its top. Pin the asset bar there so it always shows.
-        ZStack(alignment: .top) {
-            LinearGradient(colors: [.black.opacity(0.82), .black.opacity(0.42)],
-                           startPoint: .top, endPoint: .bottom)
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
-                    .frame(width: 46, height: 46)
-                    .background(Self.plate(cornerRadius: 13))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 10)
-                AudioFocusWaveform(samples: samples)
-                    .frame(width: 150, height: 46)
-                    .background(Self.plate(cornerRadius: 11))
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Self.plate(cornerRadius: 11))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-            .padding(.bottom, 14)
+            Spacer(minLength: 10)
+            AudioFocusWaveform(samples: samples)
+                .frame(width: 130, height: 38)
+                .background(Self.plate(cornerRadius: 10))
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.black.opacity(0.72))
     }
 
     /// An OPAQUE tile. `LumaTheme.surface` is a translucent white, so over a

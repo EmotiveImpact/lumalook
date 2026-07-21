@@ -1,6 +1,6 @@
 import SwiftUI
+import UIKit
 import AVKit
-import Pow
 
 /// Real metadata read back off the file that was actually written — never the
 /// spec that was requested, so a preset the encoder substituted can't be
@@ -51,30 +51,44 @@ struct ExportOutputInfo: Equatable {
     }
 }
 
+// MARK: - Export complete
+
+/// The result of a render, in the shipping design language proved by
+/// `LDExportDemoView`: THE IMAGE IS THE INTERFACE. The file that was actually
+/// written owns the top of the screen uncovered — it plays if it is a video,
+/// it is the real poster frame while the player warms up, and it is the graded
+/// source frame when nothing was produced. Everything else lives in a drawer
+/// beneath it: what was written (mono, read off the asset), what went wrong
+/// (verbatim), the actions as an unboxed tool row, and one calm instruction bar
+/// whose single filled button is Share.
+///
+/// Monochrome throughout — no teal tick, no orange failure slab, no branded
+/// share tiles, no confetti. Mono type is reserved for the measurements.
 struct ExportCompleteView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
-    @State private var appeared = false
-    @State private var celebrate = 0
     @State private var info = ExportOutputInfo()
     @State private var isSavingToPhotos = false
     /// Real first frame of the exported file, used while the player warms up.
     @State private var poster: CGImage?
+    /// The graded SOURCE frame, rendered once — shown only when the export
+    /// produced nothing, so the failure screen still shows the user's picture
+    /// rather than a black box. Never bundled art.
+    @State private var sourceFrame: CGImage?
 
-    /// There is no success to celebrate without a file (or an in-memory still)
-    /// to show for it — every share affordance keys off this.
+    /// There is no success to report without a file (or an in-memory still) to
+    /// show for it — every share affordance keys off this.
     ///
     /// A non-nil URL is NOT proof of a file: exports land in the temporary
     /// directory, which iOS purges freely. Checking only the URL rendered a
-    /// teal "Export Complete!", a black media card and a ShareLink to nothing.
+    /// success headline, a black media card and a ShareLink to nothing.
     private var hasArtefact: Bool {
         app.lastExportImage != nil || shareableURL != nil
     }
 
     /// The exported file, only if it is still on disk. Every share affordance
-    /// (hero ShareLink, brand tiles, Save to Photos) reads this, never the
-    /// raw `app.lastExportURL`.
+    /// (the bar's Share, Save to Photos) reads this, never `app.lastExportURL`.
     private var shareableURL: URL? {
         guard let url = app.lastExportURL,
               FileManager.default.fileExists(atPath: url.path) else { return nil }
@@ -89,314 +103,318 @@ struct ExportCompleteView: View {
         return url
     }
 
-    private var statusTint: Color { hasArtefact ? LumaTheme.teal : LumaTheme.orange }
-
-    private var subtitle: String {
-        guard hasArtefact else {
-            // Distinguish "the render failed" from "the file was purged" —
-            // the generic line was shown for both.
-            return app.exportError == nil
-                ? "The exported file is no longer available on this device. Export again to save or share it."
-                : "The export didn't finish."
-        }
-        return app.lastExportSavedToPhotos ? "Saved to your photos" : "Ready to share below"
-    }
+    // MARK: - Body
 
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                // Lifted out of the ScrollView so the failure stack below can
-                // be vertically centred without dragging the Back chevron with
-                // it into the middle of the screen.
-                HStack {
-                    Button { goBack() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.lumaPress)
-                    .accessibilityLabel("Back")
-                    Spacer()
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 6)
-
-                GeometryReader { proxy in
-                ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    ZStack {
-                        Circle()
-                            .fill(statusTint.opacity(0.13))
-                            .frame(width: 128, height: 128)
-                        Circle()
-                            .strokeBorder(statusTint.opacity(0.35), lineWidth: 1)
-                            .frame(width: 128, height: 128)
-                        Image(systemName: hasArtefact ? "checkmark" : "exclamationmark.triangle")
-                            .font(.system(size: 54, weight: .bold))
-                            .foregroundStyle(statusTint)
-                    }
-                    .scaleEffect(appeared ? 1 : 0.4)
-                    .opacity(appeared ? 1 : 0)
-                    .changeEffect(.spray(origin: .center) {
-                        Image(systemName: "sparkle")
-                            .foregroundStyle(LumaTheme.teal)
-                    }, value: celebrate)
-                    .padding(.top, 18)
-
-                    Text(hasArtefact ? "Export Complete!" : "Export Unavailable")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 22)
-                    Text(subtitle)
-                        .font(.system(size: 17))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 6)
-
-                    // The actual reason the export failed. It was collected in
-                    // `app.exportError` and then never shown anywhere, so the
-                    // user got a generic line for every distinct failure.
-                    if !hasArtefact, let reason = app.exportError {
-                        Text(reason)
-                            .font(.footnote)
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 11)
-                            .background(LumaTheme.orange.opacity(0.14),
-                                        in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(LumaTheme.orange.opacity(0.45), lineWidth: 1))
-                            .padding(.top, 18)
-                    }
-
-                    // Photos access denied/limited: the export still
-                    // succeeded — explain and offer the one-tap fix.
-                    if hasArtefact, !app.lastExportSavedToPhotos {
-                        VStack(spacing: 10) {
-                            Text("LumaLook couldn't add this to your photo library. In Settings, choose \"Add Photos Only\" — that's the only access LumaLook ever asks for (it never reads your library, so iOS won't show a Full Access option).")
-                                .font(.footnote)
-                                .foregroundStyle(LumaTheme.textSecondary)
-                                .multilineTextAlignment(.center)
-                            Button {
-                                if let url = URL(string: UIApplication.openSettingsURLString) {
-                                    UIApplication.shared.open(url)
-                                }
-                            } label: {
-                                Label("Turn On \"Add Photos Only\"", systemImage: "gear")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 9)
-                                    .background(LumaTheme.accent, in: Capsule())
-                            }
-                            .buttonStyle(.lumaPress)
-                        }
-                        .padding(14)
-                        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                        .padding(.horizontal, 22)
-                        .padding(.top, 14)
-                    }
-
-                    // Centered media card — the frame that was actually
-                    // written. Never bundled art: with no artefact there is
-                    // no success state to illustrate.
-                    if hasArtefact {
-                        Group {
-                            if let image = app.lastExportImage {
-                                Image(decorative: image, scale: 1)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else if let player {
-                                VideoPlayer(player: player)
-                            } else if let poster {
-                                // Player not ready yet — the real first frame,
-                                // pulled off the exported file.
-                                Image(decorative: poster, scale: 1)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                LumaTheme.surface
-                                    .overlay(ProgressView().tint(LumaTheme.textMuted))
-                            }
-                        }
-                        .frame(width: 250, height: 250)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                        // The shadow already lifts the preview off the canvas —
-                        // a rim on top of it just re-draws the edge.
-                        .contentShape(RoundedRectangle(cornerRadius: 18))
-                        .shadow(color: .black.opacity(0.45), radius: 22, y: 12)
-                        .padding(.top, 26)
-                    }
-
-                    // Delivery spec of the file that was actually written.
-                    if !info.readout.isEmpty {
-                        TechReadout(info.readout, size: 9, color: LumaTheme.textMuted)
-                            .padding(.top, 14)
-                    }
-
-                    // The hero CTA exists only when there is a file to hand to
-                    // the share sheet. A violet full-width button that opens
-                    // nothing is worse than no button at all.
-                    if let url = shareableURL {
-                        ShareLink(item: url) { shareLabel }
-                            .buttonStyle(.lumaPress)
-                            .conditionalEffect(.repeat(.shine, every: .seconds(3)), condition: true)
-                            .padding(.top, 30)
-                    } else if hasArtefact {
-                        // Graded still held in memory but never written to
-                        // disk — say so instead of shipping a dead button.
-                        VStack(spacing: 8) {
-                            shareLabel
-                                .grayscale(1)
-                                .opacity(0.45)
-                            Text("This export isn't on disk, so it can't be shared. Export again to get a shareable file.")
-                                .font(.footnote)
-                                .foregroundStyle(LumaTheme.textMuted)
-                                .multilineTextAlignment(.center)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Sharing unavailable — this export isn't on disk")
-                        .padding(.top, 30)
-                    }
-
-                    // Brand tiles are real ShareLinks — the destination apps
-                    // live in the system sheet. They were decorations before,
-                    // which read as four tappable buttons that did nothing.
-                    if let url = shareableURL {
-                        HStack(spacing: 22) {
-                            ForEach([BrandShareIcon.Kind.instagram, .tiktok, .youtube, .more],
-                                    id: \.rawValue) { kind in
-                                ShareLink(item: url) { BrandShareIcon(kind: kind) }
-                                    .buttonStyle(.lumaPress)
-                                    .accessibilityLabel("Share to \(kind.rawValue)")
-                            }
-                        }
-                        .padding(.top, 22)
-                    }
-
-                    // The GIF is a separate artefact Photos won't take —
-                    // it only ever leaves via the share sheet.
-                    if let gif = shareableGIFURL {
-                        ShareLink(item: gif) {
-                            Label("Share GIF", systemImage: "square.stack.3d.down.forward")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(LumaTheme.cardRaised, in: RoundedRectangle(cornerRadius: 14))
-                        }
-                        .buttonStyle(.lumaPress)
-                        .padding(.top, 22)
-                    }
-
-                    // Retry Photos without leaving the screen — the export is
-                    // already on disk, only the library hand-off failed.
-                    // Videos only: the still path saves its own UIImage, and
-                    // Photos rejects the audio-only M4A outright.
-                    if !app.lastExportSavedToPhotos, app.lastExportImage == nil,
-                       let url = shareableURL, url.pathExtension.lowercased() == "mov" {
-                        GhostCTA(title: isSavingToPhotos ? "Saving…" : "Save to Photos") {
-                            guard !isSavingToPhotos else { return }
-                            isSavingToPhotos = true
-                            Task {
-                                let saved = await app.exporter.saveToPhotos(url: url)
-                                app.lastExportSavedToPhotos = saved
-                                isSavingToPhotos = false
-                                if saved { LumaHaptics.shared.exportSuccess() }
-                                else { LumaHaptics.shared.failure() }
-                            }
-                        }
-                        .padding(.top, 24)
-                    }
-
-                    // Same source, new spec — straight back to the sheet the
-                    // user came from rather than out to Home. With no artefact
-                    // this is the ONLY thing worth doing, so it carries the
-                    // primary weight the (absent) share CTA would have had —
-                    // two identical grey ghosts named no recommended step.
-                    if hasArtefact {
-                        GhostCTA(title: "Export another") { goBack() }
-                            .padding(.top, 24)
-                    } else {
-                        SolidCTA(title: "Try Export Again", icon: "arrow.clockwise") { goBack() }
-                            .padding(.top, 26)
-                    }
-
-                    // Grade → Edit bridge: carry the just-graded clip into the
-                    // editor (with its look baked into the clip's grade) so the
-                    // grade room isn't a dead end before the timeline.
-                    if app.lastExportImage == nil,
-                       app.selectedVideoURL != nil || !app.editor.clips.isEmpty {
-                        GhostCTA(title: "Continue in Editor") {
-                            let editor = app.editor
-                            if editor.clips.isEmpty, let url = app.selectedVideoURL {
-                                let grade = ClipGrade(
-                                    baseLookName: app.selectedLUT == nil ? app.selectedLook.name : "",
-                                    lutID: app.selectedLUT?.id,
-                                    settings: app.settings)
-                                Task {
-                                    await editor.addClip(from: url)
-                                    if let id = editor.clips.last?.id {
-                                        editor.selectedClipID = id
-                                        editor.setClipGrade(id: id, grade)
-                                    }
-                                }
-                            }
-                            app.path = [.editor]
-                        }
-                        .padding(.top, 24)
-                    }
-
-                    GhostCTA(title: "New Project") {
-                        app.resetToHome()
-                    }
-                    .padding(.top, 24)
-                }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 40)
-                // The failure stack is short; top-aligned it left ~900 pt of
-                // empty canvas below and read as a half-loaded page. Give it a
-                // minimum of the container height and centre it. A *minimum*
-                // (not an exact frame) so it still scrolls at large text sizes.
-                // The success stack is tall already, so it stays top-aligned.
-                .frame(minHeight: hasArtefact ? nil : proxy.size.height,
-                       alignment: .center)
-                .frame(maxWidth: .infinity)
-                }
-                }
+                media
+                drawer
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
-        .sensoryFeedback(.success, trigger: celebrate)
+        .animation(.easeOut(duration: 0.18), value: app.lastExportSavedToPhotos)
         .onAppear {
             if app.lastExportImage == nil, let url = shareableURL {
                 player = AVPlayer(url: url)
             }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.1)) {
-                appeared = true
-            }
-            // Nothing to celebrate when nothing was produced.
-            guard hasArtefact else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                celebrate += 1
-            }
         }
-        .task {
-            guard let url = shareableURL, app.lastExportImage == nil else { return }
-            async let readout = ExportOutputInfo.load(url: url)
-            async let frame = Self.posterFrame(url: url)
-            info = await readout
-            poster = await frame
-        }
+        .task { await load() }
         .onDisappear { player?.pause() }
     }
+
+    private func load() async {
+        guard let url = shareableURL, app.lastExportImage == nil else {
+            // Nothing was written — render the graded source once so the
+            // failure screen is still the user's picture, not a void.
+            if !hasArtefact, sourceFrame == nil, let frame = app.previewFrame {
+                let graded = LookPipeline.shared.apply(state: app.lookState, to: frame)
+                sourceFrame = LookPipeline.shared.context.createCGImage(graded, from: frame.extent)
+            }
+            return
+        }
+        async let readout = ExportOutputInfo.load(url: url)
+        async let frame = Self.posterFrame(url: url)
+        info = await readout
+        poster = await frame
+    }
+
+    // MARK: - Media — uncovered, the whole point of the screen
+
+    private var media: some View {
+        GeometryReader { geo in
+            Group {
+                if let image = app.lastExportImage {
+                    Image(decorative: image, scale: 1)
+                        .resizable().aspectRatio(contentMode: .fill)
+                } else if let player {
+                    // The export PLAYS. Watching what you made is the reward.
+                    VideoPlayer(player: player)
+                } else if let poster {
+                    // Player not ready yet — the real first frame, pulled off
+                    // the exported file.
+                    Image(decorative: poster, scale: 1)
+                        .resizable().aspectRatio(contentMode: .fill)
+                } else if let sourceFrame {
+                    Image(decorative: sourceFrame, scale: 1)
+                        .resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    LumaTheme.surface
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            // clipShape clips PIXELS, not TOUCHES: a .fill image overflows its
+            // fixed frame and would keep taking taps outside it.
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+    }
+
+    // MARK: - Drawer
+
+    private var drawer: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(hasArtefact ? "Export complete" : "Export unavailable")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+                if let status = photosStatus {
+                    Text(status)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+
+            // The delivery spec of the file that was ACTUALLY written — read
+            // back off the asset, never the spec that was requested.
+            // Dimensions · duration · file size · codec — four measurements,
+            // so this line stays mono in full.
+            if !info.readout.isEmpty {
+                Text(info.readout)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+            }
+
+            notice
+            resultRow
+                .padding(.bottom, 12)
+            completeBar
+        }
+    }
+
+    private var photosStatus: String? {
+        guard hasArtefact, photosEligible else { return nil }
+        return app.lastExportSavedToPhotos ? "Saved to Photos" : "Not in Photos"
+    }
+
+    /// Photos only ever takes the video or the still. It rejects the
+    /// audio-only M4A outright, so reporting "not in Photos" for one — and
+    /// offering a Settings trip to fix it — would be an instruction that
+    /// cannot possibly help.
+    private var photosEligible: Bool {
+        if app.lastExportImage != nil { return true }
+        guard let url = shareableURL else { return false }
+        return ["mov", "jpg", "jpeg"].contains(url.pathExtension.lowercased())
+    }
+
+    /// One notice at a time, most consequential first. The verbatim reason the
+    /// export failed was collected in `app.exportError` and must be shown —
+    /// a generic line for every distinct failure teaches the user nothing.
+    @ViewBuilder
+    private var notice: some View {
+        if !hasArtefact {
+            // Distinguish "the render failed" (with its real reason) from
+            // "the file was purged" — one line was shown for both.
+            noticeBar(app.exportError
+                      ?? "The exported file is no longer on this device. Export again to save or share it.")
+                .padding(.horizontal, 18)
+                .padding(.bottom, 12)
+        } else if !app.lastExportSavedToPhotos, photosEligible {
+            // The export itself succeeded; only the library hand-off was
+            // refused. Explain it, and put the fix in the row below.
+            noticeBar("LumaLook couldn't add this to your photo library. In Settings choose \"Add Photos Only\" — that's the only access it ever asks for, so iOS won't offer Full Access.")
+                .padding(.horizontal, 18)
+                .padding(.bottom, 12)
+        } else if shareableURL == nil {
+            // A graded still held in memory that never reached disk.
+            noticeBar("This export isn't on disk, so it can't be shared. Export again to get a shareable file.")
+                .padding(.horizontal, 18)
+                .padding(.bottom, 12)
+        }
+    }
+
+    /// A sentence on a raised surface. No orange slab, no warning triangle —
+    /// the words are the warning.
+    private func noticeBar(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12.5))
+            .foregroundStyle(.white.opacity(0.85))
+            .lineSpacing(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(LumaTheme.surfaceStrong,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: - Actions — icon over label, unboxed, the last item clipped
+
+    private var resultRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                // Retry Photos without leaving the screen — the export is
+                // already on disk, only the library hand-off failed. Videos
+                // only: the still path saves its own UIImage, and Photos
+                // rejects the audio-only M4A outright.
+                if !app.lastExportSavedToPhotos, app.lastExportImage == nil,
+                   let url = shareableURL, url.pathExtension.lowercased() == "mov" {
+                    tool("square.and.arrow.down", isSavingToPhotos ? "Saving…" : "To Photos",
+                         on: false) {
+                        guard !isSavingToPhotos else { return }
+                        isSavingToPhotos = true
+                        Task {
+                            let saved = await app.exporter.saveToPhotos(url: url)
+                            app.lastExportSavedToPhotos = saved
+                            isSavingToPhotos = false
+                            saved ? LumaHaptics.shared.exportSuccess()
+                                  : LumaHaptics.shared.failure()
+                        }
+                    }
+                }
+                // The one-tap fix for the notice directly above.
+                if hasArtefact, !app.lastExportSavedToPhotos, photosEligible {
+                    tool("gearshape", "Settings", on: false) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+                // The GIF is a separate artefact Photos won't take — it only
+                // ever leaves via the share sheet.
+                if let gif = shareableGIFURL {
+                    ShareLink(item: gif) {
+                        VStack(spacing: 5) {
+                            Image(systemName: "square.stack.3d.down.forward")
+                                .font(.system(size: 17)).frame(height: 20)
+                            Text("Share GIF")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 74, height: 46)
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Share GIF")
+                }
+                // Same source, new spec — straight back to the sheet the user
+                // came from rather than out to Home.
+                tool("arrow.uturn.backward", "Export another", on: false) { goBack() }
+                // Grade → Edit bridge: carry the just-graded clip into the
+                // timeline so the grade room isn't a dead end. Only drawn when
+                // there is actually a clip to carry.
+                if app.lastExportImage == nil,
+                   app.selectedVideoURL != nil || !app.editor.clips.isEmpty {
+                    tool("film.stack", "In editor", on: false) { continueInEditor() }
+                }
+                tool("photo.on.rectangle", "New source", on: false) { app.path = [.selectClip] }
+                tool("plus.square", "New project", on: false) { app.resetToHome() }
+            }
+            .padding(.horizontal, 16)
+        }
+        .lumaEdgeFade(leading: 16, trailing: 16)
+    }
+
+    private func tool(_ symbol: String, _ label: String, on: Bool,
+                      enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .regular))
+                    .frame(height: 20)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            // No box, no chip, no pill — separation is by value alone.
+            .foregroundStyle(on ? .white : .white.opacity(0.5))
+            .frame(width: 74, height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.28)
+    }
+
+    // MARK: - The calm instruction bar
+
+    private var completeBar: some View {
+        HStack(spacing: 0) {
+            Button { goBack() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+            Spacer(minLength: 8)
+            Text(barSentence)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 8)
+            // The one filled button in the language. It exists only when there
+            // is a file to hand to the share sheet — a full-width button that
+            // opens nothing is worse than no button at all.
+            if let url = shareableURL {
+                ShareLink(item: url) {
+                    filledLabel(app.lastExportImage != nil ? "Share photo" : "Share")
+                }
+                .buttonStyle(.lumaPress)
+            } else {
+                Button { goBack() } label: { filledLabel("Try again") }
+                    .buttonStyle(.lumaPress)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+    }
+
+    private func filledLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.black)
+            .padding(.horizontal, 18)
+            .frame(height: 40)
+            .background(Color.white, in: Capsule())
+            .contentShape(Capsule())
+    }
+
+    private var barSentence: String {
+        if shareableURL != nil { return "Your file is ready" }
+        if hasArtefact { return "Not on disk — export again" }
+        return "Nothing was produced"
+    }
+
+    // MARK: - Navigation
 
     /// Pops to whatever pushed this screen (the editor or the compare screen),
     /// which is where "export another" belongs. `dismiss()` alone strands the
@@ -405,85 +423,32 @@ struct ExportCompleteView: View {
         if !app.path.isEmpty { app.path.removeLast() } else { dismiss() }
     }
 
+    /// Carries the just-graded clip into the timeline with its look baked into
+    /// the clip's grade, so the grade room is not a dead end.
+    private func continueInEditor() {
+        let editor = app.editor
+        if editor.clips.isEmpty, let url = app.selectedVideoURL {
+            let grade = ClipGrade(
+                baseLookName: app.selectedLUT == nil ? app.selectedLook.name : "",
+                lutID: app.selectedLUT?.id,
+                settings: app.settings)
+            Task {
+                await editor.addClip(from: url)
+                if let id = editor.clips.last?.id {
+                    editor.selectedClipID = id
+                    editor.setClipGrade(id: id, grade)
+                }
+            }
+        }
+        app.path = [.editor]
+    }
+
     /// First frame of the file that was actually written — a real poster, so
-    /// the card never has to fall back to bundled art.
+    /// the hero never has to fall back to bundled art.
     private static func posterFrame(url: URL) async -> CGImage? {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 750, height: 750)
+        generator.maximumSize = CGSize(width: 900, height: 900)
         return try? await generator.image(at: .zero).image
-    }
-
-    private var shareLabel: some View {
-        Text(app.lastExportImage != nil ? "Share Photo" : "Share Video")
-            .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 58)
-            .background(
-                LinearGradient(colors: [LumaTheme.accent, LumaTheme.accent.opacity(0.82)],
-                               startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: 16)
-            )
-            .shadow(color: LumaTheme.accent.opacity(0.35), radius: 16, y: 6)
-    }
-}
-
-// MARK: - Brand share icons
-
-struct BrandShareIcon: View {
-    enum Kind: String {
-        case instagram = "Instagram", tiktok = "TikTok", youtube = "YouTube", more = "More"
-    }
-    let kind: Kind
-
-    var body: some View {
-        VStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(LumaTheme.cardRaised)
-                .frame(width: 68, height: 68)
-                .overlay(glyph)
-            Text(kind.rawValue)
-                .font(.system(size: 13))
-                .foregroundStyle(LumaTheme.textSecondary)
-        }
-    }
-
-    @ViewBuilder
-    private var glyph: some View {
-        switch kind {
-        case .instagram:
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(
-                    LinearGradient(colors: [Color(red: 0.99, green: 0.75, blue: 0.29),
-                                            Color(red: 0.91, green: 0.26, blue: 0.43),
-                                            Color(red: 0.51, green: 0.23, blue: 0.71)],
-                                   startPoint: .bottomLeading, endPoint: .topTrailing),
-                    lineWidth: 2.5
-                )
-                .frame(width: 30, height: 30)
-                .overlay(Circle().stroke(
-                    LinearGradient(colors: [Color(red: 0.91, green: 0.26, blue: 0.43),
-                                            Color(red: 0.51, green: 0.23, blue: 0.71)],
-                                   startPoint: .bottom, endPoint: .top),
-                    lineWidth: 2.5).frame(width: 13, height: 13))
-        case .tiktok:
-            Image(systemName: "music.note")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(.white)
-                .shadow(color: Color(red: 0.0, green: 0.95, blue: 0.92), radius: 0, x: -1.5, y: 0)
-                .shadow(color: Color(red: 1.0, green: 0.0, blue: 0.31), radius: 0, x: 1.5, y: 0)
-        case .youtube:
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(red: 1.0, green: 0.0, blue: 0.0))
-                .frame(width: 34, height: 24)
-                .overlay(Image(systemName: "play.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white))
-        case .more:
-            Image(systemName: "ellipsis")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-        }
     }
 }

@@ -108,23 +108,38 @@ struct LetterboxMattes: View {
     }
 }
 
-// MARK: - D1: capture format chip
+// MARK: - Capture format chip
 
 /// Top-left format signal: resolution · fps · codec, read straight off the
 /// active `CameraSpec` so the chip can never disagree with what is recorded.
+///
+/// These are format VALUES, so they keep the mono instrument voice — but not
+/// via `TechReadout`, whose forced uppercase turns "1080p" into "1080P" and
+/// "H.264" into a tracked-out shout. The chip now sits on the camera's black
+/// matte, so it needs no scrim of its own either.
 struct CaptureFormatChip: View {
     let spec: CameraSpec
 
     var body: some View {
-        TechReadout("\(spec.resolution.rawValue) · \(spec.fps) · \(spec.codec.rawValue)",
-                    size: 11, color: .white.opacity(0.9))
-            .padding(.horizontal, 9)
+        Text("\(spec.resolution.rawValue) · \(spec.fps) · \(spec.codec.rawValue)")
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(.white.opacity(0.9))
+            .lineLimit(1)
             .padding(.vertical, 5)
-            .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
-// MARK: - D1: right-edge pro rail
+// MARK: - RETIRED with the old full-bleed camera
+//
+// Everything from here to the end of the pro-panel section belonged to the
+// previous viewfinder, where chrome floated on glass over the picture. The
+// promoted camera puts every control on a black matte, so it needs no glass,
+// no rail and no violet accent: `ProRailButton` / `ProRailGroup` /
+// `ProRailDivider` / `CameraAssistChip` / `ProReadout` / `RulerDial` now have
+// no call sites. They are left in place rather than deleted only because
+// sibling screens are being promoted concurrently — safe to remove once that
+// wave lands. `ProParameter` below is still live and must stay.
 
 /// The rail's shared glass. One surface definition so a lone button and a
 /// grouped cluster are cut from the same material — the rail must read as a

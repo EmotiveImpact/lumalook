@@ -101,11 +101,18 @@ enum GradeCubeBaker {
 
 // MARK: - Export spec sheet (frame G1)
 
-/// Delivery spec before the render: resolution as three tap-cards, frame rate
-/// and bitrate as sliders with mono readouts, an HDR toggle that is only
-/// offered when the pipeline can honour it, a live size estimate, and the
-/// .cube round-trip. Reads and writes the same `lumalook.exportSpec` store
+/// Delivery spec before the render, in the shipping design language proved by
+/// `LDExportDemoView`: resolution as three tap-cards that LEAD WITH THE VALUE,
+/// frame rate / bitrate / codec as labelled option rows (a slider for five
+/// discrete values is a dial pretending to be continuous), the HDR, GIF, audio
+/// and .cube capabilities as an unboxed tool row, a live size estimate and a
+/// calm instruction bar. Reads and writes the same `lumalook.exportSpec` store
 /// the Settings "Export Quality" default writes, so the two never disagree.
+///
+/// Chrome is monochrome — black, near-black, white, grey. Mono type is for
+/// NUMBERS ONLY (resolutions, frame rates, sizes, cube grids); every label is
+/// the system face in sentence case. Selection is one thin white ring and
+/// nothing else is ringed; unselected options separate by surface value.
 struct ExportSpecSheet: View {
     let durationSeconds: Double
     let gradeCubeTitle: String?        // nil = editor flow (no cube row)
@@ -113,82 +120,53 @@ struct ExportSpecSheet: View {
     let onExport: (ExportSpec) -> Void
 
     @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
     @AppStorage("lumalook.cubeSize") private var cubeSize = 33
     @State private var spec = ExportSpec()
     @State private var cubeURL: URL?
     @State private var isBaking = false
+    @State private var showCubePanel = false
     /// Resolved once per open from the source's format description.
     @State private var sourceIsHLG = false
 
-    /// Discrete frame rates the slider snaps between — a continuous fps
-    /// slider produces rates no camera or platform actually uses.
+    /// Discrete frame rates. A continuous fps slider produces rates no camera
+    /// or platform actually uses, and five values do not need 300 pt of travel.
     private static let frameRates = [24, 25, 30, 48, 60]
 
+    /// The .cube bake needs a live grade to sample; the editor flow has none,
+    /// so the tool is not drawn there rather than drawn dead.
+    private var offersCube: Bool { gradeCubeTitle != nil && lookState != nil }
+    /// GIF transcode is wired in the editor export path only — the grade flow
+    /// would draw a control nothing reads.
+    private var offersGIF: Bool { gradeCubeTitle == nil }
+
     var body: some View {
-        // The spec controls scroll; the Export CTA is PINNED below them. The
-        // stack measures ~470 pt against a 340 pt default detent, so a footer
-        // inside the ScrollView put the sheet's only primary action below the
-        // fold with nothing on screen to signal it was there (frame G1 wants
-        // the footer row as permanent chrome).
+        // The spec controls scroll; the estimate and the instruction bar are
+        // PINNED below them. The stack measures well past the sheet's default
+        // detent, so a footer inside the ScrollView put the only primary action
+        // below the fold with nothing on screen to signal it was there.
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    header
-
-                    if let error = app.exportError {
-                        preflightBanner(error, tone: LumaTheme.orange)
-                    } else if let warning = preflightWarning {
-                        preflightBanner(warning, tone: LumaTheme.gold)
-                    }
-
-                    if !spec.audioOnly {
-                        resolutionCards
-                        sliderRow(label: "Frame rate", value: fpsIndexBinding,
-                                  range: 0...Double(Self.frameRates.count - 1),
-                                  readout: "\(spec.fps)")
-                        sliderRow(label: "Bitrate", value: bitrateIndexBinding,
-                                  range: 0...Double(ExportSpec.Bitrate.allCases.count - 1),
-                                  readout: spec.bitrate.rawValue.uppercased())
-                        hdrRow
-                        codecRow
-                    }
-
-                    Hairline()
-
-                    Toggle(isOn: $spec.audioOnly) {
-                        Text("Audio only (M4A)")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                    }
-                    .tint(LumaTheme.accentBright)
-
-                    if gradeCubeTitle != nil, !spec.audioOnly {
-                        cubeRow
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 14)
+                specStack
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            // Pinned action bar, on the sheet's own `LumaTheme.bar` fill so the
-            // scrolling spec controls read as passing under it. The estimate +
-            // delivery spec live HERE, not in the ScrollView: they are G1's
-            // trust signal and must stay on screen while the user taps
-            // resolution or drags bitrate, at every detent the sheet offers.
+            // The estimate is G1's trust signal: it must stay on screen while
+            // the user taps resolution or bitrate, at every detent the sheet
+            // offers. Same fill as the sheet, so the controls read as passing
+            // under it rather than being cut off by a drawn line.
             VStack(spacing: 0) {
-                Hairline()
                 deliveryReadout
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 18)
                     .padding(.top, 10)
-                footer
-                    .padding(.horizontal, 20)
+                instructionBar
                     .padding(.top, 10)
-                    .padding(.bottom, 8)
             }
             .background(LumaTheme.bar)
         }
+        .animation(.easeOut(duration: 0.18), value: showCubePanel)
+        .animation(.easeOut(duration: 0.18), value: spec.audioOnly)
         .task {
             spec = ExportSpec.from(rawValue: storedSpec)
             if let url = app.selectedVideoURL, gradeCubeTitle != nil {
@@ -203,102 +181,368 @@ struct ExportSpecSheet: View {
         }
     }
 
-    // MARK: Header
+    private var specStack: some View {
+        VStack(spacing: 0) {
+            sourceLine
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 12)
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Export")
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundStyle(.white)
-            Spacer()
-            TechReadout(sourceLine, size: 9, color: LumaTheme.textMuted)
+            if let banner = app.exportError ?? preflightWarning {
+                noticeBar(banner)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+            }
+
+            if !spec.audioOnly {
+                resolutionCards
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+
+                VStack(spacing: 9) {
+                    optionRow("Frame rate", options: Self.frameRates,
+                              label: { "\($0)" }, isOn: { spec.fps == $0 },
+                              enabled: { _ in true }) { spec.fps = $0 }
+                    // Low / Medium / High are words, not values — so they are
+                    // set as words. The tier is a real file-length ceiling.
+                    optionRow("Bitrate", options: ExportSpec.Bitrate.allCases,
+                              numeric: false, label: { $0.rawValue },
+                              isOn: { spec.bitrate == $0 },
+                              enabled: { _ in true }) { spec.bitrate = $0 }
+                    optionRow("Codec", options: ExportSpec.Codec.allCases,
+                              label: codecLabel, isOn: { spec.codec == $0 },
+                              // 720 ships H.264 only — offering HEVC would lie.
+                              enabled: { !(spec.resolution == .hd720 && $0 == .hevc) }) {
+                        spec.codec = $0
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 12)
+            }
+
+            toolRow
+                .padding(.bottom, showCubePanel ? 10 : 12)
+
+            if showCubePanel, offersCube, !spec.audioOnly {
+                cubePanel
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+            }
+
+            if let reason = hdrAvailability.reason, !spec.audioOnly {
+                // The HDR toggle is only honest when the pipeline can honour
+                // it, so the reason it cannot is stated rather than hidden.
+                Text(reason)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
+            }
         }
     }
 
-    /// "TRAVEL VLOG · 00:18" — confirms what is being exported, matching the
-    /// dimmed preview still visible behind the sheet.
-    private var sourceLine: String {
-        let title = gradeCubeTitle == nil ? app.editor.projectTitle : app.selectedLook.name
-        guard durationSeconds > 0 else { return title }
-        return "\(title) · \(clock(durationSeconds))"
+    // MARK: Source
+
+    /// "Travel Vlog  00:18 … Batch 4" — what is being delivered. The title is a
+    /// NAME, so it is set as one; the duration and the batch count are numbers.
+    private var sourceLine: some View {
+        HStack(spacing: 8) {
+            Text(sourceTitle)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            if durationSeconds > 0 {
+                Text(clock(durationSeconds))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            Spacer(minLength: 0)
+            if !app.batchItems.isEmpty, gradeCubeTitle != nil {
+                HStack(spacing: 5) {
+                    Text("Batch")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Text("\(app.batchItems.count)")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+        }
+    }
+
+    private var sourceTitle: String {
+        gradeCubeTitle == nil ? app.editor.projectTitle : app.selectedLook.name
     }
 
     private func clock(_ seconds: Double) -> String {
         String(format: "%02d:%02d", Int(seconds) / 60, Int(seconds) % 60)
     }
 
-    // MARK: Resolution cards
+    // MARK: Resolution — the only cards on the sheet
 
+    /// The value leads. "2160p" tells you what you are about to write; "4K"
+    /// only tells you what to call it, so it goes underneath in plain type.
+    /// 720 says what it costs you — that card forces the codec.
     private var resolutionCards: some View {
         HStack(spacing: 8) {
-            resolutionCard(.uhd4K, title: "4K", sub: "2160p")
-            resolutionCard(.hd1080, title: "HD", sub: "1080p")
-            resolutionCard(.hd720, title: "720", sub: "Fast")
+            resolutionCard(.uhd4K, value: "2160p", name: "4K")
+            resolutionCard(.hd1080, value: "1080p", name: "HD")
+            resolutionCard(.hd720, value: "720p", name: "H.264 only")
         }
         .sensoryFeedback(.selection, trigger: spec.resolution)
     }
 
     private func resolutionCard(_ resolution: ExportSpec.Resolution,
-                                title: String, sub: String) -> some View {
+                                value: String, name: String) -> some View {
         let selected = spec.resolution == resolution
         return Button {
             spec.resolution = resolution
             // 720 is the fast tier and has no HEVC preset — keep the codec
             // readout truthful about what will actually be written.
             if resolution == .hd720 { spec.codec = .h264 }
+            LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 3) {
-                Text(title)
-                    .font(.system(size: 14, weight: selected ? .heavy : .bold))
-                    .foregroundStyle(selected ? LumaTheme.accentBright : .white)
-                TechReadout(sub, size: 9, color: selected ? LumaTheme.accentBright.opacity(0.8)
-                                                          : LumaTheme.textMuted)
+                Text(value)
+                    .font(.system(size: 18, weight: selected ? .heavy : .semibold,
+                                  design: .monospaced))
+                    .foregroundStyle(.white.opacity(selected ? 1 : 0.6))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(name)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(selected ? 0.7 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .background(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card),
-                        in: RoundedRectangle(cornerRadius: 13))
-            // MEANINGFUL: only the chosen option is ringed. The rest are plain
-            // fills, so the selection is the one line on the screen.
+            .padding(.vertical, 12)
+            // Unselected cards separate by SURFACE VALUE. Only the chosen one
+            // wears a stroke — that is what a stroke is for here.
+            .background(selected ? LumaTheme.cardRaised : LumaTheme.card,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 if selected {
-                    RoundedRectangle(cornerRadius: 13)
-                        .strokeBorder(LumaTheme.accent.opacity(0.55), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.white, lineWidth: 1)
                 }
             }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
     }
 
-    // MARK: Sliders
+    // MARK: Option rows — five discrete values, five taps
 
-    private var fpsIndexBinding: Binding<Double> {
-        Binding(
-            get: { Double(Self.frameRates.firstIndex(of: spec.fps) ?? 2) },
-            set: { spec.fps = Self.frameRates[Int($0.rounded())] }
-        )
-    }
-
-    private var bitrateIndexBinding: Binding<Double> {
-        Binding(
-            get: { Double(ExportSpec.Bitrate.allCases.firstIndex(of: spec.bitrate) ?? 2) },
-            set: { spec.bitrate = ExportSpec.Bitrate.allCases[Int($0.rounded())] }
-        )
-    }
-
-    private func sliderRow(label: String, value: Binding<Double>,
-                           range: ClosedRange<Double>, readout: String) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 78, alignment: .leading)
-            Slider(value: value, in: range, step: 1)
-                .tint(LumaTheme.accent)
-            TechReadout(readout, size: 10, color: .white)
-                .frame(width: 62, alignment: .trailing)
+    /// `numeric` decides the voice of the OPTIONS, never of the row's name: the
+    /// name is a label and is always plain, while a frame rate or a codec
+    /// designation is a value and stays mono.
+    private func optionRow<T: Hashable>(_ title: String, options: [T],
+                                        numeric: Bool = true,
+                                        label: @escaping (T) -> String,
+                                        isOn: @escaping (T) -> Bool,
+                                        enabled: @escaping (T) -> Bool,
+                                        pick: @escaping (T) -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+                .frame(width: 84, alignment: .leading)
+            ForEach(options, id: \.self) { option in
+                let on = isOn(option)
+                let usable = enabled(option)
+                Button {
+                    pick(option)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Text(label(option))
+                        .font(.system(size: numeric ? 14 : 13,
+                                      weight: on ? .semibold : .medium,
+                                      design: numeric ? .monospaced : .default))
+                        .foregroundStyle(.white.opacity(on ? 1 : 0.5))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .overlay {
+                            if on {
+                                Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 1)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .disabled(!usable)
+                .opacity(usable ? 1 : 0.25)
+            }
         }
-        .sensoryFeedback(.selection, trigger: readout)
+        .sensoryFeedback(.selection, trigger: options.first { isOn($0) })
+    }
+
+    private func codecLabel(_ codec: ExportSpec.Codec) -> String {
+        codec == .hevc ? "H.265" : "H.264"
+    }
+
+    // MARK: Tool row — icon over label, unboxed, the last item clipped
+
+    private var toolRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                tool("waveform", "Audio only", on: spec.audioOnly) {
+                    spec.audioOnly.toggle()
+                    LumaHaptics.shared.tap()
+                }
+                if offersGIF {
+                    tool("square.stack.3d.down.forward", "GIF", on: spec.alsoGIF,
+                         enabled: !spec.audioOnly) {
+                        spec.alsoGIF.toggle()
+                        LumaHaptics.shared.tap()
+                    }
+                }
+                tool("sun.max", "HDR (HLG)", on: spec.hdr,
+                     enabled: hdrAvailability.isAvailable && !spec.audioOnly) {
+                    spec.hdr.toggle()
+                    LumaHaptics.shared.tap()
+                }
+                if offersCube {
+                    // The cube tool HAS a value — the grid it will bake — so it
+                    // shows the value instead of a grid glyph that shows nothing.
+                    valueTool("\(cubeSize)³", "Cube LUT", on: showCubePanel,
+                              enabled: !spec.audioOnly) {
+                        showCubePanel.toggle()
+                        LumaHaptics.shared.tap()
+                    }
+                }
+                tool("arrow.uturn.backward", "Reset", on: false) {
+                    spec = ExportSpec()
+                    if !hdrAvailability.isAvailable { spec.hdr = false }
+                    LumaHaptics.shared.tap()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .lumaEdgeFade(leading: 16, trailing: 16)
+    }
+
+    private func tool(_ symbol: String, _ label: String, on: Bool,
+                      enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .regular))
+                    .frame(height: 20)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            // No box, no chip, no pill — separation is by value alone. An
+            // engaged tool is simply brighter than a resting one.
+            .foregroundStyle(on ? .white : .white.opacity(0.5))
+            .frame(width: 74, height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.28)
+    }
+
+    /// The instrument-cluster twin of `tool`: a live value in mono where the
+    /// glyph would have been, its name beneath in plain sentence case.
+    private func valueTool(_ value: String, _ label: String, on: Bool,
+                           enabled: Bool = true,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(value)
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .foregroundStyle(on ? .white : .white.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+            }
+            .frame(width: 74, height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.28)
+    }
+
+    // MARK: Cube
+
+    private var cubePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Bake this grade as a .cube — LUT, curves, wheels, HSL, split.")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(2)
+            HStack(spacing: 8) {
+                ForEach(GradeCubeBaker.sizes, id: \.self) { size in
+                    Button {
+                        cubeSize = size
+                        cubeURL = nil            // stale for the new size
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        // A grid size is a number: mono stays.
+                        Text("\(size)³")
+                            .font(.system(size: 14,
+                                          weight: cubeSize == size ? .semibold : .medium,
+                                          design: .monospaced))
+                            .foregroundStyle(.white.opacity(cubeSize == size ? 1 : 0.5))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .overlay {
+                                if cubeSize == size {
+                                    Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 1)
+                                }
+                            }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                }
+                if let cubeURL {
+                    ShareLink(item: cubeURL) {
+                        Text("Share")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.white, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                } else {
+                    Button {
+                        Task {
+                            guard let state = lookState, let title = gradeCubeTitle else { return }
+                            isBaking = true
+                            cubeURL = await GradeCubeBaker.bakeCurrentGrade(
+                                from: state, title: title, size: cubeSize)
+                            isBaking = false
+                            LumaHaptics.shared.tap()
+                        }
+                    } label: {
+                        Text(isBaking ? "Baking…" : "Bake")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(LumaTheme.cardRaised, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .disabled(isBaking)
+                }
+            }
+        }
+        .transition(.opacity)
     }
 
     // MARK: HDR
@@ -311,94 +555,51 @@ struct ExportSpecSheet: View {
             isTimeline: gradeCubeTitle == nil)
     }
 
-    private var hdrRow: some View {
-        let availability = hdrAvailability
-        return VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: $spec.hdr) {
-                Text("HDR (HLG)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(availability.isAvailable ? .white : LumaTheme.textMuted)
-            }
-            .tint(LumaTheme.accentBright)
-            .disabled(!availability.isAvailable)
+    // MARK: Estimate + delivery spec — the trust signal, always on screen
 
-            if let reason = availability.reason {
-                Text(reason)
-                    .font(.system(size: 11))
-                    .foregroundStyle(LumaTheme.textMuted)
+    private var deliveryReadout: some View {
+        HStack(spacing: 8) {
+            if let value = estimateValue {
+                Text("Est. size")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(value)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.9))
+            } else {
+                Text("Still image")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
             }
+            Spacer(minLength: 0)
+            // Format designations, not prose — this line stays in the
+            // instrument voice, just brighter and a size you can read.
+            Text(deliverySpecLine)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.45))
+                .lineLimit(1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 13))
     }
 
-    // MARK: Codec
-
-    private var codecRow: some View {
-        HStack(spacing: 12) {
-            Text("Codec")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 78, alignment: .leading)
-            Spacer()
-            HStack(spacing: 2) {
-                ForEach(ExportSpec.Codec.allCases, id: \.rawValue) { codec in
-                    Button { spec.codec = codec } label: {
-                        Text(codecLabel(codec))
-                            .font(.system(size: 12, weight: .bold).monospacedDigit())
-                            .foregroundStyle(spec.codec == codec ? .white : LumaTheme.textSecondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(spec.codec == codec
-                                        ? AnyShapeStyle(LumaTheme.accent)
-                                        : AnyShapeStyle(.clear),
-                                        in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.lumaPress)
-                    // 720 ships H.264 only — offering HEVC here would lie.
-                    .disabled(spec.resolution == .hd720 && codec == .hevc)
-                    .opacity(spec.resolution == .hd720 && codec == .hevc ? 0.35 : 1)
-                }
-            }
-            .padding(2)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-        }
-        .sensoryFeedback(.selection, trigger: spec.codec)
-    }
-
-    private func codecLabel(_ codec: ExportSpec.Codec) -> String {
-        codec == .hevc ? "H.265" : "H.264"
-    }
-
-    // MARK: Estimate + delivery spec
-
-    /// Live: recomputes on every resolution / bitrate / codec / fps change.
-    private var estimateLine: String {
+    /// Live: recomputes on every resolution / bitrate / codec / fps change,
+    /// from the same bitrate model the encoder's ceiling derives from. Nil when
+    /// there is no duration to estimate against — a still has no size tier.
+    private var estimateValue: String? {
         if spec.audioOnly {
-            guard durationSeconds > 0 else { return "EST. —" }
+            guard durationSeconds > 0 else { return "—" }
             // AAC stereo at the M4A preset's 128 kbps.
-            return String(format: "EST. %.0f MB", durationSeconds * 0.128 / 8)
+            return String(format: "%.0f MB", durationSeconds * 0.128 / 8)
         }
-        guard durationSeconds > 0 else { return "STILL IMAGE" }
+        guard durationSeconds > 0 else { return nil }
         let mb = Double(spec.estimatedMegabytes(durationSeconds: durationSeconds))
-        return mb >= 1000
-            ? String(format: "EST. SIZE %.1f GB", mb / 1000)
-            : String(format: "EST. SIZE %.0f MB", mb)
+        return mb >= 1000 ? String(format: "%.1f GB", mb / 1000)
+                          : String(format: "%.0f MB", mb)
     }
 
     private var deliverySpecLine: String {
         if spec.audioOnly { return "AAC · M4A" }
-        let colour = spec.hdr ? "HLG" : "REC.709"
+        let colour = spec.hdr ? "HLG" : "Rec.709"
         return "\(codecLabel(spec.codec)) · \(colour) · AAC"
-    }
-
-    private var deliveryReadout: some View {
-        HStack {
-            TechReadout(estimateLine, size: 9, color: LumaTheme.textSecondary)
-            Spacer()
-            TechReadout(deliverySpecLine, size: 9, color: LumaTheme.textMuted)
-        }
     }
 
     // MARK: Preflight
@@ -421,111 +622,59 @@ struct ExportSpecSheet: View {
         return nil
     }
 
-    private func preflightBanner(_ text: String, tone: Color) -> some View {
+    /// A sentence on a raised surface. No orange slab, no warning triangle —
+    /// the words are the warning.
+    private func noticeBar(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12))
-            .foregroundStyle(.white)
+            .font(.system(size: 12.5))
+            .foregroundStyle(.white.opacity(0.85))
+            .lineSpacing(2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(tone.opacity(0.20), in: RoundedRectangle(cornerRadius: 12))
+            .background(LumaTheme.surfaceStrong,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    // MARK: Footer
+    // MARK: The calm instruction bar
 
-    private var footer: some View {
-        HStack(spacing: 10) {
-            // GIF transcode is wired in the editor export path only; the grade
-            // flow would draw a control nothing reads, so it isn't drawn.
-            if !spec.audioOnly, gradeCubeTitle == nil {
-                Button {
-                    spec.alsoGIF.toggle()
-                    LumaHaptics.shared.tap()
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: "square.stack.3d.down.forward")
-                            .font(.system(size: 15, weight: .semibold))
-                        TechReadout("GIF", size: 9, color: spec.alsoGIF ? .white : LumaTheme.textSecondary)
-                    }
-                    .foregroundStyle(spec.alsoGIF ? .white : LumaTheme.textSecondary)
-                    .frame(width: 62, height: 52)
-                    .background(spec.alsoGIF ? AnyShapeStyle(LumaTheme.accentSoft)
-                                             : AnyShapeStyle(LumaTheme.card),
-                                in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Also save a looping GIF")
+    private var instructionBar: some View {
+        HStack(spacing: 0) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            SolidCTA(title: spec.audioOnly ? "Export audio" : "Export video", height: 52) {
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+            Spacer(minLength: 8)
+            Text(spec.audioOnly ? "Set the audio delivery" : "Set the delivery")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 8)
+            // The one filled button in the language: the irreversible, long,
+            // expensive action at the end of a tool.
+            Button {
                 storedSpec = spec.rawValue
                 app.exportError = nil
+                LumaHaptics.shared.tap()
                 onExport(spec)
+            } label: {
+                Text(spec.audioOnly ? "Export audio" : "Export")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 18)
+                    .frame(height: 40)
+                    .background(Color.white, in: Capsule())
+                    .contentShape(Capsule())
             }
+            .buttonStyle(.lumaPress)
         }
-    }
-
-    @ViewBuilder
-    private var cubeRow: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "square.grid.3x3.square")
-                    .font(.system(size: 18))
-                    .foregroundStyle(LumaTheme.accentBright)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Save this grade as .cube")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text("The full grade — LUT, curves, wheels, HSL, split")
-                        .font(.system(size: 11))
-                        .foregroundStyle(LumaTheme.textMuted)
-                }
-                Spacer()
-                if let cubeURL {
-                    ShareLink(item: cubeURL) {
-                        TechReadout("SHARE \(cubeSize)³", size: 9, color: LumaTheme.accentBright)
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(LumaTheme.accent.opacity(0.2), in: Capsule())
-                    }
-                } else {
-                    Button {
-                        Task {
-                            guard let state = lookState, let title = gradeCubeTitle else { return }
-                            isBaking = true
-                            cubeURL = await GradeCubeBaker.bakeCurrentGrade(
-                                from: state, title: title, size: cubeSize)
-                            isBaking = false
-                            LumaHaptics.shared.tap()
-                        }
-                    } label: {
-                        TechReadout(isBaking ? "…" : "BAKE", size: 9, color: .white)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(.white.opacity(0.08), in: Capsule())
-                    }
-                    .buttonStyle(.lumaPress)
-                    .disabled(isBaking)
-                }
-            }
-            // Cube size — re-bake on change.
-            HStack(spacing: 6) {
-                ForEach(GradeCubeBaker.sizes, id: \.self) { size in
-                    Button {
-                        cubeSize = size
-                        cubeURL = nil   // stale for the new size
-                    } label: {
-                        Text("\(size)³")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(cubeSize == size ? .white : LumaTheme.textSecondary)
-                            .frame(maxWidth: .infinity).frame(height: 30)
-                            .background(cubeSize == size ? LumaTheme.accent : LumaTheme.surface,
-                                        in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(12)
-        .overlay(RoundedRectangle(cornerRadius: 12)
-            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-            .foregroundStyle(.white.opacity(0.18)))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 }

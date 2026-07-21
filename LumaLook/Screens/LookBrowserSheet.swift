@@ -5,8 +5,9 @@ import UniformTypeIdentifiers
 // LookBrowserSheet — THE one reusable look browser (steps 4–6 of the unified
 // Look Library migration). Presented identically from the grade room, the
 // camera, and the editor via .lumaToolSheet, and hosted full-screen as the
-// Looks tab. Chips + search + 3-up grid + favourite stars + intensity footer,
-// all reading LookLibraryStore and applying through AppModel.select(look:).
+// Looks tab. Two-axis category bar + folded search + 3-up grid + favourite
+// stars + intensity footer, all reading LookLibraryStore and applying through
+// AppModel.select(look:).
 // =============================================================================
 
 /// Where a selection routes; drives select(look:) vs select(look:forClip:).
@@ -90,11 +91,38 @@ extension LookLibraryStore {
 
 // MARK: - The browser
 
+// =============================================================================
+// THE DESIGN LANGUAGE, APPLIED HERE
+//   1. The image is the interface. Full-screen hosting (the Looks tab) leads
+//      with the live grade, uncovered, and puts every control in the drawer
+//      beneath it. In the three SHEET contexts the image is the canvas the
+//      sheet is docked over, so the sheet stays a drawer and draws nothing on
+//      top of it.
+//   2. Monochrome chrome — black, near-black, white, grey. The only colour on
+//      this screen lives inside the tiles, which is where looks belong.
+//   3. Stroke means selection and nothing else: one thin white ring.
+//   4. The tile IS the preview — every tile is the real grade of the real frame.
+//   5. Two-axis browsing — the current category centred, neighbours faded
+//      either side, swipeable, so the gesture teaches itself.
+//   6. Mono is for NUMBERS ONLY. Counts and strengths keep the instrument
+//      voice; names, categories, headings, badges and buttons are the system
+//      face in sentence case.
+//   7. Prefer a live value over a glyph (see `valueTool` in LDCameraDemoView).
+//
+// WHAT COMPACT MODE STILL OWES THE HALF-SHEET
+// The same view is hosted at ~340 pt (grade / camera), ~620 pt (editor) and
+// full screen (Looks tab). Compact keeps its whole budget: folded search, a
+// SOLVED tile height so exactly two complete named rows fit, one-line names
+// and a single-row footer. The instruction bar is deliberately full-screen
+// only — a 44 pt bar costs the half-sheet its second tile row, and the sheet
+// already confirms with Done in its header.
+// =============================================================================
+
 struct LookBrowserSheet: View {
     let context: LookBrowserContext
     /// Intensity of the APPLIED look; nil hides the footer slider.
     var intensity: Binding<Double>? = nil
-    /// Full-screen hosting (Looks tab): adds the Create New Look CTA.
+    /// Full-screen hosting (Looks tab): adds the Create New Look door.
     var showsCreateCTA: Bool = false
     /// Full-screen hosting via a pushed route: leading back chevron.
     var showsBackButton: Bool = false
@@ -114,22 +142,28 @@ struct LookBrowserSheet: View {
     /// Height the scrolling grid ended up with, which is what the compact
     /// tile size is solved against.
     @State private var gridHeight: CGFloat = 0
-    /// Compact only: the search field is folded behind a header glyph.
+    /// The search field is folded behind a glyph in every context.
     @State private var searchExpanded = false
+    /// Full-screen hosting only: the live grade on the hero, rendered once per
+    /// look change rather than on every keystroke.
+    @State private var heroImage: CGImage?
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+
+    private var categories: [LookLibraryStore.Category] { LookLibraryStore.Category.allCases }
+    private var categoryIndex: Int { categories.firstIndex(of: category) ?? 0 }
 
     private var visibleLooks: [LibraryLook] {
         app.library.looks(category: category, search: search)
     }
 
     /// The half-sheet detent (~340 pt) cannot carry the full-size stack: header
-    /// readout + search field + chips + a 96 pt thumb with a two-line name +
-    /// a two-row footer overflows it, so the grid used to be sliced through
-    /// the middle of the thumbnails with not one look name left readable.
-    /// Compact mode spends that budget differently — folded search, no header
-    /// readout, one-row footer, one-line names — and then *solves* the tile
-    /// height so exactly two complete named rows fit (A2).
+    /// readout + search field + category bar + a 96 pt thumb with a two-line
+    /// name + a two-row footer overflows it, so the grid used to be sliced
+    /// through the middle of the thumbnails with not one look name left
+    /// readable. Compact mode spends that budget differently — folded search,
+    /// no header readout, one-row footer, one-line names — and then *solves*
+    /// the tile height so exactly two complete named rows fit (A2).
     private var compact: Bool { isSheet && panelHeight > 0 && panelHeight < 470 }
 
     private var rowSpacing: CGFloat { compact ? 8 : 14 }
@@ -143,6 +177,17 @@ struct LookBrowserSheet: View {
         return min(96, max(46, perRow.rounded(.down)))
     }
 
+    /// True when this browser is presented as a half-sheet over a live canvas
+    /// (grade / camera / editor) rather than hosted full-screen as the Looks tab.
+    private var isSheet: Bool { context != .library }
+
+    /// Hero height for full-screen hosting. Capped so a small phone still gets
+    /// a usable grid under it.
+    private var heroHeight: CGFloat {
+        guard panelHeight > 0 else { return 210 }
+        return max(132, min(210, panelHeight * 0.27))
+    }
+
     var body: some View {
         GeometryReader { geo in
             panel
@@ -154,6 +199,14 @@ struct LookBrowserSheet: View {
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
             thumbs.render(source: app.previewFrame, library: app.library.all,
                           fileURL: { app.lutRepository.fileURL(for: $0) })
+        }
+        // Only the full-screen host draws a hero, and it re-renders on the
+        // applied look — never on a keystroke in the search field.
+        .task(id: heroKey) {
+            guard !isSheet else { return }
+            let source = app.previewFrame ?? HeroPhoto.golden.ciImage ?? LookThumbs.fallbackFrame
+            heroImage = LookPipeline.shared.gradedStill(source, state: app.lookState,
+                                                        maxDimension: 900)
         }
         .alert("Rename LUT", isPresented: Binding(
             get: { renameLUT != nil },
@@ -176,90 +229,138 @@ struct LookBrowserSheet: View {
             app.libraryPackFilter = nil
             category = .purchased
             search = packName
-            // The compact field is folded away by default; a filter arriving
-            // from the store has to be visible and clearable.
+            // The field is folded away by default; a filter arriving from the
+            // store has to be visible and clearable.
             searchExpanded = true
         }
     }
 
+    /// Everything that actually changes the hero pixels. Deliberately does NOT
+    /// include `search`.
+    private var heroKey: String {
+        "\(app.selectedLook.name)-\(String(describing: app.selectedLUT?.id))-\(Int(app.settings.intensity))-\(app.previewFrame?.extent.debugDescription ?? "none")"
+    }
+
     private var panel: some View {
-        VStack(spacing: compact ? 8 : 12) {
-            header
-            if !compact || searchExpanded {
-                searchField
+        VStack(spacing: 0) {
+            if !isSheet {
+                media.frame(height: heroHeight)
             }
-            chips
+            drawer
+        }
+    }
+
+    // MARK: Media — the live grade, uncovered (full-screen hosting only)
+
+    private var media: some View {
+        GeometryReader { geo in
+            Group {
+                if let heroImage {
+                    Image(decorative: heroImage, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Color(white: 0.08)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            // clipShape clips PIXELS not touches: a scaledToFill image
+            // overflows its frame and the invisible remainder steals taps from
+            // the drawer beneath. Confine the touch region.
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+    }
+
+    // MARK: Drawer — everything that is not the image
+
+    private var drawer: some View {
+        VStack(spacing: 0) {
+            header
+                .padding(.top, compact ? 10 : 14)
+                .padding(.bottom, compact ? 10 : 12)
+            categoryBar
+                .padding(.bottom, compact ? 10 : 12)
+            if searchExpanded {
+                searchField
+                    .padding(.bottom, compact ? 8 : 12)
+            }
             grid
             footer
         }
-        .padding(.top, compact ? 10 : 14)
         // Dragging the sheet up past the compact threshold restores the
-        // subtitle, the search field and the full-size tiles — as a settle,
-        // not a snap.
+        // subtitle and the full-size tiles — as a settle, not a snap.
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: compact)
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: searchExpanded)
     }
 
     // MARK: Header
 
+    /// A count is one instrument value and one plain word. The digits are the
+    /// only part that earns mono; "looks" is not a readout.
+    private func countText(_ value: Int, _ word: String, size: CGFloat) -> Text {
+        Text("\(value)")
+            .font(.system(size: size, weight: .medium, design: .monospaced))
+        + Text(" \(word)")
+            .font(.system(size: size, weight: .medium))
+    }
+
+    private var totals: Text {
+        countText(app.library.all.count, "looks", size: 12)
+            + Text(" · ").font(.system(size: 12, weight: .medium))
+            + countText(app.lutRepository.collections.count, "collections", size: 12)
+    }
+
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             if showsBackButton {
                 BackArrow()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Looks")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-                if !compact {
-                    TechReadout("\(app.library.all.count) LOOKS · \(app.lutRepository.collections.count) COLLECTIONS",
-                                size: 8, color: LumaTheme.textMuted)
-                }
-            }
-            Spacer()
-            if compact {
-                // Compact folds the 38 pt search field away — that height is
-                // the difference between one sliced tile row and two named
-                // ones. The glyph brings it straight back, so search is never
-                // lost, only spent on demand.
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        searchExpanded.toggle()
-                        if !searchExpanded { search = "" }
+            if isSheet {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Looks")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                    if !compact {
+                        totals
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
                     }
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Image(systemName: searchExpanded ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(searchExpanded ? .white : LumaTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .background(searchExpanded ? AnyShapeStyle(LumaTheme.accent)
-                                                   : AnyShapeStyle(LumaTheme.surface),
-                                    in: Circle())
                 }
-                .buttonStyle(.lumaPress)
+            } else {
+                // Full screen: the tab bar already says "Looks", so the header
+                // spends its line on the number that grows instead.
+                totals
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
             }
+            Spacer(minLength: 6)
+
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    searchExpanded.toggle()
+                    if !searchExpanded { search = "" }
+                }
+                LumaHaptics.shared.tap()
+            } label: {
+                glyph(searchExpanded ? "xmark" : "magnifyingglass", active: searchExpanded)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(searchExpanded ? "Close search" : "Search looks")
+
             LUTImportButton { imported in
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                     select(LibraryLook(lut: imported), navigate: false)
                 }
             } label: {
-                if isSheet {
-                    // Compact in the half-sheet: the header also has to carry
-                    // Open Library + Done (A2), so Import loses its word.
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(LumaTheme.accent, in: Circle())
-                } else {
-                    Label("Import", systemImage: "plus")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(LumaTheme.accent, in: Capsule())
-                }
+                // A bare "+" reads as "create". Importing a .cube is a file
+                // coming IN, and this glyph actually depicts that.
+                glyph("square.and.arrow.down", active: false)
             }
+            .accessibilityLabel("Import a LUT")
+
             if isSheet {
                 // A2: the sheet must have a visible way out. `undimmedUpThrough`
                 // is below the detent this opens at, so tapping the preview
@@ -267,28 +368,36 @@ struct LookBrowserSheet: View {
                 Button {
                     openLibrary()
                 } label: {
-                    Text("Open Library ↗")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(LumaTheme.accentBright)
+                    Text("Open library")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
                 }
-                .buttonStyle(.lumaPress)
+                .buttonStyle(.plain)
                 Button {
                     LumaHaptics.shared.tap()
                     dismiss()
                 } label: {
                     Text("Done")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(LumaTheme.textSecondary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.lumaPress)
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
     }
 
-    /// True when this browser is presented as a half-sheet over a live canvas
-    /// (grade / camera / editor) rather than hosted full-screen as the Looks tab.
-    private var isSheet: Bool { context != .library }
+    private func glyph(_ name: String, active: Bool) -> some View {
+        let side: CGFloat = compact ? 30 : 34
+        return Image(systemName: name)
+            .font(.system(size: compact ? 13 : 14, weight: .medium))
+            .foregroundStyle(active ? .black : .white.opacity(0.8))
+            .frame(width: side, height: side)
+            .background {
+                Circle().fill(active ? AnyShapeStyle(.white) : AnyShapeStyle(Color(white: 0.13)))
+            }
+    }
 
     /// Leave the sheet for the full Looks library. The push has to wait for the
     /// dismissal, otherwise the new screen lands *behind* the sheet.
@@ -300,75 +409,106 @@ struct LookBrowserSheet: View {
         }
     }
 
-    // MARK: Search
+    // MARK: Category bar — two-axis browsing
+
+    /// The chip titles carry a "★ " prefix for the accented design. On a
+    /// monochrome screen the star is noise — the bar spells the name out.
+    private func title(_ cat: LookLibraryStore.Category) -> String {
+        cat.title.replacingOccurrences(of: "★ ", with: "")
+    }
+
+    private func count(of cat: LookLibraryStore.Category) -> Int {
+        cat == .collections ? app.lutRepository.collections.count
+                            : app.library.looks(category: cat).count
+    }
+
+    /// The current category centred with its neighbours faded either side, so
+    /// the swipe teaches itself. The count rides underneath in mono, which is
+    /// where the chip row's count badge went.
+    private var categoryBar: some View {
+        VStack(spacing: compact ? 2 : 4) {
+            HStack(spacing: 0) {
+                neighbour(at: categoryIndex - 1, alignment: .leading)
+                Text(title(categories[categoryIndex]))
+                    .font(.system(size: compact ? 15 : 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                neighbour(at: categoryIndex + 1, alignment: .trailing)
+            }
+            countText(count(of: category),
+                      category == .collections ? "collections" : "looks",
+                      size: compact ? 11 : 12)
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .padding(.horizontal, 20)
+        .contentShape(Rectangle())
+        // Simultaneous, and horizontal-only: inside a sheet a plain .gesture
+        // here would swallow the vertical drag the detents are steered with.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    step(value.translation.width < 0 ? 1 : -1)
+                }
+        )
+    }
+
+    @ViewBuilder
+    private func neighbour(at index: Int, alignment: Alignment) -> some View {
+        if categories.indices.contains(index) {
+            Button {
+                step(index - categoryIndex)
+            } label: {
+                Text(title(categories[index]))
+                    .font(.system(size: compact ? 12 : 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: alignment)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            Color.clear.frame(height: 1).frame(maxWidth: .infinity)
+        }
+    }
+
+    private func step(_ delta: Int) {
+        let next = categoryIndex + delta
+        guard categories.indices.contains(next) else { return }
+        withAnimation(.snappy(duration: 0.22)) { category = categories[next] }
+        LumaHaptics.shared.tap()
+    }
+
+    // MARK: Search — folded away until asked for
 
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(LumaTheme.textMuted)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.38))
             TextField("Search looks, packs, tags…", text: $search)
                 .font(.system(size: 15))
                 .foregroundStyle(.white)
+                .tint(.white)
                 .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
             if !search.isEmpty {
                 Button {
                     search = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(LumaTheme.textMuted)
+                        .foregroundStyle(.white.opacity(0.38))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 38)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .frame(height: compact ? 34 : 38)
+        .background(Color(white: 0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 20)
-    }
-
-    // MARK: Chips
-
-    private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(LookLibraryStore.Category.allCases) { cat in
-                    let count = cat == .collections
-                        ? app.lutRepository.collections.count
-                        : app.library.looks(category: cat).count
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            category = cat
-                        }
-                        LumaHaptics.shared.tap()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(cat.title)
-                                .font(.system(size: 13,
-                                              weight: category == cat ? .semibold : .regular))
-                            Text("\(count)")
-                                .font(.system(size: 10, weight: .bold).monospacedDigit())
-                                .foregroundStyle(category == cat ? .white.opacity(0.85)
-                                                                 : LumaTheme.textMuted)
-                        }
-                        .foregroundStyle(category == cat ? .white : LumaTheme.textSecondary)
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 8)
-                        .background {
-                            if category == cat {
-                                Capsule().fill(LumaTheme.accent)
-                            } else {
-                                Capsule().fill(LumaTheme.chip)
-                            }
-                        }
-                    }
-                    .buttonStyle(.lumaPress)
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .lumaEdgeFade()
     }
 
     // MARK: Grid
@@ -414,13 +554,25 @@ struct LookBrowserSheet: View {
     @ViewBuilder
     private var collectionsBody: some View {
         let groups = app.library.collectionGroups
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: compact ? 14 : 18) {
             // Manage only from the full-screen Looks tab: from a sheet a push
             // would land behind the sheet, which would be a dead tap.
             if context == .library {
-                SectionHeader(title: "Collections", actionTitle: "Manage") {
-                    app.path.append(.collections)
-                    LumaHaptics.shared.tap()
+                HStack {
+                    // A section heading should read as a heading.
+                    Text("Collections")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                    Spacer()
+                    Button {
+                        app.path.append(.collections)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text("Manage")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             if groups.isEmpty {
@@ -428,17 +580,29 @@ struct LookBrowserSheet: View {
             } else {
                 ForEach(groups, id: \.collection.id) { group in
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 6) {
-                            TechReadout("\(group.collection.name.uppercased()) · \(group.looks.count)",
-                                        size: 10, color: LumaTheme.textMuted)
+                        HStack(spacing: 8) {
+                            // The collection's name is a name; only its size
+                            // is a number.
+                            Text(group.collection.name)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                            Text("\(group.looks.count)")
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
                             if group.collection.pinnedToCamera == true {
-                                TechReadout("PINNED", size: 9, color: LumaTheme.accentBright)
+                                Text("Pinned")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2.5)
+                                    .background(Color(white: 0.16), in: Capsule())
                             }
                         }
                         if group.looks.isEmpty {
                             Text("Long-press any look to add it here.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(LumaTheme.textMuted)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.5))
                         } else {
                             LazyVGrid(columns: columns, spacing: rowSpacing) {
                                 ForEach(group.looks) { look in tile(for: look) }
@@ -449,20 +613,24 @@ struct LookBrowserSheet: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 44)
+        .padding(.bottom, compact ? 18 : 44)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "camera.filters")
-                .font(.system(size: 30))
-                .foregroundStyle(LumaTheme.textMuted)
+        VStack(spacing: 8) {
             Text(search.isEmpty ? "Nothing here yet" : "No looks match “\(search)”")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(LumaTheme.textSecondary)
+                .font(.system(size: compact ? 15 : 17, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.95))
+            if !compact {
+                Text(search.isEmpty ? "Import a .cube or buy a pack to fill this shelf."
+                                    : "Try a pack name, a look code, or a tag.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, compact ? 26 : 44)
     }
 
     private func tile(for look: LibraryLook) -> some View {
@@ -483,39 +651,43 @@ struct LookBrowserSheet: View {
         .contextMenu { contextMenu(for: look) }
     }
 
-    /// None / OFF leads the grid — clearing a look is as easy as applying one.
+    /// None / Off leads the grid — clearing a look is as easy as applying one.
+    /// Dashed, because it is the one tile that has no image.
     private var noneTile: some View {
         let active = noneActive
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { tapNone() }
             LumaHaptics.shared.tap()
         } label: {
-            // Same skeleton as LookTile — leading alignment, 96pt thumb, the
-            // fixed two-line title box and a subtitle line — so the first grid
-            // row shares one baseline instead of centring the shorter cell.
+            // Same skeleton as LookTile — leading alignment, the fixed caption
+            // box and a subtitle line — so the first grid row shares one
+            // baseline instead of centring the shorter cell.
             VStack(alignment: .leading, spacing: compact ? LookTile.compactSpacing : 7) {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(LumaTheme.background)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(white: 0.07))
                     .frame(maxWidth: .infinity)
                     .frame(height: compact ? compactThumbHeight : 96)
                     .overlay {
-                        TechReadout(context == .camera ? "OFF" : "NONE", size: 10,
-                                    color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
+                        Text(context == .camera ? "Off" : "None")
+                            .font(.system(size: compact ? 12 : 14, weight: .semibold))
+                            .foregroundStyle(active ? .white : .white.opacity(0.55))
                     }
-                    .overlay(RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
-                        .foregroundStyle(active ? LumaTheme.accentBright : .white.opacity(0.18)))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
+                            .foregroundStyle(active ? .white : .white.opacity(0.18))
+                    }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Original")
-                        .font(.system(size: 12, weight: active ? .semibold : .medium))
-                        .foregroundStyle(active ? .white : LumaTheme.textSecondary)
+                        .font(.system(size: 13, weight: active ? .semibold : .medium))
+                        .foregroundStyle(active ? .white : .white.opacity(0.72))
                         .lineLimit(compact ? 1 : 2)
-                        .frame(height: compact ? LookTile.compactCaptionHeight : 30,
+                        .frame(height: compact ? LookTile.compactCaptionHeight : 32,
                                alignment: .top)
                     if !compact {
                         Text("No look")
-                            .font(.system(size: 10))
-                            .foregroundStyle(LumaTheme.textMuted)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
                 }
@@ -599,107 +771,141 @@ struct LookBrowserSheet: View {
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: compact ? 8 : 10) {
-            if let intensity {
-                if compact {
-                    // Compact folds slider + Compare onto ONE row: the shared
-                    // InlineSlider spends 96 pt on its title and the Compare
-                    // row another 50 pt of height, which together cost the
-                    // grid its second row.
-                    compactIntensityRow(intensity)
-                        .padding(.horizontal, 20)
-                } else {
-                    InlineSlider(title: "Intensity", value: intensity)
-                        .padding(.horizontal, 22)
-                }
-            }
-            // A2: hold-to-Compare and Apply-to-all sit directly under the
-            // slider. Each appears only when it can actually do something —
+            // A2: the strength of the applied look and hold-to-Compare, on one
+            // calm row. Each appears only when it can actually do something —
             // Compare needs an intensity to stash (the editor sheet passes
-            // none), Apply-to-all needs more than one clip to apply to. A
-            // dead control is worse than an absent one.
-            if isSheet, (intensity != nil && !compact) || canApplyToAllClips {
-                HStack(spacing: 10) {
-                    if let intensity, !compact {
-                        compareButton(intensity)
-                    }
-                    if canApplyToAllClips {
-                        smallGhostButton(title: "Apply to all clips",
-                                         action: applyToAllClips)
-                    }
-                }
-                .padding(.horizontal, 22)
+            // none), Apply-to-all needs more than one clip to apply to. A dead
+            // control is worse than an absent one.
+            if let intensity {
+                intensityRow(intensity)
+                    .padding(.horizontal, 20)
             }
-            if showsCreateCTA {
-                SolidCTA(title: "Create New Look") {
-                    app.path.append(.customLook)
+            if canApplyToAllClips {
+                Button(action: applyToAllClips) {
+                    Text("Apply to all clips")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: compact ? 32 : 38)
+                        .background(Color(white: 0.13),
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                .padding(.horizontal, 22)
+                .buttonStyle(.lumaPress)
+                .padding(.horizontal, 20)
+            }
+            // Full screen only: a 44 pt bar would cost the half-sheet its
+            // second tile row, and the sheet already exits through Done.
+            if !isSheet {
+                instructionBar
             }
         }
-        .padding(.bottom, showsCreateCTA || intensity != nil || canApplyToAllClips ? 8 : 0)
+        .padding(.top, intensity != nil || canApplyToAllClips ? (compact ? 8 : 12) : 0)
+        .padding(.bottom, isSheet ? (intensity != nil || canApplyToAllClips ? 8 : 0) : 4)
     }
 
-    /// Intensity label + slider + value + Compare, all on one 34 pt row — the
-    /// whole footer budget a half-sheet can afford without eating the grid.
-    private func compactIntensityRow(_ intensity: Binding<Double>) -> some View {
-        HStack(spacing: 10) {
+    /// Intensity label + slider + live value + Compare, all on one row — the
+    /// whole footer budget a half-sheet can afford without eating the grid,
+    /// and the same voice at full size.
+    private func intensityRow(_ intensity: Binding<Double>) -> some View {
+        HStack(spacing: 12) {
             Text("Intensity")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
                 .fixedSize()
             Slider(value: intensity, in: 0...100)
-                .tint(LumaTheme.accent)
-            Text("\(Int(intensity.wrappedValue))")
-                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .tint(.white)
+            // The one genuine instrument value in this row — mono stays.
+            Text("\(Int(intensity.wrappedValue))%")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .monospacedDigit()
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.2), value: Int(intensity.wrappedValue))
-                .foregroundStyle(.white)
-                .frame(width: 30, alignment: .trailing)
-            compareButton(intensity, compact: true)
-                .frame(width: 86)
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 42, alignment: .trailing)
+            compareButton(intensity)
         }
     }
 
     /// Press-and-hold drops intensity to 0 and shows the ungraded frame, using
     /// the same stash/restore the None tile uses; releasing restores it.
-    private func compareButton(_ intensity: Binding<Double>,
-                               compact: Bool = false) -> some View {
+    private func compareButton(_ intensity: Binding<Double>) -> some View {
         let comparing = stashedIntensity != nil && intensity.wrappedValue == 0
-        return HStack(spacing: 6) {
-            Text("Compare")
-            if !compact {
-                Text("HOLD")
-                    .font(.system(size: 8, weight: .heavy).monospaced())
-                    .foregroundStyle(LumaTheme.textMuted)
+        return Text("Compare")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(comparing ? .black : .white.opacity(0.8))
+            .frame(width: 84, height: compact ? 30 : 32)
+            .background {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(comparing ? AnyShapeStyle(.white) : AnyShapeStyle(Color(white: 0.13)))
             }
-        }
-        .modifier(SmallGhostChrome(active: comparing,
-                                   height: compact ? 34 : 40,
-                                   fontSize: compact ? 12 : 13))
-        .contentShape(RoundedRectangle(cornerRadius: 12))
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard stashedIntensity == nil else { return }
-                    stashedIntensity = intensity.wrappedValue
-                    intensity.wrappedValue = 0
-                    LumaHaptics.shared.tap()
-                }
-                .onEnded { _ in
-                    guard let stash = stashedIntensity else { return }
-                    intensity.wrappedValue = stash
-                    stashedIntensity = nil
-                    LumaHaptics.shared.tap()
-                }
-        )
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard stashedIntensity == nil else { return }
+                        stashedIntensity = intensity.wrappedValue
+                        intensity.wrappedValue = 0
+                        LumaHaptics.shared.tap()
+                    }
+                    .onEnded { _ in
+                        guard let stash = stashedIntensity else { return }
+                        intensity.wrappedValue = stash
+                        stashedIntensity = nil
+                        LumaHaptics.shared.tap()
+                    }
+            )
+            .accessibilityLabel("Compare, hold")
+            .animation(.spring(response: 0.25, dampingFraction: 0.85), value: comparing)
     }
 
-    private func smallGhostButton(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .modifier(SmallGhostChrome(active: false))
+    // MARK: Instruction bar — a sentence, not a slogan (full screen only)
+
+    private var instruction: String {
+        if noneActive { return "Showing the original" }
+        if let current = currentLook { return current.nameSplit.title }
+        return "Choose a look to grade with"
+    }
+
+    /// A NAME of an applied look is a fact and reads at full weight; the two
+    /// other sentences are prompts and stay calm.
+    private var instructionIsName: Bool { !noneActive && currentLook != nil }
+
+    private var instructionBar: some View {
+        HStack(spacing: 10) {
+            Text(instruction)
+                .font(.system(size: 15, weight: instructionIsName ? .semibold : .medium))
+                .foregroundStyle(.white.opacity(instructionIsName ? 0.95 : 0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            if let intensity, !noneActive {
+                Text("\(Int(intensity.wrappedValue))%")
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer(minLength: 8)
+            if showsCreateCTA {
+                // The Create New Look door, kept as a word rather than a filled
+                // violet CTA: a store's buy button is the one place a filled
+                // button is still correct.
+                Button {
+                    app.path.append(.customLook)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Text("New look")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .frame(height: 36)
+                        .background(Color(white: 0.15), in: Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Create a new look")
+            }
         }
-        .buttonStyle(.lumaPress)
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
     }
 
     /// Only meaningful in the editor, and only with clips to spread across.
@@ -761,72 +967,11 @@ struct LookBrowserSheet: View {
     }
 }
 
-// MARK: - Small ghost chrome
-
-/// The compact sibling of `GhostCTA` (58pt is far too tall for a half-sheet
-/// footer) — same material, same hairline, same corner radius, just sized for
-/// a two-up row under the intensity slider.
-private struct SmallGhostChrome: ViewModifier {
-    var active: Bool = false
-    var height: CGFloat = 40
-    var fontSize: CGFloat = 13
-
-    func body(content: Content) -> some View {
-        content
-            .font(.system(size: fontSize, weight: .semibold))
-            .foregroundStyle(active ? .white : LumaTheme.textSecondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .background {
-                if active {
-                    RoundedRectangle(cornerRadius: 12).fill(LumaTheme.accent.opacity(0.28))
-                } else {
-                    RoundedRectangle(cornerRadius: 12).fill(LumaTheme.chip)
-                }
-            }
-            .animation(.spring(response: 0.25, dampingFraction: 0.85), value: active)
-    }
-}
-
 // MARK: - Grid tile
 
-/// `GradedThumb` sized by height only: the grid columns are `.flexible()`, so
-/// a hard-coded thumbnail width leaves the image narrower than its own caption
-/// and than the dashed None tile. Same chrome, width driven by the column.
-private struct FlexibleGradedThumb: View {
-    let image: CGImage
-    var height: CGFloat = 96
-    var radius: CGFloat = 14
-    var selected: Bool = false
-
-    var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .overlay {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFill()
-            }
-            .clipShape(RoundedRectangle(cornerRadius: radius))
-            // Same trap as GradedThumb: a filled image overflows its frame and
-            // its invisible remainder covers neighbouring tiles, stealing their
-            // taps. Confine touches to the tile actually drawn.
-            .contentShape(RoundedRectangle(cornerRadius: radius))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),
-                                  lineWidth: selected ? 2.5 : 1)
-            )
-            .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
-    }
-}
-
-/// One look in the browser grid: live-graded thumbnail, badge, favourite star
-/// top-right, name + source line below.
+/// One look in the browser grid: the live-graded thumbnail IS the tile, with
+/// the source badge and the favourite star separating by surface value rather
+/// than by hue. Selection is the only stroke on the screen.
 struct LookTile: View {
     let look: LibraryLook
     var image: CGImage? = nil
@@ -844,10 +989,11 @@ struct LookTile: View {
     static let compactCaptionHeight: CGFloat = 16
     static let compactSpacing: CGFloat = 4
 
+    /// "LUT" stays upper — it is an acronym, not a shouted label.
     private var badge: String? {
         switch look.source {
-        case .saved:          return "SAVED"
-        case .lut(let f):     return f.packID == nil ? (f.isLogTarget ? "LOG" : "LUT") : nil
+        case .saved:          return "Saved"
+        case .lut(let f):     return f.packID == nil ? (f.isLogTarget ? "Log" : "LUT") : nil
         case .builtIn:        return nil
         }
     }
@@ -864,61 +1010,72 @@ struct LookTile: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: compact ? Self.compactSpacing : 7) {
-                Group {
-                    if let image {
-                        FlexibleGradedThumb(image: image, height: thumbHeight,
-                                            radius: 14, selected: selected)
-                    } else {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(LumaTheme.surfaceStrong)
-                            .overlay(RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),
-                                              lineWidth: selected ? 2.5 : 1))
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: thumbHeight)
+                    .overlay {
+                        if let image {
+                            Image(decorative: image, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            Color(white: 0.12)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: thumbHeight)
-                .clipped()
-                .overlay(alignment: .topLeading) {
-                    if let badge {
-                        Text(badge)
-                            .font(.system(size: 8, weight: .heavy))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2.5)
-                            .background(LumaTheme.accent, in: Capsule())
-                            .padding(compact ? 4 : 5)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    // clipShape clips pixels but NOT touches: a scaledToFill
+                    // image overflows and its invisible remainder steals taps
+                    // from the neighbouring tile. Confine hit-testing.
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(.white, lineWidth: 2)
+                        }
                     }
-                }
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        onFavourite?()
-                    } label: {
-                        Image(systemName: isFavourite ? "star.fill" : "star")
-                            .font(.system(size: compact ? 10 : 11, weight: .bold))
-                            .foregroundStyle(isFavourite ? LumaTheme.gold : .white.opacity(0.75))
-                            .frame(width: compact ? 22 : 26, height: compact ? 22 : 26)
-                            .background(.black.opacity(0.45), in: Circle())
-                            .padding(compact ? 3 : 4)
+                    .overlay(alignment: .topLeading) {
+                        if let badge {
+                            Text(badge)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.95))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2.5)
+                                .background(.black.opacity(0.6), in: Capsule())
+                                .padding(compact ? 4 : 5)
+                        }
                     }
-                    .buttonStyle(.plain)
-                }
+                    .overlay(alignment: .topTrailing) {
+                        Button {
+                            onFavourite?()
+                        } label: {
+                            Image(systemName: isFavourite ? "star.fill" : "star")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(isFavourite ? .white : .white.opacity(0.6))
+                                .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
+                                .background(.black.opacity(0.45), in: Circle())
+                                .padding(compact ? 3 : 4)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text(split.title)
-                        .font(.system(size: 12, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.8))
                         .lineLimit(compact ? 1 : 2)
-                        .minimumScaleFactor(compact ? 0.82 : 0.9)
+                        .minimumScaleFactor(compact ? 0.82 : 0.85)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         // Fixed caption box keeps every grid row on the same
                         // baseline whether a name wraps or not.
-                        .frame(height: compact ? Self.compactCaptionHeight : 30,
+                        .frame(height: compact ? Self.compactCaptionHeight : 32,
                                alignment: .top)
                     if !compact {
                         Text(subtitle)
-                            .font(.system(size: 10))
-                            .foregroundStyle(LumaTheme.textMuted)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
                 }
@@ -981,7 +1138,7 @@ struct LookStripTile: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
-                            .background(LumaTheme.accent, in: Capsule())
+                            .background(.white.opacity(0.16), in: Capsule())
                             .padding(5)
                     }
                 }
@@ -1025,7 +1182,7 @@ struct AllLooksTile: View {
                         VStack(spacing: 5) {
                             Image(systemName: "square.grid.3x3")
                                 .font(.system(size: size.width > 80 ? 22 : 18, weight: .medium))
-                                .foregroundStyle(LumaTheme.accentBright)
+                                .foregroundStyle(.white.opacity(0.85))
                         }
                     }
 

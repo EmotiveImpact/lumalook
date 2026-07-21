@@ -487,21 +487,23 @@ struct LumaTabBar: View {
                             // profile without opening Settings.
                             .overlay(alignment: .topTrailing) {
                                 if tab == .profile && storeService.isPro {
-                                    Text("PRO")
-                                        .font(.system(size: 7, weight: .heavy))
-                                        .tracking(0.5)
+                                    Text("Pro")
+                                        .font(.system(size: 8, weight: .semibold))
                                         .foregroundStyle(.black)
                                         .fixedSize()
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 2)
-                                        .background(LumaTheme.gold, in: Capsule())
-                                        .offset(x: 16, y: -6)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1.5)
+                                        .background(.white, in: Capsule())
+                                        .offset(x: 17, y: -6)
                                 }
                             }
                         Text(tab.rawValue)
                             .font(.system(size: 12, weight: app.tab == tab ? .semibold : .regular))
                     }
-                    .foregroundStyle(app.tab == tab ? LumaTheme.accentBright : LumaTheme.textMuted)
+                    // The one sanctioned accent in the whole app: #7A68EE
+                    // (LumaTheme.accent). accentBright is #A38EFF and was the
+                    // wrong violet.
+                    .foregroundStyle(app.tab == tab ? LumaTheme.accent : LumaTheme.textMuted)
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                 }

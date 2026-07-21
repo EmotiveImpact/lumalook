@@ -24,9 +24,10 @@ enum LaneMetrics {
     static let clipAudio: CGFloat = 26
     static let music: CGFloat = 36
     static let spacing: CGFloat = 8
-    /// Dedicated row above the lane stack for the magnet toggle, so that
-    /// control never floats over the ruler or a clip's filmstrip.
-    static let magnetGutter: CGFloat = 30
+    /// Breathing room above the lane stack. The magnet toggle used to live
+    /// here; it is now a single control in the transport row (same
+    /// `timelineMagnet` value), so nothing can float over a filmstrip.
+    static let magnetGutter: CGFloat = 10
 
     /// Total stack height. `audioRows` counts every row in the audio block —
     /// real tracks plus the dashed Music/Voiceover placeholders that keep the
@@ -191,14 +192,7 @@ struct TimelineV2View: View {
             }
         }
         .frame(height: stackHeight)
-        // The magnet used to float over the lanes: a 30 pt button + 4 pt inset
-        // against an 18 pt ruler gutter dropped 16 pt onto the video clip.
-        // Reserve it a row of its own above the stack so it can never occlude
-        // clip content, whatever happens to scroll under it.
         .padding(.top, projectIsEmpty ? 0 : LaneMetrics.magnetGutter)
-        .overlay(alignment: .topTrailing) {
-            if !projectIsEmpty { magnetButton }
-        }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
     }
@@ -251,26 +245,6 @@ struct TimelineV2View: View {
             .allowsHitTesting(false)
     }
 
-    /// Magnet toggle: when on, dragged bars snap to clip boundaries + playhead.
-    private var magnetButton: some View {
-        Button {
-            magnetOn.toggle()
-            LumaHaptics.shared.tap()
-        } label: {
-            Image(systemName: "dot.squareshape.split.2x2")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(magnetOn ? .black : LumaTheme.textSecondary)
-                .frame(width: 26, height: 26)
-                .background(magnetOn ? AnyShapeStyle(LumaTheme.accentBright)
-                                     : AnyShapeStyle(.ultraThinMaterial),
-                            in: RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
-        // Sits inside the reserved gutter, never over a lane.
-        .padding(.top, (LaneMetrics.magnetGutter - 26) / 2)
-        .padding(.trailing, 8)
-    }
-
     /// Fixed centre playhead: triangle cap over a full-height line.
     private var playhead: some View {
         VStack(spacing: 0) {
@@ -292,11 +266,14 @@ struct TimelineV2View: View {
     private var emptyPlaceholder: some View {
         VStack(alignment: .leading, spacing: LaneMetrics.spacing) {
             HStack {
+                // Numbers are mono; the word beside them is not.
                 Text("00:00.00")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(LumaTheme.textMuted)
                 Spacer()
-                TechReadout("TIMELINE", size: 9, color: LumaTheme.textMuted)
+                Text("Timeline")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.4))
             }
             .frame(height: LaneMetrics.ruler)
             EmptyLaneRow(label: "Video", icon: "film", height: LaneMetrics.video,
@@ -404,7 +381,7 @@ struct TimelineContentView: View {
         .overlay(alignment: .topLeading) {
             if let t = snap.snappedTime {
                 Rectangle()
-                    .fill(LumaTheme.accentBright)
+                    .fill(Color.white.opacity(0.75))
                     .frame(width: 2, height: stackHeight)
                     .offset(x: metrics.x(for: t) - 1)
                     .allowsHitTesting(false)
@@ -413,8 +390,9 @@ struct TimelineContentView: View {
     }
 }
 
-/// Diamond chip at a cut: tap to pick the transition. White ghost = plain
-/// cut, accent = transition set (the CapCut affordance everyone knows).
+/// Diamond chip at a cut: tap to pick the transition. An empty cut is a
+/// surface-value ghost; a set one is solid white and wears the style's OWN
+/// glyph, so the cut says which transition it is without being opened.
 struct TransitionChip: View {
     let style: TransitionStyle
     let action: () -> Void
@@ -422,14 +400,14 @@ struct TransitionChip: View {
     var body: some View {
         Button(action: action) {
             RoundedRectangle(cornerRadius: 5)
-                .fill(style == .none ? AnyShapeStyle(.ultraThinMaterial)
-                                     : AnyShapeStyle(LumaTheme.accent))
+                .fill(style == .none ? AnyShapeStyle(LumaTheme.surfaceStrong)
+                                     : AnyShapeStyle(Color.white))
                 .frame(width: 22, height: 22)
                 .rotationEffect(.degrees(45))
                 .overlay {
-                    Image(systemName: style == .none ? "plus" : "sparkles")
-                        .font(.system(size: 9, weight: .heavy))
-                        .foregroundStyle(.white)
+                    Image(systemName: style == .none ? "plus" : style.icon)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(style == .none ? Color.white.opacity(0.7) : .black)
                 }
                 .shadow(color: .black.opacity(0.5), radius: 3)
                 .contentShape(Rectangle().inset(by: -8))
@@ -455,10 +433,10 @@ struct ClipAudioLane: View {
                     if clip.hasAudio {
                         let w = max(metrics.x(for: clip.timelineDuration), 10)
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(editor.muteAudio ? LumaTheme.surfaceStrong
-                                                   : LumaTheme.teal.opacity(0.42))
+                            .fill(editor.muteAudio ? LumaTheme.surface
+                                                   : LumaTheme.surfaceStrong)
                             .overlay(RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(LumaTheme.teal.opacity(0.55), lineWidth: 1))
+                                .strokeBorder(.white.opacity(0.14), lineWidth: 1))
                             .overlay(alignment: .leading) {
                                 // A lane nobody can name is a rendering
                                 // artifact, not a track — label it wherever
@@ -717,9 +695,9 @@ struct VideoLane: View {
                 // Insertion slot indicator: accent line at the drop boundary.
                 if let slot = reorder.insertSlot {
                     Rectangle()
-                        .fill(LumaTheme.accentBright)
+                        .fill(Color.white)
                         .frame(width: 3, height: LaneMetrics.video + 6)
-                        .shadow(color: LumaTheme.accent.opacity(0.8), radius: 4)
+                        .shadow(color: .black.opacity(0.7), radius: 4)
                         .offset(x: slotX(slot) - 1.5)
                         .animation(.spring(response: 0.22, dampingFraction: 0.8),
                                    value: reorder.insertSlot)
@@ -829,7 +807,7 @@ private struct ClipTrimHandles: View {
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(.black)
             .frame(width: 17, height: LaneMetrics.video)
-            .background(LumaTheme.accentBright)
+            .background(Color.white)
             .clipShape(UnevenRoundedRectangle(
                 topLeadingRadius: system.contains("left") ? 10 : 0,
                 bottomLeadingRadius: system.contains("left") ? 10 : 0,
@@ -874,15 +852,21 @@ struct TimelineClipCell: View {
         }
         .frame(width: width, height: LaneMetrics.video)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // `clipShape` clips PIXELS, not TOUCHES, and the filmstrip is tiled in
+        // fixed 44 pt squares that can overrun the cell's own width by up to
+        // 43 pt. Without this the last tile stole the next clip's taps.
+        .contentShape(RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .bottomLeading) {
             if width > 48 {
+                // Instrument values, so mono — and only these.
                 HStack(spacing: 3) {
                     if clip.speed != 1 {
                         Text(String(format: "%g×", clip.speed))
-                            .font(.system(size: 10, weight: .heavy))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                     }
                     Text(String(format: "%.1fs", clip.timelineDuration))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 5)
@@ -902,29 +886,30 @@ struct TimelineClipCell: View {
             if let grade = clip.grade {
                 HStack(spacing: 3) {
                     Image(systemName: "camera.filters")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 8, weight: .semibold))
                     if width > 92, let name = lookTag(grade) {
+                        // A look NAME is a name, so it keeps its own case and
+                        // the system font. The cell is already the grade.
                         Text(name)
-                            .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                            .font(.system(size: 9, weight: .semibold))
                             .lineLimit(1)
                     }
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2.5)
-                .background(LumaTheme.accent, in: Capsule())
+                .background(.black.opacity(0.55), in: Capsule())
                 .padding(4)
             }
         }
-        // MEANINGFUL: which clip is selected. Unselected clips are separated
+        // A stroke means selection and nothing else. Unselected clips separate
         // by their own fill and the lane gaps, not by an outline each.
         .overlay {
             if selected {
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(LumaTheme.accentBright, lineWidth: 2.5)
+                    .stroke(Color.white, lineWidth: 1.5)
             }
         }
-        .shadow(color: selected ? LumaTheme.accent.opacity(0.45) : .clear, radius: 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 
@@ -933,8 +918,8 @@ struct TimelineClipCell: View {
     private func lookTag(_ grade: ClipGrade) -> String? {
         let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
         if name.isEmpty { return grade.lutID == nil ? nil : "LUT" }
-        // Keep the distinctive part: "Kodak 2383" reads as "2383" at 8pt.
-        return String(name.split(separator: " ").last ?? "").uppercased()
+        // Keep the distinctive part: "Kodak 2383" reads as "2383" at 9pt.
+        return String(name.split(separator: " ").last ?? "")
     }
 
     /// Maps a tile position to its filmstrip frame (time-proportional),
@@ -1040,29 +1025,32 @@ private struct OverlayBar: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 26, height: LaneMetrics.overlay - 8)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
+                    // `.scaledToFill` in a fixed frame overflows, and clipShape
+                    // does not clip touches — pin the hit area to the tile.
+                    .contentShape(RoundedRectangle(cornerRadius: 4))
             } else {
                 Image(systemName: item.isImage ? "photo" : "rectangle.on.rectangle")
                     .font(.system(size: 10, weight: .bold))
             }
             if barWidth > 90 {
-                Text(item.title)
-                    .font(.system(size: 11, weight: .semibold))
+                Text(item.text ?? item.title)
+                    .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                 Spacer(minLength: 2)
                 Text(String(format: "%.1fs", item.duration))
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .opacity(0.8)
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.white.opacity(0.88))
         .padding(.horizontal, 6)
         .frame(width: barWidth, height: LaneMetrics.overlay)
         .background(RoundedRectangle(cornerRadius: 7)
-            .fill(LumaTheme.teal.opacity(0.34)))
+            .fill(LumaTheme.cardRaised))
         .overlay(RoundedRectangle(cornerRadius: 7)
-            .strokeBorder(isDraggingBar ? LumaTheme.accentBright : .white.opacity(0.14),
-                          lineWidth: isDraggingBar ? 2 : 1))
+            .strokeBorder(isDraggingBar ? Color.white : .white.opacity(0.12),
+                          lineWidth: isDraggingBar ? 1.5 : 1))
         .opacity(isDraggingBar ? 0.92 : 1)
         // Trim handles (gap fix): head trims content + anchors the out-point,
         // tail adjusts duration. One engine commit per drag.
@@ -1142,9 +1130,9 @@ private struct OverlayBar: View {
     private func overlayTrimHandle(system: String) -> some View {
         Image(systemName: system)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(.black)
             .frame(width: 14, height: LaneMetrics.overlay)
-            .background(.white.opacity(0.2))
+            .background(Color.white.opacity(0.9))
             .contentShape(Rectangle().inset(by: -6))
     }
 
@@ -1210,13 +1198,13 @@ struct MusicLane: View {
             // duration glyphs sat straight on the waveform bars.
             if barWidth > 132 {
                 Text(music.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
             }
             Spacer(minLength: 2)
             if barWidth > 176 {
                 Text(String(format: "%.1fs", rendered))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     // An opaque plate so the readout never overprints waveform.
                     .padding(.horizontal, 5)
@@ -1224,20 +1212,16 @@ struct MusicLane: View {
                     .background(Capsule().fill(.black.opacity(0.45)))
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.white.opacity(0.9))
         .padding(.horizontal, 8)
         .frame(width: barWidth, height: LaneMetrics.music)
         .background {
             // Fill + real waveform (trimmed window of whole-file RMS buckets).
-            //
-            // A tinted WASH, not a solid fill: at full opacity the voiceover
-            // lane was white-on-mint at ~1.7:1 and unreadable. 0.28 over the
-            // dark timeline keeps the lane's colour identity while white glyphs
-            // clear 4.5:1 on every kind — the same treatment MiniAudioBar uses.
+            // The lane is identified by its glyph and its name, not by a hue:
+            // colour on this screen belongs to content the user chose.
             ZStack {
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(music.isMuted ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                        : AnyShapeStyle(music.kind.tint.opacity(0.28)))
+                    .fill(music.isMuted ? LumaTheme.surface : LumaTheme.surfaceStrong)
                 if !music.waveform.isEmpty {
                     WaveformBars(samples: music.waveform,
                                  windowStart: music.trimStart / max(music.assetDuration, 0.01),
@@ -1246,13 +1230,9 @@ struct MusicLane: View {
                 }
             }
         }
-        // The kind's colour now lives in the border, so a washed fill still
-        // identifies the lane at a glance.
         .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(isDraggingBar ? LumaTheme.accentBright
-                                        : (music.isMuted ? .white.opacity(0.12)
-                                                         : music.kind.tint.opacity(0.6)),
-                          lineWidth: isDraggingBar ? 2 : 1))
+            .strokeBorder(isDraggingBar ? Color.white : .white.opacity(0.12),
+                          lineWidth: isDraggingBar ? 1.5 : 1))
         .overlay(alignment: .leading) {
             // Beat markers (C6): 1-pt ticks at each detected beat.
             if !music.beatMarkers.isEmpty {
@@ -1414,9 +1394,9 @@ struct MusicLane: View {
         private func handle(system: String) -> some View {
             Image(systemName: system)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.black)
                 .frame(width: 16, height: LaneMetrics.music)
-                .background(.white.opacity(0.18))
+                .background(Color.white.opacity(0.9))
                 .contentShape(Rectangle().inset(by: -6))
         }
     }

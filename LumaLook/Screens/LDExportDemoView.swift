@@ -23,7 +23,6 @@ import CoreImage
 //     via `spec.estimatedMegabytes`, the same model the encoder is held to
 //   ✓ Delivery spec readout — codec · colour · audio
 //   ✓ Audio only (M4A)
-//   ✓ Also save a looping GIF
 //   ✓ Grade → .cube bake, 17³ / 33³ / 65³, with a real ShareLink
 //   ✓ Preflight warnings — thermal state and free disk space, before the render
 //   ✓ Export error surfaced verbatim (`app.exportError`)
@@ -39,9 +38,9 @@ import CoreImage
 //   ✓ Real output metadata read back off the written file (`ExportOutputInfo`):
 //     dimensions, duration, file size, codec
 //   ✓ Real poster frame of the exported file
-//   ✓ Share (system sheet), Share GIF
+//   ✓ Share (system sheet), Share GIF (when the editor path produced one)
 //   ✓ Save to Photos retry when the library hand-off was refused, with the
-//     Settings deep link explanation
+//     explanation AND the Settings deep link that acts on it
 //   ✓ Export another (back to the spec, same source)
 //   ✓ Continue in Editor (carries the grade into the clip)
 //   ✓ New project
@@ -394,11 +393,13 @@ struct LDExportDemoView: View {
                     spec.audioOnly.toggle()
                     LumaHaptics.shared.tap()
                 }
-                tool("square.stack.3d.down.forward", "GIF", on: spec.alsoGIF,
-                     enabled: !spec.audioOnly) {
-                    spec.alsoGIF.toggle()
-                    LumaHaptics.shared.tap()
-                }
+                // NO GIF tool here. `GIFExporter.makeGIF` is called from the
+                // EDITOR export path only, and this screen drives the grade
+                // path (`app.exportCurrentVideo`), which never reads
+                // `spec.alsoGIF` — so the toggle would set a flag nothing
+                // honours. The shipping sheet draws it in the editor flow,
+                // where it is real. A control that changes nothing is worse
+                // than a missing one.
                 tool("sun.max", "HDR (HLG)", on: spec.hdr,
                      enabled: hdrAvailability.isAvailable && !spec.audioOnly) {
                     spec.hdr.toggle()
@@ -807,6 +808,15 @@ struct LDExportDemoView: View {
                         }
                     }
                 }
+                // The one-tap fix for the notice above it — the explanation on
+                // its own left the user to find Settings themselves.
+                if hasArtefact, !app.lastExportSavedToPhotos {
+                    tool("gearshape", "Settings", on: false) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
                 if let gif = shareableGIFURL {
                     ShareLink(item: gif) {
                         VStack(spacing: 5) {
@@ -848,7 +858,11 @@ struct LDExportDemoView: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: 8)
-            Text(hasArtefact ? "Your file is ready" : "Nothing was produced")
+            // "Your file is ready" was shown for a graded still that lives in
+            // memory and never reached disk — the Share button beside it is a
+            // "Try again" in that case, so the sentence has to agree with it.
+            Text(shareableURL != nil ? "Your file is ready"
+                 : (hasArtefact ? "Not on disk — export again" : "Nothing was produced"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
