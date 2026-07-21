@@ -126,11 +126,35 @@ struct CaptureFormatChip: View {
 
 // MARK: - D1: right-edge pro rail
 
-/// One 40pt translucent button on the viewfinder's right rail. The rail is
-/// the only control column over the feed, which is what keeps the centre
-/// two-thirds of the frame clear.
+/// The rail's shared glass. One surface definition so a lone button and a
+/// grouped cluster are cut from the same material — the rail must read as a
+/// few machined objects, not a stack of unrelated chips.
+private struct RailGlass: View {
+    var radius: CGFloat = 12
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        ZStack {
+            shape.fill(.black.opacity(0.30))
+            shape.fill(.ultraThinMaterial)
+        }
+        // Over live video the chrome has no predictable backdrop, so a
+        // hairline is meaning rather than decoration: it is what keeps the
+        // control's edge legible against a blown-out sky.
+        .overlay(shape.strokeBorder(.white.opacity(0.07), lineWidth: 0.5))
+    }
+}
+
+/// One 40pt control on the viewfinder's right rail. The rail is the only
+/// control column over the feed, which is what keeps the centre two-thirds
+/// of the frame clear.
+///
+/// `grouped` members paint no surface of their own — a `ProRailGroup` carries
+/// one shared piece of glass for the whole cluster, which is what takes the
+/// rail's visual weight down without shrinking a single hit target.
 struct ProRailButton<Label: View>: View {
     var active: Bool = false
+    var grouped: Bool = false
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
@@ -138,17 +162,47 @@ struct ProRailButton<Label: View>: View {
         Button(action: action) {
             label()
                 .foregroundStyle(active ? LumaTheme.accentBright : .white)
+                // Every rail control is the same 40pt square so the column has
+                // one hard right edge, and so no hit target shrank.
                 .frame(width: 40, height: 40)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 13))
-                .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 13))
-                // Active state reads as an accent tint over the glass, not a ring.
-                .overlay {
+                // Colour is the accent, never the fill: an armed control is a
+                // 2pt accent tally on the frame-facing edge plus a tinted
+                // glyph. A saturated block over live video reads as a toy.
+                .overlay(alignment: .leading) {
                     if active {
-                        RoundedRectangle(cornerRadius: 13).fill(LumaTheme.accent.opacity(0.22))
+                        Capsule()
+                            .fill(LumaTheme.accentBright)
+                            .frame(width: 2, height: 16)
+                            .padding(.leading, 3)
                     }
                 }
+                .background { if !grouped { RailGlass() } }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
+    }
+}
+
+/// A rail cluster: several controls sharing one glass surface, hairline-
+/// separated. Used for the three exposure controls, which are one class of
+/// thing and should read as one object.
+struct ProRailGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) { content() }
+            .background { RailGlass() }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// Inset hairline between two `ProRailGroup` members — separation by value,
+/// not by drawing a box round every control.
+struct ProRailDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(.white.opacity(0.10))
+            .frame(width: 22, height: 0.5)
     }
 }
 
@@ -268,6 +322,11 @@ struct RulerDial: View {
 
 /// Assist toggle chip (Zebras / Focus peaking / Grid / Level). Each one owns
 /// a real overlay renderer; there are no decorative chips in this row.
+///
+/// An engaged assist is stated by a lit tally dot and accent type on a
+/// near-black surface — not by flooding the chip with saturated violet. A
+/// solid colour block in a pro viewfinder panel reads as a toy, and four of
+/// them lit at once reads as a toy shop.
 struct CameraAssistChip: View {
     let title: String
     let on: Bool
@@ -275,15 +334,21 @@ struct CameraAssistChip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(on ? .black : .white.opacity(0.85))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(on ? AnyShapeStyle(LumaTheme.accentBright)
-                               : AnyShapeStyle(Color.white.opacity(0.09)),
-                            in: Capsule())
-
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(on ? AnyShapeStyle(LumaTheme.accentBright)
+                             : AnyShapeStyle(Color.white.opacity(0.22)))
+                    .frame(width: 5, height: 5)
+                Text(title)
+                    .font(.system(size: 11, weight: on ? .bold : .medium))
+                    .foregroundStyle(on ? LumaTheme.accentBright : .white.opacity(0.72))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(on ? 0.10 : 0.05), in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
         .sensoryFeedback(.selection, trigger: on)

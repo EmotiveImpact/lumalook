@@ -167,8 +167,12 @@ struct CameraLiveLookView: View {
                                 }
                                 app.path = [.editor]
                             })
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.horizontal, 10)
+                    // The card is a dialogue, not a bar: capped so it never
+                    // stretches into a 410pt-wide slab on a Pro Max, and on
+                    // the app's 20pt gutter rather than a 10pt one.
+                    .frame(maxWidth: 380)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 200)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(50)
@@ -201,10 +205,12 @@ struct CameraLiveLookView: View {
                     RecordingPill(start: recordStart ?? Date())
                     // C12 — live mic meter rides under the REC pill: clipped or
                     // dead audio is visible DURING the take, not after.
+                    // InputMeterView already carries its own padded capsule —
+                    // wrapping it in a second one drew a pill inside a pill.
+                    // It only needs the dark backing under its material so the
+                    // segments stay readable over a blown-out frame.
                     InputMeterView(level: camera.audioLevel)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(.black.opacity(0.4), in: Capsule())
+                        .background(.black.opacity(0.35), in: Capsule())
                         .transition(.opacity)
                 }
                 if let statusCaption {
@@ -254,7 +260,10 @@ struct CameraLiveLookView: View {
         }
         .sheet(isPresented: $showFormatSheet) {
             CameraFormatSheet(camera: camera)
-                .presentationDetents([.height(300)])
+                // Three labelled chip rows + a title + the bottom safe-area
+                // inset measure ~315pt; at 300 the last row was squeezed
+                // against the home indicator.
+                .presentationDetents([.height(344)])
                 .presentationBackground(LumaTheme.background)
                 .preferredColorScheme(.dark)
         }
@@ -467,8 +476,14 @@ struct CameraLiveLookView: View {
 
     // MARK: - D1: right-edge pro rail
 
+    /// Six equally-weighted chips down the edge read as a stack of buttons,
+    /// not as an instrument. They are three classes of control, so the rail
+    /// is now three objects: the zoom readout (a value), one glass cluster
+    /// holding the three exposure controls (they belong together and all open
+    /// the same panel), and the two session controls below it. Every hit
+    /// target is still 40pt — only the visual weight came down.
     private var proRail: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 9) {
             ProRailButton {
                 camera.cycleZoom()
                 LumaHaptics.shared.tap()
@@ -477,42 +492,52 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .monospacedDigit()
             }
-            ProRailButton(active: camera.evBias != 0) {
-                openPro(.ev)
-            } label: {
-                Image(systemName: "plusminus.circle")
-                    .font(.system(size: 17, weight: .medium))
+
+            ProRailGroup {
+                ProRailButton(active: camera.evBias != 0, grouped: true) {
+                    openPro(.ev)
+                } label: {
+                    Image(systemName: "plusminus.circle")
+                        .font(.system(size: 17, weight: .medium))
+                }
+                ProRailDivider()
+                ProRailButton(active: camera.manualWB, grouped: true) {
+                    openPro(.wb)
+                } label: {
+                    Text("WB")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                }
+                ProRailDivider()
+                ProRailButton(active: camera.manualFocus, grouped: true) {
+                    openPro(.focus)
+                } label: {
+                    Image(systemName: "camera.aperture")
+                        .font(.system(size: 17, weight: .medium))
+                }
             }
-            ProRailButton(active: camera.manualWB) {
-                openPro(.wb)
-            } label: {
-                Text("WB")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-            }
-            ProRailButton(active: camera.manualFocus) {
-                openPro(.focus)
-            } label: {
-                Image(systemName: "camera.aperture")
-                    .font(.system(size: 17, weight: .medium))
-            }
-            ProRailButton(active: camera.cameraPosition == .front) {
-                camera.flipCamera()
-                LumaHaptics.shared.tap()
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .opacity(camera.isRecording ? 0.35 : 1)
-            .disabled(camera.isRecording)
-            ProRailButton(active: camera.manualExposure || camera.manualWB || camera.manualFocus) {
-                openPro(camera.manualExposure ? .iso : .shutter)
-            } label: {
-                Text("PRO")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                    .tracking(1)
+
+            ProRailGroup {
+                ProRailButton(active: camera.cameraPosition == .front, grouped: true) {
+                    camera.flipCamera()
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .opacity(camera.isRecording ? 0.35 : 1)
+                .disabled(camera.isRecording)
+                ProRailDivider()
+                ProRailButton(active: camera.manualExposure || camera.manualWB || camera.manualFocus,
+                              grouped: true) {
+                    openPro(camera.manualExposure ? .iso : .shutter)
+                } label: {
+                    Text("PRO")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .tracking(1)
+                }
             }
         }
-        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
     }
 
     /// Opens D2 already targeting the parameter the rail button names, so a
@@ -604,7 +629,14 @@ struct CameraLiveLookView: View {
         // Every other horizontal strip in the app fades at its edges; without
         // it the last tile is hard-cut by the screen edge and the All Looks
         // tile past it reads as nothing at all.
-        .lumaEdgeFade(leading: 12, trailing: 12)
+        //
+        // The ramp width MATCHES the content inset above deliberately: at rest
+        // the fade sits entirely over the 20pt gutter, so the first and last
+        // tiles are never dimmed for no reason — and the moment the strip
+        // scrolls, a tile leaving the frame gets a full 20pt ramp instead of
+        // being guillotined by the screen edge. The old 12pt was too short to
+        // read as a fade at all against a 52pt tile.
+        .lumaEdgeFade(leading: 20, trailing: 20)
         .sensoryFeedback(.selection, trigger: app.selectedLook.id)
         .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
     }
@@ -748,7 +780,10 @@ struct CameraLiveLookView: View {
             }
             .padding(.horizontal, 20)
 
-            HStack(spacing: 8) {
+            // Left-aligned to the same 20pt gutter as the panel header. Centred
+            // in the row they read as four chips floating in the middle of the
+            // panel with no relationship to anything above them.
+            HStack(spacing: 7) {
                 CameraAssistChip(title: "Zebras", on: camera.zebrasOn) {
                     camera.zebrasOn.toggle()
                 }
@@ -761,8 +796,9 @@ struct CameraLiveLookView: View {
                 CameraAssistChip(title: "Level", on: showLevel) {
                     showLevel.toggle()
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
         }
         .padding(.top, 10)
         // The background extends THROUGH the bottom safe area, so the home
@@ -1098,9 +1134,12 @@ private struct HandOffCard: View {
                             ? AnyShapeStyle(LinearGradient(colors: [LumaTheme.accent, LumaTheme.accentDeep],
                                                            startPoint: .top, endPoint: .bottom))
                             : AnyShapeStyle(.white.opacity(0.08)),
-                            in: RoundedRectangle(cornerRadius: 11))
-                .overlay(RoundedRectangle(cornerRadius: 11)
-                    .strokeBorder(.white.opacity(solid ? 0.22 : 0.1), lineWidth: 1))
+                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                // No stroke: these sit INSIDE the card, on a surface whose
+                // value is known, so they separate by fill like every other
+                // button in the app. The card itself keeps its hairline —
+                // that one has live video behind it and needs the edge.
+                .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.lumaPress)
     }
@@ -1142,22 +1181,30 @@ private struct CameraFormatSheet: View {
                                       pick: @escaping (T) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             TechReadout(title, size: 10, color: LumaTheme.textMuted)
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 ForEach(options, id: \.self) { option in
                     Button {
                         pick(option)
                         LumaHaptics.shared.tap()
                     } label: {
+                        // These are all numeric/format values, so they speak in
+                        // the mono instrument voice — and the selected one is
+                        // stated by accent type on a raised surface, not by a
+                        // block of saturated violet with black text on it.
                         Text(label(option))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(isOn(option) ? .black : .white)
-                            .padding(.horizontal, 16).padding(.vertical, 9)
-                            .background(isOn(option) ? AnyShapeStyle(LumaTheme.accentBright)
-                                                     : AnyShapeStyle(LumaTheme.surface),
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .monospacedDigit()
+                            .kerning(0.6)
+                            .foregroundStyle(isOn(option) ? LumaTheme.accentBright
+                                                          : .white.opacity(0.7))
+                            .padding(.horizontal, 15).padding(.vertical, 9)
+                            .background(isOn(option) ? LumaTheme.cardRaised : LumaTheme.surface,
                                         in: Capsule())
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
+                Spacer(minLength: 0)
             }
         }
     }
