@@ -18,12 +18,12 @@ import CoreImage
 // ✓ All store categories (All / Film / Cinema / Mono / Instant / Camera /
 //   Originals / Free), and only those the catalog can actually fill
 // ✓ Per-category live counts (mono readout under the category name)
-// ✓ Owned readout — N OWNED OF M LOOKS · P/Q PACKS
+// ✓ Owned readout — "N of M looks · P/Q packs", counts mono
 // ✓ Search across pack name, era tag, and every look's name and code
 // ✓ Clear-search control
 // ✓ Featured pack (cine-print-set-01, looked up by id) — now the hero itself
 // ✓ Pack rows: real graded art, look count, era tag
-// ✓ Pack state — In Library / Free / Pro / price — restated monochrome
+// ✓ Pack state — In library / Free / Pro / price — restated monochrome
 // ✓ Owned pack tap → StoreNav.openInLibrary (library pre-filtered to the pack)
 // ✓ Unowned pack tap → the pack detail
 // ✓ Restore purchases → StoreService.restorePurchases()
@@ -35,7 +35,7 @@ import CoreImage
 // ✓ Pack family line
 // ✓ Every look previewed through the real pipeline, tap to preview
 // ✓ Selected-look readout, and the hero follows the selection
-// ✓ Technical claim (MEASURED FILM DATA / BAKED 33-POINT CUBES)
+// ✓ Technical claim (Measured film data / Baked 33-point cubes)
 // ✓ Try on your last clip — newest project clip, else newest grade session,
 //   else a bundled frame deliberately different from the hero
 // ✓ Price block: label + value + look count + era tag
@@ -59,13 +59,23 @@ import CoreImage
 // The shipping store says owned with a teal pill, which is the only colour on
 // a screen whose whole job is to show colour. Here ownership is said three
 // ways, none of them hue: the row's surface steps UP a value (owned packs sit
-// on a lighter plate than the ones you could still buy), the readout reads
-// IN LIBRARY in full white where a price reads in grey, and a filled white
+// on a lighter plate than the ones you could still buy), the label reads
+// "In library" in full white where a price reads in grey, and a filled white
 // check disc sits where the price would be. Value, weight, and a mark — it
 // reads instantly at a glance and survives greyscale, which teal never did.
 //
 // The purchase button is the one place a filled button is still correct: white
 // fill, black label. Confident, and still not a colour.
+//
+// THE TYPE RULES (shared with LDCameraDemoView / LDExportDemoView)
+//   A. Mono is for NUMBERS. Prices, look counts, category counts — those keep
+//      the instrument voice. A pack NAME, a category, a state, a section
+//      heading, the disclaimer: those are language, and language is set in the
+//      system face, sentence case, no tracking, at contrast you can read.
+//   B. A hierarchy, so the eye has somewhere to land. Pack name 16–20pt
+//      semibold/bold at full white; the price mono 14–22pt; supporting labels
+//      12–13pt medium at ~0.55–0.6. On a store, the NAME and the PRICE are the
+//      two things that must be legible from across the room.
 // =============================================================================
 
 struct LDStoreDemoView: View {
@@ -210,14 +220,15 @@ struct LDStoreDemoView: View {
         let installed = app.packStore.isInstalled(pack)
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                TechReadout(needle.isEmpty && category == .all ? "FEATURED PACK" : "FIRST RESULT",
-                            size: 9, color: .white.opacity(0.42))
+                Text(needle.isEmpty && category == .all ? "Featured pack" : "First result")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
                 Text(pack.name)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                TechReadout("\(pack.looks.count) LOOKS · \(pack.eraTag)",
-                            size: 9, color: .white.opacity(0.38))
+                packMetaLine(pack)
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
             PackState(pack: pack, installed: installed,
@@ -238,8 +249,15 @@ struct LDStoreDemoView: View {
                     .padding(.horizontal, 10)
                 neighbour(at: categoryIndex + 1, alignment: .trailing)
             }
-            TechReadout("\(ownedLookCount) OWNED OF \(PackCatalog.totalLookCount) · \(ownedPackCount)/\(PackCatalog.packs.count) PACKS",
-                        size: 9, color: .white.opacity(0.34))
+            // Numbers in the instrument voice, the words around them in plain
+            // type — the counts are what you scan for, so they carry the weight.
+            (mono("\(ownedLookCount)", 13, 0.8)
+             + plain(" of ", 12, 0.5)
+             + mono("\(PackCatalog.totalLookCount)", 13, 0.8)
+             + plain(" looks · ", 12, 0.5)
+             + mono("\(ownedPackCount)/\(PackCatalog.packs.count)", 13, 0.8)
+             + plain(" packs", 12, 0.5))
+                .lineLimit(1)
         }
         .padding(.horizontal, 20)
         .contentShape(Rectangle())
@@ -257,10 +275,12 @@ struct LDStoreDemoView: View {
             } label: {
                 VStack(spacing: 1) {
                     Text(categories[index].title)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.3))
-                    TechReadout("\(PackCatalog.packs.filter(categories[index].contains).count)",
-                                size: 8, color: .white.opacity(0.22))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.42))
+                    // A count IS a number: it keeps the mono voice.
+                    Text("\(PackCatalog.packs.filter(categories[index].contains).count)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.32))
                 }
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: alignment)
@@ -319,14 +339,15 @@ struct LDStoreDemoView: View {
                     Text(needle.isEmpty
                          ? "No packs in this category yet."
                          : "No packs or looks match “\(query)”.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.42))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 44)
                 }
                 Text(MockData.namingDisclaimer)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineSpacing(2)
                     .padding(.top, 14)
                     .padding(.bottom, 8)
             }
@@ -370,11 +391,11 @@ struct LDStoreDemoView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(pack.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(installed ? .white : .white.opacity(0.85))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(installed ? .white : .white.opacity(0.92))
                         .lineLimit(1)
-                    TechReadout("\(pack.looks.count) LOOKS · \(pack.eraTag)",
-                                size: 8.5, color: .white.opacity(0.36))
+                    packMetaLine(pack)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 6)
                 PackState(pack: pack, installed: installed,
@@ -453,10 +474,37 @@ struct LDStoreDemoView: View {
     }
 }
 
+// MARK: - The two type voices
+
+/// A number, in the instrument voice. Prices, counts, sizes — data only.
+private func mono(_ text: String, _ size: CGFloat, _ opacity: Double) -> Text {
+    Text(text)
+        .font(.system(size: size, weight: .medium, design: .monospaced))
+        .foregroundStyle(.white.opacity(opacity))
+}
+
+/// Language, in the reading voice: system face, sentence case, no tracking.
+private func plain(_ text: String, _ size: CGFloat, _ opacity: Double,
+                   weight: Font.Weight = .medium) -> Text {
+    Text(text)
+        .font(.system(size: size, weight: weight))
+        .foregroundStyle(.white.opacity(opacity))
+}
+
+/// "12 looks · Measured slide films" — the count is data and keeps the mono
+/// voice; the words around it are plain type at a contrast you can actually
+/// read. The era tag is left exactly as the catalog wrote it: it is a phrase,
+/// not a code, and shouting it in tracked caps was the mistake.
+private func packMetaLine(_ pack: LookPack) -> Text {
+    mono("\(pack.looks.count)", 13, 0.72)
+        + plain(" looks · \(pack.eraTag)", 12, 0.58)
+}
+
 // MARK: - Ownership, said without colour
 
 /// Four states, no hue between them: a filled white check disc for owned, and
-/// mono readouts of decreasing weight for everything you could still get.
+/// readouts of decreasing weight for everything you could still get. Only the
+/// price is a number, so only the price stays mono.
 private struct PackState: View {
     let pack: LookPack
     let installed: Bool
@@ -470,26 +518,38 @@ private struct PackState: View {
                     .foregroundStyle(.black)
                     .frame(width: 18, height: 18)
                     .background(.white, in: Circle())
-                TechReadout("IN LIBRARY", size: 9, color: .white)
+                Text("In library")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
             }
         } else if pack.isFree {
-            TechReadout("FREE", size: 10, color: .white.opacity(0.8))
-                .padding(.horizontal, 10)
+            Text("Free")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .background(Color(white: 0.18), in: Capsule())
         } else if pack.isProIncluded {
             HStack(spacing: 5) {
                 Image(systemName: "crown.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.8))
-                TechReadout("PRO", size: 10, color: .white.opacity(0.8))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.9))
+                Text("Pro")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 11)
             .padding(.vertical, 6)
             .background(Color(white: 0.18), in: Capsule())
         } else {
-            TechReadout(price, size: 11, color: .white)
-                .padding(.horizontal, 10)
+            // A price is a number, and it is one of the two things on this
+            // screen that must read instantly.
+            Text(price)
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
         }
@@ -546,10 +606,10 @@ private struct LDPackDetail: View {
         return alternate.ciImage ?? heroSource
     }
 
-    /// What the pack technically is.
+    /// What the pack technically is. A claim is a sentence, not a readout.
     private var techClaim: String {
-        pack.looks.contains { $0.cubeFile != nil } ? "MEASURED FILM DATA"
-                                                   : "BAKED 33-POINT CUBES"
+        pack.looks.contains { $0.cubeFile != nil } ? "Measured film data"
+                                                   : "Baked 33-point cubes"
     }
 
     var body: some View {
@@ -599,26 +659,33 @@ private struct LDPackDetail: View {
                 VStack(alignment: .leading, spacing: 14) {
                     titleBlock
                     Text(pack.familyLine)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: 14.5))
+                        .foregroundStyle(.white.opacity(0.65))
                         .lineSpacing(3)
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            TechReadout("INSIDE THE PACK", size: 9, color: .white.opacity(0.42))
+                            Text("Inside the pack")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
                             Spacer()
-                            TechReadout("TAP TO PREVIEW", size: 9, color: .white.opacity(0.3))
+                            Text("Tap to preview")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.45))
                         }
                         looksRail
-                        TechReadout(techClaim, size: 9, color: .white.opacity(0.3))
+                        Text(techClaim)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
                     }
 
                     tryOnPanel
                     priceBlock
 
                     Text(MockData.namingDisclaimer)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineSpacing(2)
                         .padding(.top, 4)
                 }
                 .padding(.horizontal, 20)
@@ -641,14 +708,20 @@ private struct LDPackDetail: View {
     private var titleBlock: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                TechReadout("PACK · \(pack.looks.count) LOOKS", size: 9,
-                            color: .white.opacity(0.42))
+                (plain("Pack · ", 12, 0.55)
+                 + mono("\(pack.looks.count)", 13, 0.72)
+                 + plain(" looks", 12, 0.55))
+                    .lineLimit(1)
                 Text(pack.name)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
-                TechReadout(activeLook.name, size: 9, color: .white.opacity(0.5))
+                // A look NAME is a name, not a readout.
+                Text(activeLook.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
             PackState(pack: pack, installed: installed,
@@ -686,12 +759,12 @@ private struct LDPackDetail: View {
                                 }
                             }
                             Text(look.name)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(active ? .white : .white.opacity(0.45))
+                                .font(.system(size: 11.5, weight: active ? .semibold : .medium))
+                                .foregroundStyle(active ? .white : .white.opacity(0.58))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
                                 .minimumScaleFactor(0.7)
-                                .frame(width: 74, height: 26, alignment: .top)
+                                .frame(width: 74, height: 30, alignment: .top)
                         }
                     }
                     .buttonStyle(.lumaPress)
@@ -719,15 +792,17 @@ private struct LDPackDetail: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            TechReadout(tryOnIsUserMedia
-                        ? "YOUR LAST CLIP · \(activeLook.code)"
-                        : "SAMPLE FRAME · \(activeLook.code)",
-                        size: 9, color: .white.opacity(0.5))
+            // The source is language; the look CODE is a catalog designation,
+            // so it keeps the instrument voice beside it.
+            (plain(tryOnIsUserMedia ? "Your last clip · " : "Sample frame · ",
+                   13, 0.7, weight: .semibold)
+             + mono(activeLook.code, 12, 0.5))
+                .lineLimit(1)
             Text(tryOnIsUserMedia
                  ? "Your most recent footage, graded with \(activeLook.name) before you buy."
                  : "Import or record something and this panel grades your own footage instead.")
-                .font(.system(size: 11.5))
-                .foregroundStyle(.white.opacity(0.34))
+                .font(.system(size: 12.5))
+                .foregroundStyle(.white.opacity(0.5))
         }
     }
 
@@ -735,31 +810,35 @@ private struct LDPackDetail: View {
     /// rating, because there is no ratings source and fabricated social proof
     /// is worse than the void it fills.
     private var priceBlock: some View {
-        HStack(alignment: .lastTextBaseline) {
+        // A bare price is a number and stays mono; "Free" / "Included with Pro"
+        // / "In your library" are words, and words are set in the reading face.
+        let isNumericPrice = !installed && !pack.isFree && !pack.isProIncluded
+        return HStack(alignment: .lastTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                TechReadout(installed ? "STATUS"
-                            : pack.isFree ? "PRICE"
-                            : pack.isProIncluded ? "SUBSCRIPTION" : "ONE-TIME PURCHASE",
-                            size: 9, color: .white.opacity(0.42))
+                Text(installed ? "Status"
+                     : pack.isFree ? "Price"
+                     : pack.isProIncluded ? "Subscription" : "One-time purchase")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
                 Text(installed ? "In your library"
                      : pack.isFree ? "Free"
                      : pack.isProIncluded ? "Included with Pro"
                      : StoreNav.price(pack, storeService))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold,
+                                  design: isNumericPrice ? .monospaced : .default))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             Spacer(minLength: 12)
             VStack(alignment: .trailing, spacing: 3) {
-                TechReadout("\(pack.looks.count) LOOKS", size: 11, color: .white.opacity(0.6))
-                // Deliberately not TechReadout: that type hardcodes
-                // lineLimit(1), and this is the pack's only descriptive claim
-                // on the screen. Same instrument voice, allowed to wrap.
-                Text(pack.eraTag.uppercased())
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .kerning(1.2)
-                    .foregroundStyle(.white.opacity(0.34))
+                (mono("\(pack.looks.count)", 14, 0.8) + plain(" looks", 13, 0.62))
+                    .lineLimit(1)
+                // The pack's only descriptive claim on the screen, so it is
+                // allowed to wrap — and it is a phrase, so it reads as one.
+                Text(pack.eraTag)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.48))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
@@ -794,7 +873,7 @@ private struct LDPackDetail: View {
                         if installing || storeService.purchaseInFlight {
                             ProgressView().tint(.black)
                         } else if installed {
-                            Text("In Library · Open")
+                            Text("In library · Open")
                             Image(systemName: "arrow.right")
                         } else if unlocked {
                             Text(pack.isFree ? "Install Free" : "Install")
@@ -827,16 +906,16 @@ private struct LDPackDetail: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("Or grade your current media now")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
                 .buttonStyle(.plain)
             }
             if !unlocked && !pack.isProIncluded {
                 Button { showPaywall = true } label: {
                     Text("Or get every pack with Pro")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
                 .buttonStyle(.plain)
             }

@@ -12,7 +12,8 @@ import CoreImage
 // FEATURE INVENTORY vs ExportSpecSheet + ExportCompleteView — nothing dropped.
 //
 //   SPEC
-//   ✓ Resolution tap-cards — 4K / HD / 720 (720 forces H.264, as the presets do)
+//   ✓ Resolution tap-cards — 2160p / 1080p / 720p, the value leading and the
+//     name beneath (720 forces H.264, as the presets do, and says so)
 //   ✓ Frame rate — 24 / 25 / 30 / 48 / 60
 //   ✓ Bitrate tier — Low / Medium / High (a real file-length ceiling)
 //   ✓ Codec — H.264 / H.265, HEVC correctly unavailable at 720
@@ -32,7 +33,7 @@ import CoreImage
 //   ✓ Real progress from `app.exporter.progress` — never faked
 //   ✓ Cancel → `app.exporter.cancel()`
 //   ✓ Batch export — one grade across the whole picked set, with the live
-//     "PROCESSING n OF m" status from `app.batchStatus`
+//     "Processing n of m" status from `app.batchStatus`
 //
 //   RESULT
 //   ✓ Real output metadata read back off the written file (`ExportOutputInfo`):
@@ -63,8 +64,14 @@ import CoreImage
 //   3. Stroke means selection — one thin white ring, nothing else is ringed.
 //   5. A calm instruction bar: ✕ at one edge, a plain sentence centred, and
 //      the one filled button in the language at the other.
-//   6. TechReadout mono microtype for every number.
-//   7. Tool rows are icon-over-label and unboxed, the last item clipped.
+//   6. Mono microtype for NUMBERS ONLY — sizes, bitrates, resolutions, frame
+//      rates, durations, percentages, cube point counts. Every label, heading,
+//      state and button beside them is the system face, sentence case, no
+//      tracking, 11–15pt at a contrast you can read.
+//   7. Where a control HAS a value, it shows the value: the resolution cards
+//      lead with 2160p / 1080p / 720p, and the cube tool shows the point size
+//      it will bake. The number is the better icon, and it is live.
+//   8. Tool rows are icon-over-label and unboxed, the last item clipped.
 // =============================================================================
 
 struct LDExportDemoView: View {
@@ -187,14 +194,16 @@ struct LDExportDemoView: View {
                     .padding(.bottom, 12)
 
                 VStack(spacing: 9) {
-                    optionRow("FRAME RATE", options: Self.frameRates,
+                    optionRow("Frame rate", options: Self.frameRates,
                               label: { "\($0)" }, isOn: { spec.fps == $0 },
                               enabled: { _ in true }) { spec.fps = $0 }
-                    optionRow("BITRATE", options: ExportSpec.Bitrate.allCases,
-                              label: { $0.rawValue.uppercased() },
+                    // Low / Medium / High are words, not values.
+                    optionRow("Bitrate", options: ExportSpec.Bitrate.allCases,
+                              numeric: false,
+                              label: { $0.rawValue.capitalized },
                               isOn: { spec.bitrate == $0 },
                               enabled: { _ in true }) { spec.bitrate = $0 }
-                    optionRow("CODEC", options: ExportSpec.Codec.allCases,
+                    optionRow("Codec", options: ExportSpec.Codec.allCases,
                               label: { $0 == .hevc ? "H.265" : "H.264" },
                               isOn: { spec.codec == $0 },
                               // 720 ships H.264 only — offering HEVC would lie.
@@ -218,7 +227,9 @@ struct LDExportDemoView: View {
             if let reason = hdrAvailability.reason, !spec.audioOnly {
                 // The HDR toggle is only honest when the pipeline can honour
                 // it, so the reason it cannot is stated rather than hidden.
-                TechReadout(reason, size: 8, color: .white.opacity(0.32))
+                Text(reason)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 18)
@@ -233,41 +244,63 @@ struct LDExportDemoView: View {
         }
     }
 
-    /// "TRAVEL VLOG · 00:18 · BATCH 4" — what is being delivered.
+    /// "Travel Vlog  00:18 … Batch 4" — what is being delivered. The look is a
+    /// NAME, so it is set as one; the duration and the batch count are numbers.
     private var sourceLine: some View {
-        HStack {
-            TechReadout(sourceTitle, size: 10, color: .white.opacity(0.8))
+        HStack(spacing: 8) {
+            Text(sourceTitle)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            if durationSeconds > 0 {
+                Text(clock(durationSeconds))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
             Spacer(minLength: 0)
             if !app.batchItems.isEmpty {
-                TechReadout("BATCH · \(app.batchItems.count)", size: 9,
-                            color: .white.opacity(0.5))
+                HStack(spacing: 5) {
+                    Text("Batch")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Text("\(app.batchItems.count)")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
         }
     }
 
     private var sourceTitle: String {
-        let name = app.selectedLUT?.displayName ?? app.selectedLook.name
-        guard durationSeconds > 0 else { return name }
-        return "\(name) · \(clock(durationSeconds))"
+        app.selectedLUT?.displayName ?? app.selectedLook.name
     }
 
     private func clock(_ seconds: Double) -> String {
         String(format: "%02d:%02d", Int(seconds) / 60, Int(seconds) % 60)
     }
 
+    /// "PROCESSING 2 OF 5" → "Processing 2 of 5". The model shouts its status
+    /// in caps; this screen reads it back as a sentence, numerals untouched.
+    private static func sentenceCased(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        return lower.prefix(1).uppercased() + lower.dropFirst()
+    }
+
     // MARK: Resolution — the only cards on the screen
 
+    /// The value leads. "2160p" tells you what you are about to write; "4K"
+    /// only tells you what to call it, so it goes underneath in plain type.
     private var resolutionCards: some View {
         HStack(spacing: 8) {
-            resolutionCard(.uhd4K, title: "4K", sub: "2160P")
-            resolutionCard(.hd1080, title: "HD", sub: "1080P")
-            resolutionCard(.hd720, title: "720", sub: "FAST")
+            resolutionCard(.uhd4K, value: "2160p", name: "4K")
+            resolutionCard(.hd1080, value: "1080p", name: "HD")
+            resolutionCard(.hd720, value: "720p", name: "H.264 only")
         }
         .sensoryFeedback(.selection, trigger: spec.resolution)
     }
 
     private func resolutionCard(_ resolution: ExportSpec.Resolution,
-                                title: String, sub: String) -> some View {
+                                value: String, name: String) -> some View {
         let selected = spec.resolution == resolution
         return Button {
             spec.resolution = resolution
@@ -275,11 +308,17 @@ struct LDExportDemoView: View {
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 3) {
-                Text(title)
-                    .font(.system(size: 15, weight: selected ? .heavy : .semibold,
+                Text(value)
+                    .font(.system(size: 18, weight: selected ? .heavy : .semibold,
                                   design: .monospaced))
-                    .foregroundStyle(.white.opacity(selected ? 1 : 0.55))
-                TechReadout(sub, size: 8, color: .white.opacity(selected ? 0.6 : 0.3))
+                    .foregroundStyle(.white.opacity(selected ? 1 : 0.6))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(name)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(selected ? 0.7 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -300,14 +339,21 @@ struct LDExportDemoView: View {
 
     // MARK: Option rows
 
+    /// `numeric` decides the voice of the OPTIONS, never of the row's name: the
+    /// name is a label and is always plain, while a frame rate or a codec
+    /// designation is a value and stays mono.
     private func optionRow<T: Hashable>(_ title: String, options: [T],
+                                        numeric: Bool = true,
                                         label: @escaping (T) -> String,
                                         isOn: @escaping (T) -> Bool,
                                         enabled: @escaping (T) -> Bool,
                                         pick: @escaping (T) -> Void) -> some View {
         HStack(spacing: 8) {
-            TechReadout(title, size: 8, color: .white.opacity(0.32))
-                .frame(width: 78, alignment: .leading)
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+                .frame(width: 84, alignment: .leading)
             ForEach(options, id: \.self) { option in
                 let on = isOn(option)
                 let usable = enabled(option)
@@ -315,8 +361,13 @@ struct LDExportDemoView: View {
                     pick(option)
                     LumaHaptics.shared.tap()
                 } label: {
-                    TechReadout(label(option), size: 10,
-                                color: .white.opacity(on ? 0.95 : 0.42))
+                    Text(label(option))
+                        .font(.system(size: numeric ? 14 : 13,
+                                      weight: on ? .semibold : .medium,
+                                      design: numeric ? .monospaced : .default))
+                        .foregroundStyle(.white.opacity(on ? 1 : 0.5))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
                         .overlay {
@@ -339,7 +390,7 @@ struct LDExportDemoView: View {
     private var toolRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                tool("waveform", "AUDIO ONLY", on: spec.audioOnly) {
+                tool("waveform", "Audio only", on: spec.audioOnly) {
                     spec.audioOnly.toggle()
                     LumaHaptics.shared.tap()
                 }
@@ -348,23 +399,25 @@ struct LDExportDemoView: View {
                     spec.alsoGIF.toggle()
                     LumaHaptics.shared.tap()
                 }
-                tool("sun.max", "HDR HLG", on: spec.hdr,
+                tool("sun.max", "HDR (HLG)", on: spec.hdr,
                      enabled: hdrAvailability.isAvailable && !spec.audioOnly) {
                     spec.hdr.toggle()
                     LumaHaptics.shared.tap()
                 }
-                tool("square.grid.3x3.square", "CUBE", on: showCubePanel,
-                     enabled: !spec.audioOnly) {
+                // The cube tool HAS a value — the grid it will bake — so it
+                // shows the value instead of a grid glyph that shows nothing.
+                valueTool("\(cubeSize)³", "Cube LUT", on: showCubePanel,
+                          enabled: !spec.audioOnly) {
                     showCubePanel.toggle()
                     LumaHaptics.shared.tap()
                 }
-                tool("arrow.uturn.backward", "RESET", on: false) {
+                tool("arrow.uturn.backward", "Reset", on: false) {
                     spec = ExportSpec()
                     if !hdrAvailability.isAvailable { spec.hdr = false }
                     LumaHaptics.shared.tap()
                 }
-                tool("film.stack", "EDITOR", on: false) { app.path = [.editor] }
-                tool("photo.on.rectangle", "SOURCE", on: false) { app.path = [.selectClip] }
+                tool("film.stack", "Editor", on: false) { app.path = [.editor] }
+                tool("photo.on.rectangle", "Source", on: false) { app.path = [.selectClip] }
             }
             .padding(.horizontal, 16)
         }
@@ -378,9 +431,38 @@ struct LDExportDemoView: View {
                 Image(systemName: symbol)
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
-                TechReadout(label, size: 8, color: on ? .white : .white.opacity(0.42))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .foregroundStyle(on ? .white : .white.opacity(0.5))
+            .frame(width: 74, height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.28)
+    }
+
+    /// The instrument-cluster twin of `tool`: a live value in mono where the
+    /// glyph would have been, its name beneath in plain sentence case.
+    private func valueTool(_ value: String, _ label: String, on: Bool,
+                           enabled: Bool = true,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(value)
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .foregroundStyle(on ? .white : .white.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
+                    .lineLimit(1)
+            }
             .frame(width: 74, height: 46)
             .contentShape(Rectangle())
         }
@@ -393,8 +475,9 @@ struct LDExportDemoView: View {
 
     private var cubePanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TechReadout("BAKE THIS GRADE AS .CUBE — LUT, CURVES, WHEELS, HSL, SPLIT",
-                        size: 8, color: .white.opacity(0.34))
+            Text("Bake this grade as a .cube — LUT, curves, wheels, HSL, split.")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(2)
             HStack(spacing: 8) {
                 ForEach(GradeCubeBaker.sizes, id: \.self) { size in
@@ -403,8 +486,12 @@ struct LDExportDemoView: View {
                         cubeURL = nil            // stale for the new size
                         LumaHaptics.shared.tap()
                     } label: {
-                        TechReadout("\(size)³", size: 10,
-                                    color: .white.opacity(cubeSize == size ? 0.95 : 0.42))
+                        // A grid size is a number: mono stays.
+                        Text("\(size)³")
+                            .font(.system(size: 14,
+                                          weight: cubeSize == size ? .semibold : .medium,
+                                          design: .monospaced))
+                            .foregroundStyle(.white.opacity(cubeSize == size ? 1 : 0.5))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .overlay {
@@ -418,7 +505,9 @@ struct LDExportDemoView: View {
                 }
                 if let cubeURL {
                     ShareLink(item: cubeURL) {
-                        TechReadout("SHARE", size: 10, color: .black)
+                        Text("Share")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.white, in: Capsule())
@@ -436,8 +525,9 @@ struct LDExportDemoView: View {
                             LumaHaptics.shared.tap()
                         }
                     } label: {
-                        TechReadout(isBaking ? "…" : "BAKE", size: 10,
-                                    color: .white.opacity(0.9))
+                        Text(isBaking ? "Baking…" : "Bake")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color(white: 0.13), in: Capsule())
@@ -454,29 +544,46 @@ struct LDExportDemoView: View {
     // MARK: Estimate + delivery spec — the trust signal, always on screen
 
     private var deliveryReadout: some View {
-        HStack {
-            TechReadout(estimateLine, size: 9, color: .white.opacity(0.6))
+        HStack(spacing: 8) {
+            if let value = estimateValue {
+                Text("Est. size")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(value)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.9))
+            } else {
+                Text("Still image")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
             Spacer(minLength: 0)
-            TechReadout(deliverySpecLine, size: 9, color: .white.opacity(0.34))
+            // Format designations, not prose — this line stays in the
+            // instrument voice, just brighter and a size you can read.
+            Text(deliverySpecLine)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.45))
+                .lineLimit(1)
         }
     }
 
     /// Live: recomputes on every resolution / bitrate / codec / fps change,
-    /// from the same bitrate model the encoder's ceiling derives from.
-    private var estimateLine: String {
+    /// from the same bitrate model the encoder's ceiling derives from. Nil when
+    /// there is no duration to estimate against — a still has no size tier.
+    private var estimateValue: String? {
         if spec.audioOnly {
-            guard durationSeconds > 0 else { return "EST. —" }
-            return String(format: "EST. %.0f MB", durationSeconds * 0.128 / 8)
+            guard durationSeconds > 0 else { return "—" }
+            return String(format: "%.0f MB", durationSeconds * 0.128 / 8)
         }
-        guard durationSeconds > 0 else { return "STILL IMAGE" }
+        guard durationSeconds > 0 else { return nil }
         let mb = Double(spec.estimatedMegabytes(durationSeconds: durationSeconds))
-        return mb >= 1000 ? String(format: "EST. SIZE %.1f GB", mb / 1000)
-                          : String(format: "EST. SIZE %.0f MB", mb)
+        return mb >= 1000 ? String(format: "%.1f GB", mb / 1000)
+                          : String(format: "%.0f MB", mb)
     }
 
     private var deliverySpecLine: String {
         if spec.audioOnly { return "AAC · M4A" }
-        let colour = spec.hdr ? "HLG" : "REC.709"
+        let colour = spec.hdr ? "HLG" : "Rec.709"
         let codec = spec.codec == .hevc ? "H.265" : "H.264"
         return "\(codec) · \(colour) · AAC"
     }
@@ -513,8 +620,9 @@ struct LDExportDemoView: View {
     /// the words are the warning.
     private func noticeBar(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5))
-            .foregroundStyle(.white.opacity(0.8))
+            .font(.system(size: 12.5))
+            .foregroundStyle(.white.opacity(0.85))
+            .lineSpacing(2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -536,14 +644,16 @@ struct LDExportDemoView: View {
             .buttonStyle(.plain)
             Spacer(minLength: 8)
             Text(spec.audioOnly ? "Set the audio delivery" : "Set the delivery")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.55))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
             Spacer(minLength: 8)
             // The one filled button in the language: the irreversible, long,
             // expensive action at the end of a tool.
             Button { startExport() } label: {
-                TechReadout(spec.audioOnly ? "EXPORT AUDIO" : "EXPORT", size: 10, color: .black)
+                Text(spec.audioOnly ? "Export audio" : "Export")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 18)
                     .frame(height: 40)
                     .background(Color.white, in: Capsule())
@@ -563,10 +673,17 @@ struct LDExportDemoView: View {
     private var renderDrawer: some View {
         VStack(spacing: 14) {
             HStack {
-                TechReadout(app.batchStatus ?? (spec.audioOnly ? "WRITING AUDIO" : "WRITING VIDEO"),
-                            size: 10, color: .white.opacity(0.7))
+                // `app.batchStatus` arrives as "PROCESSING 2 OF 5" from the
+                // model; it is read here as a sentence, numerals intact.
+                Text(app.batchStatus.map(Self.sentenceCased)
+                     ?? (spec.audioOnly ? "Writing audio" : "Writing video"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
                 Spacer(minLength: 0)
-                TechReadout("\(Int(app.exporter.progress * 100))%", size: 12, color: .white)
+                Text("\(Int(app.exporter.progress * 100))%")
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white)
             }
 
             // Determinate, from the session's own progress — never a spinner
@@ -582,13 +699,17 @@ struct LDExportDemoView: View {
             .frame(height: 2)
 
             HStack {
-                TechReadout(deliverySpecLine, size: 9, color: .white.opacity(0.32))
+                Text(deliverySpecLine)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.45))
                 Spacer(minLength: 0)
                 Button {
                     app.exporter.cancel()
                     LumaHaptics.shared.tap()
                 } label: {
-                    TechReadout("CANCEL", size: 10, color: .white.opacity(0.75))
+                    Text("Cancel")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 14)
                         .frame(height: 36)
                         .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
@@ -623,11 +744,13 @@ struct LDExportDemoView: View {
     private var completeDrawer: some View {
         VStack(spacing: 0) {
             HStack {
-                TechReadout(hasArtefact ? "EXPORT COMPLETE" : "EXPORT UNAVAILABLE",
-                            size: 10, color: .white)
+                Text(hasArtefact ? "Export complete" : "Export unavailable")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
                 Spacer(minLength: 0)
-                TechReadout(app.lastExportSavedToPhotos ? "SAVED TO PHOTOS" : "NOT IN PHOTOS",
-                            size: 9, color: .white.opacity(0.4))
+                Text(app.lastExportSavedToPhotos ? "Saved to Photos" : "Not in Photos")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
@@ -635,8 +758,14 @@ struct LDExportDemoView: View {
 
             // The delivery spec of the file that was ACTUALLY written — read
             // back off the asset, never the spec that was requested.
+            // Dimensions · duration · file size · codec — four measurements,
+            // so this one stays mono in full.
             if !info.readout.isEmpty {
-                TechReadout(info.readout, size: 9, color: .white.opacity(0.55))
+                Text(info.readout)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 18)
                     .padding(.bottom, 12)
@@ -665,7 +794,7 @@ struct LDExportDemoView: View {
             HStack(spacing: 4) {
                 if !app.lastExportSavedToPhotos, app.lastExportImage == nil,
                    let url = shareableURL, url.pathExtension.lowercased() == "mov" {
-                    tool("square.and.arrow.down", isSavingToPhotos ? "SAVING…" : "TO PHOTOS",
+                    tool("square.and.arrow.down", isSavingToPhotos ? "Saving…" : "To Photos",
                          on: false) {
                         guard !isSavingToPhotos else { return }
                         isSavingToPhotos = true
@@ -683,22 +812,25 @@ struct LDExportDemoView: View {
                         VStack(spacing: 5) {
                             Image(systemName: "square.stack.3d.down.forward")
                                 .font(.system(size: 17)).frame(height: 20)
-                            TechReadout("GIF", size: 8, color: .white.opacity(0.42))
+                            Text("Share GIF")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(.white.opacity(0.5))
                         .frame(width: 74, height: 46)
                         .contentShape(Rectangle())
                     }
                 }
-                tool("arrow.uturn.backward", "EXPORT AGAIN", on: false) {
+                tool("arrow.uturn.backward", "Export again", on: false) {
                     app.exportError = nil
                     info = ExportOutputInfo()
                     poster = nil
                     phase = .spec
                 }
-                tool("film.stack", "IN EDITOR", on: false) { continueInEditor() }
-                tool("photo.on.rectangle", "NEW SOURCE", on: false) { app.path = [.selectClip] }
-                tool("plus.square", "NEW PROJECT", on: false) { app.resetToHome() }
+                tool("film.stack", "In editor", on: false) { continueInEditor() }
+                tool("photo.on.rectangle", "New source", on: false) { app.path = [.selectClip] }
+                tool("plus.square", "New project", on: false) { app.resetToHome() }
             }
             .padding(.horizontal, 16)
         }
@@ -717,14 +849,15 @@ struct LDExportDemoView: View {
             .buttonStyle(.plain)
             Spacer(minLength: 8)
             Text(hasArtefact ? "Your file is ready" : "Nothing was produced")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.55))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
             Spacer(minLength: 8)
             if let url = shareableURL {
                 ShareLink(item: url) {
-                    TechReadout(app.lastExportImage != nil ? "SHARE PHOTO" : "SHARE", size: 10,
-                                color: .black)
+                    Text(app.lastExportImage != nil ? "Share photo" : "Share")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.black)
                         .padding(.horizontal, 18)
                         .frame(height: 40)
                         .background(Color.white, in: Capsule())
@@ -736,7 +869,9 @@ struct LDExportDemoView: View {
                     app.exportError = nil
                     phase = .spec
                 } label: {
-                    TechReadout("TRY AGAIN", size: 10, color: .black)
+                    Text("Try again")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.black)
                         .padding(.horizontal, 18)
                         .frame(height: 40)
                         .background(Color.white, in: Capsule())

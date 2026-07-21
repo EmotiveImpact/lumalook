@@ -12,7 +12,7 @@ import SwiftUI
 // ✓ All seven categories (All / Favourites / Recents / Your Looks / Purchased /
 //   Imported / Collections) — as a swipeable two-axis category bar
 // ✓ Per-category live counts (mono readout under the category name)
-// ✓ Library totals readout — N LOOKS · M COLLECTIONS
+// ✓ Library totals readout — N looks · M collections (mono digits, plain words)
 // ✓ Search across look name, pack name and LUT tags (folded behind a glyph,
 //   exactly like the compact browser)
 // ✓ Clear-search control
@@ -55,8 +55,11 @@ import SwiftUI
 //   3. Stroke means selection and nothing else — one thin white ring.
 //   4. The tile IS the preview.
 //   5. Two-axis browsing — the current category centred, neighbours faded.
-//   6. A calm instruction bar — a sentence, with ✕ and ✓ at the edges.
-//   7. TechReadout for every number.
+//   6. A calm instruction bar — the live look and its strength, with ✕ and ✓
+//      at the edges.
+//   7. Mono for NUMBERS ONLY — counts, strengths. Every name, category,
+//      section heading, badge and button word is the system font in sentence
+//      case, weighted and contrasted enough to read as deliberate.
 // =============================================================================
 
 struct LDLibraryDemoView: View {
@@ -85,6 +88,15 @@ struct LDLibraryDemoView: View {
     private func count(of cat: LookLibraryStore.Category) -> Int {
         cat == .collections ? app.lutRepository.collections.count
                             : app.library.looks(category: cat).count
+    }
+
+    /// A count is one instrument value and one plain word. The digits are the
+    /// only part that earns mono; "looks" is not a readout.
+    private func countText(_ value: Int, _ word: String, size: CGFloat) -> Text {
+        Text("\(value)")
+            .font(.system(size: size, weight: .medium, design: .monospaced))
+        + Text(" \(word)")
+            .font(.system(size: size, weight: .medium))
     }
 
     /// The chip titles carry a "★ " prefix for the accented design. On a
@@ -188,8 +200,11 @@ struct LDLibraryDemoView: View {
     /// search, import, create — as bare glyphs on the right.
     private var toolRow: some View {
         HStack(spacing: 4) {
-            TechReadout("\(app.library.all.count) LOOKS · \(app.lutRepository.collections.count) COLLECTIONS",
-                        size: 9, color: .white.opacity(0.42))
+            (countText(app.library.all.count, "looks", size: 12)
+             + Text(" · ").font(.system(size: 12, weight: .medium))
+             + countText(app.lutRepository.collections.count, "collections", size: 12))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
             Spacer(minLength: 8)
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -208,7 +223,9 @@ struct LDLibraryDemoView: View {
                     app.select(look: LibraryLook(lut: imported))
                 }
             } label: {
-                glyph("plus", active: false)
+                // A bare "+" reads as "create". Importing a .cube is a file
+                // coming IN, and this glyph actually depicts that.
+                glyph("square.and.arrow.down", active: false)
             }
             .accessibilityLabel("Import a LUT")
 
@@ -242,14 +259,15 @@ struct LDLibraryDemoView: View {
             HStack(spacing: 0) {
                 neighbour(at: categoryIndex - 1, alignment: .leading)
                 Text(title(categories[categoryIndex]))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .padding(.horizontal, 10)
                 neighbour(at: categoryIndex + 1, alignment: .trailing)
             }
-            TechReadout("\(count(of: category)) \(category == .collections ? "COLLECTIONS" : "LOOKS")",
-                        size: 9, color: .white.opacity(0.34))
+            countText(count(of: category),
+                      category == .collections ? "collections" : "looks", size: 12)
+                .foregroundStyle(.white.opacity(0.5))
         }
         .padding(.horizontal, 20)
         .contentShape(Rectangle())
@@ -268,8 +286,8 @@ struct LDLibraryDemoView: View {
                 step(index - categoryIndex)
             } label: {
                 Text(title(categories[index]))
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: alignment)
                     .contentShape(Rectangle())
@@ -357,7 +375,10 @@ struct LDLibraryDemoView: View {
         let groups = app.library.collectionGroups
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                TechReadout("COLLECTIONS", size: 10, color: .white.opacity(0.5))
+                // A section heading should read as a heading.
+                Text("Collections")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
                 Spacer()
                 Button {
                     app.path.append(.collections)
@@ -375,19 +396,28 @@ struct LDLibraryDemoView: View {
                 ForEach(groups, id: \.collection.id) { group in
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
-                            TechReadout("\(group.collection.name) · \(group.looks.count)",
-                                        size: 10, color: .white.opacity(0.5))
+                            // The collection's name is a name; only its size
+                            // is a number.
+                            Text(group.collection.name)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                            Text("\(group.looks.count)")
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
                             if group.collection.pinnedToCamera == true {
-                                TechReadout("PINNED", size: 9, color: .white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                Text("Pinned")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2.5)
                                     .background(Color(white: 0.16), in: Capsule())
                             }
                         }
                         if group.looks.isEmpty {
                             Text("Long-press any look to add it here.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.38))
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.5))
                         } else {
                             LazyVGrid(columns: columns, spacing: 14) {
                                 ForEach(group.looks) { look in tile(for: look) }
@@ -404,12 +434,12 @@ struct LDLibraryDemoView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text(search.isEmpty ? "Nothing here yet" : "No looks match “\(search)”")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.95))
             Text(search.isEmpty ? "Import a .cube or buy a pack to fill this shelf."
                                 : "Try a pack name, a look code, or a tag.")
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.38))
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.55))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -446,7 +476,9 @@ struct LDLibraryDemoView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 96)
                     .overlay {
-                        TechReadout("NONE", size: 10, color: active ? .white : .white.opacity(0.4))
+                        Text("None")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(active ? .white : .white.opacity(0.55))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -455,13 +487,13 @@ struct LDLibraryDemoView: View {
                     }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Original")
-                        .font(.system(size: 12, weight: active ? .semibold : .medium))
-                        .foregroundStyle(active ? .white : .white.opacity(0.55))
+                        .font(.system(size: 13, weight: active ? .semibold : .medium))
+                        .foregroundStyle(active ? .white : .white.opacity(0.72))
                         .lineLimit(2)
-                        .frame(height: 30, alignment: .top)
+                        .frame(height: 32, alignment: .top)
                     Text("No look")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.34))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -532,16 +564,20 @@ struct LDLibraryDemoView: View {
 
     private var intensityRow: some View {
         HStack(spacing: 12) {
-            TechReadout("INTENSITY", size: 9, color: .white.opacity(0.42))
+            Text("Intensity")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
                 .fixedSize()
             Slider(value: $app.settings.intensity, in: 0...100)
                 .tint(.white)
-            Text("\(Int(app.settings.intensity))")
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            // The one genuine instrument value in this row — mono stays.
+            Text("\(Int(app.settings.intensity))%")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .monospacedDigit()
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.2), value: Int(app.settings.intensity))
-                .foregroundStyle(.white)
-                .frame(width: 28, alignment: .trailing)
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 42, alignment: .trailing)
             compareButton
         }
     }
@@ -550,11 +586,10 @@ struct LDLibraryDemoView: View {
     /// releasing restores it — the same stash the None tile uses.
     private var compareButton: some View {
         let comparing = stashedIntensity != nil && app.settings.intensity == 0
-        return Text("COMPARE")
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .kerning(1.2)
-            .foregroundStyle(comparing ? .black : .white.opacity(0.7))
-            .frame(width: 84, height: 30)
+        return Text("Compare")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(comparing ? .black : .white.opacity(0.8))
+            .frame(width: 84, height: 32)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(comparing ? AnyShapeStyle(.white) : AnyShapeStyle(Color(white: 0.13)))
@@ -599,10 +634,24 @@ struct LDLibraryDemoView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
             Spacer()
-            Text(instruction)
-                .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.75))
-                .lineLimit(1)
+            // The applied look is the anchor of this bar: a name at full
+            // weight, its strength beside it as the live value.
+            if app.settings.intensity == 0 {
+                Text(instruction)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+            } else {
+                HStack(spacing: 7) {
+                    Text(instruction)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(1)
+                    Text("\(Int(app.settings.intensity))%")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "checkmark")
@@ -631,10 +680,11 @@ private struct LDLookTile: View {
     let action: () -> Void
     var onFavourite: () -> Void
 
+    /// "LUT" stays upper — it is an acronym, not a shouted label.
     private var badge: String? {
         switch look.source {
-        case .saved:      return "SAVED"
-        case .lut(let f): return f.packID == nil ? (f.isLogTarget ? "LOG" : "LUT") : nil
+        case .saved:      return "Saved"
+        case .lut(let f): return f.packID == nil ? (f.isLogTarget ? "Log" : "LUT") : nil
         case .builtIn:    return nil
         }
     }
@@ -673,10 +723,12 @@ private struct LDLookTile: View {
                     }
                     .overlay(alignment: .topLeading) {
                         if let badge {
-                            TechReadout(badge, size: 8, color: .white.opacity(0.9))
-                                .padding(.horizontal, 5)
+                            Text(badge)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.95))
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2.5)
-                                .background(.black.opacity(0.55), in: Capsule())
+                                .background(.black.opacity(0.6), in: Capsule())
                                 .padding(5)
                         }
                     }
@@ -696,16 +748,16 @@ private struct LDLookTile: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(look.nameSplit.title)
-                        .font(.system(size: 12, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? .white : .white.opacity(0.6))
+                        .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.8))
                         .lineLimit(2)
-                        .minimumScaleFactor(0.9)
+                        .minimumScaleFactor(0.85)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(height: 30, alignment: .top)
+                        .frame(height: 32, alignment: .top)
                     Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.34))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 2)

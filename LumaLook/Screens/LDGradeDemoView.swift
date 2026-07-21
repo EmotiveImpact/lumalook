@@ -12,8 +12,12 @@ import SwiftUI
 //      colour comes from the user's footage and the looks themselves.
 //   3. Stroke means selection and nothing else — one thin white ring.
 //   4. The tile IS the preview — each one is the actual grade, not an icon.
-//   5. A calm instruction bar — a plain sentence centred, dismiss and confirm
-//      at the two edges. No shouting CTA inside a tool.
+//   5. A calm instruction bar — the live look name and its strength centred
+//      (a plain sentence when nothing is applied), dismiss and confirm at the
+//      two edges. No shouting CTA inside a tool.
+//
+// TYPE: mono is reserved for numbers. Names, categories and captions are the
+// system font in sentence case, at a contrast you can actually read.
 //
 // Reachable headlessly with LUMA_ROUTE=ldDemo.
 // =============================================================================
@@ -92,7 +96,7 @@ struct LDGradeDemoView: View {
             label(at: categoryIndex - 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(categories[categoryIndex].title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .fixedSize()
             label(at: categoryIndex + 1)
@@ -116,8 +120,8 @@ struct LDGradeDemoView: View {
     private func label(at index: Int) -> some View {
         if categories.indices.contains(index) {
             Text(categories[index].title)
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.32))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45))
                 .lineLimit(1)
         } else {
             Color.clear.frame(height: 1)
@@ -152,10 +156,13 @@ struct LDGradeDemoView: View {
                                         .strokeBorder(.white, lineWidth: 2)
                                 }
                             }
+                            // A look's name is a name, not a readout: real
+                            // weight, real contrast, sentence case.
                             Text(look.nameSplit.title)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(app.isCurrent(look) ? .white : .white.opacity(0.45))
+                                .font(.system(size: 12, weight: app.isCurrent(look) ? .semibold : .medium))
+                                .foregroundStyle(app.isCurrent(look) ? .white : .white.opacity(0.62))
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                                 .frame(width: 76)
                         }
                     }
@@ -167,9 +174,13 @@ struct LDGradeDemoView: View {
         .lumaEdgeFade(leading: 20, trailing: 20)
     }
 
-    /// A sentence, not a slogan. Dismiss and confirm sit at the two edges.
+    /// The centre of this bar is the one place the applied grade is named, so
+    /// it states the live value rather than a slogan: the look, then its
+    /// strength in mono. With the grade off it falls back to a plain sentence.
     private var instructionBar: some View {
-        HStack {
+        let name = app.selectedLUT?.displayName ?? app.selectedLook.name
+        let strength = Int(app.settings.intensity.rounded())
+        return HStack {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .medium))
@@ -178,9 +189,22 @@ struct LDGradeDemoView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Text("Choose a look")
-                .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.75))
+            if strength == 0 {
+                Text("Showing the original")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+            } else {
+                HStack(spacing: 7) {
+                    Text(name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(1)
+                    Text("\(strength)%")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "checkmark")
