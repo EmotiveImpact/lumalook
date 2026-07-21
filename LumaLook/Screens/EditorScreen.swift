@@ -4114,10 +4114,20 @@ private struct PreviewOverlayEditor: View {
     @ObservedObject var editor: EditorState
     @Binding var selectedOverlayID: UUID?
 
-    /// The layer as it stood when the finger went down — the undo baseline for
-    /// the whole gesture, and the origin every delta is measured from. Non-nil
-    /// exactly while a gesture is live.
-    @State private var gestureStart: EditorState.OverlayItem?
+    private struct GestureStart {
+        /// Full model snapshot for the single release-time undo entry.
+        let before: EditorState.OverlayItem
+        /// Raw placement at the playhead. This is interpolated for keyframed
+        /// layers but excludes text animation, whose offset/scale must remain
+        /// intact while the user changes the underlying placement.
+        let placement: OverlayLayout.Placement
+        var translation: CGSize = .zero
+        var magnification: CGFloat = 1
+        var rotationDegrees: Double = 0
+        var hasMutated = false
+    }
+
+    @State private var gestureStart: GestureStart?
 
     /// Layers on screen at the playhead, lowest lane first so the topmost one
     /// is last in the ZStack and therefore takes the touch.
@@ -4130,7 +4140,9 @@ private struct PreviewOverlayEditor: View {
 
     var body: some View {
         GeometryReader { geo in
-            let media = mediaRect(in: geo.size)
+            let media = OverlayRenderGeometry.aspectFitRect(
+                contentSize: editor.format.renderSize,
+                in: CGRect(origin: .zero, size: geo.size))
             ZStack(alignment: .topLeading) {
                 ForEach(liveLayers) { item in
                     layerHandle(item, in: media)
@@ -4141,25 +4153,6 @@ private struct PreviewOverlayEditor: View {
     }
 
     // MARK: Geometry
-
-    /// The picture inside the container. AVKit aspect-FITS the composition, so
-    /// the video is letterboxed (or pillarboxed) inside the view: unit overlay
-    /// coordinates have to be mapped through THIS rect, never the container
-    /// bounds, or the layer lags the finger by the matte offset and the error
-    /// grows with the aspect mismatch.
-    private func mediaRect(in size: CGSize) -> CGRect {
-        let target = editor.format.aspect
-        guard size.width > 1, size.height > 1, target > 0 else {
-            return CGRect(origin: .zero, size: size)
-        }
-        if size.width / size.height > target {          // pillarboxed
-            let w = size.height * target
-            return CGRect(x: (size.width - w) / 2, y: 0, width: w, height: size.height)
-        } else {                                        // letterboxed
-            let h = size.width / target
-            return CGRect(x: 0, y: (size.height - h) / 2, width: size.width, height: h)
-        }
-    }
 
     /// The placement actually on screen right now. Read from the live layout
     /// box so a keyframed layer is grabbed where it is being drawn, not where
@@ -4173,30 +4166,22 @@ private struct PreviewOverlayEditor: View {
                                        rotationDegrees: item.rotationDegrees)
     }
 
-    /// Width ÷ height of the layer as the compositor rasterises it: a square
-    /// canvas for shapes, the measured glyph box for text, the thumbnail for
-    /// media. The compositor normalises WIDTH to `sizeFraction`, so this is the
-    /// only unknown in the box.
-    private func aspect(_ item: EditorState.OverlayItem) -> CGFloat {
-        if item.shapeKind != nil { return 1 }           // 512 × 512 authoring canvas
-        if let text = item.text, !text.isEmpty {
-            let extent = TextRasterizer.image(text, style: item.textSpec)?.extent
-            if let extent, extent.height > 1 { return extent.width / extent.height }
-        }
-        if let thumb = item.thumbnail, thumb.height > 0 {
-            return CGFloat(thumb.width) / CGFloat(thumb.height)
-        }
-        return 16.0 / 9.0
-    }
-
-    /// The layer's box on screen, before rotation.
-    private func box(_ item: EditorState.OverlayItem, in media: CGRect) -> CGRect {
-        let p = placement(item)
-        let w = media.width * CGFloat(min(max(0.05, p.sizeFraction), 1))
-        let h = w / max(0.05, aspect(item))
-        return CGRect(x: media.minX + CGFloat(p.center.x) * media.width - w / 2,
-                      y: media.minY + CGFloat(p.center.y) * media.height - h / 2,
-                      width: w, height: h)
+    /// Exact compositor geometry for this frame. If a rebuild is in flight and
+    /// there is no extent belonging to the currently published player item,
+    /// draw no speculative handle — the pixels are not there yet either.
+    private func geometry(_ item: EditorState.OverlayItem,
+                          in media: CGRect) -> OverlayRenderGeometry.Layout? {
+        guard !editor.isRebuilding,
+              let sourceExtent = editor.overlaySourceExtents[item.id] else { return nil }
+        let localTime = max(0, editor.currentTime - item.timelineOffset)
+        let resolved = OverlayRenderGeometry.resolve(
+            placement(item),
+            textAnimation: item.text == nil ? nil : item.textAnimation,
+            localTime: localTime,
+            duration: item.duration)
+        return OverlayRenderGeometry.layout(sourceExtent: sourceExtent,
+                                            placement: resolved.placement,
+                                            canvasRect: media)
     }
 
     // MARK: The handle
@@ -4206,67 +4191,88 @@ private struct PreviewOverlayEditor: View {
     /// sticker can easily be smaller than the gap between them — so its grab
     /// zone never falls below 88 pt. Only one layer is selected at a time, so
     /// the reach stays predictable.
-    private func grabSlop(_ rect: CGRect, selected: Bool) -> CGFloat {
-        guard selected else { return 11 }
-        return max(11, (88 - min(rect.width, rect.height)) / 2)
+    private struct LayerHitShape: Shape {
+        let horizontalInset: CGFloat
+        let verticalInset: CGFloat
+
+        func path(in rect: CGRect) -> Path {
+            Path(rect.insetBy(dx: -horizontalInset, dy: -verticalInset))
+        }
+    }
+
+    private func grabInsets(_ rect: CGRect, selected: Bool) -> CGSize {
+        guard selected else { return CGSize(width: 11, height: 11) }
+        return CGSize(width: max(11, (88 - rect.width) / 2),
+                      height: max(11, (88 - rect.height) / 2))
     }
 
     @ViewBuilder
     private func layerHandle(_ item: EditorState.OverlayItem, in media: CGRect) -> some View {
-        let rect = box(item, in: media)
-        let selected = selectedOverlayID == item.id
-        Color.clear
-            .frame(width: max(1, rect.width), height: max(1, rect.height))
-            .overlay {
-                // A stroke means selection and nothing else — a thin white
-                // outline, no handles pretending to be resize grips.
-                if selected {
-                    Rectangle().strokeBorder(Color.white, lineWidth: 1)
-                        .shadow(color: .black.opacity(0.5), radius: 2)
+        if let geometry = geometry(item, in: media) {
+            let rect = geometry.frame
+            let selected = selectedOverlayID == item.id
+            let insets = grabInsets(rect, selected: selected)
+            Color.clear
+                .frame(width: max(1, rect.width), height: max(1, rect.height))
+                .overlay {
+                    // A stroke means selection and nothing else — a thin white
+                    // outline, no handles pretending to be resize grips.
+                    if selected {
+                        Rectangle().strokeBorder(Color.white, lineWidth: 1)
+                            .shadow(color: .black.opacity(0.5), radius: 2)
+                    }
                 }
-            }
-            // A thin caption or a small sticker is a poor target: grow the
-            // touch area past the drawn box without moving a pixel. Set BEFORE
-            // the rotation so the target turns with the layer.
-            .contentShape(Rectangle().inset(by: -grabSlop(rect, selected: selected)))
-            .rotationEffect(.degrees(placement(item).rotationDegrees))
-            .position(x: rect.midX, y: rect.midY)
-            .gesture(dragGesture(item, media: media))
-            .simultaneousGesture(scaleGesture(item))
-            .simultaneousGesture(rotateGesture(item))
+                // The shape precedes rotation, so the hit target rotates with
+                // the pixels. X/Y grow independently: a 200x20 caption becomes
+                // 222x88, not the old accidental 268x88 target.
+                .contentShape(LayerHitShape(horizontalInset: insets.width,
+                                            verticalInset: insets.height))
+                .rotationEffect(.degrees(geometry.rotationDegrees))
+                .position(x: rect.midX, y: rect.midY)
+                .gesture(transformGesture(item, media: media))
+        }
     }
 
-    private func dragGesture(_ item: EditorState.OverlayItem, media: CGRect) -> some Gesture {
+    /// One composed recogniser produces one end event for drag + pinch + twist.
+    /// Separate `.simultaneousGesture` modifiers can end on different ticks;
+    /// the first used to clear the baseline and a trailing callback could open
+    /// a second undo transaction.
+    private func transformGesture(_ item: EditorState.OverlayItem,
+                                  media: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .simultaneously(with: MagnifyGesture())
+            .simultaneously(with: RotateGesture())
             .onChanged { value in
                 begin(item)
-                guard let start = gestureStart, media.width > 1, media.height > 1 else { return }
-                // Unit coords are relative to the VIDEO frame, so the finger's
-                // travel is divided by the fitted picture, not the container.
-                editor.setOverlayCenter(id: item.id, CGPoint(
-                    x: min(max(0, start.center.x + value.translation.width / media.width), 1),
-                    y: min(max(0, start.center.y + value.translation.height / media.height), 1)))
-            }
-            .onEnded { _ in commit(item.id) }
-    }
+                guard var start = gestureStart, start.before.id == item.id,
+                      media.width > 1, media.height > 1 else { return }
 
-    private func scaleGesture(_ item: EditorState.OverlayItem) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                begin(item)
-                guard let start = gestureStart else { return }
-                editor.setOverlaySize(id: item.id, start.sizeFraction * value.magnification)
-            }
-            .onEnded { _ in commit(item.id) }
-    }
+                // A component becomes nil after its recogniser ends while a
+                // sibling may still be active. Retain its last delta so a
+                // continuing drag cannot reset an already-finished twist.
+                if let drag = value.first?.first { start.translation = drag.translation }
+                if let magnify = value.first?.second { start.magnification = magnify.magnification }
+                if let rotate = value.second { start.rotationDegrees = rotate.rotation.degrees }
 
-    private func rotateGesture(_ item: EditorState.OverlayItem) -> some Gesture {
-        RotateGesture()
-            .onChanged { value in
-                begin(item)
-                guard let start = gestureStart else { return }
-                editor.setOverlayRotation(id: item.id,
-                                          start.rotationDegrees + value.rotation.degrees)
+                var next = start.placement
+                next.center = CGPoint(
+                    x: min(max(0, start.placement.center.x
+                        + start.translation.width / media.width), 1),
+                    y: min(max(0, start.placement.center.y
+                        + start.translation.height / media.height), 1))
+                next.sizeFraction = min(max(0.25,
+                    start.placement.sizeFraction * start.magnification), 1)
+                next.rotationDegrees = min(max(-180,
+                    start.placement.rotationDegrees + start.rotationDegrees), 180)
+
+                let moved = next.center != start.placement.center
+                    || next.sizeFraction != start.placement.sizeFraction
+                    || next.rotationDegrees != start.placement.rotationDegrees
+                if moved || start.hasMutated {
+                    start.hasMutated = true
+                    editor.setOverlayTransform(id: item.id, next)
+                }
+                gestureStart = start
             }
             .onEnded { _ in commit(item.id) }
     }
@@ -4280,20 +4286,19 @@ private struct PreviewOverlayEditor: View {
         // Nil, not "a different layer": a second finger landing on a NEIGHBOUR
         // mid-drag must not re-baseline the gesture that is already running.
         guard gestureStart == nil else { return }
-        gestureStart = item
+        gestureStart = GestureStart(before: item, placement: placement(item))
         if selectedOverlayID != item.id {
             selectedOverlayID = item.id
             LumaHaptics.shared.tap()
         }
     }
 
-    /// One snapshot per gesture. Drag, pinch and rotate all end at roughly the
-    /// same moment; the first to land clears the baseline and the rest no-op,
-    /// so a combined gesture is still a single undo step.
+    /// One snapshot per composed drag + pinch + rotate gesture. A tap takes a
+    /// baseline for selection but writes no model value, so commit is a no-op.
     private func commit(_ id: UUID) {
-        guard let start = gestureStart, start.id == id else { return }
+        guard let start = gestureStart, start.before.id == id else { return }
         gestureStart = nil
-        editor.commitOverlayGesture(id: id, before: start)
+        editor.commitOverlayGesture(id: id, before: start.before)
     }
 }
 

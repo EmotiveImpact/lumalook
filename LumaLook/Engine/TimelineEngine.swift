@@ -455,6 +455,9 @@ final class EditorState: ObservableObject {
         let clipAudioTrack: AVMutableCompositionTrack?
         let musicAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)]
         let overlayAudioTracks: [(id: UUID, track: AVMutableCompositionTrack)]
+        /// Exact source rasters used by `OverlayRenderGeometry`. Published only
+        /// with the player item built from the same overlay specs.
+        let overlaySourceExtents: [UUID: CGRect]
         let duration: Double
     }
 
@@ -479,6 +482,9 @@ final class EditorState: ObservableObject {
     @Published var selectedClipID: UUID?
     @Published private(set) var audioTracks: [MusicTrack] = []
     @Published private(set) var overlays: [OverlayItem] = []
+    /// Geometry metadata from the currently published video composition.
+    /// The preview never guesses from thumbnails while a rebuild is in flight.
+    @Published private(set) var overlaySourceExtents: [UUID: CGRect] = [:]
     /// F6 — timed full-frame effects (glitch/VHS/light leak/...).
     @Published private(set) var effectLayers: [EffectLayer] = []
     /// F7 — timed particle layers (dust/rain/snow/sparkle/confetti).
@@ -880,6 +886,7 @@ final class EditorState: ObservableObject {
         selectedClipID = nil
         audioTracks = []
         overlays = []
+        overlaySourceExtents = [:]
         undoStack.removeAll()
         redoStack.removeAll()
         updateHistoryFlags()
@@ -2392,9 +2399,26 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// Atomic direct-manipulation update. A keyframe stores the whole
+    /// placement, so drag/pinch/rotate must write the interpolated opacity and
+    /// untouched transform components together; calling the three scalar
+    /// setters independently would make a drag snap size/rotation back to the
+    /// overlay's base fields and would seek the paused player three times.
+    func setOverlayTransform(id: UUID, _ placement: OverlayLayout.Placement) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        overlays[i].center = CGPoint(x: min(max(0, placement.center.x), 1),
+                                     y: min(max(0, placement.center.y), 1))
+        overlays[i].sizeFraction = min(max(0.25, placement.sizeFraction), 1)
+        overlays[i].rotationDegrees = min(max(-180, placement.rotationDegrees), 180)
+        overlays[i].opacity = min(max(0, placement.opacity), 1)
+        overlayKeyframeAutoUpsert(index: i)
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
     /// ONE undo entry for a whole direct-manipulation gesture on the preview.
     ///
-    /// Dragging, pinching and twisting a layer write through the setters above,
+    /// Dragging, pinching and twisting a layer write through the atomic setter,
     /// which deliberately do NOT snapshot — they run per frame and would bury
     /// the undo stack. `before` is the overlay as it stood when the finger went
     /// down: it is put back just long enough for the snapshot to capture it,
@@ -2406,7 +2430,7 @@ final class EditorState: ObservableObject {
         guard after.center != before.center
                 || after.sizeFraction != before.sizeFraction
                 || after.rotationDegrees != before.rotationDegrees
-                || after.keyframes.count != before.keyframes.count else { return }
+                || after.keyframes != before.keyframes else { return }
         overlays[i] = before
         pushUndoSnapshot()
         overlays[i] = after
@@ -2831,6 +2855,7 @@ final class EditorState: ObservableObject {
             currentTime = 0
             isPlaying = false
             lastBuiltTracks = (nil, [], [])
+            overlaySourceExtents = [:]
             return
         }
 
@@ -2849,6 +2874,7 @@ final class EditorState: ObservableObject {
         item.audioMix = built.audioMix
         item.audioTimePitchAlgorithm = .spectral
         lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks, built.overlayAudioTracks)
+        overlaySourceExtents = built.overlaySourceExtents
 
         let player = self.player ?? AVPlayer()
         player.replaceCurrentItem(with: item)
@@ -3118,16 +3144,20 @@ final class EditorState: ObservableObject {
                                                 trackID: kCMPersistentTrackID_Invalid,
                                                 imageURL: nil,
                                                 transform: .identity,
+                                                sourceExtent: OverlayRenderGeometry.shapeSourceExtent,
                                                 start: start, end: start + playable,
                                                 shape: shape,
                                                 lane: overlay.lane))
                 continue
             }
             if let text = overlay.text {
+                guard let raster = TextRasterizer.image(text, style: overlay.textSpec),
+                      let extent = OverlayRenderGeometry.sourceExtent(raster.extent) else { continue }
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: kCMPersistentTrackID_Invalid,
                                                 imageURL: nil,
                                                 transform: .identity,
+                                                sourceExtent: extent,
                                                 start: start, end: start + playable,
                                                 text: text,
                                                 textSpec: overlay.textSpec,
@@ -3136,10 +3166,14 @@ final class EditorState: ObservableObject {
                 continue
             }
             if overlay.isImage {
+                guard let raster = CIImage(contentsOf: overlay.url,
+                                           options: [.applyOrientationProperty: true]),
+                      let extent = OverlayRenderGeometry.sourceExtent(raster.extent) else { continue }
                 overlaySpecs.append(OverlaySpec(id: overlay.id,
                                                 trackID: kCMPersistentTrackID_Invalid,
                                                 imageURL: overlay.url,
                                                 transform: .identity,
+                                                sourceExtent: extent,
                                                 start: start, end: start + playable,
                                                 lane: overlay.lane))
                 continue
@@ -3149,6 +3183,9 @@ final class EditorState: ObservableObject {
             guard let sourceVideo = try? await overlayAsset.loadTracks(withMediaType: .video).first
             else { continue }
             let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
+            let naturalSize = (try? await sourceVideo.load(.naturalSize)) ?? .zero
+            guard let sourceExtent = OverlayRenderGeometry.sourceExtent(
+                CGRect(origin: .zero, size: naturalSize), applying: transform) else { continue }
             if overlayLaneTracks[overlay.lane] == nil,
                let t = composition.addMutableTrack(withMediaType: .video,
                                                    preferredTrackID: kCMPersistentTrackID_Invalid) {
@@ -3184,6 +3221,7 @@ final class EditorState: ObservableObject {
                                                 trackID: track.trackID,
                                                 imageURL: nil,
                                                 transform: transform,
+                                                sourceExtent: sourceExtent,
                                                 start: start, end: start + playable,
                                                 lane: overlay.lane))
                 // Overlay AUDIO rides its own lazy track (was silently
@@ -3373,6 +3411,8 @@ final class EditorState: ObservableObject {
                              clipAudioTrack: audioTrack,
                              musicAudioTracks: musicTracks,
                              overlayAudioTracks: overlayAudioTracks,
+                             overlaySourceExtents: Dictionary(uniqueKeysWithValues:
+                                overlaySpecs.map { ($0.id, $0.sourceExtent) }),
                              duration: duration)
     }
 

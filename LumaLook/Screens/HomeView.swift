@@ -347,9 +347,9 @@ enum HomeMetrics {
     static let headerToRail: CGFloat = 12
 
     /// The peek rail. Tall enough that a half card is still a legible image.
-    static let exploreCard = CardSize(width: 124, height: 164, radius: 14)
+    static let exploreCard = CardSize(width: 104, height: 138, radius: 13)
     /// THE rail card. Every rail on Home uses this one metric.
-    static let railCard = CardSize(width: 124, height: 164, radius: 14)
+    static let railCard = CardSize(width: 104, height: 138, radius: 13)
     /// The second shelf, fully below the fold, is a normal browsing size.
     static let shelfCard = CardSize(width: 124, height: 150, radius: 15)
 
@@ -516,9 +516,9 @@ private struct RecentsRail: View {
 private enum Poster {
     // Matches HomeMetrics.railCard exactly: every rail on Home shares one
     // card metric, so the page reads as designed rather than assembled.
-    static let width: CGFloat = 124
-    static let height: CGFloat = 164
-    static let radius: CGFloat = 14
+    static let width: CGFloat = 104
+    static let height: CGFloat = 138
+    static let radius: CGFloat = 13
 
     static func duration(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))

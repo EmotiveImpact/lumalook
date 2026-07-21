@@ -166,6 +166,95 @@ final class OverlayLayout: @unchecked Sendable {
     }
 }
 
+/// Pure overlay geometry shared by the compositor and the preview editor.
+///
+/// `sourceExtent` is the exact, post-orientation raster extent recorded while
+/// the composition is built. `canvasRect` may be the render canvas (pixels) or
+/// AVKit's aspect-fitted preview rect (points); because placement is expressed
+/// in unit-canvas coordinates the same function is correct for both.
+struct OverlayRenderGeometry {
+    struct Layout {
+        /// The unrotated layer frame in y-down canvas coordinates.
+        let frame: CGRect
+        /// Uniform source-raster scale needed to reach `frame`.
+        let sourceScale: CGFloat
+        let rotationDegrees: Double
+    }
+
+    struct ResolvedPlacement {
+        var placement: OverlayLayout.Placement
+        var reveal: Double
+    }
+
+    static let shapeSourceExtent = CGRect(x: 0, y: 0, width: 512, height: 512)
+
+    /// Normalises an extent after an affine source transform (video
+    /// orientation, for example). Translation is deliberately discarded: the
+    /// compositor re-origins transformed sources before laying them out.
+    static func sourceExtent(_ extent: CGRect,
+                             applying transform: CGAffineTransform = .identity) -> CGRect? {
+        let transformed = extent.applying(transform).standardized
+        guard transformed.width.isFinite, transformed.height.isFinite,
+              transformed.width > 0.001, transformed.height > 0.001 else { return nil }
+        return CGRect(origin: .zero, size: transformed.size)
+    }
+
+    /// Applies the compositor's time-dependent text transform to a raw
+    /// placement. Non-text layers pass `nil` and remain unchanged.
+    static func resolve(_ placement: OverlayLayout.Placement,
+                        textAnimation rawAnimation: String?,
+                        localTime: Double,
+                        duration: Double) -> ResolvedPlacement {
+        guard let rawAnimation,
+              let preset = TextAnimation(rawValue: rawAnimation), preset != .none else {
+            return ResolvedPlacement(placement: placement, reveal: 1)
+        }
+        let state = TextAnimator.state(preset, localTime: localTime, duration: duration)
+        var resolved = placement
+        resolved.opacity *= state.opacity
+        resolved.sizeFraction *= state.scale
+        resolved.center.x += state.offset.x
+        resolved.center.y += state.offset.y
+        return ResolvedPlacement(placement: resolved, reveal: state.reveal)
+    }
+
+    static func layout(sourceExtent: CGRect,
+                       placement: OverlayLayout.Placement,
+                       canvasRect: CGRect) -> Layout? {
+        guard let source = OverlayRenderGeometry.sourceExtent(sourceExtent),
+              canvasRect.width.isFinite, canvasRect.height.isFinite,
+              canvasRect.width > 0.001, canvasRect.height > 0.001 else { return nil }
+        let fraction = min(max(placement.sizeFraction, 0.05), 1.0)
+        let width = canvasRect.width * CGFloat(fraction)
+        let scale = width / source.width
+        let height = source.height * scale
+        let center = CGPoint(
+            x: canvasRect.minX + CGFloat(placement.center.x) * canvasRect.width,
+            y: canvasRect.minY + CGFloat(placement.center.y) * canvasRect.height)
+        return Layout(
+            frame: CGRect(x: center.x - width / 2, y: center.y - height / 2,
+                          width: width, height: height),
+            sourceScale: scale,
+            rotationDegrees: placement.rotationDegrees)
+    }
+
+    /// Matches `AVPlayerLayer.videoGravity = .resizeAspect` / VideoPlayer's
+    /// fitted presentation of the video-composition canvas.
+    static func aspectFitRect(contentSize: CGSize, in bounds: CGRect) -> CGRect {
+        guard contentSize.width.isFinite, contentSize.height.isFinite,
+              bounds.width.isFinite, bounds.height.isFinite,
+              contentSize.width > 0.001, contentSize.height > 0.001,
+              bounds.width > 0.001, bounds.height > 0.001 else { return bounds }
+        let scale = min(bounds.width / contentSize.width,
+                        bounds.height / contentSize.height)
+        let fitted = CGSize(width: contentSize.width * scale,
+                            height: contentSize.height * scale)
+        return CGRect(x: bounds.midX - fitted.width / 2,
+                      y: bounds.midY - fitted.height / 2,
+                      width: fitted.width, height: fitted.height)
+    }
+}
+
 /// Audio-reactive visual style modulated by a per-frame level envelope.
 enum AudioReactiveStyle: String, Codable, CaseIterable {
     case pulse, glow, shake
@@ -268,6 +357,9 @@ struct OverlaySpec {
     let imageURL: URL?
     /// Orientation normalisation for video overlays.
     let transform: CGAffineTransform
+    /// Exact post-orientation raster extent. This is captured from the same
+    /// source used by the compositor, never inferred from a UI thumbnail.
+    let sourceExtent: CGRect
     let start: Double
     let end: Double
     /// Text layer (T6): rendered by the compositor's text cache; never graded.
@@ -624,21 +716,15 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             guard var placement = instruction.overlayLayout.placement(
                 for: spec.id, at: seconds - spec.start) else { continue }
 
-            // F3: fold the text animation INTO the placement, so scale/offset/
-            // opacity ride the existing sizing, centring and fade steps rather
-            // than duplicating them. `reveal` is handled at rasterise time.
-            var reveal = 1.0
-            if let raw = spec.textAnimation,
-               let preset = TextAnimation(rawValue: raw), preset != .none {
-                let st = TextAnimator.state(preset,
-                                            localTime: seconds - spec.start,
-                                            duration: spec.end - spec.start)
-                placement.opacity *= st.opacity
-                placement.sizeFraction *= st.scale
-                placement.center.x += st.offset.x
-                placement.center.y += st.offset.y
-                reveal = st.reveal
-            }
+            // F3: the preview editor calls this same resolver, so an animated
+            // title's visible scale/offset and its touch geometry cannot drift.
+            let resolved = OverlayRenderGeometry.resolve(
+                placement,
+                textAnimation: spec.textAnimation,
+                localTime: seconds - spec.start,
+                duration: spec.end - spec.start)
+            placement = resolved.placement
+            let reveal = resolved.reveal
 
             // Live effect stack for this overlay (blend/chroma/mask/adjust/border).
             let fx = instruction.overlayEffects.effects(for: spec.id) ?? OverlayEffects()
@@ -693,6 +779,14 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             }
             guard var overlay = overlayImage, overlay.extent.width > 0 else { continue }
 
+            // Make the recorded source extent authoritative even for animated
+            // formats whose decoded frames may expose smaller sub-rects. All
+            // ordinary text/shape/still/video sources already match this plate,
+            // so this is an extent normalisation rather than a visual change.
+            let sourcePlate = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                .cropped(to: spec.sourceExtent)
+            overlay = overlay.composited(over: sourcePlate).cropped(to: spec.sourceExtent)
+
             // ---- Overlay effect hook chain ----
             // Order: chroma (raw) → grade → adjust → scale → mask → border →
             //        rotate/position/opacity → blend composite.
@@ -718,11 +812,14 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 overlay = pipeline.applyOverlayAdjustments(adjust, to: overlay)
             }
 
-            // Scale so the overlay's width is `sizeFraction` of the canvas.
-            let fraction = min(max(placement.sizeFraction, 0.05), 1.0)
-            let targetWidth = renderSize.width * CGFloat(fraction)
-            let scale = targetWidth / overlay.extent.width
-            overlay = overlay.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            // Scale/position geometry has ONE implementation. `sourceExtent`
+            // was captured from this source during the composition build.
+            guard let geometry = OverlayRenderGeometry.layout(
+                sourceExtent: spec.sourceExtent,
+                placement: placement,
+                canvasRect: renderRect) else { continue }
+            overlay = overlay.transformed(by: CGAffineTransform(
+                scaleX: geometry.sourceScale, y: geometry.sourceScale))
 
             // F5 mask: generated for the SCALED extent so feather widths are in
             // render pixels. Applied before rotation so the alpha rotates with it.
@@ -753,8 +850,8 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             }
 
             // Position: unit center, UI y-down -> CI y-up.
-            let ciCenterX = CGFloat(placement.center.x) * renderSize.width
-            let ciCenterY = (1 - CGFloat(placement.center.y)) * renderSize.height
+            let ciCenterX = geometry.frame.midX
+            let ciCenterY = renderRect.maxY - geometry.frame.midY
             let dx = ciCenterX - overlay.extent.midX
             let dy = ciCenterY - overlay.extent.midY
             overlay = overlay.transformed(by: CGAffineTransform(translationX: dx, y: dy))

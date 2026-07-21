@@ -149,7 +149,11 @@ struct LookBrowserSheet: View {
     /// look change rather than on every keystroke.
     @State private var heroImage: CGImage?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+    /// Square tiles mean the COLUMN COUNT carries the density difference
+    /// between the half-sheet and the full screen, instead of the tile shape.
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: compact ? 4 : 3)
+    }
 
     private var categories: [LookLibraryStore.Category] { LookLibraryStore.Category.allCases }
     private var categoryIndex: Int { categories.firstIndex(of: category) ?? 0 }
@@ -168,15 +172,6 @@ struct LookBrowserSheet: View {
     private var compact: Bool { isSheet && panelHeight > 0 && panelHeight < 470 }
 
     private var rowSpacing: CGFloat { compact ? 8 : 14 }
-
-    /// Thumbnail height that makes two whole rows fit the measured grid, with
-    /// a 14 pt sliver of the third row left under the fade so the grid still
-    /// reads as scrollable. Clamped so it degrades gracefully either way.
-    private var compactThumbHeight: CGFloat {
-        let caption = LookTile.compactCaptionHeight + LookTile.compactSpacing
-        let perRow = (gridHeight - rowSpacing - 14) / 2 - caption
-        return min(96, max(46, perRow.rounded(.down)))
-    }
 
     /// True when this browser is presented as a half-sheet over a live canvas
     /// (grade / camera / editor) rather than hosted full-screen as the Looks tab.
@@ -644,8 +639,7 @@ struct LookBrowserSheet: View {
                  image: thumbs.images[look.thumbKey],
                  selected: isSelected(look),
                  isFavourite: app.library.isFavourite(look.id),
-                 compact: compact,
-                 thumbHeight: compact ? compactThumbHeight : 96) {
+                 compact: compact) {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 select(look, navigate: true)
             }
@@ -672,7 +666,7 @@ struct LookBrowserSheet: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(white: 0.07))
                     .frame(maxWidth: .infinity)
-                    .frame(height: compact ? compactThumbHeight : 96)
+                    .aspectRatio(1, contentMode: .fit)
                     .overlay {
                         Text(context == .camera ? "Off" : "None")
                             .font(.system(size: compact ? 12 : 14, weight: .semibold))
@@ -992,7 +986,6 @@ struct LookTile: View {
     /// Half-sheet variant: shorter thumb, one-line name, no subtitle line —
     /// so a ~340 pt panel can still show two COMPLETE, named rows.
     var compact: Bool = false
-    var thumbHeight: CGFloat = 96
     let action: () -> Void
     var onFavourite: (() -> Void)? = nil
 
@@ -1025,7 +1018,9 @@ struct LookTile: View {
                 VStack(alignment: .leading, spacing: compact ? Self.compactSpacing : 7) {
                 Color.clear
                     .frame(maxWidth: .infinity)
-                    .frame(height: thumbHeight)
+                    // Square, always. Height follows the column width so the
+                    // tile is the same object on every surface.
+                    .aspectRatio(1, contentMode: .fit)
                     .overlay {
                         if let image {
                             Image(decorative: image, scale: 1)

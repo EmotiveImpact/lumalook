@@ -948,7 +948,10 @@ struct FilterPackDetailView: View {
                                     Color(white: 0.12)
                                 }
                             }
-                            .frame(width: 74, height: 92)
+                            // Square: a look tile is the same object here as
+                            // in the camera strip, the grade room and the
+                            // library. Only pack POSTERS are poster-shaped.
+                            .frame(width: 78, height: 78)
                             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                             // clipShape clips pixels but NOT touches — confine
                             // the tile so it cannot steal its neighbour's tap.
