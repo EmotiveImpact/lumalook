@@ -11,7 +11,10 @@ import SwiftUI
 final class CameraController: NSObject, ObservableObject {
     @Published var isRunning = false
     @Published var isRecording = false
+    @Published private(set) var isPreparingRecording = false
+    @Published private(set) var recordingError: String?
     @Published var permissionDenied = false
+    @Published private(set) var microphoneDenied = false
     @Published var cameraUnavailable = false
     @Published var lastSavedToPhotos = false
     /// The finished recording, kept for the hand-off card (Grade / Edit).
@@ -75,6 +78,10 @@ final class CameraController: NSObject, ObservableObject {
     private var pixelAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var writerStarted = false
     private var wantsRecording = false
+    /// Main-thread intent and media-queue execution are kept separate so the
+    /// delayed session-rotation hop cannot resurrect a cancelled start.
+    private var requestedRecordingID: UUID?
+    private var activeRecordingID: UUID? // mediaQueue only
     private var outputURL: URL?
     /// Output geometry for the CURRENT take (from spec at record start).
     private var recordSize = CGSize(width: 1080, height: 1920)
@@ -122,15 +129,33 @@ final class CameraController: NSObject, ObservableObject {
         #endif
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            startSession()
+            requestAudioAndStart()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
-                    granted ? self?.startSession() : (self?.permissionDenied = true)
+                    granted ? self?.requestAudioAndStart() : (self?.permissionDenied = true)
                 }
             }
         default:
             permissionDenied = true
+        }
+    }
+
+    private func requestAudioAndStart() {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            microphoneDenied = false
+            startSession()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.microphoneDenied = !granted
+                    self?.startSession()
+                }
+            }
+        default:
+            microphoneDenied = true
+            startSession()
         }
     }
 
@@ -171,7 +196,8 @@ final class CameraController: NSObject, ObservableObject {
         applyFormat(spec, on: device)
         configureZoomBaseline(for: device)
 
-        if let mic = AVCaptureDevice.default(for: .audio),
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+           let mic = AVCaptureDevice.default(for: .audio),
            let audioInput = try? AVCaptureDeviceInput(device: mic),
            session.canAddInput(audioInput) {
             session.addInput(audioInput)
@@ -207,7 +233,7 @@ final class CameraController: NSObject, ObservableObject {
     /// User picked a new format. Blocked mid-recording (writer geometry must
     /// stay stable for the take). Applies live to the running session.
     func setSpec(_ newSpec: CameraSpec) {
-        guard !isRecording else { return }
+        guard !isRecording, !isPreparingRecording else { return }
         DispatchQueue.main.async { self.spec = newSpec }
         newSpec.save()
         sessionQueue.async { [weak self] in
@@ -497,6 +523,7 @@ final class CameraController: NSObject, ObservableObject {
                                                        for: .video, position: target),
                   let input = try? AVCaptureDeviceInput(device: device) else { return }
             self.session.beginConfiguration()
+            var didSwitch = false
             if let current = self.activeVideoInput {
                 self.session.removeInput(current)
             }
@@ -504,6 +531,9 @@ final class CameraController: NSObject, ObservableObject {
                 self.session.addInput(input)
                 self.activeVideoDevice = device
                 self.activeVideoInput = input
+                self.applyFormat(self.spec, on: device)
+                self.configureZoomBaseline(for: device)
+                didSwitch = true
             } else if let current = self.activeVideoInput {
                 self.session.addInput(current)   // roll back
             }
@@ -513,14 +543,17 @@ final class CameraController: NSObject, ObservableObject {
                 connection.isVideoMirrored = target == .front
             }
             self.session.commitConfiguration()
+            guard didSwitch else { return }
             DispatchQueue.main.async {
                 self.cameraPosition = target
-                self.zoomFactor = 1
             }
         }
     }
 
     func stopSession() {
+        if isRecording || isPreparingRecording {
+            stopRecording()
+        }
         #if DEBUG
         stubTimer?.cancel()
         stubTimer = nil
@@ -607,13 +640,19 @@ final class CameraController: NSObject, ObservableObject {
     // MARK: - Recording (baked-in look)
 
     func toggleRecording() {
-        isRecording ? stopRecording() : startRecording()
+        isRecording || isPreparingRecording ? stopRecording() : startRecording()
     }
 
     func startRecording() {
-        guard isRunning else { return }
+        guard isRunning, !isRecording, !isPreparingRecording else { return }
+        let requestID = UUID()
         lastSavedToPhotos = false
-        isRecording = true
+        recordingError = nil
+        isPreparingRecording = true
+        requestedRecordingID = requestID
+        mediaQueue.async { [weak self] in
+            self?.activeRecordingID = requestID
+        }
         // C4 — commit the take's orientation NOW: rotate the capture
         // connection so buffers arrive upright for how the phone is held,
         // and let beginWriter size the file to match. Mid-take rotation
@@ -628,16 +667,20 @@ final class CameraController: NSObject, ObservableObject {
                 }
             }
             self.mediaQueue.async {
+                guard self.activeRecordingID == requestID else { return }
                 self.recordLandscape = landscape
-                self.beginWriter()
+                self.beginWriter(requestID: requestID)
             }
         }
         print("[LUMA] REC start orientation=\(landscape ? "landscape" : "portrait")")
     }
 
     func stopRecording() {
+        requestedRecordingID = nil
+        isPreparingRecording = false
         isRecording = false
         mediaQueue.async { [weak self] in
+            self?.activeRecordingID = nil
             self?.finishWriter()
         }
         // C4 — back to portrait-upright buffers for the viewfinder.
@@ -650,10 +693,17 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     /// mediaQueue only.
-    private func beginWriter() {
+    private func beginWriter(requestID: UUID) {
+        guard activeRecordingID == requestID else { return }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("LumaLook_Live_\(UUID().uuidString).mov")
-        guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
+        let writer: AVAssetWriter
+        do {
+            writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        } catch {
+            failRecording(requestID: requestID, message: "Couldn’t create the recording: \(error.localizedDescription)")
+            return
+        }
 
         // C3/C4: geometry + codec follow the user's spec, captured once per
         // take so a mid-take spec change can never tear frames.
@@ -685,9 +735,21 @@ final class CameraController: NSObject, ObservableObject {
         let audio = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
         audio.expectsMediaDataInRealTime = true
 
-        if writer.canAdd(video) { writer.add(video) }
+        guard writer.canAdd(video) else {
+            failRecording(requestID: requestID, message: "This capture format can’t be recorded on this device.")
+            return
+        }
+        writer.add(video)
         if writer.canAdd(audio) { writer.add(audio) }
-        guard writer.startWriting() else { return }
+        guard writer.startWriting() else {
+            failRecording(requestID: requestID,
+                          message: writer.error?.localizedDescription ?? "The recording could not be started.")
+            return
+        }
+        guard activeRecordingID == requestID else {
+            writer.cancelWriting()
+            return
+        }
 
         self.writer = writer
         self.writerVideo = video
@@ -696,11 +758,32 @@ final class CameraController: NSObject, ObservableObject {
         self.writerStarted = false
         self.outputURL = url
         self.wantsRecording = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.requestedRecordingID == requestID else { return }
+            self.isPreparingRecording = false
+            self.isRecording = true
+        }
+    }
+
+    /// mediaQueue only. Clears a failed start and exposes a useful message to UI.
+    private func failRecording(requestID: UUID, message: String) {
+        guard activeRecordingID == requestID else { return }
+        activeRecordingID = nil
+        wantsRecording = false
+        cleanupWriter()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.requestedRecordingID == requestID else { return }
+            self.requestedRecordingID = nil
+            self.isPreparingRecording = false
+            self.isRecording = false
+            self.recordingError = message
+        }
     }
 
     /// mediaQueue only.
     private func finishWriter() {
         wantsRecording = false
+        activeRecordingID = nil
         guard let writer, writer.status == .writing, let url = outputURL else {
             cleanupWriter()
             return

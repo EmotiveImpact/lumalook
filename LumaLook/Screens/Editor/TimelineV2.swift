@@ -1127,8 +1127,8 @@ private struct OverlayBar: View {
                     dragTranslation = t
                 }
                 .onEnded { value in
-                    if case .second(true, let drag) = value {
-                        commitDrag(translation: clampTranslation(drag?.translation.width ?? 0))
+                    if case .second(true, _) = value {
+                        commitDrag(translation: dragTranslation)
                     }
                     isDraggingBar = false
                     dragTranslation = 0
@@ -1307,9 +1307,8 @@ struct MusicLane: View {
                     dragTranslation = t
                 }
                 .onEnded { value in
-                    if case .second(true, let drag) = value {
-                        let translation = clampTranslation(drag?.translation.width ?? 0, music: music)
-                        commitDrag(translation: translation, music: music)
+                    if case .second(true, _) = value {
+                        commitDrag(translation: dragTranslation, music: music)
                     }
                     isDraggingBar = false
                     dragTranslation = 0

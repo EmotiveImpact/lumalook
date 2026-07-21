@@ -134,7 +134,8 @@ struct LookBrowserSheet: View {
     @State private var search = ""
     @State private var renameLUT: LUTFile?
     @State private var renameText = ""
-    @State private var stashedIntensity: Double?
+    @State private var noneStashedIntensity: Double?
+    @State private var compareStashedIntensity: Double?
     /// Height the presentation actually gave us (detent height minus safe
     /// area), measured rather than assumed — the same view is hosted at
     /// ~340 pt, ~620 pt and full screen.
@@ -553,7 +554,12 @@ struct LookBrowserSheet: View {
 
     @ViewBuilder
     private var collectionsBody: some View {
-        let groups = app.library.collectionGroups
+        let matchingIDs = Set(visibleLooks.map(\.id))
+        let groups = app.library.collectionGroups.compactMap { group in
+            guard !search.isEmpty else { return group }
+            let matches = group.looks.filter { matchingIDs.contains($0.id) }
+            return matches.isEmpty ? nil : (collection: group.collection, looks: matches)
+        }
         VStack(alignment: .leading, spacing: compact ? 14 : 18) {
             // Manage only from the full-screen Looks tab: from a sheet a push
             // would land behind the sheet, which would be a dead tap.
@@ -711,10 +717,10 @@ struct LookBrowserSheet: View {
             return
         }
         if app.settings.intensity == 0 {
-            app.settings.intensity = stashedIntensity ?? 75
-            stashedIntensity = nil
+            app.settings.intensity = noneStashedIntensity ?? 75
+            noneStashedIntensity = nil
         } else {
-            stashedIntensity = app.settings.intensity
+            noneStashedIntensity = app.settings.intensity
             app.settings.intensity = 0
         }
     }
@@ -827,10 +833,11 @@ struct LookBrowserSheet: View {
         }
     }
 
-    /// Press-and-hold drops intensity to 0 and shows the ungraded frame, using
-    /// the same stash/restore the None tile uses; releasing restores it.
+    /// Press-and-hold drops intensity to 0 and shows the ungraded frame. Its
+    /// stash is deliberately separate from None's persistent restore value.
     private func compareButton(_ intensity: Binding<Double>) -> some View {
-        let comparing = stashedIntensity != nil && intensity.wrappedValue == 0
+        let comparing = compareStashedIntensity != nil
+        let canCompare = intensity.wrappedValue > 0 || comparing
         return Text("Compare")
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(comparing ? .black : .white.opacity(0.8))
@@ -843,19 +850,22 @@ struct LookBrowserSheet: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        guard stashedIntensity == nil else { return }
-                        stashedIntensity = intensity.wrappedValue
+                        guard canCompare, compareStashedIntensity == nil else { return }
+                        compareStashedIntensity = intensity.wrappedValue
                         intensity.wrappedValue = 0
                         LumaHaptics.shared.tap()
                     }
                     .onEnded { _ in
-                        guard let stash = stashedIntensity else { return }
+                        guard let stash = compareStashedIntensity else { return }
                         intensity.wrappedValue = stash
-                        stashedIntensity = nil
+                        compareStashedIntensity = nil
                         LumaHaptics.shared.tap()
                     }
             )
+            .allowsHitTesting(canCompare)
+            .opacity(canCompare ? 1 : 0.45)
             .accessibilityLabel("Compare, hold")
+            .accessibilityHint(canCompare ? "Shows the original while held" : "Unavailable while the original is selected")
             .animation(.spring(response: 0.25, dampingFraction: 0.85), value: comparing)
     }
 
@@ -941,7 +951,9 @@ struct LookBrowserSheet: View {
             switch look.source {
             case .builtIn(let p): return g.lutID == nil && g.baseLookName == p.name
             case .lut(let f):     return g.lutID == f.id
-            case .saved(let s):   return g.baseLookName == s.baseLookName && g.lutID == s.lutID
+            case .saved(let s):   return g.baseLookName == s.baseLookName
+                                        && g.lutID == s.lutID
+                                        && g.settings == s.settings
             }
         }
         return app.isCurrent(look)
@@ -1008,8 +1020,9 @@ struct LookTile: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: compact ? Self.compactSpacing : 7) {
+        ZStack(alignment: .topTrailing) {
+            Button(action: action) {
+                VStack(alignment: .leading, spacing: compact ? Self.compactSpacing : 7) {
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: thumbHeight)
@@ -1044,20 +1057,6 @@ struct LookTile: View {
                                 .padding(compact ? 4 : 5)
                         }
                     }
-                    .overlay(alignment: .topTrailing) {
-                        Button {
-                            onFavourite?()
-                        } label: {
-                            Image(systemName: isFavourite ? "star.fill" : "star")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(isFavourite ? .white : .white.opacity(0.6))
-                                .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
-                                .background(.black.opacity(0.45), in: Circle())
-                                .padding(compact ? 3 : 4)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
-                    }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -1080,9 +1079,23 @@ struct LookTile: View {
                     }
                 }
                 .padding(.horizontal, 2)
+                }
+            }
+            .buttonStyle(.lumaPress)
+
+            if let onFavourite {
+                Button(action: onFavourite) {
+                    Image(systemName: isFavourite ? "star.fill" : "star")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(isFavourite ? .white : .white.opacity(0.6))
+                        .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
+                        .background(.black.opacity(0.45), in: Circle())
+                        .padding(compact ? 3 : 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
             }
         }
-        .buttonStyle(.lumaPress)
     }
 }
 

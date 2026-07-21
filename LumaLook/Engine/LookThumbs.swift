@@ -10,6 +10,7 @@ final class LookThumbs: ObservableObject {
     @Published private(set) var images: [String: CGImage] = [:]
     private var renderTask: Task<Void, Never>?
     private var lastStamp = ""
+    private static let stampContext = CIContext(options: [.cacheIntermediates: false])
 
     /// The unified cache key — one scheme for every surface (`LibraryLook.id`,
     /// which is stable across launches, unlike `LookPreset.id`).
@@ -30,16 +31,56 @@ final class LookThumbs: ObservableObject {
         let lutURL: URL?
     }
 
+    /// A small pixel digest makes equal-sized clips distinct, while recipe,
+    /// settings and LUT file metadata invalidate thumbnails when a look is
+    /// edited or its cube is replaced in place.
+    private static func renderStamp(frame: CIImage, isFallback: Bool,
+                                    jobs: [Job]) -> String {
+        var hasher = Hasher()
+        hasher.combine(isFallback)
+        hasher.combine(frame.extent)
+
+        let sampleBounds = CGRect(x: 0, y: 0, width: 8, height: 8)
+        let normalized = frame
+            .transformed(by: CGAffineTransform(
+                translationX: -frame.extent.minX, y: -frame.extent.minY))
+            .transformed(by: CGAffineTransform(
+                scaleX: sampleBounds.width / max(frame.extent.width, 1),
+                y: sampleBounds.height / max(frame.extent.height, 1)))
+        var pixels = [UInt8](repeating: 0, count: 8 * 8 * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            Self.stampContext.render(normalized, toBitmap: baseAddress,
+                                     rowBytes: 8 * 4, bounds: sampleBounds,
+                                     format: .RGBA8,
+                                     colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        }
+        pixels.withUnsafeBytes { hasher.combine(bytes: $0) }
+
+        let encoder = JSONEncoder()
+        for job in jobs {
+            hasher.combine(job.key)
+            hasher.combine(job.recipe)
+            if let settings = try? encoder.encode(job.settings) {
+                settings.withUnsafeBytes { hasher.combine(bytes: $0) }
+            }
+            if let url = job.lutURL {
+                hasher.combine(url.standardizedFileURL.path)
+                if let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) {
+                    hasher.combine(values.fileSize)
+                    hasher.combine(values.contentModificationDate)
+                }
+            }
+        }
+        return String(hasher.finalize())
+    }
+
     /// Renders a thumbnail for EVERY kind of library look through the real
     /// pipeline: builtIn → recipe, lut → cube, saved → recipe + the user's
     /// saved settings + optional cube. `fileURL` resolves a LUT's cube path
     /// (pass `lutRepository.fileURL(for:)`).
     func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL) {
         let frame = source ?? Self.fallbackFrame
-        let stamp = "\(frame.extent)-\(source == nil)-\(library.map(\.id).joined())"
-        guard stamp != lastStamp else { return }
-        lastStamp = stamp
-
         var fullStrength = LookSettings()
         fullStrength.intensity = 100
         // Saved looks reference their cube by id — resolve against the
@@ -67,7 +108,12 @@ final class LookThumbs: ObservableObject {
             }
         }
 
+        let stamp = Self.renderStamp(frame: frame, isFallback: source == nil, jobs: jobs)
+        guard stamp != lastStamp else { return }
+        lastStamp = stamp
+
         renderTask?.cancel()
+        images = [:]
         renderTask = Task.detached(priority: .userInitiated) { [weak self] in
             let pipeline = LookPipeline.shared
             for job in jobs {
@@ -79,8 +125,12 @@ final class LookThumbs: ObservableObject {
                     guard let parsed = try? pipeline.loadLUT(at: url) else { continue }
                     state.lut = parsed
                 }
-                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220) {
-                    await MainActor.run { self?.images[job.key] = cg }
+                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220),
+                   !Task.isCancelled {
+                    await MainActor.run {
+                        guard self?.lastStamp == stamp else { return }
+                        self?.images[job.key] = cg
+                    }
                 }
             }
         }

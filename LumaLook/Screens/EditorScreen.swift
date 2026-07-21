@@ -3177,16 +3177,16 @@ private struct LDEffectsPanel: View {
                 ForEach(editor.particleLayers) { layer in
                     row(title: ParticleKind(rawValue: layer.kind)?.label ?? layer.kind,
                         offset: layer.timelineOffset,
-                        intensity: Binding(get: { layer.intensity },
-                                           set: { editor.setParticleIntensity(id: layer.id, $0) }),
+                        intensity: layer.intensity,
+                        setIntensity: { editor.setParticleIntensity(id: layer.id, $0) },
                         remove: { editor.removeParticleLayer(id: layer.id) })
                 }
             } else {
                 ForEach(editor.effectLayers) { layer in
                     row(title: EffectKind(rawValue: layer.kind)?.label ?? layer.kind,
                         offset: layer.timelineOffset,
-                        intensity: Binding(get: { layer.intensity },
-                                           set: { editor.setEffectIntensity(id: layer.id, $0) }),
+                        intensity: layer.intensity,
+                        setIntensity: { editor.setEffectIntensity(id: layer.id, $0) },
                         remove: { editor.removeEffectLayer(id: layer.id) })
                 }
             }
@@ -3208,7 +3208,8 @@ private struct LDEffectsPanel: View {
     }
 
     private func row(title: String, offset: Double,
-                     intensity: Binding<Double>, remove: @escaping () -> Void) -> some View {
+                     intensity: Double, setIntensity: @escaping (Double) -> Void,
+                     remove: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(.white)
@@ -3224,7 +3225,8 @@ private struct LDEffectsPanel: View {
                 }
                 .buttonStyle(.lumaPress)
             }
-            LDSlider(label: "Strength", value: intensity, range: 0...1)
+            LDCommitSlider(label: "Strength", initial: intensity, range: 0...1,
+                           commit: setIntensity)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -3254,13 +3256,9 @@ private struct LDCanvasPanel: View {
                     }
                 }
             }
-            // `editor.zoom` is only read inside buildComposition, so assigning
-            // it alone changed nothing on screen — the slider was a placebo. It
-            // commits through setFormat (snapshot + rebuild) when you let go.
-            LDSlider(label: "Canvas zoom",
-                     value: Binding(get: { editor.zoom }, set: { editor.zoom = $0 }),
-                     range: 100...200, readout: { "\(Int($0))%" },
-                     onCommit: { editor.setFormat(editor.format, zoom: editor.zoom) })
+            LDCommitSlider(label: "Canvas zoom", initial: editor.zoom,
+                           range: 100...200, readout: { "\(Int($0))%" },
+                           commit: { editor.setFormat(editor.format, zoom: $0) })
             LDCaption("Frame")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(FramePreset.allCases, id: \.self) { preset in
@@ -3561,10 +3559,9 @@ private struct LDOverlayPanel: View {
         if item.textStrokeHex != nil {
             // Starts at 1, not 0: a zero-width outline under a chip that reads
             // "on" is a control that lies about its own state.
-            LDSlider(label: "Outline width",
-                     value: Binding(get: { max(1, item.textStrokeWidth) },
-                                    set: { editor.setTextDecor(id: id, strokeWidth: $0) }),
-                     range: 1...12, readout: { String(format: "%.1f", $0) })
+            LDCommitSlider(label: "Outline width", initial: max(1, item.textStrokeWidth),
+                           range: 1...12, readout: { String(format: "%.1f", $0) },
+                           commit: { editor.setTextDecor(id: id, strokeWidth: $0) })
         }
 
         LDCaption("Animation")
@@ -4001,8 +3998,15 @@ private struct LDAudioEffects: View {
 
     private var fx: AudioEffectSettings { track.effects }
 
+    @State private var renderTask: Task<Void, Never>?
+
     private func commit(_ s: AudioEffectSettings) {
-        Task { await editor.applyTrackEffects(id: track.id, s) }
+        let precedingTask = renderTask
+        renderTask = Task {
+            await precedingTask?.value
+            guard !Task.isCancelled else { return }
+            await editor.applyTrackEffects(id: track.id, s)
+        }
     }
 
     var body: some View {
@@ -4032,22 +4036,20 @@ private struct LDAudioEffects: View {
             .lumaEdgeFade(leading: 0, trailing: 16)
 
             ForEach(0..<5, id: \.self) { band in
-                LDSlider(label: "\(Self.bandLabels[band]) Hz",
-                         value: Binding(
-                            get: { (fx.eqBandGains?.count == 5 ? fx.eqBandGains![band] : 0) },
-                            set: { v in
-                                var gains = fx.eqBandGains?.count == 5 ? fx.eqBandGains! : [0, 0, 0, 0, 0]
-                                gains[band] = v
-                                var s = fx; s.eqBandGains = gains; s.eqPresetName = nil
-                                commit(s)
-                            }),
-                         range: -12...12, readout: { String(format: "%+.0f dB", $0) })
+                LDCommitSlider(label: "\(Self.bandLabels[band]) Hz",
+                               initial: fx.eqBandGains?.count == 5 ? fx.eqBandGains![band] : 0,
+                               range: -12...12, readout: { String(format: "%+.0f dB", $0) }) { v in
+                    var gains = fx.eqBandGains?.count == 5 ? fx.eqBandGains! : [0, 0, 0, 0, 0]
+                    gains[band] = v
+                    var s = fx; s.eqBandGains = gains; s.eqPresetName = nil
+                    commit(s)
+                }
             }
 
-            LDSlider(label: "Pitch",
-                     value: Binding(get: { fx.pitchSemitones },
-                                    set: { var s = fx; s.pitchSemitones = $0.rounded(); s.voiceEffect = nil; commit(s) }),
-                     range: -12...12, readout: { String(format: "%+.0f st", $0) })
+            LDCommitSlider(label: "Pitch", initial: fx.pitchSemitones,
+                           range: -12...12, readout: { String(format: "%+.0f st", $0) }) {
+                var s = fx; s.pitchSemitones = $0.rounded(); s.voiceEffect = nil; commit(s)
+            }
 
             LDCaption("Voice changer")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
@@ -4073,10 +4075,10 @@ private struct LDAudioEffects: View {
                 }
             }
             if fx.reverbPreset != nil {
-                LDSlider(label: "Wet",
-                         value: Binding(get: { fx.reverbMix },
-                                        set: { var s = fx; s.reverbMix = $0; commit(s) }),
-                         range: 0...100, readout: { "\(Int($0))%" })
+                LDCommitSlider(label: "Wet", initial: fx.reverbMix,
+                               range: 0...100, readout: { "\(Int($0))%" }) {
+                    var s = fx; s.reverbMix = $0; commit(s)
+                }
             }
 
             LDCaption("Loudness")

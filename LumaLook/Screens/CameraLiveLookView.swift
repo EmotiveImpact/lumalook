@@ -138,6 +138,22 @@ struct CameraLiveLookView: View {
         .onDisappear { camera.stopSession() }
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil
+            if recording, panel == .format { panel = .none }
+        }
+        .onChange(of: app.settings) { _, _ in
+            syncCameraLook()
+        }
+        .onChange(of: app.selectedLook.id) { _, _ in
+            syncCameraLook()
+        }
+        .onChange(of: app.selectedLUT?.id) { _, _ in
+            syncCameraLook()
+        }
+        .onChange(of: camera.recordingError) { _, error in
+            if let error { flash(error) }
+        }
+        .onChange(of: camera.microphoneDenied) { _, denied in
+            if denied { flash("Microphone access is off — recordings will be silent") }
         }
         // The controller writes the finished take to the photo library on its
         // own clock, well after the writer closes. Confirm it when it actually
@@ -189,6 +205,10 @@ struct CameraLiveLookView: View {
                       fileURL: { app.lutRepository.fileURL(for: $0) })
     }
 
+    private func syncCameraLook() {
+        camera.lookState = app.lookState
+    }
+
     /// ~5 Hz scope render. The preview frame is ALREADY graded, so the scope
     /// analyses it with a neutral state.
     private func runScopeLoop() async {
@@ -224,8 +244,11 @@ struct CameraLiveLookView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
-                .disabled(camera.isRecording)
-                .opacity(camera.isRecording ? 0.45 : 1)
+                .disabled(camera.isRecording || camera.isPreparingRecording)
+                .opacity(camera.isRecording || camera.isPreparingRecording ? 0.45 : 1)
+                .accessibilityHint(camera.isRecording || camera.isPreparingRecording
+                                   ? "Stop recording to change the capture format"
+                                   : "Change resolution, frame rate, and codec")
 
                 Spacer(minLength: 0)
 
@@ -252,9 +275,11 @@ struct CameraLiveLookView: View {
             if camera.isRecording {
                 // The permitted colour exception: armed means armed.
                 RecordTally()
-                TimelineView(.periodic(from: recordStart ?? Date(), by: 1.0 / 30.0)) { context in
+                TimelineView(.periodic(from: recordStart ?? Date(),
+                                       by: 1.0 / Double(camera.spec.fps))) { context in
                     Text(Timecode.string(
-                        seconds: context.date.timeIntervalSince(recordStart ?? context.date)))
+                        seconds: context.date.timeIntervalSince(recordStart ?? context.date),
+                        fps: Double(camera.spec.fps)))
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white)
@@ -768,9 +793,13 @@ struct CameraLiveLookView: View {
                 }
                 tool("grid", "Grid", on: showGrid) { showGrid.toggle() }
                 tool("level", "Level", on: showLevel) { showLevel.toggle() }
-                tool("rectangle.on.rectangle", "Format", on: panel == .format) {
+                tool("rectangle.on.rectangle", "Format", on: panel == .format,
+                     enabled: !camera.isRecording && !camera.isPreparingRecording) {
                     panel = panel == .format ? .none : .format
                 }
+                .accessibilityHint(camera.isRecording || camera.isPreparingRecording
+                                   ? "Stop recording to change the capture format"
+                                   : "Change resolution, frame rate, and codec")
                 tool("a.circle", "Auto all", on: false) { autoAll() }
             }
             .padding(.horizontal, 16)
@@ -869,6 +898,11 @@ struct CameraLiveLookView: View {
 
     private var formatPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if camera.isRecording || camera.isPreparingRecording {
+                Text("Stop recording to change format.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
             formatRow("Resolution", options: CameraSpec.Resolution.allCases,
                       label: { $0.rawValue }, isOn: { camera.spec.resolution == $0 }) { r in
                 var s = camera.spec; s.resolution = r; camera.setSpec(s)
@@ -882,6 +916,8 @@ struct CameraLiveLookView: View {
                 var s = camera.spec; s.codec = c; camera.setSpec(s)
             }
         }
+        .disabled(camera.isRecording || camera.isPreparingRecording)
+        .opacity(camera.isRecording || camera.isPreparingRecording ? 0.45 : 1)
         .padding(.horizontal, 18)
         .transition(.opacity)
     }

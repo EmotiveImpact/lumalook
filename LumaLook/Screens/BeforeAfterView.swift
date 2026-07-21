@@ -77,6 +77,7 @@ struct BeforeAfterView: View {
     @State private var progress: Double = 0
     @State private var duration: Double = 1
     @State private var timeObserver: Any?
+    @State private var timeObserverPlayer: AVPlayer?
 
     // Export
     @State private var showExportSheet = false
@@ -93,13 +94,22 @@ struct BeforeAfterView: View {
         app.selectedLUT?.displayName ?? app.selectedLook.name
     }
 
+    /// Identifies the selected asset, not merely its dimensions. Two different
+    /// photographs can have identical extents and still require fresh panes.
+    private var mediaIdentity: String {
+        if let url = app.selectedVideoURL { return "video-\(url.absoluteString)" }
+        if let still = app.selectedImage { return "still-\(ObjectIdentifier(still))" }
+        if let player = app.player { return "player-\(ObjectIdentifier(player))" }
+        return "sample"
+    }
+
     /// Everything that changes what the graded pane should look like.
     private var gradeStamp: String {
         "\(app.settings)-\(app.selectedLook.id)-\(app.selectedLUT?.id.uuidString ?? "")"
         + "-\(app.conversionLUT?.id.uuidString ?? "")-\(Int(app.creativeOpacity))"
         // Keyed on the RESOLVED source, so swapping between the hero fallback
         // and real media re-renders the panes instead of holding a stale pair.
-        + "-\(Int(app.conversionOpacity))-\(GradeSourceFrame.current(app).extent.debugDescription)"
+        + "-\(Int(app.conversionOpacity))-\(mediaIdentity)"
     }
 
     var body: some View {
@@ -120,7 +130,7 @@ struct BeforeAfterView: View {
         .onChange(of: mode) { _, new in applyMode(new) }
         .task(id: "\(gradeStamp)|\(mode.rawValue)") {
             guard mode == .side else { return }
-            renderPanes()
+            await renderPanes()
         }
         .onDisappear {
             detachTimeObserver()
@@ -385,7 +395,7 @@ struct BeforeAfterView: View {
     /// Renders both panes from the reference frame. `previewFrame` is already
     /// bounded to 480px; nothing here is clamped-to-extent, so the spatial ops
     /// in the pipeline stay honest.
-    private func renderPanes() {
+    private func renderPanes() async {
         app.player?.pause()
         isPlaying = false
         // Same ladder Split and Flip resolve through (LookPreviewSurface), so
@@ -397,9 +407,16 @@ struct BeforeAfterView: View {
             gradedPane = nil
             return
         }
-        originalPane = LookPipeline.shared.context.createCGImage(frame, from: extent)
-        gradedPane = LookPipeline.shared.gradedStill(frame, state: app.lookState,
-                                                     includeSplit: false)
+        let state = app.lookState
+        let panes = await Task.detached(priority: .userInitiated) {
+            let original = LookPipeline.shared.context.createCGImage(frame, from: extent)
+            let graded = LookPipeline.shared.gradedStill(frame, state: state,
+                                                          includeSplit: false)
+            return (original, graded)
+        }.value
+        guard !Task.isCancelled else { return }
+        originalPane = panes.0
+        gradedPane = panes.1
     }
 
     // MARK: - Drawer
@@ -545,6 +562,11 @@ struct BeforeAfterView: View {
     /// The one filled button on the screen.
     private var exportButton: some View {
         Button {
+            guard hasRealMedia else {
+                LumaHaptics.shared.tap()
+                app.path = [.selectClip]
+                return
+            }
             // Commit the grade as compared: drop the wipe (it is preview
             // chrome, never baked) and open the export sheet with the same
             // lookState.
@@ -613,6 +635,7 @@ struct BeforeAfterView: View {
 
     private func attachTimeObserver() {
         guard let player = app.player, let item = player.currentItem else { return }
+        detachTimeObserver()
         Task {
             if let d = try? await item.asset.load(.duration).seconds, d.isFinite, d > 0 {
                 duration = d
@@ -624,13 +647,15 @@ struct BeforeAfterView: View {
             guard duration > 0 else { return }
             progress = min(max(time.seconds / duration, 0), 1)
         }
+        timeObserverPlayer = player
     }
 
     private func detachTimeObserver() {
-        if let timeObserver, let player = app.player {
+        if let timeObserver, let player = timeObserverPlayer {
             player.removeTimeObserver(timeObserver)
         }
         timeObserver = nil
+        timeObserverPlayer = nil
     }
 
     // MARK: - Export

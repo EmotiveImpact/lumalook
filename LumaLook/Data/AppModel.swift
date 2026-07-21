@@ -14,13 +14,23 @@ final class AppModel: ObservableObject {
     // Apply a Look flow — video OR still image (SPEC_ADDENDUM §5)
     @Published var selectedVideoURL: URL? {
         didSet {
+            autoDetectLogTask?.cancel()
             rebuildPlayer()
             updatePreviewFrame()
             if !isRestoringSession {
                 detachGradeSession()
+                clearSourceConversion()
                 autoDetectLogProfile()
             }
         }
+    }
+
+    private var autoDetectLogTask: Task<Void, Never>?
+
+    private func clearSourceConversion() {
+        conversionProfile = nil
+        conversionLUT = nil
+        conversionOpacity = 100
     }
 
     /// T2.8 — auto-detect the source's log/HDR profile from the video track's
@@ -28,11 +38,12 @@ final class AppModel: ObservableObject {
     /// D-Log containers are generic → manual picker only.
     private func autoDetectLogProfile() {
         guard let url = selectedVideoURL else { return }
-        Task { [weak self] in
+        autoDetectLogTask = Task { [weak self] in
             let asset = AVURLAsset(url: url)
             guard let track = try? await asset.loadTracks(withMediaType: .video).first,
                   let descs = try? await track.load(.formatDescriptions),
-                  let desc = descs.first else { return }
+                  let desc = descs.first,
+                  !Task.isCancelled else { return }
             let ext = CMFormatDescriptionGetExtensions(desc) as? [String: Any]
             let transfer = ext?[kCVImageBufferTransferFunctionKey as String] as? String
             var detected: LogProfile?
@@ -45,20 +56,25 @@ final class AppModel: ObservableObject {
                 }
             }
             guard let detected else { return }
-            await MainActor.run { [weak self] in
-                guard let self, self.conversionProfile == nil,
+            guard !Task.isCancelled,
+                  let self,
+                  self.selectedVideoURL == url,
+                  self.selectedImage == nil,
+                  self.conversionProfile == nil,
                       self.conversionLUT == nil else { return }
-                self.conversionProfile = detected
-                self.importToast = "Auto: \(detected.label) → Rec.709"
-                print("[LUMA] LOGDETECT \(detected.rawValue)")
-            }
+            self.conversionProfile = detected
+            self.importToast = "Auto: \(detected.label) → Rec.709"
+            print("[LUMA] LOGDETECT \(detected.rawValue)")
         }
     }
     @Published var selectedImage: CIImage? {
         didSet {
             if selectedImage != nil { selectedVideoURL = nil }
             updatePreviewFrame()
-            if !isRestoringSession { detachGradeSession() }
+            if !isRestoringSession {
+                detachGradeSession()
+                clearSourceConversion()
+            }
         }
     }
 
@@ -238,7 +254,7 @@ final class AppModel: ObservableObject {
     @Published var conversionProfile: LogProfile? {
         didSet {
             if conversionProfile != nil { conversionLUT = nil }
-            lookState.conversionProfile = conversionProfile
+            syncLookState()
         }
     }
     @Published var conversionLUT: LUTFile? {
@@ -712,7 +728,16 @@ final class AppModel: ObservableObject {
         // share sheet and a Settings link instead of a dead end.
         let jpegURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("LumaLook_Photo_\(UUID().uuidString).jpg")
-        try? ui.jpegData(compressionQuality: 0.92)?.write(to: jpegURL)
+        guard let jpegData = ui.jpegData(compressionQuality: 0.92) else {
+            exportError = "Could not encode the graded photo."
+            return false
+        }
+        do {
+            try jpegData.write(to: jpegURL, options: .atomic)
+        } catch {
+            exportError = error.localizedDescription
+            return false
+        }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             lastExportSavedToPhotos = false

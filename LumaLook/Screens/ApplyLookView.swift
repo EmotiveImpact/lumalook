@@ -290,14 +290,15 @@ struct ApplyLookView: View {
     // MARK: Media identity
 
     private var thumbStamp: String {
-        "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)"
+        "\(mediaKey)-\(app.library.all.count)"
     }
 
     private var mediaKey: String {
         if let url = app.selectedVideoURL { return url.absoluteString }
         if let still = app.selectedImage {
-            return "still-\(Int(still.extent.width))x\(Int(still.extent.height))"
+            return "still-\(ObjectIdentifier(still))"
         }
+        if let player = app.player { return "player-\(ObjectIdentifier(player))" }
         return "none"
     }
 
@@ -938,14 +939,19 @@ struct ApplyLookView: View {
                 toolDivider
 
                 tool("wand.and.stars", app.isAutoGrading ? "Working" : "Auto",
-                     on: app.isAutoGrading, enabled: !app.isAutoGrading) {
+                     on: app.isAutoGrading, enabled: hasRealMedia && !app.isAutoGrading) {
+                    guard hasRealMedia else { return }
                     Task { await app.autoGrade() }
                     LumaHaptics.shared.tap()
                 }
-                tool("eyedropper.halffull", "White bal.", on: eyedropping) {
+                .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
+                tool("eyedropper.halffull", "White bal.", on: eyedropping,
+                     enabled: hasRealMedia) {
+                    guard hasRealMedia else { return }
                     withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
                     LumaHaptics.shared.tap()
                 }
+                .accessibilityHint(hasRealMedia ? "Choose a neutral point in the selected media" : "Pick a photo or video first")
                 tool(isFavourite ? "star.fill" : "star",
                      isFavourite ? "Favourited" : "Favourite",
                      on: isFavourite, enabled: currentLibraryLook != nil) {
