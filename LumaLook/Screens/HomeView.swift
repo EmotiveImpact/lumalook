@@ -166,25 +166,21 @@ struct HomeView: View {
         VStack(spacing: HomeMetrics.gridSpacing) {
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "plus", title: "New Project",
-                          subtitle: "Clips, music, looks",
                           tint: LumaTheme.accentBright, height: height) {
                     app.editor.startNewProject()
                     app.path.append(.editor)
                 }
                 HomePanel(icon: "camera.fill", title: "Camera",
-                          subtitle: "Shoot with a look on",
                           tint: Color(red: 0.93, green: 0.66, blue: 0.36), height: height) {
                     app.path.append(.camera)
                 }
             }
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "camera.filters", title: "Apply Look",
-                          subtitle: "Grade in two taps",
                           tint: LumaTheme.teal, height: height) {
                     app.path.append(.selectClip)
                 }
                 HomePanel(icon: "bag.fill", title: "Look Store",
-                          subtitle: "Packs and film stocks",
                           tint: Color(red: 0.62, green: 0.68, blue: 0.95), height: height) {
                     app.tab = .store
                 }
@@ -335,10 +331,10 @@ enum HomeMetrics {
     /// Solving it against the screen made four buttons eat ~70% of a phone —
     /// a launcher tile should read as a control, so it stays a shade wider
     /// than it is tall and the rails below get the room they earn.
-    static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat {
-        let column = width > 0 ? (width - 40 - gridSpacing) / 2 : 170
-        return min(max(column * 0.62, 104), 128)
-    }
+    /// A launcher tile is a CONTROL. Stacking a glyph above a title above a
+    /// subtitle forced a tall box with a void in the middle; laying it out
+    /// horizontally lets the same four actions cost 172pt instead of 260.
+    static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat { 80 }
 }
 
 // MARK: - Panels
@@ -349,7 +345,6 @@ enum HomeMetrics {
 private struct HomePanel: View {
     let icon: String
     let title: String
-    let subtitle: String
     /// The panel's identity colour. It tints the surface faintly and owns the
     /// glyph outright — full-bleed saturated fills read as toy, not tool.
     let tint: Color
@@ -361,39 +356,35 @@ private struct HomePanel: View {
             LumaHaptics.shared.tap()
             action()
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 34, height: 34)
-                    .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 11))
-                Spacer(minLength: 10)
+                    .frame(width: 32, height: 32)
+                    .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 9))
                 Text(title)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text(subtitle)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(LumaTheme.textMuted)
-                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
+            .padding(.horizontal, 13)
+            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
             // Near-black surface carrying only a whisper of the identity hue.
             // The colour lives in the glyph; the panel stays cinematic.
             .background {
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(LumaTheme.cardRaised)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(LinearGradient(colors: [tint.opacity(0.17), tint.opacity(0.04)],
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: [tint.opacity(0.15), tint.opacity(0.03)],
                                                  startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .contentShape(RoundedRectangle(cornerRadius: 18))
-            .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
         }
         .buttonStyle(.lumaPress)
     }

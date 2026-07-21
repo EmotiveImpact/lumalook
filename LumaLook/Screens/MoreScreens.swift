@@ -1937,6 +1937,16 @@ struct SettingsSubscriptionView: View {
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
         List {
+            // Design previews shipped for review, not for customers. First in
+            // the list on purpose: a preview buried under About is a preview
+            // nobody opens.
+            Section("Design Lab") {
+                settingsRow(icon: "sparkles", title: "Grade Room Preview",
+                            value: "New") {
+                    app.path.append(.ldDemo)
+                }
+            }
+
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)
