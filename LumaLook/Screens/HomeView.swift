@@ -38,7 +38,7 @@ struct HomeView: View {
             // fold lands: the grid ends exactly high enough that the explore
             // cards are cut through their middle. See `HomeMetrics.panelHeight`.
             GeometryReader { geo in
-                scroll(viewport: HomeMetrics.viewport(geo))
+                scroll(viewport: HomeMetrics.viewport(geo), width: geo.size.width)
             }
         }
         // STICKY header: the wordmark bar is pinned; content scrolls under it.
@@ -51,10 +51,10 @@ struct HomeView: View {
         }
     }
 
-    private func scroll(viewport: CGFloat) -> some View {
+    private func scroll(viewport: CGFloat, width: CGFloat) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                panelGrid(height: HomeMetrics.panelHeight(viewport: viewport))
+                panelGrid(height: HomeMetrics.panelHeight(viewport: viewport, width: width))
                     .padding(.horizontal, 20)
                     .padding(.top, HomeMetrics.topPad)
 
@@ -168,27 +168,25 @@ struct HomeView: View {
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "plus", title: "New Project",
                           subtitle: "Clips, music, looks",
-                          gradient: LumaTheme.tilePurple, height: height) {
+                          tint: LumaTheme.accentBright, height: height) {
                     app.editor.startNewProject()
                     app.path.append(.editor)
                 }
                 HomePanel(icon: "camera.fill", title: "Camera",
                           subtitle: "Shoot with a look on",
-                          gradient: LumaTheme.tileAmber, height: height) {
+                          tint: Color(red: 0.93, green: 0.66, blue: 0.36), height: height) {
                     app.path.append(.camera)
                 }
             }
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "camera.filters", title: "Apply Look",
                           subtitle: "Grade in two taps",
-                          gradient: LumaTheme.tileTeal,
-                          iconTint: Color(red: 0.55, green: 0.95, blue: 0.85),
-                          height: height) {
+                          tint: LumaTheme.teal, height: height) {
                     app.path.append(.selectClip)
                 }
                 HomePanel(icon: "bag.fill", title: "Look Store",
                           subtitle: "Packs and film stocks",
-                          gradient: LumaTheme.tileIndigo, height: height) {
+                          tint: Color(red: 0.62, green: 0.68, blue: 0.95), height: height) {
                     app.tab = .store
                 }
             }
@@ -332,10 +330,13 @@ enum HomeMetrics {
         return raw > 320 ? raw : 660
     }
 
-    static func panelHeight(viewport: CGFloat) -> CGFloat {
-        let peek = exploreCard.height * peekFraction
-        let available = viewport - chrome - peek
-        return min(max(available / 2, 150), 300)
+    /// Panel height is derived from the COLUMN WIDTH, not from the viewport.
+    /// Solving it against the screen made four buttons eat ~70% of a phone —
+    /// a launcher tile should read as a control, so it stays a shade wider
+    /// than it is tall and the rails below get the room they earn.
+    static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat {
+        let column = width > 0 ? (width - 40 - gridSpacing) / 2 : 170
+        return min(max(column * 0.78, 116), 150)
     }
 }
 
@@ -348,8 +349,9 @@ private struct HomePanel: View {
     let icon: String
     let title: String
     let subtitle: String
-    let gradient: LinearGradient
-    var iconTint: Color = .white
+    /// The panel's identity colour. It tints the surface faintly and owns the
+    /// glyph outright — full-bleed saturated fills read as toy, not tool.
+    let tint: Color
     let height: CGFloat
     let action: () -> Void
 
@@ -360,39 +362,37 @@ private struct HomePanel: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(iconTint)
-                    .frame(width: 54, height: 54)
-                    .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 17))
-                    // Light radiating FROM the glyph, not a ring around it.
-                    .shadow(color: iconTint.opacity(0.35), radius: 14)
-                Spacer(minLength: 12)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 11))
+                Spacer(minLength: 10)
                 Text(title)
-                    .font(.system(size: 20, weight: .heavy))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.85)
                 Text(subtitle)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.66))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(LumaTheme.textMuted)
+                    .lineLimit(1)
             }
-            .padding(18)
+            .padding(14)
             .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
-            .background(gradient, in: RoundedRectangle(cornerRadius: 22))
-            // Top-lit sheen: the surface catches light, which separates the
-            // tile from the near-black page without drawing an edge on it.
-            .overlay {
-                LinearGradient(colors: [.white.opacity(0.10), .clear],
-                               startPoint: .top, endPoint: .center)
-                .clipShape(RoundedRectangle(cornerRadius: 22))
-                .allowsHitTesting(false)
+            // Near-black surface carrying only a whisper of the identity hue.
+            // The colour lives in the glyph; the panel stays cinematic.
+            .background {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(LumaTheme.cardRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(LinearGradient(colors: [tint.opacity(0.17), tint.opacity(0.04)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22))
-            .contentShape(RoundedRectangle(cornerRadius: 22))
-            .shadow(color: .black.opacity(0.45), radius: 20, y: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
         }
         .buttonStyle(.lumaPress)
     }
