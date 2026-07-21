@@ -100,6 +100,11 @@ struct GradedThumb: View {
             .scaledToFill()
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: radius))
+            // clipShape clips PIXELS, not touches: a landscape frame scaled to
+            // fill a portrait tile overflows well past its bounds, so in a rail
+            // each tile's invisible overflow sat on top of its neighbours and
+            // ate their taps — which is why look tiles could not be selected.
+            .contentShape(RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
                     .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),

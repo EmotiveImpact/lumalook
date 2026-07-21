@@ -815,6 +815,10 @@ private struct FlexibleGradedThumb: View {
                     .scaledToFill()
             }
             .clipShape(RoundedRectangle(cornerRadius: radius))
+            // Same trap as GradedThumb: a filled image overflows its frame and
+            // its invisible remainder covers neighbouring tiles, stealing their
+            // taps. Confine touches to the tile actually drawn.
+            .contentShape(RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
                     .strokeBorder(selected ? LumaTheme.accentBright : .white.opacity(0.08),

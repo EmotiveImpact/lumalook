@@ -700,7 +700,16 @@ struct FilterPackDetailView: View {
         .sensoryFeedback(.success, trigger: installedFlash)
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .task(id: pack.id) {
+            #if DEBUG
+            // LUMA_SEED_PACKLOOK=<code> selects a look without a tap, so the
+            // render path can be verified independently of hit testing.
+            let seeded = ProcessInfo.processInfo.environment["LUMA_SEED_PACKLOOK"]
+            selectedCode = seeded.flatMap { code in
+                pack.looks.first { $0.code == code }?.code
+            } ?? pack.looks.first?.code
+            #else
             selectedCode = pack.looks.first?.code
+            #endif
             renderPreviews()
             await loadTryOnSource()
         }
