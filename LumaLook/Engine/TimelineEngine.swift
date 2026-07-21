@@ -2392,6 +2392,28 @@ final class EditorState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// ONE undo entry for a whole direct-manipulation gesture on the preview.
+    ///
+    /// Dragging, pinching and twisting a layer write through the setters above,
+    /// which deliberately do NOT snapshot — they run per frame and would bury
+    /// the undo stack. `before` is the overlay as it stood when the finger went
+    /// down: it is put back just long enough for the snapshot to capture it,
+    /// then the gesture's result is restored. Both writes land in the same
+    /// runloop turn, so nothing renders in between.
+    func commitOverlayGesture(id: UUID, before: OverlayItem) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let after = overlays[i]
+        guard after.center != before.center
+                || after.sizeFraction != before.sizeFraction
+                || after.rotationDegrees != before.rotationDegrees
+                || after.keyframes.count != before.keyframes.count else { return }
+        overlays[i] = before
+        pushUndoSnapshot()
+        overlays[i] = after
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
     // MARK: - Overlay effects (blend / chroma / mask / adjust / border)
 
     /// Discrete change → snapshot; all live (no rebuild) via overlayEffects box.
