@@ -682,6 +682,7 @@ final class AppModel: ObservableObject {
             return false
         }
         exportError = nil
+        lastExportGIFURL = nil
         lookState.splitFraction = nil
         do {
             let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
@@ -700,6 +701,7 @@ final class AppModel: ObservableObject {
     /// Grades and saves a still image to the photo library.
     private func exportStill(_ image: CIImage) async -> Bool {
         exportError = nil
+        lastExportGIFURL = nil
         guard let cg = LookPipeline.shared.gradedStill(image, state: lookState) else {
             exportError = "Could not render the graded photo."
             return false
