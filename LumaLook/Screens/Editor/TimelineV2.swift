@@ -1562,7 +1562,7 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
                   let editor, editor.totalDuration > 0 else { return }
             let raw = metrics.time(for: scrollView.contentOffset.x + scrollView.contentInset.left)
             let clamped = min(max(0, raw), editor.totalDuration)
-            editor.seek(to: clamped)
+            editor.seek(to: clamped, precise: false)
 
             // Sparing haptic tick when the scrub crosses a second boundary.
             let second = Int(clamped)

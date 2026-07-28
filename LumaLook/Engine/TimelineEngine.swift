@@ -2783,12 +2783,27 @@ final class EditorState: ObservableObject {
         isPlaying.toggle()
     }
 
-    func seek(to seconds: Double) {
+    /// `precise: false` is for CONTINUOUS scrubbing. A zero-tolerance seek
+    /// forces the decoder to land on an exact frame, which means decoding from
+    /// the nearest keyframe every time — and the timeline scrubber fires this
+    /// on every scroll tick, ~60 times a second. Those requests queue and the
+    /// drag visibly stutters, which is most of what "the editor doesn't feel
+    /// solid" actually is. A half-frame tolerance lets AVFoundation serve the
+    /// nearest decoded frame instead, and `finalizeScrub()` lands the exact
+    /// frame once the finger lifts (TimelineV2's own `finalizeScrub`, which
+    /// already existed), so nothing is lost but the jank.
+    func seek(to seconds: Double, precise: Bool = true) {
         let clamped = min(max(0, seconds), totalDuration)
-        player?.seek(to: CMTime(seconds: clamped, preferredTimescale: 600),
-                     toleranceBefore: .zero, toleranceAfter: .zero)
+        let time = CMTime(seconds: clamped, preferredTimescale: 600)
+        if precise {
+            player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        } else {
+            let slack = CMTime(seconds: frameDuration / 2, preferredTimescale: 600)
+            player?.seek(to: time, toleranceBefore: slack, toleranceAfter: slack)
+        }
         currentTime = clamped
     }
+
 
     /// Frame duration matching the export video composition (1/30). Used by
     /// the frame-nudge transport and the MM:SS:FF timecode readout.
