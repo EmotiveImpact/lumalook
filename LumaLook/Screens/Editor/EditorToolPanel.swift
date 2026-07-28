@@ -34,12 +34,11 @@ struct MiniTimelineStrip: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Left-anchored with a follow band, matching the main timeline.
-            // A centre-fixed mini strip flipped the model the moment a tool
-            // opened: content jumped to the middle of the strip mid-edit.
-            let playheadX = CGFloat(editor.currentTime) * zoom
-            let follow = geo.size.width * 0.65
-            let offset = -max(0, playheadX - follow)
+            // Centre-fixed, matching the main timeline: the playhead holds
+            // station and the film runs under it. A mini strip on a different
+            // model would flip the mental model the moment a tool opened.
+            let centre = geo.size.width / 2
+            let offset = centre - CGFloat(editor.currentTime) * zoom
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 3) {
@@ -66,7 +65,7 @@ struct MiniTimelineStrip: View {
                     .fill(.white)
                     .frame(width: 2)
                     .shadow(color: .black.opacity(0.6), radius: 3)
-                    .offset(x: playheadX + offset - 1)
+                    .offset(x: centre - 1)
                     .allowsHitTesting(false)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -76,7 +75,7 @@ struct MiniTimelineStrip: View {
                     .onChanged { value in
                         let anchor = scrubAnchor ?? editor.currentTime
                         if scrubAnchor == nil { scrubAnchor = anchor }
-                        let delta = Double(value.translation.width / max(zoom, 1))
+                        let delta = Double(-value.translation.width / max(zoom, 1))
                         editor.seek(to: min(max(0, anchor + delta), editor.totalDuration))
                     }
                     .onEnded { _ in scrubAnchor = nil }

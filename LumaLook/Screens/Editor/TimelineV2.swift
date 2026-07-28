@@ -89,10 +89,8 @@ final class TimelineReorderState: ObservableObject {
 
 // MARK: - Timeline V2 (assembled)
 
-/// Left-anchored multitrack timeline: t = 0 sits on the leading edge and the
-/// playhead TRAVELS across the content as playback advances (the model the
-/// approved preview screens used). The view only scrolls to keep the playhead
-/// comfortably inside the viewport.
+/// Center-fixed-playhead multitrack timeline: content scrolls under a fixed
+/// centre line; scrubbing drags the content, playback drives the scroll.
 /// Live snap indicator state: the timeline time a dragged bar is currently
 /// snapped to, shared so a single accent guide-line renders in content space.
 final class SnapState: ObservableObject {
@@ -169,10 +167,11 @@ struct TimelineV2View: View {
     }
 
     var body: some View {
-        // The playhead is NOT a fixed line over the viewport any more: it is
-        // drawn inside the scrolled content at x(currentTime), so it travels
-        // across the clips instead of the clips travelling under it. Only the
-        // pinned add-gutter still rides above the scroller.
+        // `.top` centres the playhead horizontally over the scroller (whose
+        // contentInset = viewport/2 puts the current frame at screen-centre).
+        // The magnet button rides a SEPARATE top-trailing overlay — sharing a
+        // `.topTrailing` ZStack with the playhead is what jammed the playhead
+        // to the right edge instead of the centre.
         ZStack(alignment: .top) {
             if projectIsEmpty {
                 emptyPlaceholder
@@ -189,6 +188,7 @@ struct TimelineV2View: View {
                                         onRecordVoiceover: onRecordVoiceover)
                 }
                 addGutter
+                playhead
             }
         }
         .frame(height: stackHeight)
@@ -234,11 +234,7 @@ struct TimelineV2View: View {
                 AddAudioRow(action: onAddMusic)
             }
         }
-        // NO leading padding. The scroller's content is left-anchored (content
-        // x = 0 is the timeline's leading edge), so any inset here would set
-        // these rows a few points in from the lanes they line up with — which
-        // is exactly what made them look wrong. Trailing only.
-        .padding(.trailing, 12)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -246,6 +242,20 @@ struct TimelineV2View: View {
         Color.clear
             .frame(height: height)
             .allowsHitTesting(false)
+    }
+
+    /// Fixed centre playhead: triangle cap over a full-height line.
+    private var playhead: some View {
+        VStack(spacing: 0) {
+            Triangle()
+                .fill(.white)
+                .frame(width: 10, height: 5)
+            Rectangle()
+                .fill(.white)
+                .frame(width: 2.5)
+                .shadow(color: .black.opacity(0.6), radius: 3)
+        }
+        .allowsHitTesting(false)
     }
 
     /// B1: the empty timeline teaches its own anatomy. Four dashed, labelled
@@ -286,28 +296,6 @@ struct TimelineV2View: View {
                          action: onAddClip)
         }
         .padding(.horizontal, 20)
-    }
-}
-
-// MARK: - Playhead
-
-/// Triangle cap over a full-height line, drawn IN CONTENT SPACE at
-/// x(currentTime). It scrolls with the clips, so it reads as a position on the
-/// timeline rather than as a fixed rule the footage slides beneath.
-struct TimelinePlayhead: View {
-    let height: CGFloat
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Triangle()
-                .fill(.white)
-                .frame(width: 10, height: 5)
-            Rectangle()
-                .fill(.white)
-                .frame(width: 2.5, height: max(0, height - 5))
-                .shadow(color: .black.opacity(0.6), radius: 3)
-        }
-        .allowsHitTesting(false)
     }
 
     private struct Triangle: Shape {
@@ -371,9 +359,9 @@ struct TimelineContentView: View {
             // The Music / Voiceover placeholders and the "Add audio" row are
             // ADD AFFORDANCES, not content: they belong to the viewport, not to
             // a moment in time. They live in TimelineV2View's pinned gutter now
-            // — inside this stack they scrolled off the leading edge and were
-            // unreachable a few seconds into any edit. Only their heights are
-            // reserved here so the two layers stay in vertical lockstep.
+            // — inside this stack they translated under the fixed playhead and
+            // were unreachable a few seconds into any edit. Only their heights
+            // are reserved here so the two layers stay in vertical lockstep.
             ForEach(AudioLanePlan.missingKinds(editor.audioTracks), id: \.self) { _ in
                 Color.clear
                     .frame(height: LaneMetrics.music)
@@ -397,16 +385,6 @@ struct TimelineContentView: View {
                     .offset(x: metrics.x(for: t) - 1)
                     .allowsHitTesting(false)
             }
-        }
-        // The playhead lives HERE, in content space: it is a position on the
-        // timeline, so it travels with the clips instead of being a fixed line
-        // the whole timeline has to slide under.
-        .overlay(alignment: .topLeading) {
-            // The 10 pt triangle cap is centred over the 2.5 pt rule, so the
-            // rule sits 5 pt into the view: subtract that or the playhead
-            // reads half a cap late at every zoom level.
-            TimelinePlayhead(height: stackHeight)
-                .offset(x: metrics.x(for: editor.currentTime) - 5)
         }
     }
 }
@@ -1022,8 +1000,9 @@ struct OverlayAddButton: View {
             }
             .padding(.horizontal, 11)
             .foregroundStyle(LumaTheme.textSecondary)
-            // Full width, so it reads as an empty TRACK rather than a stray
-            // button — the same shape the Music / Voiceover placeholders take.
+            // Full width, because the playhead is CENTRE-FIXED: a fixed-width
+            // chip pinned to the leading edge sits alone in the empty left half
+            // at t = 0, reading as a stray button rather than an empty track.
             .frame(maxWidth: .infinity, minHeight: LaneMetrics.overlay,
                    maxHeight: LaneMetrics.overlay, alignment: .leading)
             .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
@@ -1437,27 +1416,9 @@ struct MusicLane: View {
 
 // MARK: - Scroller (UIKit)
 
-/// Fractions of the viewport the playhead is kept clear of before the content
-/// scrolls to follow it. It travels freely between them, so it stays
-/// comfortably in view without being pinned to one line. (File scope because
-/// the scroller's coordinator is nested in a generic type.)
-private enum TimelineFollow {
-    static let leadMargin: CGFloat = 0.15
-    static let trailMargin: CGFloat = 0.35
-}
-
-/// Left-anchored scroller. There is NO leading inset: content x = 0 is the
-/// timeline's leading edge, so at t = 0 the first clip starts at the edge of
-/// the screen instead of half a screen in. The playhead is drawn in content
-/// space by `TimelineContentView`, so it travels; this view only scrolls to
-/// keep it comfortably inside the viewport, and keeps a trailing inset so the
-/// end of the last clip can still be pulled clear of the right edge.
-///
-/// Two scrub paths, both writing the same clamped time through `applyScrub`:
-///   · dragging a lane pans the content and carries the playhead with it
-///     (delta scrub — the familiar "slide the timeline" feel),
-///   · dragging the RULER seeks straight to the touched time, which is the
-///     only mapping that can reach t = 0 and t = duration in one gesture.
+/// Center-fixed-playhead scroller. Content scrolls under a fixed centre line:
+/// `contentInset = viewport/2` on both sides, so t = 0 and t = duration both
+/// land exactly under the playhead at the scroll extremes.
 struct TimelineScroller<Content: View>: UIViewRepresentable {
     @ObservedObject var editor: EditorState
     @Binding var metrics: TimelineMetrics
@@ -1509,21 +1470,6 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         longPress.delegate = context.coordinator
         scrollView.addGestureRecognizer(longPress)
 
-        // Ruler scrub. A zero-duration long press is the UIKit equivalent of
-        // `DragGesture(minimumDistance: 0)`: it fires on touch-down and then
-        // tracks the finger. `gestureRecognizerShouldBegin` restricts it to the
-        // ruler band, and the scroll view's pan waits on it — a touch that
-        // starts anywhere else fails this recognizer immediately, so panning is
-        // not delayed.
-        let scrub = UILongPressGestureRecognizer(target: context.coordinator,
-                                                 action: #selector(Coordinator.handleScrub(_:)))
-        scrub.minimumPressDuration = 0
-        scrub.allowableMovement = .greatestFiniteMagnitude
-        scrub.delegate = context.coordinator
-        scrollView.addGestureRecognizer(scrub)
-        scrollView.panGestureRecognizer.require(toFail: scrub)
-        context.coordinator.scrubRecognizer = scrub
-
         context.coordinator.reorder = reorder
         return scrollView
     }
@@ -1550,28 +1496,13 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         var reorder: TimelineReorderState?
         var contentHeight: CGFloat = 0
         private var lastInsertSlot: Int?
-        weak var scrubRecognizer: UIGestureRecognizer?
 
         /// Write-side guard: offset assignments from code must not read back
         /// as user scrubs.
         var isProgrammaticScroll = false
         private var isPinching = false
         private var pinchStartPPS: CGFloat = 50
-        /// Where the playhead sat on screen when the pinch began, so zoom is
-        /// anchored on it instead of yanking it to a fixed line.
-        private var pinchAnchorScreenX: CGFloat = 0
         private var pinchWasClamped = false
-        /// True while the finger owns the ruler. The follow is suppressed for
-        /// its duration: the touch is read in CONTENT coordinates, so scrolling
-        /// the content under a stationary finger would feed back into the time
-        /// it maps to and run away.
-        private var isScrubbing = false
-        /// Delta-scrub anchor: the content offset and the time at the moment a
-        /// pan began. Panning slides the content UNDER the playhead, so time
-        /// moves by exactly the distance the content did and the playhead keeps
-        /// its screen position — the old centre-fixed feel, without the
-        /// centre-fixed geometry.
-        private var scrubAnchor: (offset: CGFloat, time: Double)?
         private var lastHapticSecond = Int.min
         private var lastBoundaryHit: Int?
         private let scrubTick = UISelectionFeedbackGenerator()
@@ -1587,14 +1518,10 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
             guard viewportWidth > 0 else { return }   // first layout pass
 
             let contentWidth = max(metrics.x(for: editor.totalDuration), 1)
-            // Trailing inset only: the content is left-anchored. It matches the
-            // trailing follow margin, so the playhead can settle in the same
-            // place at the end of the timeline as it does in the middle, and
-            // the last clip can still be pulled clear of the right edge.
-            let trailing = (viewportWidth * TimelineFollow.trailMargin).rounded()
-            if scrollView.contentInset.left != 0 || scrollView.contentInset.right != trailing {
+            let inset = (viewportWidth / 2).rounded()
+            if scrollView.contentInset.left != inset || scrollView.contentInset.right != inset {
                 isProgrammaticScroll = true
-                scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: trailing)
+                scrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
                 isProgrammaticScroll = false
             }
 
@@ -1608,10 +1535,10 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
 
             // Playback (or seek) drives the scroll — but never while the
             // user owns the gesture: that's the other half of the loop guard.
-            guard followPlayhead, !isPinching, !isScrubbing,
+            guard followPlayhead, !isPinching,
                   !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating
             else { return }
-            let target = followOffset(scrollView)
+            let target = metrics.x(for: editor.currentTime) - inset
             if abs(scrollView.contentOffset.x - target) > 0.25 {
                 isProgrammaticScroll = true
                 scrollView.setContentOffset(CGPoint(x: target, y: 0), animated: false)
@@ -1619,46 +1546,22 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
             }
         }
 
-        /// Scroll-into-view with margins. The playhead moves freely while it is
-        /// inside the comfort band and the content only shifts by the amount
-        /// needed to bring it back to the band's edge. At t = 0 the target
-        /// clamps to 0, so the timeline sits flush on its leading edge.
-        private func followOffset(_ scrollView: UIScrollView) -> CGFloat {
-            guard let editor else { return scrollView.contentOffset.x }
-            let width = scrollView.bounds.width
-            let x = metrics.x(for: editor.currentTime)
-            let lead = width * TimelineFollow.leadMargin
-            let trail = width * TimelineFollow.trailMargin
-            var offset = scrollView.contentOffset.x
-            if x > offset + width - trail {
-                offset = x - (width - trail)
-            } else if x < offset + lead {
-                offset = x - lead
-            }
-            return min(max(0, offset), maxOffset(scrollView))
-        }
-
-        private func maxOffset(_ scrollView: UIScrollView) -> CGFloat {
-            max(0, scrollView.contentSize.width + scrollView.contentInset.right
-                 - scrollView.bounds.width)
-        }
-
-        /// Keeps the playhead under the same point on screen across a zoom.
-        private func holdPlayheadDuringZoom(_ scrollView: UIScrollView) {
+        private func recenterOnPlayhead(_ scrollView: UIScrollView) {
             guard let editor else { return }
-            let target = metrics.x(for: editor.currentTime) - pinchAnchorScreenX
             isProgrammaticScroll = true
-            scrollView.contentOffset = CGPoint(x: min(max(0, target), maxOffset(scrollView)), y: 0)
+            scrollView.contentOffset = CGPoint(
+                x: metrics.x(for: editor.currentTime) - scrollView.contentInset.left, y: 0)
             isProgrammaticScroll = false
         }
 
-        // MARK: Scrub (both paths land here)
+        // MARK: UIScrollViewDelegate (user scrub → player)
 
-        /// The one writer of `currentTime` for every scrub, so the second-tick
-        /// haptic and the clip-boundary detent can never disagree between the
-        /// pan path and the ruler path.
-        private func applyScrub(to time: Double, editor: EditorState) {
-            let clamped = min(max(0, time), editor.totalDuration)
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard !isProgrammaticScroll, !isPinching,
+                  scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating,
+                  let editor, editor.totalDuration > 0 else { return }
+            let raw = metrics.time(for: scrollView.contentOffset.x + scrollView.contentInset.left)
+            let clamped = min(max(0, raw), editor.totalDuration)
             editor.seek(to: clamped)
 
             // Sparing haptic tick when the scrub crosses a second boundary.
@@ -1684,48 +1587,9 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
             }
         }
 
-        /// Ruler drag: seek straight to the touched time. This is the mapping
-        /// that reaches t = 0 and t = duration in one gesture, which a pan
-        /// cannot once the content is left-anchored.
-        @objc func handleScrub(_ gesture: UILongPressGestureRecognizer) {
-            guard let scrollView = gesture.view as? UIScrollView,
-                  let editor, editor.totalDuration > 0 else { return }
-            let x = gesture.location(in: host.view).x
-            switch gesture.state {
-            case .began:
-                isScrubbing = true
-                lastHapticSecond = Int(editor.currentTime)
-                scrubTick.prepare()
-                // Same rule as a pan: touching the timeline pauses.
-                if editor.isPlaying { editor.togglePlayback() }
-                applyScrub(to: metrics.time(for: x), editor: editor)
-            case .changed:
-                applyScrub(to: metrics.time(for: x), editor: editor)
-            default:
-                isScrubbing = false
-                applyGeometry(scrollView)
-            }
-        }
-
-        // MARK: UIScrollViewDelegate (pan → delta scrub)
-
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard !isProgrammaticScroll, !isPinching,
-                  scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating,
-                  let editor, editor.totalDuration > 0,
-                  let anchor = scrubAnchor else { return }
-            let raw = scrollView.contentOffset.x
-            applyScrub(to: anchor.time + metrics.time(for: raw - anchor.offset), editor: editor)
-            // Rubber-banding past either end means the scrub has run out of
-            // travel — the time is already clamped there. Drop the anchor so the
-            // spring-back does not rewind what the finger just did.
-            if raw != min(max(0, raw), maxOffset(scrollView)) { scrubAnchor = nil }
-        }
-
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             if let editor {
                 lastHapticSecond = Int(editor.currentTime)
-                scrubAnchor = (scrollView.contentOffset.x, editor.currentTime)
                 // CapCut behaviour: dragging pauses, the user taps play again.
                 if editor.isPlaying { editor.togglePlayback() }
             }
@@ -1733,11 +1597,18 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         }
 
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-            if !decelerate { scrubAnchor = nil }
+            if !decelerate { finalizeScrub(scrollView) }
         }
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            scrubAnchor = nil
+            finalizeScrub(scrollView)
+        }
+
+        /// Always land the final frame exactly where the scroll settled.
+        private func finalizeScrub(_ scrollView: UIScrollView) {
+            guard let editor, editor.totalDuration > 0 else { return }
+            let raw = metrics.time(for: scrollView.contentOffset.x + scrollView.contentInset.left)
+            editor.seek(to: min(max(0, raw), editor.totalDuration))
         }
 
         // MARK: Pinch zoom
@@ -1749,12 +1620,6 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
                 isPinching = true
                 pinchStartPPS = metrics.pointsPerSecond
                 pinchWasClamped = false
-                // Where the playhead is on screen right now — the zoom pivots
-                // there, so the frame you are looking at stays put.
-                if let editor {
-                    let screenX = metrics.x(for: editor.currentTime) - scrollView.contentOffset.x
-                    pinchAnchorScreenX = min(max(0, screenX), scrollView.bounds.width)
-                }
             case .changed:
                 let raw = pinchStartPPS * gesture.scale
                 let clamped = min(max(raw, TimelineMetrics.minPPS), TimelineMetrics.maxPPS)
@@ -1767,7 +1632,7 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
                 // Re-derive geometry now so zoom stays anchored on the
                 // playhead even before SwiftUI's update pass lands.
                 applyGeometry(scrollView, followPlayhead: false)
-                holdPlayheadDuringZoom(scrollView)
+                recenterOnPlayhead(scrollView)
             default:
                 isPinching = false
                 applyGeometry(scrollView)
@@ -1777,17 +1642,6 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             true
-        }
-
-        /// The ruler — and only the ruler — is the seek surface. The band stops
-        /// at the midpoint of the gap above the video lane, exactly where the
-        /// reorder long-press band starts, so the two can never contend for the
-        /// same touch.
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard gestureRecognizer === scrubRecognizer else { return true }
-            guard let editor, editor.totalDuration > 0 else { return false }
-            let y = gestureRecognizer.location(in: host.view).y
-            return y >= 0 && y < LaneMetrics.ruler + LaneMetrics.spacing / 2
         }
 
         // MARK: Long-press clip reorder
