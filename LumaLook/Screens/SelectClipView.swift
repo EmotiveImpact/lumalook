@@ -24,6 +24,9 @@ struct SelectClipView: View {
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var showInfo = false
+    /// Batch grading needs MULTI-select, which needs the picker's own confirm
+    /// bar. Off by default so the common case is one tap.
+    @State private var batchMode = false
 
     private var hasSelection: Bool {
         app.selectedVideoURL != nil || app.selectedImage != nil || pickerItems.count > 1
@@ -39,8 +42,27 @@ struct SelectClipView: View {
                                     trailingAction: { showInfo = true })
 
                 VStack(spacing: 16) {
-                    SegmentPills(options: ["All", "Video", "Photos"], selection: $mode)
-                        .padding(.horizontal, 22)
+                    HStack(spacing: 10) {
+                        SegmentPills(options: ["All", "Video", "Photos"], selection: $mode)
+                        Button {
+                            batchMode.toggle()
+                            pickerItems = []
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            Text("Multiple")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(batchMode ? .black : .white.opacity(0.7))
+                                .padding(.horizontal, 13)
+                                .frame(height: 34)
+                                .background(batchMode ? AnyShapeStyle(.white)
+                                                      : AnyShapeStyle(LumaTheme.surfaceStrong),
+                                            in: Capsule())
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.lumaPress)
+                        .accessibilityLabel(batchMode ? "Multiple selection on" : "Select multiple")
+                    }
+                    .padding(.horizontal, 22)
 
                     HStack(spacing: 8) {
                         if isLoading {
@@ -75,15 +97,20 @@ struct SelectClipView: View {
                     // The real photo library, embedded in our chrome — every
                     // thumbnail is the user's actual footage.
                     PhotosPicker(selection: $pickerItems,
-                                 maxSelectionCount: 10,
+                                 maxSelectionCount: batchMode ? 10 : 1,
                                  matching: mode == "All" ? .any(of: [.videos, .images])
                                           : (pickingPhotos ? .images : .videos),
                                  photoLibrary: .shared()) {
                         Label("Open Library", systemImage: "photo.on.rectangle")
                     }
                     .photosPickerStyle(.inline)
-                    .photosPickerDisabledCapabilities(.selectionActions)
-                    .photosPickerAccessoryVisibility(.hidden, edges: .all)
+                    // In batch mode the picker's own bottom bar carries the
+                    // confirm that commits a multi-selection — hiding it is what
+                    // made selection impossible. Single-select needs no confirm,
+                    // so the bar stays hidden and our Next bar is the only one.
+                    .photosPickerAccessoryVisibility(batchMode ? .visible : .hidden,
+                                                     edges: batchMode ? .bottom : .all)
+                    .id(batchMode)
                     .frame(maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .padding(.horizontal, 22)
