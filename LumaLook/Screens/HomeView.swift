@@ -67,7 +67,7 @@ struct HomeView: View {
                 recentsSection
 
                 if !morePacks.isEmpty {
-                    Spacer(minLength: 0).frame(height: 28)
+                    Spacer(minLength: 0).frame(height: HomeMetrics.sectionGap)
                     HomeSectionHeader(title: "Fresh this week", actionTitle: "Store") {
                         app.tab = .store
                         LumaHaptics.shared.tap()
@@ -77,7 +77,7 @@ struct HomeView: View {
                     packRail(morePacks, badged: newBadgeIDs, size: HomeMetrics.railCard)
                 }
 
-                Spacer(minLength: 0).frame(height: 28)
+                Spacer(minLength: 0).frame(height: HomeMetrics.sectionGap)
 
                 HomeSectionHeader(title: "More to explore", actionTitle: "Store") {
                     app.tab = .store
@@ -174,22 +174,22 @@ struct HomeView: View {
         VStack(spacing: HomeMetrics.gridSpacing) {
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "plus", title: "New Project",
-                          tint: LumaTheme.accentBright, height: height) {
+                          tint: PanelHue.newProject, height: height) {
                     app.editor.startNewProject()
                     app.path.append(.editor)
                 }
                 HomePanel(icon: "camera.fill", title: "Camera",
-                          tint: Color(red: 0.93, green: 0.66, blue: 0.36), height: height) {
+                          tint: PanelHue.camera, height: height) {
                     app.path.append(.camera)
                 }
             }
             HStack(spacing: HomeMetrics.gridSpacing) {
                 HomePanel(icon: "camera.filters", title: "Apply Look",
-                          tint: LumaTheme.teal, height: height) {
+                          tint: PanelHue.applyLook, height: height) {
                     app.path.append(.selectClip)
                 }
                 HomePanel(icon: "bag.fill", title: "Look Store",
-                          tint: Color(red: 0.62, green: 0.68, blue: 0.95), height: height) {
+                          tint: PanelHue.lookStore, height: height) {
                     app.tab = .store
                 }
             }
@@ -271,6 +271,20 @@ struct HomeView: View {
 
 // MARK: - Home chrome
 
+/// The four identity hues, and the only colour Home is allowed to invent.
+/// Everywhere else on this page colour arrives from footage or from a graded
+/// pack thumbnail. Named here rather than inlined at the call site so the set
+/// is legible as a set: violet is the app's own accent, then one warm, one
+/// cool-green and one cool-blue, evenly spaced round the wheel and all pulled
+/// to roughly the same luminance so no single tile shouts louder than its
+/// neighbours. They are consumed as LIGHT by `HomePanel`, never as a fill.
+private enum PanelHue {
+    static let newProject = LumaTheme.accentBright                      // #A38EFF
+    static let camera = Color(red: 0.93, green: 0.66, blue: 0.36)       // warm tungsten
+    static let applyLook = LumaTheme.teal                               // #34E0B6
+    static let lookStore = Color(red: 0.62, green: 0.68, blue: 0.95)    // cool daylight
+}
+
 /// Home's own rail heading. The shared `SectionHeader` sets the title in
 /// tracked-out UPPERCASE at 62% white with a violet action beside it — caps
 /// and tracking make a heading read as a system label rather than a voice, and
@@ -339,29 +353,35 @@ enum HomeMetrics {
         let radius: CGFloat
     }
 
-    static let topPad: CGFloat = 14
+    static let topPad: CGFloat = 12
     static let gridSpacing: CGFloat = 12
-    static let gridToRail: CGFloat = 24
+    static let gridToRail: CGFloat = 20
     /// SectionHeader is a footnote next to a 15pt semibold button.
     static let sectionHeaderHeight: CGFloat = 21
-    static let headerToRail: CGFloat = 12
+    static let headerToRail: CGFloat = 11
+    /// Air between one finished rail and the next section's heading. Every
+    /// gap on the page is one of these four constants — the solver below can
+    /// only stay honest if nothing is spaced by a stray literal.
+    static let sectionGap: CGFloat = 26
 
-    /// The peek rail. Tall enough that a half card is still a legible image.
-    static let exploreCard = CardSize(width: 104, height: 138, radius: 13)
-    /// THE rail card. Every rail on Home uses this one metric.
+    /// THE rail card. Every rail on Home uses this one metric — differing
+    /// sizes per rail is what made the page read as assembled rather than
+    /// designed, and the solver below can only close if there is one number.
     static let railCard = CardSize(width: 104, height: 138, radius: 13)
-    /// The second shelf, fully below the fold, is a normal browsing size.
-    static let shelfCard = CardSize(width: 124, height: 150, radius: 15)
 
-    /// How much of an explore card stays visible above the bottom of the
-    /// screen. 0.5 is the brief; the clamp on `panelHeight` can push the real
-    /// figure a few points either way on very short devices, which is why the
-    /// target sits dead centre of the acceptable 45–55% band.
-    static let peekFraction: CGFloat = 0.5
+    /// How much of the LAST rail ("More to explore") should clear the bottom
+    /// of the screen. Small on purpose: the brief is that the section reads as
+    /// present — heading legible, cards just breaking the fold — not that a
+    /// third rail is half-served above it.
+    static let peekFraction: CGFloat = 0.06
 
-    /// Height of everything above the explore cards, excluding the grid.
-    private static var chrome: CGFloat {
-        topPad + gridSpacing + gridToRail + sectionHeaderHeight + headerToRail
+    /// Everything between the bottom of the panel grid and the top of the
+    /// last rail: three section headings, two complete rails, and the air
+    /// around them. All constants, so the grid is the only free variable.
+    private static var belowGrid: CGFloat {
+        topPad + gridToRail
+            + 3 * (sectionHeaderHeight + headerToRail)
+            + 2 * (railCard.height + sectionGap)
     }
 
     /// The visible content region between the sticky header and the tab bar.
@@ -374,7 +394,7 @@ enum HomeMetrics {
         let inset = raw - geo.safeAreaInsets.top - geo.safeAreaInsets.bottom
         #if DEBUG
         if ProcessInfo.processInfo.environment["LUMA_HOME_METRICS"] == "1" {
-            print("[LUMA] HOME raw=\(raw) top=\(geo.safeAreaInsets.top) bottom=\(geo.safeAreaInsets.bottom) inset=\(inset) panel=\(min(max((raw - chrome - exploreCard.height * peekFraction) / 2, 150), 300))")
+            print("[LUMA] HOME raw=\(raw) top=\(geo.safeAreaInsets.top) bottom=\(geo.safeAreaInsets.bottom) inset=\(inset) panel=\(panelHeight(viewport: raw))")
         }
         #endif
         // MEASURED, not guessed: inside both safeAreaInsets the proxy already
@@ -386,66 +406,151 @@ enum HomeMetrics {
         return raw > 320 ? raw : 660
     }
 
-    /// Panel height is derived from the COLUMN WIDTH, not from the viewport.
-    /// Solving it against the screen made four buttons eat ~70% of a phone —
-    /// a launcher tile should read as a control, so it stays a shade wider
-    /// than it is tall and the rails below get the room they earn.
-    /// A launcher tile is a CONTROL. Stacking a glyph above a title above a
-    /// subtitle forced a tall box with a void in the middle; laying it out
-    /// horizontally lets the same four actions cost 172pt instead of 260.
-    static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat { 80 }
+    /// Solved backwards from the fold. `belowGrid` is fixed, the last rail is
+    /// meant to be cut by the bottom of the screen, so whatever vertical
+    /// budget is left belongs to the two rows of panels:
+    ///
+    ///     2 * panel + gridSpacing + belowGrid + peek = viewport
+    ///
+    /// The clamp is the guard rail that a pure solve does not give you. 80pt
+    /// was the floor of an earlier fixed-height build and reads as a list row;
+    /// past ~100pt the four tiles start behaving like the full-bleed gradient
+    /// billboards that got thrown out. 86–100 is the band where a tile reads
+    /// as a considered control on both a 5.4" and a 6.9" phone.
+    static func panelHeight(viewport: CGFloat, width: CGFloat = 0) -> CGFloat {
+        let free = viewport - belowGrid - gridSpacing - railCard.height * peekFraction
+        return min(max((free / 2).rounded(), 86), 100)
+    }
 }
 
 // MARK: - Panels
 
-/// A primary action. Separation comes from a lifted gradient surface and a
-/// soft drop shadow — no outline. (Borders are being pulled app-wide; a 1px
-/// stroke on a coloured tile reads as a web button, not a control surface.)
+/// A primary action, built as a MACHINED PLATE rather than a coloured button.
+///
+/// Two rejected ancestors are the whole brief here. The first was a full-bleed
+/// saturated gradient billboard — candy, and it ate the page. The correction
+/// went too far the other way: a near-black bar with a small tinted chip and a
+/// title, which is a settings row wearing a hue. The difference between those
+/// and this one is not size and not saturation, it is MATERIAL:
+///
+///  • the plate is lit from above (value falls off top→bottom) and darkens
+///    into its own bottom edge, so it reads as a surface with thickness;
+///  • the identity hue arrives as a BLOOM behind the glyph — light spilling
+///    under the plate — and is never used as a fill;
+///  • the top edge carries a specular highlight that dies out by two thirds
+///    down. That is deliberately not a border: a border is uniform and closes
+///    a shape, this is asymmetric and only describes where the light is;
+///  • the glyph sits in a WELL that is darker than the plate around it. A
+///    recess is the one cue a printed swatch can never fake.
+///
+/// Composition is poster, not row: glyph pinned top-leading, title pinned
+/// bottom-leading, the air between them doing the work. (The old note about a
+/// stacked layout leaving "a void in the middle" was true of a three-element
+/// stack at 130pt; at 92pt with two elements the gap is tension, not a hole.)
 private struct HomePanel: View {
     let icon: String
     let title: String
-    /// The panel's identity colour. It tints the surface faintly and owns the
-    /// glyph outright — full-bleed saturated fills read as toy, not tool.
+    /// The panel's identity colour — the one sanctioned exception to Home's
+    /// monochrome discipline. It is spent entirely on light: the bloom, the
+    /// glyph, the glyph's halo, and one warm inch of the top edge.
     let tint: Color
     let height: CGFloat
     let action: () -> Void
+
+    private static let padY: CGFloat = 12
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+    }
 
     var body: some View {
         Button {
             LumaHaptics.shared.tap()
             action()
         } label: {
-            HStack(spacing: 11) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 32, height: 32)
-                    .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 0) {
+                glyph
+                Spacer(minLength: 8)
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
+                    .minimumScaleFactor(0.82)
             }
-            .padding(.horizontal, 13)
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
-            // Near-black surface carrying only a whisper of the identity hue.
-            // The colour lives in the glyph; the panel stays cinematic.
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(LumaTheme.cardRaised)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(LinearGradient(colors: [tint.opacity(0.15), tint.opacity(0.03)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                    }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+            // EXPLICIT height, not `minHeight`. With a minimum the VStack keeps
+            // its intrinsic height, the outer frame pads the difference, and the
+            // Spacer never expands — the glyph and title clump at the top with
+            // dead air underneath. Pinning the column to the plate's inner
+            // height is what actually drives the title to the bottom edge.
+            .frame(maxWidth: .infinity,
+                   minHeight: height - Self.padY * 2,
+                   maxHeight: height - Self.padY * 2,
+                   alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, Self.padY)
+            .background { plate }
+            .clipShape(shape)
+            // Drawn after the clip and inset, so the highlight is a full 1pt
+            // wide instead of a centred stroke with half of itself shaved off.
+            .overlay { edgeLight }
+            .contentShape(shape)
+            .shadow(color: LumaTheme.cardShadow, radius: 16, y: 9)
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(title)
+    }
+
+    /// Base surface. Top-lit value falloff between two existing elevation
+    /// tokens, then the hue bloom, then the plate's own floor shadow.
+    private var plate: some View {
+        ZStack {
+            LinearGradient(colors: [LumaTheme.cardRaised, LumaTheme.surface],
+                           startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [tint.opacity(0.30), tint.opacity(0.09), .clear],
+                           center: UnitPoint(x: 0.17, y: 0.16),
+                           startRadius: 2, endRadius: 132)
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.45),
+                .init(color: .black.opacity(0.30), location: 1)
+            ], startPoint: .top, endPoint: .bottom)
+        }
+    }
+
+    /// The specular edge. Bright white at the crown, warmed by the identity
+    /// hue as it comes round the shoulder, gone by 72% down.
+    private var edgeLight: some View {
+        shape.strokeBorder(
+            LinearGradient(stops: [
+                .init(color: .white.opacity(0.26), location: 0),
+                .init(color: tint.opacity(0.20), location: 0.30),
+                .init(color: .white.opacity(0.03), location: 0.72),
+                .init(color: .clear, location: 1)
+            ], startPoint: .top, endPoint: .bottom),
+            lineWidth: 1
+        )
+    }
+
+    /// A recess, not a chip. Darker than the plate it is cut into, with the
+    /// light catching only its top lip; the glyph itself carries a halo of its
+    /// own hue so the colour reads as emitted rather than painted on.
+    private var glyph: some View {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(tint)
+            .shadow(color: tint.opacity(0.55), radius: 8)
+            .frame(width: 32, height: 32)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.black.opacity(0.34))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(colors: [tint.opacity(0.34), .white.opacity(0.02)],
+                                               startPoint: .top, endPoint: .bottom),
+                                lineWidth: 1
+                            )
+                    }
+            }
     }
 }
 
