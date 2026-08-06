@@ -300,6 +300,15 @@ final class CameraController: NSObject, ObservableObject {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
+            // One shared completion slot: a second tap overwrote the first
+            // before its delegate callback arrived, so the FIRST photo was
+            // delivered to the SECOND closure and the second result was
+            // dropped entirely. Refuse to start a capture while one is in
+            // flight — the delegate clears the slot when it completes.
+            guard self.stillCompletion == nil else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
             self.stillCompletion = completion
             let settings = AVCapturePhotoSettings()
             settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
@@ -563,6 +572,13 @@ final class CameraController: NSObject, ObservableObject {
         // the handler kept firing for the rest of the app's lifetime after the
         // first visit to the camera. They restart with the next session.
         orientationMotion.stopDeviceMotionUpdates()
+        // If a capture was in flight when the session went away its delegate
+        // may never fire, and the in-flight guard in captureFullResStill would
+        // then reject every future still. Release the slot.
+        if let pending = stillCompletion {
+            stillCompletion = nil
+            DispatchQueue.main.async { pending(nil) }
+        }
         sessionQueue.async { [weak self] in
             self?.session.stopRunning()
             DispatchQueue.main.async { self?.isRunning = false }

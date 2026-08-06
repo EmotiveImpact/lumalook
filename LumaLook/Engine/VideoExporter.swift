@@ -92,8 +92,13 @@ struct ExportSpec: Equatable {
 
     /// AppStorage-friendly encoding. Fields 4+ were added later; readers that
     /// only understand the first three still parse this string correctly.
+    /// Fields 6 and 7 are `audioOnly` and `alsoGIF`. They were documented as
+    /// remembered across sessions and were the only two options NOT written
+    /// here, so both silently reset on every launch. The reader's legacy
+    /// "AUDIO"/"GIF" substring checks could never fire, because no writer had
+    /// ever emitted those tokens.
     var rawValue: String {
-        "\(resolution.rawValue)|\(codec.rawValue)|\(fps)|\(bitrate.rawValue)|\(hdr ? 1 : 0)"
+        "\(resolution.rawValue)|\(codec.rawValue)|\(fps)|\(bitrate.rawValue)|\(hdr ? 1 : 0)|\(audioOnly ? 1 : 0)|\(alsoGIF ? 1 : 0)"
     }
     static func from(rawValue: String) -> ExportSpec {
         var spec = ExportSpec()
@@ -107,6 +112,8 @@ struct ExportSpec: Equatable {
         }
         if parts.count >= 4 { spec.bitrate = Bitrate(rawValue: parts[3]) ?? .high }
         if parts.count >= 5 { spec.hdr = parts[4] == "1" }
+        if parts.count >= 6 { spec.audioOnly = parts[5] == "1" }
+        if parts.count >= 7 { spec.alsoGIF = parts[6] == "1" }
         return spec
     }
 }

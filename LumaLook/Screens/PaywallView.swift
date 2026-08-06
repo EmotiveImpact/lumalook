@@ -13,7 +13,13 @@ struct PaywallView: View {
 
     private enum Plan { case yearly, monthly, lifetime }
     @State private var plan: Plan = .yearly
-    @State private var purchased = false
+
+    /// True only when StoreKit says THIS user can still get the introductory
+    /// offer on the yearly product. The CTA and badge used to promise a
+    /// 7-day free trial purely from the local `Plan` enum, so a returning
+    /// subscriber — or a product with no eligible offer — was shown a
+    /// guarantee StoreKit would not honour.
+    @State private var yearlyTrialEligible = false
 
     private var yearlyPrice: String {
         storeService.proYearly?.displayPrice ?? StoreService.LockedPricing.yearly
@@ -56,6 +62,13 @@ struct PaywallView: View {
         }
         .onChange(of: storeService.isPro) { _, pro in
             if pro { dismiss() }
+        }
+        // Ask StoreKit whether THIS account can still use the intro offer.
+        // Re-runs when products finish loading, since the subscription info
+        // is nil until then.
+        .task(id: storeService.proYearly?.id) {
+            yearlyTrialEligible =
+                await storeService.proYearly?.subscription?.isEligibleForIntroOffer ?? false
         }
     }
 
@@ -107,9 +120,30 @@ struct PaywallView: View {
         }
     }
 
+    /// The yearly product's introductory offer, in whatever units StoreKit
+    /// actually reports (a "7-day" claim hardcoded in the UI is a claim about
+    /// App Store Connect configuration that the app cannot see).
+    private var yearlyTrialLabel: String? {
+        guard yearlyTrialEligible,
+              let offer = storeService.proYearly?.subscription?.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return nil }
+        let n = offer.period.value
+        let unit: String
+        switch offer.period.unit {
+        case .day:   unit = n == 1 ? "Day" : "Day"
+        case .week:  unit = n == 1 ? "Week" : "Week"
+        case .month: unit = n == 1 ? "Month" : "Month"
+        case .year:  unit = n == 1 ? "Year" : "Year"
+        @unknown default: return nil
+        }
+        return "\(n)-\(unit) Free Trial"
+    }
+
     private var callToAction: String {
         switch plan {
-        case .yearly:   return "Start 7-Day Free Trial"
+        case .yearly:
+            // Only offer a trial when this user is actually eligible for one.
+            return yearlyTrialLabel.map { "Start \($0)" } ?? "Subscribe Yearly"
         case .monthly:  return "Subscribe Monthly"
         case .lifetime: return "Get Lifetime Access"
         }
@@ -118,7 +152,10 @@ struct PaywallView: View {
     /// Apple requires the renewing price and cadence next to a subscription CTA.
     private var renewalNote: String? {
         switch plan {
-        case .yearly:   return "Then \(yearlyPrice) per year. Cancel anytime."
+        case .yearly:
+            return yearlyTrialLabel == nil
+                ? "\(yearlyPrice) per year. Cancel anytime."
+                : "Then \(yearlyPrice) per year. Cancel anytime."
         case .monthly:  return "\(monthlyPrice) per month. Cancel anytime."
         case .lifetime: return nil
         }
@@ -151,7 +188,13 @@ struct PaywallView: View {
         Button {
             Task {
                 guard let product = selectedProduct else { return }
-                purchased = await storeService.purchase(product)
+                // The result used to be assigned to state nothing read, so a
+                // successful purchase left the paywall sitting there as if
+                // nothing had happened.
+                if await storeService.purchase(product) {
+                    LumaHaptics.shared.exportSuccess()
+                    dismiss()
+                }
             }
         } label: {
             HStack {
