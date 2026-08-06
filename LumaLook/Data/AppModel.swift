@@ -701,6 +701,21 @@ final class AppModel: ObservableObject {
         lastExportGIFURL = nil
         lookState.splitFraction = nil
         do {
+            // Audio-only has to branch HERE. `exporter.export(videoURL:...)`
+            // always builds a video composition and returns a video, so the
+            // grade flow was handing back an ordinary graded movie while the
+            // sheet promised "AAC · M4A". The editor flow already had this
+            // branch (EditorScreen.swift, startExport) — the grade flow never
+            // called the M4A path at all.
+            if spec.audioOnly {
+                let output = try await exporter.exportAudioOnly(
+                    asset: AVURLAsset(url: url), audioMix: nil)
+                // Photos rejects bare audio, so this is share-only.
+                lastExportSavedToPhotos = false
+                lastExportImage = nil
+                lastExportURL = output
+                return true
+            }
             let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
             lastExportSavedToPhotos = await exporter.saveToPhotos(url: output)
             lastExportImage = nil

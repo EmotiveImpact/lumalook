@@ -634,6 +634,13 @@ struct EditorTimelineView: View {
             #endif
         }
         .onDisappear {
+            // A take left running keeps the microphone hot and the 30 Hz meter
+            // task alive after the editor is gone, with no visible stop control
+            // anywhere in the app. `EditorState` is owned by AppModel and
+            // outlives this view (AppModel.swift), so nothing else would ever
+            // stop it. Committing rather than discarding: the user recorded
+            // audio, and silently binning it would be the worse failure.
+            if editor.isRecordingVoiceover { editor.stopVoiceover() }
             editor.saveProject()
         }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {

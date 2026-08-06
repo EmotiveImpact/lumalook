@@ -141,6 +141,13 @@ struct ExportSpecSheet: View {
     /// would draw a control nothing reads.
     private var offersGIF: Bool { gradeCubeTitle == nil }
 
+    /// A still has no audio track to export. The grade flow passes
+    /// `durationSeconds: 0` for a picked photo (BeforeAfterView.swift), which
+    /// is the same signal the size estimate already uses. Without this the
+    /// sheet offered "Audio only" on a photo and promised an M4A that cannot
+    /// exist.
+    private var offersAudioOnly: Bool { durationSeconds > 0 }
+
     var body: some View {
         // The spec controls scroll; the estimate and the instruction bar are
         // PINNED below them. The stack measures well past the sheet's default
@@ -391,9 +398,11 @@ struct ExportSpecSheet: View {
     private var toolRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                tool("waveform", "Audio only", on: spec.audioOnly) {
-                    spec.audioOnly.toggle()
-                    LumaHaptics.shared.tap()
+                if offersAudioOnly {
+                    tool("waveform", "Audio only", on: spec.audioOnly) {
+                        spec.audioOnly.toggle()
+                        LumaHaptics.shared.tap()
+                    }
                 }
                 if offersGIF {
                     tool("square.stack.3d.down.forward", "GIF", on: spec.alsoGIF,

@@ -887,10 +887,44 @@ final class EditorState: ObservableObject {
         audioTracks = []
         overlays = []
         overlaySourceExtents = [:]
+        resetProjectDefaults()
         undoStack.removeAll()
         redoStack.removeAll()
         updateHistoryFlags()
         rebuild(keepPosition: false)
+    }
+
+    /// Every project-owned field that is NOT media, restored to its declared
+    /// default.
+    ///
+    /// `startNewProject()` used to clear only clips, audio, overlays and
+    /// history — so a "new" project silently inherited the previous one's
+    /// adjustment/effect/particle layers, audio-reactive config, canvas mode
+    /// and colours, frame preset, zoom, format, and the whole volume/fade/mute
+    /// mix. All of it is persisted per project by `saveProject()` and consumed
+    /// by the next `rebuild()`, so the first clip you dropped into a blank
+    /// project came out wearing the last project's grade and mix.
+    ///
+    /// `load(project:)` never had this bug — it assigns every one of these
+    /// fields with a `?? default`, which is why only the new-project path was
+    /// affected. This method is the same defaults in one place; the list must
+    /// stay in step with what `saveProject()` serializes.
+    private func resetProjectDefaults() {
+        adjustmentLayers = []
+        effectLayers = []
+        particleLayers = []
+        audioReactive = nil
+        format = .widescreen
+        zoom = 100
+        canvasMode = .fill
+        canvasSolidHex = "#101014"
+        canvasGradientTopHex = "#2A2A38"
+        canvasGradientBottomHex = "#050507"
+        framePreset = FramePreset.none.rawValue
+        volume = 100
+        fadeIn = 0
+        fadeOut = 0
+        muteAudio = false
     }
 
     // MARK: - Mutations
