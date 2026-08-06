@@ -475,6 +475,10 @@ final class EditorState: ObservableObject {
         var canvasGradientTopHex: String
         var canvasGradientBottomHex: String
         var framePreset: String
+        /// `setAudioReactive` pushes an undo snapshot and the compositor reads
+        /// this every rebuild — but it was missing here, so Undo rolled back
+        /// everything EXCEPT the reactive effect you were trying to undo.
+        var audioReactive: AudioReactiveConfig?
     }
 
     // Timeline
@@ -2755,7 +2759,8 @@ final class EditorState: ObservableObject {
                  canvasMode: canvasMode, canvasSolidHex: canvasSolidHex,
                  canvasGradientTopHex: canvasGradientTopHex,
                  canvasGradientBottomHex: canvasGradientBottomHex,
-                 framePreset: framePreset)
+                 framePreset: framePreset,
+                 audioReactive: audioReactive)
     }
 
     private func pushUndoSnapshot() {
@@ -2780,6 +2785,7 @@ final class EditorState: ObservableObject {
         clips = snapshot.clips
         format = snapshot.format
         zoom = snapshot.zoom
+        audioReactive = snapshot.audioReactive
         audioTracks = snapshot.audioTracks
         overlays = snapshot.overlays
         adjustmentLayers = snapshot.adjustmentLayers

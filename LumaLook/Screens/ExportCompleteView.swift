@@ -331,7 +331,14 @@ struct ExportCompleteView: View {
                     tool("film.stack", "In editor", on: false) { continueInEditor() }
                 }
                 tool("photo.on.rectangle", "New source", on: false) { app.path = [.selectClip] }
-                tool("plus.square", "New project", on: false) { app.resetToHome() }
+                // `resetToHome()` alone only clears navigation and the grade
+                // source — the previous project stayed loaded in the editor, so
+                // a button labelled "New project" neither created nor cleared
+                // one. Start the project first, THEN reset navigation.
+                tool("plus.square", "New project", on: false) {
+                    app.editor.startNewProject()
+                    app.resetToHome()
+                }
             }
             .padding(.horizontal, 16)
         }

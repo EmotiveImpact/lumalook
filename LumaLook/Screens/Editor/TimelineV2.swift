@@ -147,9 +147,20 @@ struct TimelineV2View: View {
                 set: { zoom = $0.pointsPerSecond })
     }
 
-    /// One row per stacking lane in use (F0); always at least one.
+    /// One row per stacking lane in use (F0), plus ONE SPARE once anything is
+    /// stacked — the spare is what keeps "add another overlay" reachable.
+    ///
+    /// This was `maxLane + 1`, so every lane was always occupied. The pinned
+    /// gutter only drew its "+ Overlay" button when `overlays.isEmpty`, and the
+    /// lane inside the scroller passes `showsAddPlaceholder: false` because the
+    /// gutter is meant to own that affordance. Net effect: adding your FIRST
+    /// overlay deleted the only way to add a SECOND from the timeline.
+    ///
+    /// Defined identically in TimelineV2View and TimelineContentView; they must
+    /// agree or the pinned gutter and the scrolling lanes lose vertical sync.
     private var overlayLaneCount: Int {
-        (editor.overlays.map(\.lane).max() ?? 0) + 1
+        guard let top = editor.overlays.map(\.lane).max() else { return 1 }
+        return top + 2
     }
     private var stackHeight: CGFloat {
         LaneMetrics.total(audioRows: AudioLanePlan.rowCount(editor.audioTracks),
@@ -213,11 +224,13 @@ struct TimelineV2View: View {
             gutterSpacer(LaneMetrics.ruler)
             VStack(alignment: .leading, spacing: 4) {
                 gutterSpacer(LaneMetrics.video)
-                ForEach((0..<overlayLaneCount).reversed(), id: \.self) { _ in
-                    if editor.overlays.isEmpty {
-                        OverlayAddButton(action: onAddOverlay)
-                    } else {
+                ForEach((0..<overlayLaneCount).reversed(), id: \.self) { lane in
+                    // Per-lane, not global: an EMPTY lane offers the button, an
+                    // occupied one yields to the bars underneath it.
+                    if editor.overlays.contains(where: { $0.lane == lane }) {
                         gutterSpacer(LaneMetrics.overlay)
+                    } else {
+                        OverlayAddButton(action: onAddOverlay)
                     }
                 }
                 gutterSpacer(LaneMetrics.clipAudio)
@@ -326,9 +339,20 @@ struct TimelineContentView: View {
     let onTapOverlay: (UUID) -> Void
     let onRecordVoiceover: () -> Void
 
-    /// One row per stacking lane in use (F0); always at least one.
+    /// One row per stacking lane in use (F0), plus ONE SPARE once anything is
+    /// stacked — the spare is what keeps "add another overlay" reachable.
+    ///
+    /// This was `maxLane + 1`, so every lane was always occupied. The pinned
+    /// gutter only drew its "+ Overlay" button when `overlays.isEmpty`, and the
+    /// lane inside the scroller passes `showsAddPlaceholder: false` because the
+    /// gutter is meant to own that affordance. Net effect: adding your FIRST
+    /// overlay deleted the only way to add a SECOND from the timeline.
+    ///
+    /// Defined identically in TimelineV2View and TimelineContentView; they must
+    /// agree or the pinned gutter and the scrolling lanes lose vertical sync.
     private var overlayLaneCount: Int {
-        (editor.overlays.map(\.lane).max() ?? 0) + 1
+        guard let top = editor.overlays.map(\.lane).max() else { return 1 }
+        return top + 2
     }
 
     private var stackHeight: CGFloat {

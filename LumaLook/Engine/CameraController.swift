@@ -558,6 +558,11 @@ final class CameraController: NSObject, ObservableObject {
         stubTimer?.cancel()
         stubTimer = nil
         #endif
+        // startSession() also starts device-motion updates (capture
+        // orientation). Nothing ever stopped them, so the gyro stayed live and
+        // the handler kept firing for the rest of the app's lifetime after the
+        // first visit to the camera. They restart with the next session.
+        orientationMotion.stopDeviceMotionUpdates()
         sessionQueue.async { [weak self] in
             self?.session.stopRunning()
             DispatchQueue.main.async { self?.isRunning = false }
