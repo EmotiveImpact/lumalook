@@ -425,39 +425,38 @@ enum HomeMetrics {
 
 // MARK: - Panels
 
-/// A primary action, built as a MACHINED PLATE rather than a coloured button.
+/// A primary action, built as a POSTER: a title, one big graphic, one light.
 ///
-/// Two rejected ancestors are the whole brief here. The first was a full-bleed
-/// saturated gradient billboard — candy, and it ate the page. The correction
-/// went too far the other way: a near-black bar with a small tinted chip and a
-/// title, which is a settings row wearing a hue. The difference between those
-/// and this one is not size and not saturation, it is MATERIAL:
+/// Three rejected ancestors are the brief. First a full-bleed saturated
+/// gradient billboard — candy, and it ate the page. The correction went too far
+/// the other way: a near-black bar with a 15pt glyph in a 32pt chip and 15pt
+/// text, laid out as a horizontal row. Then a "machined plate" that kept that
+/// same 15pt glyph and tried to buy presence with craft instead — five stacked
+/// gradients (value falloff, hue bloom, floor shadow, specular border, and the
+/// glyph well's own gradient stroke) on a 92pt tile.
 ///
-///  • the plate is lit from above (value falls off top→bottom) and darkens
-///    into its own bottom edge, so it reads as a surface with thickness;
-///  • the identity hue arrives as a BLOOM behind the glyph — light spilling
-///    under the plate — and is never used as a fill;
-///  • the top edge carries a specular highlight that dies out by two thirds
-///    down. That is deliberately not a border: a border is uniform and closes
-///    a shape, this is asymmetric and only describes where the light is;
-///  • the glyph sits in a WELL that is darker than the plate around it. A
-///    recess is the one cue a printed swatch can never fake.
+/// The plate failed for a reason worth writing down: NONE OF THAT IS LEGIBLE AT
+/// THIS SIZE. A 30%-opacity bloom with a 132pt radius, a stroke that fades out
+/// by 72%, a well 34% darker than its plate — each is a real effect at 300pt,
+/// and at 92pt they composite into grey mud. The tiles did not look crafted,
+/// they looked smudged, and the glyph was still a speck. Both rejected versions
+/// shared the actual defect: SETTINGS-ROW SCALE IN A LAUNCHER TILE.
 ///
-/// Composition is poster, not row: glyph pinned top-leading, title pinned
-/// bottom-leading, the air between them doing the work. (The old note about a
-/// stacked layout leaving "a void in the middle" was true of a three-element
-/// stack at 130pt; at 92pt with two elements the gap is tension, not a hole.)
+/// So the fix is scale and composition, not more layers. The glyph is now the
+/// tile's graphic — 46pt, no container, bled off the bottom-right corner so it
+/// reads as artwork rather than an icon centred in a box — and the title sits
+/// top-left against it on the diagonal. One radial wash, seated at the glyph so
+/// the colour and the light agree about where they come from, and one hairline
+/// along the top. Everything else was subtracted.
 private struct HomePanel: View {
     let icon: String
     let title: String
-    /// The panel's identity colour — the one sanctioned exception to Home's
-    /// monochrome discipline. It is spent entirely on light: the bloom, the
-    /// glyph, the glyph's halo, and one warm inch of the top edge.
+    /// The panel's identity colour, and Home's one sanctioned exception to
+    /// monochrome chrome. It owns the glyph outright and washes the surface
+    /// from behind it; it is never a fill.
     let tint: Color
     let height: CGFloat
     let action: () -> Void
-
-    private static let padY: CGFloat = 12
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -468,89 +467,76 @@ private struct HomePanel: View {
             LumaHaptics.shared.tap()
             action()
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                glyph
-                Spacer(minLength: 8)
+            ZStack(alignment: .topLeading) {
+                plate
+                artwork
                 Text(title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(.system(size: 16.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 15)
+                    .padding(.top, 13)
             }
-            // EXPLICIT height, not `minHeight`. With a minimum the VStack keeps
-            // its intrinsic height, the outer frame pads the difference, and the
-            // Spacer never expands — the glyph and title clump at the top with
-            // dead air underneath. Pinning the column to the plate's inner
-            // height is what actually drives the title to the bottom edge.
-            .frame(maxWidth: .infinity,
-                   minHeight: height - Self.padY * 2,
-                   maxHeight: height - Self.padY * 2,
-                   alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, Self.padY)
-            .background { plate }
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height,
+                   alignment: .topLeading)
             .clipShape(shape)
-            // Drawn after the clip and inset, so the highlight is a full 1pt
-            // wide instead of a centred stroke with half of itself shaved off.
-            .overlay { edgeLight }
+            // Inset stroke drawn after the clip, so the hairline is a full 1pt
+            // rather than a centred stroke with half of itself shaved off.
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(colors: [.white.opacity(0.16), .white.opacity(0.02)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1
+                )
+            }
             .contentShape(shape)
-            .shadow(color: LumaTheme.cardShadow, radius: 16, y: 9)
+            .shadow(color: LumaTheme.cardShadow, radius: 14, y: 8)
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel(title)
     }
 
-    /// Base surface. Top-lit value falloff between two existing elevation
-    /// tokens, then the hue bloom, then the plate's own floor shadow.
+    /// One surface, one light. The wash is seated under the glyph rather than
+    /// in the opposite corner, so the tile reads as lit BY its own artwork.
     private var plate: some View {
         ZStack {
-            LinearGradient(colors: [LumaTheme.cardRaised, LumaTheme.surface],
-                           startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [tint.opacity(0.30), tint.opacity(0.09), .clear],
-                           center: UnitPoint(x: 0.17, y: 0.16),
-                           startRadius: 2, endRadius: 132)
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0.45),
-                .init(color: .black.opacity(0.30), location: 1)
-            ], startPoint: .top, endPoint: .bottom)
+            LumaTheme.cardRaised
+            RadialGradient(colors: [tint.opacity(0.34), tint.opacity(0.10), .clear],
+                           center: UnitPoint(x: 0.84, y: 0.92),
+                           startRadius: 4, endRadius: 168)
         }
     }
 
-    /// The specular edge. Bright white at the crown, warmed by the identity
-    /// hue as it comes round the shoulder, gone by 72% down.
-    private var edgeLight: some View {
-        shape.strokeBorder(
-            LinearGradient(stops: [
-                .init(color: .white.opacity(0.26), location: 0),
-                .init(color: tint.opacity(0.20), location: 0.30),
-                .init(color: .white.opacity(0.03), location: 0.72),
-                .init(color: .clear, location: 1)
-            ], startPoint: .top, endPoint: .bottom),
-            lineWidth: 1
-        )
-    }
-
-    /// A recess, not a chip. Darker than the plate it is cut into, with the
-    /// light catching only its top lip; the glyph itself carries a halo of its
-    /// own hue so the colour reads as emitted rather than painted on.
-    private var glyph: some View {
-        Image(systemName: icon)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(tint)
-            .shadow(color: tint.opacity(0.55), radius: 8)
-            .frame(width: 32, height: 32)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.black.opacity(0.34))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(colors: [tint.opacity(0.34), .white.opacity(0.02)],
-                                               startPoint: .top, endPoint: .bottom),
-                                lineWidth: 1
-                            )
-                    }
+    /// The graphic, seated whole in the bottom-right corner.
+    ///
+    /// This was briefly bled off the corner, which is a good instinct on a
+    /// single tile and wrong across four: SF Symbols do not share an aspect
+    /// ratio, so ONE offset crops each glyph by a different amount. `plus` is
+    /// symmetric and survived it, but `camera.fill` and `bag.fill` are wide and
+    /// got sliced through the middle of their forms — the result read as a
+    /// clipping bug, not a composition. Scale is what gives the tile presence;
+    /// the bleed was never doing that work, so it went.
+    private var artwork: some View {
+        VStack {
+            Spacer(minLength: 0)
+            HStack {
+                Spacer(minLength: 0)
+                Image(systemName: icon)
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(colors: [tint, tint.opacity(0.62)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+                    .shadow(color: tint.opacity(0.45), radius: 14)
+                    .padding(.trailing, 15)
+                    .padding(.bottom, 11)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The artwork must never intercept the tap — the Button's own
+        // contentShape owns the whole tile.
+        .allowsHitTesting(false)
     }
 }
 
