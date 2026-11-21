@@ -204,9 +204,7 @@ final class LookLibraryStore: ObservableObject {
         // Freeze what is on screen BEFORE recording, so the tile the user
         // just tapped keeps its place (see "Stable order while picking").
         if pickingOrder == nil {
-            let fresh = freshStripOrder(all: all)
-            pickingOrder = PickingOrder(strip: fresh.ids, pinnedCount: fresh.pinnedCount,
-                                        recents: recentIDs)
+            pickingOrder = PickingOrder(strip: freshStripOrder(all: all), recents: recentIDs)
         }
         if pickingOrder?.promoted.contains(look.id) == false {
             pickingOrder?.promoted.insert(look.id, at: 0)
@@ -227,7 +225,8 @@ final class LookLibraryStore: ObservableObject {
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ids: [String]
         if let order = pickingOrder {
-            ids = order.promoted.filter { !order.recents.contains($0) } + order.recents
+            ids = Array((order.promoted.filter { !order.recents.contains($0) } + order.recents)
+                .prefix(Self.recentsCap))
         } else {
             ids = recentIDs
         }
@@ -252,7 +251,6 @@ final class LookLibraryStore: ObservableObject {
     private struct PickingOrder {
         /// The full strip order when picking began, pinned looks first.
         var strip: [String]
-        var pinnedCount: Int
         /// The recents order when picking began.
         var recents: [String]
         /// Looks picked since, in first-pick order, newest first. Never
@@ -270,11 +268,17 @@ final class LookLibraryStore: ObservableObject {
         let all = self.all
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         guard let order = pickingOrder else {
-            return freshStripOrder(all: all).ids.prefix(limit).compactMap { byID[$0] }
+            return freshStripOrder(all: all).prefix(limit).compactMap { byID[$0] }
         }
-        var ids = order.strip.filter { byID[$0] != nil }.prefix(limit).map { $0 }
+        // The pinned collection can change from All looks without leaving
+        // the camera, so its prefix follows live membership; the rest keeps
+        // the frozen order. A look unpinned meanwhile stays where it was.
+        var seen = Set<String>()
+        let pinned = pinnedCollectionLooks.map(\.id).filter { seen.insert($0).inserted }
+        let unpinned = order.strip.filter { byID[$0] != nil && !seen.contains($0) }
+        var ids = Array((pinned + unpinned).prefix(limit))
         for id in order.promoted.reversed() where !ids.contains(id) && byID[id] != nil {
-            ids.insert(id, at: min(order.pinnedCount, ids.count))
+            ids.insert(id, at: min(pinned.count, ids.count))
             if ids.count > limit,
                let drop = ids.lastIndex(where: { !order.promoted.contains($0) }) {
                 ids.remove(at: drop)
@@ -292,14 +296,13 @@ final class LookLibraryStore: ObservableObject {
         pickingOrder = nil
     }
 
-    private func freshStripOrder(all: [LibraryLook]) -> (ids: [String], pinnedCount: Int) {
+    private func freshStripOrder(all: [LibraryLook]) -> [String] {
         let known = Set(all.map(\.id))
         var seen = Set<String>()
         var ids: [String] = []
         for look in pinnedCollectionLooks where seen.insert(look.id).inserted {
             ids.append(look.id)
         }
-        let pinnedCount = ids.count
         for id in recentIDs where known.contains(id) && seen.insert(id).inserted {
             ids.append(id)
         }
@@ -309,7 +312,7 @@ final class LookLibraryStore: ObservableObject {
         for look in all where seen.insert(look.id).inserted {
             ids.append(look.id)
         }
-        return (ids, pinnedCount)
+        return ids
     }
 
     // MARK: - Persistence (Documents/LookLibrary.json — NEW file, additive)

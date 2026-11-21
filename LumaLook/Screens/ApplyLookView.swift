@@ -737,7 +737,12 @@ struct ApplyLookView: View {
                 // A tile the user just tapped is already under their thumb:
                 // scrolling after it would lose their place. Only a pick made
                 // elsewhere (All looks, undo, a category switch) is fetched.
-                guard let new, new != tappedLookID else { return }
+                // A saved look also lights its base tile, which can sit
+                // earlier in the strip, so test the tapped tile itself.
+                guard let new else { return }
+                if let tapped = tappedLookID,
+                   let look = categoryLooks.first(where: { $0.id == tapped }),
+                   app.isCurrent(look) { return }
                 tappedLookID = nil
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(new, anchor: .center) }
             }
