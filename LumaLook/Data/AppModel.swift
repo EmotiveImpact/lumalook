@@ -214,7 +214,7 @@ final class AppModel: ObservableObject {
             self?.previewFrame = CIImage(cgImage: result.image)
         }
     }
-    @Published var selectedLook: LookPreset = MockData.looks[2] {
+    @Published var selectedLook: LookPreset = MockData.defaultLook {
         didSet { syncLookState() }
     }
     @Published var selectedLUT: LUTFile? {
@@ -495,13 +495,7 @@ final class AppModel: ObservableObject {
             "projectLibrary": [.projectLibrary],
             "settings": [.settings],
             "customLook": [.selectClip, .applyLook, .customLook],
-            "collections": [.collections],
-            "ldGrade": [.ldGrade],
-            "ldLibrary": [.ldLibrary],
-            "ldCamera": [.ldCamera],
-            "ldEditor": [.ldEditor],
-            "ldStore": [.ldStore],
-            "ldExport": [.ldExport]
+            "collections": [.collections]
         ]
         if let target = map[route] {
             path = target
@@ -687,6 +681,68 @@ final class AppModel: ObservableObject {
         settings = saved.settings
     }
 
+    /// True when the grade-room grade changes the picture at all. Strength 0
+    /// dissolves the look and the user adjustments back to the original; a
+    /// lens sits outside that blend, so it counts on its own.
+    var gradeIsApplied: Bool {
+        let lens = LensKind(rawValue: settings.lensKind) ?? .none
+        return settings.intensity > 0 || lens != .none
+    }
+
+    // MARK: - Grade stash (editor ✕)
+
+    /// The whole global grade as one value, so a tool that changes it (the
+    /// editor's whole-edit Looks) can put it back exactly when cancelled.
+    struct GradeStash {
+        let look: LookPreset
+        let lut: LUTFile?
+        let settings: LookSettings
+        let creativeOpacity: Double
+        let creativeBlend: LUTBlendMode
+    }
+
+    func stashGrade() -> GradeStash {
+        GradeStash(look: selectedLook, lut: selectedLUT, settings: settings,
+                   creativeOpacity: creativeOpacity, creativeBlend: creativeBlend)
+    }
+
+    /// Restores a stash without the side effects of a fresh pick: no
+    /// remembered-strength load and no per-LUT strength write-back.
+    func restoreGrade(_ stash: GradeStash) {
+        isRestoringSession = true
+        selectedLook = stash.look
+        selectedLUT = stash.lut
+        creativeOpacity = stash.creativeOpacity
+        creativeBlend = stash.creativeBlend
+        settings = stash.settings
+        isRestoringSession = false
+    }
+
+    // MARK: - Premium gate
+
+    /// The locked look in the grade-room grade (video, still, camera), or nil.
+    /// A LUT in the creative slot replaces the recipe entirely, and LUTs are
+    /// files the user already owns, so only a recipe grade can be locked.
+    func lockedLookInGrade(_ store: StoreService) -> LookLock? {
+        // Strength 0 is the Original/OFF tile: the look renders nothing.
+        guard selectedLUT == nil, settings.intensity > 0 else { return nil }
+        return store.lock(forBuiltIn: selectedLook)
+    }
+
+    /// The first locked look anywhere in the editor project: any clip that
+    /// follows the timeline grade, every per-clip grade and every adjustment
+    /// layer. Checked at export so a premium look cannot ride out on a clip.
+    func lockedLookInProject(_ store: StoreService) -> LookLock? {
+        if editor.clips.contains(where: { $0.grade == nil }),
+           let lock = lockedLookInGrade(store) {
+            return lock
+        }
+        for grade in editor.clips.compactMap(\.grade) + editor.adjustmentLayers.map(\.grade) {
+            if let lock = store.lock(for: grade) { return lock }
+        }
+        return nil
+    }
+
     // MARK: - Export
 
     func exportCurrentVideo(spec: ExportSpec = ExportSpec()) async -> Bool {
@@ -716,6 +772,10 @@ final class AppModel: ObservableObject {
                 lastExportURL = output
                 return true
             }
+            // Belt and braces for the sheet's own check: an HLG tag is only
+            // honest on an ungraded frame (HDRDelivery).
+            var spec = spec
+            if spec.hdr && gradeIsApplied { spec.hdr = false }
             let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
             lastExportSavedToPhotos = await exporter.saveToPhotos(url: output)
             lastExportImage = nil

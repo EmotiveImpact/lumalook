@@ -329,7 +329,10 @@ extension AVMutableVideoComposition {
 ///
 /// LumaLook grades in Rec.709: `LogNormalizer` maps log/HDR sources down and
 /// `LookPipeline` works in sRGB. So HDR is only real when the source itself
-/// is HLG-tagged AND nothing is converting it away. Every other case returns
+/// is HLG-tagged AND nothing is converting or grading it. A graded frame
+/// tagged HLG is a Rec.709 picture wearing an HDR label: it plays back with
+/// the wrong tone curve, so a grade rules HDR out until the pipeline can
+/// grade in a wide-gamut working space. Every other case returns
 /// a reason the sheet shows instead of offering a toggle that does nothing.
 enum HDRDelivery {
     enum Availability: Equatable {
@@ -356,6 +359,7 @@ enum HDRDelivery {
 
     static func availability(sourceIsHLG: Bool,
                              logConversionActive: Bool,
+                             gradeApplied: Bool,
                              spec: ExportSpec,
                              isTimeline: Bool) -> Availability {
         if spec.audioOnly { return .unavailable("Audio-only exports carry no video track.") }
@@ -364,6 +368,7 @@ enum HDRDelivery {
         if spec.resolution == .hd720 { return .unavailable("The 720 fast tier delivers H.264 Rec.709.") }
         if !sourceIsHLG { return .unavailable("This clip is Rec.709 — there is no HDR to keep.") }
         if logConversionActive { return .unavailable("Log conversion already maps this clip to Rec.709.") }
+        if gradeApplied { return .unavailable("Looks are graded in Rec.709. Set the look to Original to keep this clip's HDR.") }
         return .available
     }
 }

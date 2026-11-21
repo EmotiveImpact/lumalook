@@ -95,6 +95,27 @@ final class TimelineReorderState: ObservableObject {
 /// snapped to, shared so a single accent guide-line renders in content space.
 final class SnapState: ObservableObject {
     @Published var snappedTime: Double?
+    /// Width of the timeline viewport. Not published: it only feeds the snap
+    /// maths, so a size change shouldn't re-render every lane.
+    var viewportWidth: CGFloat = 0
+}
+
+/// Held while a trim handle or a bar is being dragged, so the timeline's own
+/// scroll pan can't start under the finger and slide the content away
+/// mid-trim. Static because only one timeline is ever on screen.
+@MainActor enum TimelineDragLock {
+    static var isHeld = false
+}
+
+/// A hit area wider than the grip it belongs to, so a narrow trim handle
+/// still takes a 44 pt touch without reaching into the lanes above and below.
+struct HitSlop: Shape {
+    var horizontal: CGFloat
+    var vertical: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -horizontal, dy: -vertical))
+    }
 }
 
 /// Shared snap-target maths for the timeline: t = 0, every clip boundary, and
@@ -111,12 +132,29 @@ enum TimelineSnap {
         return result
     }
 
-    /// The nearest snap target to `time` within `window` seconds, or nil.
-    @MainActor static func nearest(to time: Double, editor: EditorState, within window: Double) -> Double? {
-        guard let target = targets(editor: editor).min(by: {
-            abs($0 - time) < abs($1 - time)
-        }), abs(target - time) < window else { return nil }
-        return target
+    /// Where a dragged bar should land, or nil to leave it under the finger.
+    /// Either edge can catch, within 8 pt, but only on a target the person
+    /// can see. A long bar used to snap by its leading edge while that edge,
+    /// and the boundary it caught, were both scrolled off-screen.
+    @MainActor static func magnet(start: Double, duration: Double,
+                                  editor: EditorState, metrics: TimelineMetrics,
+                                  viewportWidth: CGFloat) -> (shift: Double, target: Double)? {
+        let window = metrics.time(for: 8)
+        // The playhead sits mid-viewport, so the visible span centres on it.
+        let now = editor.currentTime
+        let halfSpan = viewportWidth > 0 ? metrics.time(for: viewportWidth / 2)
+                                         : .greatestFiniteMagnitude
+        func isVisible(_ time: Double) -> Bool { abs(time - now) <= halfSpan }
+
+        let candidates = targets(editor: editor).filter { isVisible($0) }
+        var best: (shift: Double, target: Double)?
+        for edge in [start, start + duration] where isVisible(edge) {
+            guard let target = candidates.min(by: { abs($0 - edge) < abs($1 - edge) }),
+                  abs(target - edge) < window,
+                  abs(target - edge) < abs(best?.shift ?? .greatestFiniteMagnitude) else { continue }
+            best = (target - edge, target)
+        }
+        return best
     }
 }
 
@@ -203,6 +241,13 @@ struct TimelineV2View: View {
             }
         }
         .frame(height: stackHeight)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { snap.viewportWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in snap.viewportWidth = width }
+            }
+        }
         .padding(.top, projectIsEmpty ? 0 : LaneMetrics.magnetGutter)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: editor.audioTracks.count)
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: overlayLaneCount)
@@ -598,7 +643,7 @@ struct RulerLane: View {
                 )
                 if isLabelTick {
                     let label = Text(Self.label(for: s))
-                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.45))
                     context.draw(label,
                                  at: CGPoint(x: s == 0 ? x + 2 : x, y: 4),
@@ -786,14 +831,21 @@ private struct ClipTrimHandles: View {
     @Binding var draftTailX: CGFloat
     let onCommit: () -> Void
 
+    @GestureState private var headActive = false
+    @GestureState private var tailActive = false
+
     private var baseWidth: CGFloat { max(metrics.x(for: clip.timelineDuration), 10) }
 
     var body: some View {
         HStack {
             grip(system: "chevron.compact.left")
                 .gesture(
-                    DragGesture(minimumDistance: 2)
+                    // Global coordinates: the grip rides the draft offset, so
+                    // a local translation would fight its own movement.
+                    DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                        .updating($headActive) { _, active, _ in active = true }
                         .onChanged { value in
+                            TimelineDragLock.isHeld = true
                             // + shrinks from the left; − extends into unused
                             // head material (never past the asset start).
                             let minX = -metrics.x(for: clip.trimStart / clip.speed)
@@ -805,8 +857,10 @@ private struct ClipTrimHandles: View {
             Spacer(minLength: 0)
             grip(system: "chevron.compact.right")
                 .gesture(
-                    DragGesture(minimumDistance: 2)
+                    DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                        .updating($tailActive) { _, active, _ in active = true }
                         .onChanged { value in
+                            TimelineDragLock.isHeld = true
                             // + extends into unused tail material.
                             let maxX = metrics.x(for: (clip.assetDuration - clip.trimEnd) / clip.speed)
                             let minX = -(baseWidth - metrics.x(for: 0.2 / clip.speed) - draftHeadX)
@@ -816,6 +870,12 @@ private struct ClipTrimHandles: View {
                 )
         }
         .allowsHitTesting(true)
+        // Releases the scroll lock on end AND on cancel (a cancelled drag
+        // never reaches onEnded, but its gesture state always resets).
+        .onChange(of: headActive || tailActive) { _, active in
+            TimelineDragLock.isHeld = active
+        }
+        .onDisappear { TimelineDragLock.isHeld = false }
     }
 
     private func commit() {
@@ -841,7 +901,8 @@ private struct ClipTrimHandles: View {
                 bottomLeadingRadius: system.contains("left") ? 10 : 0,
                 bottomTrailingRadius: system.contains("left") ? 0 : 10,
                 topTrailingRadius: system.contains("left") ? 0 : 10))
-            .contentShape(Rectangle().inset(by: -8))
+            // 17 pt grip, 45 pt touch.
+            .contentShape(HitSlop(horizontal: 14, vertical: 4))
     }
 }
 
@@ -1051,9 +1112,22 @@ private struct OverlayBar: View {
     @State private var dragTranslation: CGFloat = 0
     @State private var isDraggingBar = false
     @State private var lastSnappedTime: Double?
+    /// Live trim preview in seconds, already clamped by the engine, so the
+    /// bar moves under the finger like a clip's grips instead of jumping
+    /// only on release.
+    @State private var headTrim: Double = 0
+    @State private var tailTrim: Double = 0
+    @GestureState private var headActive = false
+    @GestureState private var tailActive = false
+    @GestureState private var barActive = false
 
     var body: some View {
-        let barWidth = max(metrics.x(for: item.duration), 28)
+        let shownStart = item.timelineOffset + headTrim
+        let shownDuration = item.duration - headTrim + tailTrim
+        let barWidth = max(metrics.x(for: shownDuration), 28)
+        // Handles come and go with the COMMITTED width: keying them off the
+        // preview would remove a grip mid-drag and cancel the trim.
+        let committedWidth = max(metrics.x(for: item.duration), 28)
         HStack(spacing: 6) {
             if let thumb = item.thumbnail {
                 Image(decorative: thumb, scale: 1)
@@ -1073,7 +1147,7 @@ private struct OverlayBar: View {
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                 Spacer(minLength: 2)
-                Text(String(format: "%.1fs", item.duration))
+                Text(String(format: "%.1fs", shownDuration))
                     .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .opacity(0.8)
@@ -1089,14 +1163,24 @@ private struct OverlayBar: View {
                           lineWidth: isDraggingBar ? 1.5 : 1))
         .opacity(isDraggingBar ? 0.92 : 1)
         // Trim handles (gap fix): head trims content + anchors the out-point,
-        // tail adjusts duration. One engine commit per drag.
+        // tail adjusts duration. The bar previews live while a handle drags;
+        // one engine commit per drag. Global coordinates, because the handle
+        // itself moves with the preview and would skew a local translation.
         .overlay {
-            if !isDraggingBar, barWidth > 54 {
+            if !isDraggingBar, committedWidth > 54 {
                 HStack {
                     overlayTrimHandle(system: "chevron.compact.left")
                         .gesture(
-                            DragGesture(minimumDistance: 2)
+                            DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                                .updating($headActive) { _, active, _ in active = true }
+                                .onChanged { value in
+                                    TimelineDragLock.isHeld = true
+                                    headTrim = editor.overlayHeadTrim(
+                                        id: item.id,
+                                        deltaSeconds: metrics.time(for: value.translation.width))
+                                }
                                 .onEnded { value in
+                                    headTrim = 0
                                     editor.trimOverlayHead(
                                         id: item.id,
                                         deltaSeconds: metrics.time(for: value.translation.width))
@@ -1106,8 +1190,16 @@ private struct OverlayBar: View {
                     Spacer(minLength: 0)
                     overlayTrimHandle(system: "chevron.compact.right")
                         .gesture(
-                            DragGesture(minimumDistance: 2)
+                            DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                                .updating($tailActive) { _, active, _ in active = true }
+                                .onChanged { value in
+                                    TimelineDragLock.isHeld = true
+                                    tailTrim = editor.overlayTailTrim(
+                                        id: item.id,
+                                        deltaSeconds: metrics.time(for: value.translation.width))
+                                }
                                 .onEnded { value in
+                                    tailTrim = 0
                                     editor.trimOverlayTail(
                                         id: item.id,
                                         deltaSeconds: metrics.time(for: value.translation.width))
@@ -1117,7 +1209,7 @@ private struct OverlayBar: View {
                 }
             }
         }
-        .offset(x: metrics.x(for: item.timelineOffset) + dragTranslation)
+        .offset(x: metrics.x(for: shownStart) + dragTranslation)
         .onTapGesture { onTapOverlay(item.id) }
         .contextMenu {
             Button(role: .destructive) {
@@ -1127,21 +1219,26 @@ private struct OverlayBar: View {
         .gesture(
             LongPressGesture(minimumDuration: 0.25)
                 .sequenced(before: DragGesture())
+                .updating($barActive) { value, active, _ in
+                    if case .second(true, _) = value { active = true }
+                }
                 .onChanged { value in
                     guard case .second(true, let drag) = value else { return }
                     isDraggingBar = true
+                    TimelineDragLock.isHeld = true
                     var t = clampTranslation(drag?.translation.width ?? 0)
-                    // Live magnet snap: pull the bar's LEADING edge onto the
-                    // nearest boundary within ~8pt and show the guide-line.
+                    // Live magnet snap: pull either edge onto the nearest
+                    // visible boundary within ~8pt and show the guide-line.
                     if magnetOn {
-                        let offset = item.timelineOffset + metrics.time(for: t)
-                        if let target = TimelineSnap.nearest(to: offset, editor: editor,
-                                                             within: metrics.time(for: 8)) {
-                            t = clampTranslation(metrics.x(for: target - item.timelineOffset))
-                            snap.snappedTime = target
-                            if lastSnappedTime != target {
+                        let start = item.timelineOffset + metrics.time(for: t)
+                        if let hit = TimelineSnap.magnet(start: start, duration: item.duration,
+                                                         editor: editor, metrics: metrics,
+                                                         viewportWidth: snap.viewportWidth) {
+                            t = clampTranslation(metrics.x(for: start + hit.shift - item.timelineOffset))
+                            snap.snappedTime = hit.target
+                            if lastSnappedTime != hit.target {
                                 LumaHaptics.shared.timelineSnap()
-                                lastSnappedTime = target
+                                lastSnappedTime = hit.target
                             }
                         } else {
                             snap.snappedTime = nil
@@ -1161,6 +1258,16 @@ private struct OverlayBar: View {
                 }
         )
         .sensoryFeedback(.impact(weight: .light), trigger: isDraggingBar)
+        // Releases the scroll lock and any half-shown trim on end AND on
+        // cancel (a cancelled drag never reaches onEnded).
+        .onChange(of: headActive || tailActive || barActive) { _, active in
+            TimelineDragLock.isHeld = active
+            if !active {
+                headTrim = 0
+                tailTrim = 0
+            }
+        }
+        .onDisappear { TimelineDragLock.isHeld = false }
     }
 
     private func overlayTrimHandle(system: String) -> some View {
@@ -1169,7 +1276,8 @@ private struct OverlayBar: View {
             .foregroundStyle(.black)
             .frame(width: 14, height: LaneMetrics.overlay)
             .background(Color.white.opacity(0.9))
-            .contentShape(Rectangle().inset(by: -6))
+            // 14 pt grip, 44 pt touch; only 2 pt into the lanes above/below.
+            .contentShape(HitSlop(horizontal: 15, vertical: 2))
     }
 
     private func clampTranslation(_ translation: CGFloat) -> CGFloat {
@@ -1179,19 +1287,10 @@ private struct OverlayBar: View {
     }
 
     private func commitDrag(translation: CGFloat) {
-        var offset = item.timelineOffset + metrics.time(for: translation)
-        // Snap to t = 0 and clip boundaries within 0.15 s.
-        var boundaries: [Double] = [0]
-        var cursor = 0.0
-        for clip in editor.clips {
-            cursor += clip.timelineDuration
-            boundaries.append(cursor)
-        }
-        if let snap = boundaries.min(by: { abs($0 - offset) < abs($1 - offset) }),
-           abs(snap - offset) < 0.15 {
-            offset = snap
-        }
-        editor.setOverlayOffset(id: item.id, offset)
+        // The live magnet has already put a snapped bar on its target. A
+        // second snap here, on a fixed 0.15 s window, ignored the magnet
+        // switch and could catch a boundary the person couldn't see.
+        editor.setOverlayOffset(id: item.id, item.timelineOffset + metrics.time(for: translation))
     }
 }
 
@@ -1208,6 +1307,12 @@ struct MusicLane: View {
     @State private var dragTranslation: CGFloat = 0
     @State private var isDraggingBar = false
     @State private var lastSnappedTime: Double?
+    /// Live trim preview, already clamped by the engine, so the bar and its
+    /// waveform follow the grip like a clip's instead of jumping on release.
+    @State private var headTrimShift: Double = 0
+    @State private var headOffsetShift: Double = 0
+    @State private var tailTrimShift: Double = 0
+    @GestureState private var barActive = false
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -1216,12 +1321,25 @@ struct MusicLane: View {
         .frame(width: max(metrics.x(for: editor.totalDuration), 1),
                height: LaneMetrics.music, alignment: .leading)
         .sensoryFeedback(.impact(weight: .light), trigger: isDraggingBar)
+        .onChange(of: barActive) { _, active in
+            TimelineDragLock.isHeld = active
+        }
+        // Not on the grips: they hide when a bar drag starts, and releasing
+        // there would drop the lock that drag has just taken.
+        .onDisappear { TimelineDragLock.isHeld = false }
     }
 
     private func musicBar(_ music: EditorState.MusicTrack) -> some View {
-        let rendered = max(0.05, min(music.timelineDuration,
-                                     editor.totalDuration - music.timelineOffset))
+        let shownStart = music.timelineOffset + headOffsetShift
+        let shownTrimStart = music.trimStart + headTrimShift
+        let shownTrimEnd = music.trimEnd + tailTrimShift
+        let rendered = max(0.05, min(shownTrimEnd - shownTrimStart,
+                                     editor.totalDuration - shownStart))
         let barWidth = max(metrics.x(for: rendered), 28)
+        // Handles come and go with the COMMITTED width, so a preview can't
+        // remove a grip mid-drag and cancel the trim.
+        let committedWidth = max(metrics.x(for: max(0.05, min(music.timelineDuration,
+                                                            editor.totalDuration - music.timelineOffset))), 28)
         return HStack(spacing: 6) {
             Image(systemName: music.isMuted ? "speaker.slash.fill" : music.kind.icon)
                 .font(.system(size: 11, weight: .bold))
@@ -1260,8 +1378,8 @@ struct MusicLane: View {
                     .fill(music.isMuted ? LumaTheme.surface : LumaTheme.surfaceStrong)
                 if !music.waveform.isEmpty {
                     WaveformBars(samples: music.waveform,
-                                 windowStart: music.trimStart / max(music.assetDuration, 0.01),
-                                 windowEnd: music.trimEnd / max(music.assetDuration, 0.01))
+                                 windowStart: shownTrimStart / max(music.assetDuration, 0.01),
+                                 windowEnd: shownTrimEnd / max(music.assetDuration, 0.01))
                         .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
             }
@@ -1274,7 +1392,7 @@ struct MusicLane: View {
             if !music.beatMarkers.isEmpty {
                 ZStack(alignment: .leading) {
                     ForEach(Array(music.beatMarkers.enumerated()), id: \.offset) { _, beat in
-                        let x = metrics.x(for: beat - music.trimStart)
+                        let x = metrics.x(for: beat - shownTrimStart)
                         if x >= 0, x <= barWidth {
                             Rectangle().fill(.white.opacity(0.85))
                                 .frame(width: 1, height: LaneMetrics.music - 6)
@@ -1286,12 +1404,15 @@ struct MusicLane: View {
             }
         }
         .overlay {
-            if barWidth > 120 {
-                MusicTrimHandles(metrics: metrics, trackID: music.id, editor: editor)
+            if !isDraggingBar, committedWidth > 120 {
+                MusicTrimHandles(metrics: metrics, trackID: music.id, editor: editor,
+                                 headTrimShift: $headTrimShift,
+                                 headOffsetShift: $headOffsetShift,
+                                 tailTrimShift: $tailTrimShift)
             }
         }
         .opacity(isDraggingBar ? 0.92 : 1)
-        .offset(x: metrics.x(for: music.timelineOffset) + dragTranslation)
+        .offset(x: metrics.x(for: shownStart) + dragTranslation)
         .onTapGesture { onTapMusic(music.id) }
         .contextMenu {
             Button {
@@ -1309,19 +1430,25 @@ struct MusicLane: View {
         .gesture(
             LongPressGesture(minimumDuration: 0.25)
                 .sequenced(before: DragGesture())
+                .updating($barActive) { value, active, _ in
+                    if case .second(true, _) = value { active = true }
+                }
                 .onChanged { value in
                     guard case .second(true, let drag) = value else { return }
                     isDraggingBar = true
+                    TimelineDragLock.isHeld = true
                     var t = clampTranslation(drag?.translation.width ?? 0, music: music)
                     if magnetOn {
-                        let offset = music.timelineOffset + metrics.time(for: t)
-                        if let target = TimelineSnap.nearest(to: offset, editor: editor,
-                                                             within: metrics.time(for: 8)) {
-                            t = clampTranslation(metrics.x(for: target - music.timelineOffset), music: music)
-                            snap.snappedTime = target
-                            if lastSnappedTime != target {
+                        let start = music.timelineOffset + metrics.time(for: t)
+                        if let hit = TimelineSnap.magnet(start: start, duration: music.timelineDuration,
+                                                         editor: editor, metrics: metrics,
+                                                         viewportWidth: snap.viewportWidth) {
+                            t = clampTranslation(metrics.x(for: start + hit.shift - music.timelineOffset),
+                                                 music: music)
+                            snap.snappedTime = hit.target
+                            if lastSnappedTime != hit.target {
                                 LumaHaptics.shared.timelineSnap()
-                                lastSnappedTime = target
+                                lastSnappedTime = hit.target
                             }
                         } else {
                             snap.snappedTime = nil
@@ -1349,19 +1476,9 @@ struct MusicLane: View {
     }
 
     private func commitDrag(translation: CGFloat, music: EditorState.MusicTrack) {
-        var offset = music.timelineOffset + metrics.time(for: translation)
-        // Snap to t = 0 and clip boundaries within 0.15 s.
-        var boundaries: [Double] = [0]
-        var cursor = 0.0
-        for clip in editor.clips {
-            cursor += clip.timelineDuration
-            boundaries.append(cursor)
-        }
-        if let snap = boundaries.min(by: { abs($0 - offset) < abs($1 - offset) }),
-           abs(snap - offset) < 0.15 {
-            offset = snap
-        }
-        editor.setMusicOffset(id: music.id, offset)
+        // The live magnet has already put a snapped bar on its target; see
+        // OverlayBar.commitDrag for why there is no second snap here.
+        editor.setMusicOffset(id: music.id, music.timelineOffset + metrics.time(for: translation))
     }
 
     /// Waveform bars over the trimmed sample window.
@@ -1398,14 +1515,32 @@ struct MusicLane: View {
         let metrics: TimelineMetrics
         let trackID: UUID
         @ObservedObject var editor: EditorState
+        @Binding var headTrimShift: Double
+        @Binding var headOffsetShift: Double
+        @Binding var tailTrimShift: Double
+        @GestureState private var headActive = false
+        @GestureState private var tailActive = false
+
         var body: some View {
-            // One engine commit per drag (single undo entry, single rebuild);
-            // haptic on release confirms the cut landed.
+            // The bar previews live while a grip drags; one engine commit per
+            // drag (single undo entry, single rebuild), haptic on release.
+            // Global coordinates, because the grip moves with the preview.
             HStack {
                 handle(system: "chevron.compact.left")
                     .gesture(
-                        DragGesture(minimumDistance: 2)
+                        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                            .updating($headActive) { _, active, _ in active = true }
+                            .onChanged { value in
+                                TimelineDragLock.isHeld = true
+                                let shift = editor.musicHeadTrim(
+                                    id: trackID,
+                                    deltaSeconds: metrics.time(for: value.translation.width))
+                                headTrimShift = shift.trimShift
+                                headOffsetShift = shift.offsetShift
+                            }
                             .onEnded { value in
+                                headTrimShift = 0
+                                headOffsetShift = 0
                                 editor.trimMusicHead(
                                     id: trackID,
                                     deltaSeconds: metrics.time(for: value.translation.width))
@@ -1415,14 +1550,32 @@ struct MusicLane: View {
                 Spacer()
                 handle(system: "chevron.compact.right")
                     .gesture(
-                        DragGesture(minimumDistance: 2)
+                        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                            .updating($tailActive) { _, active, _ in active = true }
+                            .onChanged { value in
+                                TimelineDragLock.isHeld = true
+                                tailTrimShift = editor.musicTailTrim(
+                                    id: trackID,
+                                    deltaSeconds: metrics.time(for: value.translation.width))
+                            }
                             .onEnded { value in
+                                tailTrimShift = 0
                                 editor.trimMusicTail(
                                     id: trackID,
                                     deltaSeconds: metrics.time(for: value.translation.width))
                                 LumaHaptics.shared.trimRubberband()
                             }
                     )
+            }
+            // Releases the scroll lock and any half-shown trim on end AND on
+            // cancel (a cancelled drag never reaches onEnded).
+            .onChange(of: headActive || tailActive) { _, active in
+                TimelineDragLock.isHeld = active
+                if !active {
+                    headTrimShift = 0
+                    headOffsetShift = 0
+                    tailTrimShift = 0
+                }
             }
         }
 
@@ -1432,7 +1585,8 @@ struct MusicLane: View {
                 .foregroundStyle(.black)
                 .frame(width: 16, height: LaneMetrics.music)
                 .background(Color.white.opacity(0.9))
-                .contentShape(Rectangle().inset(by: -6))
+                // 16 pt grip, 44 pt touch; only 2 pt into the lanes above/below.
+                .contentShape(HitSlop(horizontal: 14, vertical: 2))
         }
     }
 
@@ -1754,6 +1908,23 @@ struct TimelineScroller<Content: View>: UIViewRepresentable {
         override func layoutSubviews() {
             super.layoutSubviews()
             onLayout?()
+        }
+
+        /// A fresh touch can't be mid-trim, so it clears any lock a grip that
+        /// vanished mid-drag never got to release.
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let touches = event?.allTouches, !touches.isEmpty,
+               touches.allSatisfy({ $0.phase == .began }) {
+                TimelineDragLock.isHeld = false
+            }
+            return super.hitTest(point, with: event)
+        }
+
+        /// While a trim handle or bar is mid-drag the pan must not start, or
+        /// the timeline slides away under the finger.
+        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === panGestureRecognizer, TimelineDragLock.isHeld { return false }
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
         }
     }
 }

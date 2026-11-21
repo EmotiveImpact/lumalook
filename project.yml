@@ -8,6 +8,11 @@ packages:
   Pow:
     url: https://github.com/EmergeTools/Pow
     from: 1.0.0
+  # Purchases, restores and entitlements (StoreService). The -spm mirror is
+  # RevenueCat's lightweight Swift Package distribution of purchases-ios.
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios-spm
+    from: 5.102.3
 # Shared scheme — required by Xcode Cloud.
 schemes:
   LumaLook:
@@ -49,6 +54,7 @@ targets:
       - LumaLook
     dependencies:
       - package: Pow
+      - package: RevenueCat
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.emotiveimpact.lumalook

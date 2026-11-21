@@ -3,19 +3,28 @@ import SwiftUI
 enum MockData {
     // The 10 built-in P0 looks. Each carries a real Core Image recipe and a
     // grade tint so its thumbnail shows the shared scene under that grade.
+    //
+    // `isPremium` marks every built-in whose full version a PAID pack sells
+    // (see LookLibraryStore.builtInReplacements): free to preview, and the
+    // pack or Pro unlocks export. Otherwise Originals 01 would be selling
+    // Neon Nights, Night Drive and Afrobeats Glow to people who already have
+    // them. Looks whose replacement lives in a free pack stay free.
     static let looks: [LookPreset] = [
         .init(name: "KD4 · Clean Neutral", category: "Negative", systemImage: "circle.lefthalf.filled",
               colours: [.gray, .white.opacity(0.7)], gradeTint: Color(white: 0.85),
               recipe: LookRecipe(contrast: 1.02, saturation: 0.98)),
         .init(name: "CN83 · Teal & Orange", category: "Cine", systemImage: "sparkles",
               colours: [LumaTheme.cyan, LumaTheme.orange], gradeTint: Color(red: 0.1, green: 0.75, blue: 0.75),
-              recipe: LookRecipe(temperature: 5600, tint: -14, contrast: 1.14, saturation: 1.18, vignette: 0.4)),
+              recipe: LookRecipe(temperature: 5600, tint: -14, contrast: 1.14, saturation: 1.18, vignette: 0.4),
+              isPremium: true),
         .init(name: "Neon Nights", category: "Original", systemImage: "cube.transparent",
               colours: [LumaTheme.accent, .pink, LumaTheme.orange], gradeTint: Color(red: 0.75, green: 0.3, blue: 1.0),
-              recipe: LookRecipe(temperature: 7600, tint: 22, contrast: 1.18, saturation: 1.32, vignette: 0.7, bloom: 0.35)),
+              recipe: LookRecipe(temperature: 7600, tint: 22, contrast: 1.18, saturation: 1.32, vignette: 0.7, bloom: 0.35),
+              isPremium: true),
         .init(name: "Night Drive", category: "Original", systemImage: "moon.stars",
               colours: [.blue, LumaTheme.accent], gradeTint: Color(red: 0.2, green: 0.3, blue: 0.9),
-              recipe: LookRecipe(temperature: 8200, tint: 8, contrast: 1.2, saturation: 0.92, brightness: -0.04, vignette: 0.9)),
+              recipe: LookRecipe(temperature: 8200, tint: 8, contrast: 1.2, saturation: 0.92, brightness: -0.04, vignette: 0.9),
+              isPremium: true),
         .init(name: "KD52 · Cine Negative", category: "Negative", systemImage: "camera.filters",
               colours: [.brown, .orange], gradeTint: Color(red: 0.85, green: 0.6, blue: 0.35),
               recipe: LookRecipe(temperature: 5900, tint: 4, contrast: 1.08, saturation: 1.06, vignette: 0.25)),
@@ -27,15 +36,26 @@ enum MockData {
               recipe: LookRecipe(temperature: 7800, tint: -6, contrast: 1.1, saturation: 0.78, brightness: -0.02, vignette: 0.5)),
         .init(name: "Afrobeats Glow", category: "Original", systemImage: "music.note",
               colours: [.orange, .pink], gradeTint: Color(red: 1.0, green: 0.45, blue: 0.4),
-              recipe: LookRecipe(temperature: 5100, tint: 12, contrast: 1.12, saturation: 1.28, bloom: 0.45)),
+              recipe: LookRecipe(temperature: 5100, tint: 12, contrast: 1.12, saturation: 1.28, bloom: 0.45),
+              isPremium: true),
         .init(name: "BW32 · Documentary Grit", category: "B&W", systemImage: "doc.viewfinder",
               colours: [.gray, .black], gradeTint: Color(white: 0.45),
-              recipe: LookRecipe(temperature: 6700, contrast: 1.22, saturation: 0.7, vignette: 0.6)),
+              recipe: LookRecipe(temperature: 6700, contrast: 1.22, saturation: 0.7, vignette: 0.6),
+              isPremium: true),
         .init(name: "CN93 · Luxury Campaign", category: "Cine", systemImage: "crown",
               colours: [.black, LumaTheme.orange], gradeTint: Color(red: 0.9, green: 0.7, blue: 0.45),
               recipe: LookRecipe(temperature: 6100, tint: 2, contrast: 1.16, saturation: 1.04, brightness: 0.02, vignette: 0.55, bloom: 0.2),
               isPremium: true)
     ]
+
+    /// The look a fresh install opens with: the first free one people would
+    /// actually want on their footage. Never premium, so the very first export
+    /// a new user makes cannot hit a paywall they did not choose.
+    static var defaultLook: LookPreset {
+        looks.first { $0.name == "KD2 · Golden Hour" && !$0.isPremium }
+            ?? looks.first { !$0.isPremium }
+            ?? looks[0]
+    }
 
     // RNI-style process taxonomy (research §4.2): grouping by process reads
     // as expertise; "Trending" reads as commodity.

@@ -54,7 +54,7 @@ struct ExportOutputInfo: Equatable {
 // MARK: - Export complete
 
 /// The result of a render, in the shipping design language proved by
-/// `LDExportDemoView`: THE IMAGE IS THE INTERFACE. The file that was actually
+/// the retired Design Lab export preview: THE IMAGE IS THE INTERFACE. The file that was actually
 /// written owns the top of the screen uncovered — it plays if it is a video,
 /// it is the real poster frame while the player warms up, and it is the graded
 /// source frame when nothing was produced. Everything else lives in a drawer

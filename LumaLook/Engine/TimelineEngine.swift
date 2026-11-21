@@ -459,6 +459,8 @@ final class EditorState: ObservableObject {
         /// with the player item built from the same overlay specs.
         let overlaySourceExtents: [UUID: CGRect]
         let duration: Double
+        /// The project frame rate this composition was built at.
+        let frameRate: Double
     }
 
     private struct Snapshot {
@@ -621,6 +623,7 @@ final class EditorState: ObservableObject {
 
     /// Debounced auto-save after every timeline mutation.
     private func scheduleAutosave() {
+        mutationCount &+= 1
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -761,6 +764,8 @@ final class EditorState: ObservableObject {
         muteAudio = project.muteAudio
         undoStack.removeAll()
         redoStack.removeAll()
+        toolSession = nil
+        pendingToolOrigin = nil
         updateHistoryFlags()
         clips = project.clips.compactMap { stored in
             let url = store.clipURL(for: stored)
@@ -894,6 +899,8 @@ final class EditorState: ObservableObject {
         resetProjectDefaults()
         undoStack.removeAll()
         redoStack.removeAll()
+        toolSession = nil
+        pendingToolOrigin = nil
         updateHistoryFlags()
         rebuild(keepPosition: false)
     }
@@ -1614,27 +1621,41 @@ final class EditorState: ObservableObject {
     /// Combined head-trim used by the lane's leading handle: content trims
     /// AND the bar's timeline position advances, so the tail stays anchored
     /// (standard NLE behaviour). One undo entry.
+    /// How far `trimMusicHead` would move the in-point and the bar for this
+    /// drag, so the lane can preview the trim live.
+    func musicHeadTrim(id: UUID, deltaSeconds: Double) -> (trimShift: Double, offsetShift: Double) {
+        guard let track = audioTracks.first(where: { $0.id == id }) else { return (0, 0) }
+        let newStart = min(max(0, track.trimStart + deltaSeconds), track.trimEnd - 0.2)
+        let applied = newStart - track.trimStart
+        let newOffset = min(max(0, track.timelineOffset + applied), max(0, totalDuration - 0.2))
+        return (applied, newOffset - track.timelineOffset)
+    }
+
     func trimMusicHead(id: UUID, deltaSeconds: Double) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
         let track = audioTracks[i]
-        let newStart = min(max(0, track.trimStart + deltaSeconds), track.trimEnd - 0.2)
-        let applied = newStart - track.trimStart
-        guard abs(applied) > 0.01 else { return }
+        let shift = musicHeadTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(shift.trimShift) > 0.01 else { return }
         pushUndoSnapshot()
-        audioTracks[i].trimStart = newStart
-        audioTracks[i].timelineOffset = min(max(0, track.timelineOffset + applied),
-                                            max(0, totalDuration - 0.2))
+        audioTracks[i].trimStart = track.trimStart + shift.trimShift
+        audioTracks[i].timelineOffset = track.timelineOffset + shift.offsetShift
         rebuild()
+    }
+
+    /// How far `trimMusicTail` would move the out-point for this drag.
+    func musicTailTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let track = audioTracks.first(where: { $0.id == id }) else { return 0 }
+        let newEnd = max(min(track.assetDuration, track.trimEnd + deltaSeconds),
+                         track.trimStart + 0.2)
+        return newEnd - track.trimEnd
     }
 
     func trimMusicTail(id: UUID, deltaSeconds: Double) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
-        let track = audioTracks[i]
-        let newEnd = max(min(track.assetDuration, track.trimEnd + deltaSeconds),
-                         track.trimStart + 0.2)
-        guard abs(newEnd - track.trimEnd) > 0.01 else { return }
+        let change = musicTailTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(change) > 0.01 else { return }
         pushUndoSnapshot()
-        audioTracks[i].trimEnd = newEnd
+        audioTracks[i].trimEnd = audioTracks[i].trimEnd + change
         rebuild()
     }
 
@@ -1644,7 +1665,7 @@ final class EditorState: ObservableObject {
             let url = track.url
             let id = track.id
             Task.detached(priority: .utility) {
-                let samples = Self.waveformSamples(url: url)
+                let samples = await Self.waveformSamples(url: url)
                 await MainActor.run { [weak self] in
                     guard let self,
                           let i = self.audioTracks.firstIndex(where: { $0.id == id }) else { return }
@@ -1654,9 +1675,12 @@ final class EditorState: ObservableObject {
         }
     }
 
-    nonisolated static func waveformSamples(url: URL, buckets: Int = 140) -> [Float] {
+    /// Async so the track and duration load the iOS 16 way; being
+    /// nonisolated, the decode itself also runs off the main actor.
+    nonisolated static func waveformSamples(url: URL, buckets: Int = 140) async -> [Float] {
         let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .audio).first,
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first,
+              let totalSeconds = try? await asset.load(.duration).seconds,
               let reader = try? AVAssetReader(asset: asset) else { return [] }
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
@@ -1671,7 +1695,6 @@ final class EditorState: ObservableObject {
 
         var sums = [Double](repeating: 0, count: buckets)
         var counts = [Int](repeating: 0, count: buckets)
-        let totalSeconds = asset.duration.seconds
         guard totalSeconds > 0 else { return [] }
 
         while reader.status == .reading, let buffer = output.copyNextSampleBuffer() {
@@ -2358,14 +2381,21 @@ final class EditorState: ObservableObject {
     /// Overlay trim (gap fix): the lane bar's leading handle trims content
     /// AND advances the bar so the out-point stays anchored; the trailing
     /// handle adjusts duration. One undo entry per drag.
-    func trimOverlayHead(id: UUID, deltaSeconds: Double) {
-        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
-        let item = overlays[i]
+    /// The shift `trimOverlayHead` would apply for this drag, so the bar can
+    /// preview exactly where its edge will land before anything commits.
+    func overlayHeadTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let item = overlays.first(where: { $0.id == id }) else { return 0 }
         var applied = min(deltaSeconds, item.duration - 0.2)
         if !item.isImage && item.text == nil {
             applied = max(applied, -item.mediaStart)   // no material before 0
         }
-        applied = max(applied, -item.timelineOffset)   // can't start before 0
+        return max(applied, -item.timelineOffset)      // can't start before 0
+    }
+
+    func trimOverlayHead(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let item = overlays[i]
+        let applied = overlayHeadTrim(id: id, deltaSeconds: deltaSeconds)
         guard abs(applied) > 0.01 else { return }
         pushUndoSnapshot()
         if !item.isImage && item.text == nil {
@@ -2376,9 +2406,9 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
-    func trimOverlayTail(id: UUID, deltaSeconds: Double) {
-        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
-        let item = overlays[i]
+    /// The change in length `trimOverlayTail` would apply for this drag.
+    func overlayTailTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let item = overlays.first(where: { $0.id == id }) else { return 0 }
         var maxDuration = max(0.2, totalDuration - item.timelineOffset)
         if !item.isImage && item.text == nil {
             maxDuration = min(maxDuration, item.mediaDuration - item.mediaStart)
@@ -2388,10 +2418,15 @@ final class EditorState: ObservableObject {
             .min(by: { $0.timelineOffset < $1.timelineOffset }) {
             maxDuration = min(maxDuration, next.timelineOffset - item.timelineOffset)
         }
-        let newDuration = min(max(0.2, item.duration + deltaSeconds), maxDuration)
-        guard abs(newDuration - item.duration) > 0.01 else { return }
+        return min(max(0.2, item.duration + deltaSeconds), maxDuration) - item.duration
+    }
+
+    func trimOverlayTail(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let change = overlayTailTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(change) > 0.01 else { return }
         pushUndoSnapshot()
-        overlays[i].duration = newDuration
+        overlays[i].duration = overlays[i].duration + change
         rebuild()
     }
 
@@ -2763,10 +2798,38 @@ final class EditorState: ObservableObject {
                  audioReactive: audioReactive)
     }
 
+    /// How many steps Undo remembers. Every snapshot carries each clip's
+    /// thumbnail and filmstrip, so an unbounded history grew with every edit
+    /// until iOS killed a long session. Forty steps is well past what anyone
+    /// walks back through, and the images are shared, not copied, so the cap
+    /// is what bounds the memory.
+    private static let undoLimit = 40
+
     private func pushUndoSnapshot() {
         undoStack.append(currentSnapshot())
+        trimUndoHistory()
         redoStack.removeAll()
+        mutationCount &+= 1
         updateHistoryFlags()
+    }
+
+    /// Drops the oldest steps past `undoLimit`. An open tool session's
+    /// recorded depth moves with them, so ✕ still trims exactly the entries
+    /// the tool pushed.
+    private func trimUndoHistory() {
+        let overflow = undoStack.count - Self.undoLimit
+        guard overflow > 0 else { return }
+        undoStack.removeFirst(overflow)
+        if let session = toolSession {
+            toolSession = ToolSession(start: session.start,
+                                      undoDepth: max(0, session.undoDepth - overflow),
+                                      mutationMark: session.mutationMark)
+        }
+        if let origin = pendingToolOrigin {
+            pendingToolOrigin = ToolSession(start: origin.start,
+                                            undoDepth: max(0, origin.undoDepth - overflow),
+                                            mutationMark: origin.mutationMark)
+        }
     }
 
     func undo() {
@@ -2778,7 +2841,78 @@ final class EditorState: ObservableObject {
     func redo() {
         guard let snapshot = redoStack.popLast() else { return }
         undoStack.append(currentSnapshot())
+        trimUndoHistory()
         restore(snapshot)
+    }
+
+    // MARK: - Tool sessions (✕ means "put it back")
+
+    /// The project as it stood when an editor tool opened. Most tools commit
+    /// live (sliders write straight to the model so the frame updates), which
+    /// made ✕ identical to ✓. Snapshotting on open and restoring on ✕ makes
+    /// Cancel honest for every tool at once, whatever mutations it made.
+    private struct ToolSession {
+        let start: Snapshot
+        let undoDepth: Int
+        let mutationMark: Int
+    }
+    private var toolSession: ToolSession?
+    /// Captured just before an "add, then open its tool" action (Text, a
+    /// sticker, overlay media), so ✕ takes away the thing that was added,
+    /// not only the edits made to it afterwards.
+    private var pendingToolOrigin: ToolSession?
+    /// Bumped by every undoable push and every autosave-worthy change, so
+    /// ✕ on a tool that changed nothing skips the restore and its rebuild.
+    private var mutationCount = 0
+
+    /// Call immediately before an action that adds an element and then opens
+    /// its tool. Used only if exactly one undo step lands before the tool
+    /// opens (the add itself); anything else falls back to a fresh snapshot.
+    func prepareToolSessionForAdd() {
+        pendingToolOrigin = ToolSession(start: currentSnapshot(),
+                                        undoDepth: undoStack.count,
+                                        mutationMark: mutationCount)
+    }
+
+    func beginToolSession() {
+        defer { pendingToolOrigin = nil }
+        if let origin = pendingToolOrigin, undoStack.count == origin.undoDepth + 1 {
+            toolSession = origin
+        } else {
+            toolSession = ToolSession(start: currentSnapshot(),
+                                      undoDepth: undoStack.count,
+                                      mutationMark: mutationCount)
+        }
+    }
+
+    /// ✓, or the tool closing itself: keep everything, history as made.
+    func commitToolSession() {
+        toolSession = nil
+    }
+
+    /// ✕: put the project back exactly as the tool found it. The steps the
+    /// tool pushed leave Undo (so Undo cannot replay a cancelled change), and
+    /// the cancelled state waits on Redo, so a mistaken ✕ is one tap from
+    /// coming back.
+    func cancelToolSession() {
+        guard let session = toolSession else { return }
+        toolSession = nil
+        guard mutationCount != session.mutationMark else { return }
+        let cancelled = currentSnapshot()
+        if undoStack.count > session.undoDepth {
+            undoStack.removeSubrange(session.undoDepth...)
+        }
+        redoStack = [cancelled]
+        restore(session.start)
+    }
+
+    /// Re-renders the paused frame. A paused AVPlayer never re-runs the
+    /// compositor on its own, so changes the composition reads live (the
+    /// shared timeline grade) need a nudge to show.
+    func refreshPausedFrame() {
+        guard let player, player.timeControlStatus != .playing else { return }
+        let time = player.currentTime()
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     private func restore(_ snapshot: Snapshot) {
@@ -2845,9 +2979,39 @@ final class EditorState: ObservableObject {
     }
 
 
-    /// Frame duration matching the export video composition (1/30). Used by
+    /// The project frame rate, published by each rebuild from the first video
+    /// clip (photo-only projects stay at 30). Drives the preview composition,
     /// the frame-nudge transport and the MM:SS:FF timecode readout.
-    var frameDuration: Double { 1.0 / 30.0 }
+    @Published private(set) var frameRate: Double = 30
+
+    /// One frame at the project rate, in seconds.
+    var frameDuration: Double { 1.0 / frameRate }
+
+    /// Snaps a track's nominal rate to the standard rate it was shot at
+    /// (23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60). Capped at 60: a
+    /// 240 fps slow-motion clip should not turn the preview into a 240 fps
+    /// composition. Missing or nonsense rates fall back to 30.
+    static func standardFrameRate(_ nominal: Float) -> Double {
+        let rate = Double(nominal)
+        guard rate.isFinite, rate >= 1 else { return 30 }
+        let standards: [Double] = [24000.0 / 1001, 24, 25, 30000.0 / 1001, 30,
+                                   48, 50, 60000.0 / 1001, 60]
+        if rate > 60.5 { return 60 }
+        if let match = standards.min(by: { abs($0 - rate) < abs($1 - rate) }),
+           abs(match - rate) < 0.6 {
+            return match
+        }
+        return min(60, max(1, rate.rounded()))
+    }
+
+    /// Exact frame duration for a rate, using the 1001 timescales for the
+    /// NTSC rates so 23.976 / 29.97 / 59.94 never drift.
+    static func frameDurationTime(for rate: Double) -> CMTime {
+        for base in [24.0, 30.0, 60.0] where abs(rate - base * 1000 / 1001) < 0.001 {
+            return CMTime(value: 1001, timescale: CMTimeScale(base * 1000))
+        }
+        return CMTime(value: 1, timescale: CMTimeScale(max(1, rate.rounded())))
+    }
 
     /// Frame-exact nudge: pauses, steps the current item by ±N frames (no seek
     /// tolerance games), and re-syncs the published clock.
@@ -2930,6 +3094,7 @@ final class EditorState: ObservableObject {
         item.audioTimePitchAlgorithm = .spectral
         lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks, built.overlayAudioTracks)
         overlaySourceExtents = built.overlaySourceExtents
+        if frameRate != built.frameRate { frameRate = built.frameRate }
 
         let player = self.player ?? AVPlayer()
         player.replaceCurrentItem(with: item)
@@ -3023,6 +3188,9 @@ final class EditorState: ObservableObject {
 
         var cursor = CMTime.zero
         var metas: [FrameMeta] = []
+        /// Taken from the first video clip, the usual NLE convention, so 24 fps
+        /// footage previews, steps and reads its timecode at 24, not 30.
+        var projectRate: Double?
 
         for clip in clips {
             // Photo clip (T7): the still renders through the compositor's
@@ -3071,6 +3239,9 @@ final class EditorState: ObservableObject {
             guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else { continue }
             let sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
             let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
+            if projectRate == nil, let nominal = try? await sourceVideo.load(.nominalFrameRate) {
+                projectRate = Self.standardFrameRate(nominal)
+            }
 
             let timescale = CMTimeScale(600)
             let range = CMTimeRange(
@@ -3401,7 +3572,7 @@ final class EditorState: ObservableObject {
         let videoComposition = AVMutableVideoComposition()
         videoComposition.customVideoCompositorClass = LumaVideoCompositor.self
         videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = Self.frameDurationTime(for: projectRate ?? 30)
         let adjustmentSpans = adjustmentLayers
             .filter { $0.duration > 0.05 && $0.timelineOffset < cursor.seconds }
             .map { AdjustmentSpan(start: max(0, $0.timelineOffset),
@@ -3432,7 +3603,7 @@ final class EditorState: ObservableObject {
            let src = audioTracks.first(where: { $0.id == cfg.sourceTrackID }) ?? audioTracks.first {
             let frames = max(1, Int(cursor.seconds * 30) + 1)
             var levels = [Float](repeating: 0, count: frames)
-            let srcBuckets = Self.waveformSamples(url: src.renderedFileURL ?? src.url,
+            let srcBuckets = await Self.waveformSamples(url: src.renderedFileURL ?? src.url,
                                                   buckets: max(2, Int(src.timelineDuration * 30)))
             let maxV = srcBuckets.max() ?? 1
             let startFrame = Int(src.timelineOffset * 30)
@@ -3468,7 +3639,8 @@ final class EditorState: ObservableObject {
                              overlayAudioTracks: overlayAudioTracks,
                              overlaySourceExtents: Dictionary(uniqueKeysWithValues:
                                 overlaySpecs.map { ($0.id, $0.sourceExtent) }),
-                             duration: duration)
+                             duration: duration,
+                             frameRate: projectRate)
     }
 
     /// Segments the timeline into `LumaCompositionInstruction`s. Boundaries

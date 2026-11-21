@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
 
 // =============================================================================
 // EditorTimelineView — the SHIPPING video editor, in the approved design
-// language (promoted from LDEditorDemoView after a line-by-line parity pass).
+// language (promoted from the retired Design Lab editor after a line-by-line
+// parity pass).
 //
 // THE LANGUAGE
 //   1. The image is the interface. The preview is never covered; opening a tool
@@ -55,7 +56,8 @@ private struct LDToolItem: View {
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    // Floor at ~10 pt; every current label fits 64 pt at 11.
+                    .minimumScaleFactor(0.9)
                     .foregroundStyle(.white.opacity(active ? 0.7 : 0.5))
             }
             .foregroundStyle(active ? Color.white : .white.opacity(0.62))
@@ -84,7 +86,8 @@ private struct LDValueTool: View {
                     .font(.system(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(active ? .white : .white.opacity(0.82))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    // Floor at ~13 pt so a long value still reads.
+                    .minimumScaleFactor(0.85)
                 Text(label)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(active ? 0.7 : 0.45))
@@ -417,9 +420,20 @@ private enum LDFormat {
         return String(format: "%02d:%02d", Int(t) / 60, Int(t) % 60)
     }
 
+    /// "24 fps", "29.97 fps": the rate the frame counter is counting in.
+    static func rate(_ r: Double) -> String {
+        abs(r - r.rounded()) < 0.01 ? "\(Int(r.rounded())) fps" : String(format: "%.2f fps", r)
+    }
+
+    /// MM:SS:FF at the project's own rate: frame numbers run 0…23 for 24 fps
+    /// footage and 0…59 for 60, not 0…29 for everything. The tiny epsilon
+    /// stops 0.9999… of a frame flooring to the previous one.
     static func timecode(_ s: Double, frameDuration: Double) -> String {
         let t = max(0, s)
-        let f = frameDuration > 0 ? Int((t - floor(t)) / frameDuration) % 30 : 0
+        let perSecond = frameDuration > 0 ? max(1, Int((1 / frameDuration).rounded())) : 30
+        let f = frameDuration > 0
+            ? min(perSecond - 1, Int((t - floor(t)) / frameDuration + 1e-6))
+            : 0
         return String(format: "%02d:%02d:%02d", Int(t) / 60, Int(t) % 60, f)
     }
 }
@@ -441,6 +455,7 @@ private enum EditorTool: Hashable {
 
 struct EditorTimelineView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
 
     // Which tool owns the drawer. One value replaces the old parallel
@@ -481,6 +496,8 @@ struct EditorTimelineView: View {
     @State private var showExportSheet = false
     @State private var isExporting = false
     @State private var exportError: String?
+    /// A premium look somewhere in the project that is not unlocked yet.
+    @State private var lookLock: LookLock?
 
     @State private var isCaptioning = false
     /// Strength parked by the whole-edit "None" tile so the next look restores it.
@@ -527,7 +544,13 @@ struct EditorTimelineView: View {
                 onOpenCropSheet: { showCropPanel = true },
                 onOpenLookBrowser: { showLookBrowser = true },
                 onFullscreen: { showFullscreenPreview = true },
-                onExport: { showExportSheet = true },
+                onExport: {
+                    if let lock = app.lockedLookInProject(storeService) {
+                        lookLock = lock
+                    } else {
+                        showExportSheet = true
+                    }
+                },
                 onRecordFootage: { app.path.append(.camera) },
                 onOpenProjects: { app.path.append(.projectLibrary) },
                 onOpenAdjust: { app.path.append(.customLook) },
@@ -578,8 +601,11 @@ struct EditorTimelineView: View {
                 defer { isLoadingClip = false }
                 let before = Set(editor.overlays.map(\.id))
                 if let video = try? await newItem.loadTransferable(type: PickedVideo.self) {
+                    // ✕ on the Overlay panel this opens removes the new media.
+                    editor.prepareToolSessionForAdd()
                     await editor.addOverlay(from: video.url, isImage: false)
                 } else if let imageURL = await Self.pickedImageFile(from: newItem) {
+                    editor.prepareToolSessionForAdd()
                     await editor.addOverlay(from: imageURL, isImage: true)
                 }
                 // Open the panel on the freshly added overlay (the array is
@@ -642,6 +668,15 @@ struct EditorTimelineView: View {
             // audio, and silently binning it would be the worse failure.
             if editor.isRecordingVoiceover { editor.stopVoiceover() }
             editor.saveProject()
+        }
+        .lockedLookSheet($lookLock) {
+            // One purchase may not cover every locked look in the project
+            // (two packs); check again rather than assume.
+            if let next = app.lockedLookInProject(storeService) {
+                lookLock = next
+            } else {
+                showExportSheet = true
+            }
         }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: editor.totalDuration,
@@ -1627,6 +1662,7 @@ extension EditorTimelineView {
 private struct EditorContent: View {
     @ObservedObject var editor: EditorState
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @StateObject private var thumbs = LookThumbs()
 
     @Binding var tool: EditorTool
@@ -1665,6 +1701,10 @@ private struct EditorContent: View {
     /// for the session — the music lane has always shown genuine RMS data and
     /// the clip-sound card has no reason to differ.
     @State private var clipWaveforms: [UUID: [Float]] = [:]
+    /// The global grade (and the None tile's parked strength) as the
+    /// whole-edit Looks tool found them, so ✕ can put them back. The project
+    /// itself is snapshotted by `EditorState.beginToolSession()`.
+    @State private var looksStash: (grade: AppModel.GradeStash, parkedIntensity: Double?)?
 
     private var toolIsOpen: Bool { tool != .none }
     private var hasClips: Bool { !editor.isEmpty }
@@ -1711,9 +1751,16 @@ private struct EditorContent: View {
             thumbs.render(source: app.previewFrame, library: app.library.all,
                           fileURL: { app.lutRepository.fileURL(for: $0) })
         }
-        .onChange(of: tool) { _, new in
+        .onChange(of: tool) { old, new in
             if new == .clipAudio { loadClipWaveformIfNeeded() }
+            toolSessionChanged(from: old, to: new)
         }
+        // The timeline grade is read live by the compositor, and a paused
+        // player never re-renders on its own: without this a whole-edit look
+        // picked (or put back by ✕) while paused did not show until Play.
+        .onChange(of: app.selectedLook.id) { _, _ in editor.refreshPausedFrame() }
+        .onChange(of: app.selectedLUT?.id) { _, _ in editor.refreshPausedFrame() }
+        .onChange(of: app.settings) { _, _ in editor.refreshPausedFrame() }
         .onChange(of: editor.selectedClipID) { _, _ in
             if tool == .clipAudio { loadClipWaveformIfNeeded() }
         }
@@ -1850,7 +1897,7 @@ private struct EditorContent: View {
         let url = clip.url
         Task {
             let samples = await Task.detached(priority: .utility) {
-                EditorState.waveformSamples(url: url)
+                await EditorState.waveformSamples(url: url)
             }.value
             if !samples.isEmpty { clipWaveforms[id] = samples }
         }
@@ -1915,6 +1962,14 @@ private struct EditorContent: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
+                if showFrames {
+                    // Frames are only meaningful with their rate beside them.
+                    Text(LDFormat.rate(editor.frameRate))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -1944,34 +1999,45 @@ private struct EditorContent: View {
                 if editor.isRebuilding {
                     ProgressView().controlSize(.mini).tint(LumaTheme.textMuted)
                 }
+                // Glyphs stay small; each touch area is ~44 pt square.
                 Button { magnetOn.toggle(); LumaHaptics.shared.tap() } label: {
                     Image(systemName: magnetOn ? "magnet.fill" : "magnet")
                         .font(.system(size: 13, weight: .light))
                         .foregroundStyle(magnetOn ? Color.white : LumaTheme.textMuted)
                         .frame(width: 26, height: 30)
-                        .contentShape(Rectangle())
+                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
                 }
                 .buttonStyle(.lumaPress)
+                .accessibilityLabel(magnetOn ? "Snapping on" : "Snapping off")
                 Button(action: onFullscreen) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 13, weight: .light))
                         .frame(width: 26, height: 30)
-                        .contentShape(Rectangle())
+                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
+                .accessibilityLabel("Full screen preview")
                 Button {
                     timelineZoom = nextZoom(timelineZoom)
                     LumaHaptics.shared.tap()
                 } label: {
-                    // The control has a value, so it shows the value.
-                    Text(String(format: "%.1f×", timelineZoom / 50))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(minWidth: 34, minHeight: 30)
-                        .contentShape(Rectangle())
+                    // The control has a value, so it shows the value. Zoom
+                    // reads as a percentage beside a magnifier; "×" belongs
+                    // to Speed alone, so the two can't be mistaken.
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus.magnifyingglass")
+                            .font(.system(size: 11, weight: .regular))
+                        Text("\(Int((timelineZoom / 50 * 100).rounded()))%")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(minWidth: 34, minHeight: 30)
+                    .contentShape(HitSlop(horizontal: 4, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
+                .accessibilityLabel("Timeline zoom")
+                .accessibilityValue("\(Int((timelineZoom / 50 * 100).rounded())) percent")
             }
             .foregroundStyle(LumaTheme.textSecondary)
             .frame(maxWidth: .infinity)
@@ -2045,14 +2111,42 @@ private struct EditorContent: View {
         LumaHaptics.shared.tap()
     }
 
-    /// ✕ means "put it back". Only Trim holds a revertible draft — its sliders
-    /// commit live so the frame updates, which would otherwise make ✕ a lie.
+    /// ✕ means "put it back", for every tool. Sliders commit live so the frame
+    /// updates as you drag, which used to make ✕ exactly the same as ✓ for all
+    /// but Trim. Now the project is snapshotted when the drawer opens and
+    /// restored here; the cancelled state waits on Redo in case ✕ was a slip.
     private func cancelTool() {
-        if tool == .trim, let original = trimOriginal, let clip = editor.selectedClip,
-           abs(clip.trimStart - original.start) > 0.001 || abs(clip.trimEnd - original.end) > 0.001 {
-            editor.applyTrim(start: original.start, end: original.end)
+        if let stash = looksStash {
+            app.restoreGrade(stash.grade)
+            stashedIntensity = stash.parkedIntensity
+            looksStash = nil
         }
+        editor.cancelToolSession()
         closeTool()
+    }
+
+    /// One opening of the drawer is one session. Switching tools inside it
+    /// (Shape, then the new shape's Overlay panel) continues the session, so
+    /// ✕ undoes the whole visit, including the shape that was added.
+    private func toolSessionChanged(from old: EditorTool, to new: EditorTool) {
+        // Voiceover records on its own clock and lands its take after the
+        // writer closes; a snapshot restore could race it, so ✕ there simply
+        // closes, as it always has.
+        if new == .voice {
+            editor.commitToolSession()
+            looksStash = nil
+            return
+        }
+        if old == .none, new != .none {
+            editor.beginToolSession()
+            looksStash = nil
+        } else if new == .none {
+            editor.commitToolSession()
+            looksStash = nil
+        }
+        if new == .looks, looksStash == nil {
+            looksStash = (app.stashGrade(), stashedIntensity)
+        }
     }
 
     /// The tool row swaps on selection — context decides the tools.
@@ -2290,6 +2384,9 @@ private struct EditorContent: View {
                             // clipShape clips PIXELS, not TOUCHES: without this
                             // the overflowing fill steals its neighbour's taps.
                             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .overlay(alignment: .bottomTrailing) {
+                                if storeService.isLocked(look) { LookLockGlyph(compact: true) }
+                            }
                             .overlay {
                                 if isLookActive(look, clipID: clipID) {
                                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -2452,6 +2549,9 @@ private struct EditorContent: View {
                             .frame(width: 62, height: 62)
                             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .overlay(alignment: .bottomTrailing) {
+                                if storeService.isLocked(look) { LookLockGlyph(compact: true) }
+                            }
                             Text(look.name).font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.55)).lineLimit(1).frame(width: 62)
                         }
@@ -2701,6 +2801,8 @@ private struct EditorContent: View {
 
     private func addText() {
         let before = Set(editor.overlays.map(\.id))
+        // ✕ on the panel this opens should take the new text away too.
+        editor.prepareToolSessionForAdd()
         editor.addTextOverlay()
         if let added = editor.overlays.first(where: { !before.contains($0.id) }) {
             selectedOverlayID = added.id

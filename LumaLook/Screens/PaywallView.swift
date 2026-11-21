@@ -3,9 +3,9 @@ import StoreKit
 
 // MARK: - Paywall (C5)
 
-/// Pro paywall. Pricing locked: $24.99/yr with a 7-day free trial or
-/// $119.99 lifetime, $9.99/mo — no WEEKLY tier, matching the anti-subscription
-/// wave in the LUT niche. Presented as a sheet from Settings, onboarding,
+/// Pro paywall. Pricing locked (StoreService.LockedPricing): $49.99/yr with a
+/// 7-day free trial, $9.99/mo or $119.99 lifetime. No WEEKLY tier, matching
+/// the anti-subscription wave in the LUT niche. Presented as a sheet from Settings, onboarding,
 /// premium looks, and pack purchases.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
@@ -100,7 +100,7 @@ struct PaywallView: View {
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 13) {
             PaywallFeatureRow(icon: "camera.filters", title: "All Looks & Packs",
-                              detail: "16 cinematic looks plus every future pack.")
+                              detail: "All \(PackCatalog.totalLookCount) pack looks and every signature look, plus every future pack.")
             PaywallFeatureRow(icon: "square.stack.3d.up", title: "LUT Stacking",
                               detail: "Conversion and creative slots with per-slot strength.")
             PaywallFeatureRow(icon: "square.and.arrow.up.on.square", title: "Batch Export",
@@ -166,7 +166,9 @@ struct PaywallView: View {
             PaywallPlanRow(
                 title: "Yearly",
                 price: "\(yearlyPrice) / year",
-                badge: "7-Day Free Trial",
+                // The trial badge is a promise, so it shows only when StoreKit
+                // says THIS account can take the offer (same rule as the CTA).
+                badge: yearlyTrialLabel ?? "Best Value",
                 selected: plan == .yearly
             ) { plan = .yearly }
             PaywallPlanRow(
@@ -308,6 +310,229 @@ private struct PaywallPlanRow: View {
             }
         }
         .buttonStyle(.lumaPress)
+    }
+}
+
+// MARK: - Locked look
+
+extension View {
+    /// Presents `LockedLookSheet` while `lock` is non-nil. If the purchase
+    /// lands, `onUnlocked` runs once the sheet has fully gone, so the caller
+    /// can carry straight on with the export the user asked for instead of
+    /// making them find the button again.
+    func lockedLookSheet(_ lock: Binding<LookLock?>,
+                         onUnlocked: @escaping () -> Void) -> some View {
+        modifier(LockedLookPresenter(lock: lock, onUnlocked: onUnlocked))
+    }
+}
+
+private struct LockedLookPresenter: ViewModifier {
+    @Binding var lock: LookLock?
+    let onUnlocked: () -> Void
+    @State private var didUnlock = false
+
+    func body(content: Content) -> some View {
+        content.sheet(item: $lock, onDismiss: {
+            guard didUnlock else { return }
+            didUnlock = false
+            onUnlocked()
+        }) { shown in
+            LockedLookSheet(lock: shown) { didUnlock = true }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Color.black)
+        }
+    }
+}
+
+/// Shown when a premium look is about to leave the app (an export, a
+/// recording, a still, a .cube). The look has already graded the footage for
+/// free; this sheet sells the one pack that contains it, or Pro, and gets out
+/// of the way the moment either purchase lands.
+struct LockedLookSheet: View {
+    let lock: LookLock
+    let onUnlocked: () -> Void
+
+    @EnvironmentObject private var storeService: StoreService
+    @Environment(\.dismiss) private var dismiss
+    @State private var showPaywall = false
+    @State private var restoring = false
+    @State private var restoreFoundNothing = false
+    @State private var errorMessage: String?
+
+    private var preset: LookPreset? { MockData.looks.first { $0.name == lock.lookName } }
+    private var isUnlocked: Bool {
+        guard let preset else { return true }
+        return storeService.lock(forBuiltIn: preset) == nil
+    }
+    private var packProduct: Product? {
+        lock.pack.flatMap { storeService.packProducts[$0.id] }
+    }
+    private var swatch: [Color] {
+        let colours = preset?.colours ?? []
+        return colours.count >= 2 ? colours : [Color(white: 0.3), Color(white: 0.12)]
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(LinearGradient(colors: swatch, startPoint: .topLeading,
+                                     endPoint: .bottomTrailing))
+                .frame(width: 76, height: 76)
+                .overlay {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+                }
+                .padding(.top, 26)
+                .accessibilityHidden(true)
+
+            Text(lock.lookName)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding(.top, 16)
+
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.62))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+                .padding(.horizontal, 28)
+
+            Spacer(minLength: 18)
+
+            VStack(spacing: 10) {
+                if let pack = lock.pack {
+                    primaryButton(packButtonTitle(pack)) { buyPack() }
+                        .disabled(packProduct == nil || storeService.purchaseInFlight)
+                        .opacity(packProduct == nil ? 0.45 : 1)
+                    secondaryButton("Unlock every look with Pro") { showPaywall = true }
+                } else {
+                    primaryButton("Unlock with Pro") { showPaywall = true }
+                }
+                Button {
+                    restore()
+                } label: {
+                    Group {
+                        if restoring {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(restoreFoundNothing ? "No purchases found to restore"
+                                                     : "Restore Purchases")
+                        }
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(height: 30)
+                }
+                .buttonStyle(.plain)
+                .disabled(restoring)
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity)
+        .sheet(isPresented: $showPaywall, onDismiss: {
+            // Bought Pro from the paywall: it closed itself, now close too.
+            if isUnlocked { finish() }
+        }) {
+            PaywallView()
+        }
+        .onChange(of: isUnlocked) { _, unlocked in
+            // A pack bought here (or a restore) closes the sheet directly;
+            // while the paywall is up, its own dismissal finishes instead.
+            if unlocked && !showPaywall { finish() }
+        }
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var message: String {
+        if let pack = lock.pack {
+            return "Part of \(pack.name). Preview it as much as you like; to export it, get the pack or go Pro."
+        }
+        return "A Pro look. Preview it as much as you like; to export it, go Pro."
+    }
+
+    private func packButtonTitle(_ pack: LookPack) -> String {
+        let price = packProduct?.displayPrice ?? pack.price
+        return "Get \(pack.name) · \(price)"
+    }
+
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                if storeService.purchaseInFlight {
+                    ProgressView().tint(.black)
+                } else {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(.white, in: Capsule())
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(LumaTheme.surfaceStrong, in: Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(storeService.purchaseInFlight)
+    }
+
+    private func buyPack() {
+        guard let product = packProduct else { return }
+        storeService.lastError = nil
+        Task {
+            if await storeService.purchase(product) {
+                LumaHaptics.shared.exportSuccess()
+            } else if let error = storeService.lastError {
+                // A cancel is silent; only a real failure says so.
+                errorMessage = error
+                storeService.lastError = nil
+            }
+        }
+    }
+
+    private func restore() {
+        restoring = true
+        restoreFoundNothing = false
+        storeService.lastError = nil
+        Task {
+            await storeService.restorePurchases()
+            restoring = false
+            if let error = storeService.lastError {
+                errorMessage = error
+                storeService.lastError = nil
+            } else if !isUnlocked {
+                restoreFoundNothing = true
+            }
+        }
+    }
+
+    private func finish() {
+        onUnlocked()
+        dismiss()
     }
 }
 

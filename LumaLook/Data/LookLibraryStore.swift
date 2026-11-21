@@ -84,6 +84,17 @@ final class LookLibraryStore: ObservableObject {
         "Afrobeats Glow":          "Afrobeats Glow",
     ]
 
+    /// The Store pack that sells the full version of a built-in signature
+    /// look, if any. The same table drives library de-duplication above and
+    /// the export gate (`StoreService.lock(forBuiltIn:)`), so "which pack
+    /// unlocks this look" can never disagree with "which pack replaces it".
+    static func supersedingPack(forBuiltIn name: String) -> LookPack? {
+        guard let code = builtInReplacements[name] else { return nil }
+        return PackCatalog.packs.first { pack in
+            pack.looks.contains { $0.code == code || $0.name == code || $0.name.hasPrefix(code + " ") }
+        }
+    }
+
     /// Full library, ordered Saved → Signature → Installed(purchased) → Imported.
     var all: [LibraryLook] {
         var out: [LibraryLook] = []

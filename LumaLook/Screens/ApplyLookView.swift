@@ -4,9 +4,9 @@ import AVKit
 // =============================================================================
 // C1 — THE GRADE ROOM, in the approved design language.
 //
-// This is the SHIPPING screen, not the Design-Lab proof. `LDGradeDemoView` was
-// the first sketch of the language (category bar, look tiles, instruction bar)
-// and is deliberately minimal; it is the STYLE reference here and nothing more.
+// This is the SHIPPING screen. The retired Design Lab sketch (`LDGradeDemoView`,
+// since deleted) was the first pass at the language (category bar, look tiles,
+// instruction bar); it was the STYLE reference here and nothing more.
 // Everything the shipping room could do it still does — the controls moved off
 // the picture and into the drawer, and every scrap of accent colour came out so
 // the footage and the looks are the only coloured things on screen.
@@ -75,7 +75,7 @@ import AVKit
 //      1.2pt kerning cannot look anything but timid at small size.
 //   7. Prefer a live value over a glyph. Grain, Bloom, Halation, Vignette, Lens
 //      and Source all show their number — the number is the better icon, and it
-//      is live. Same voice as `valueTool` in LDCameraDemoView.
+//      is live. Same voice as the camera drawer's value tools.
 //   8. A calm instruction bar: dismiss at one edge, the applied look and its
 //      strength stated in the middle, Apply at the other. Apply is the one
 //      place a filled button is still correct.
@@ -835,6 +835,9 @@ struct ApplyLookView: View {
                             .padding(5)
                             .allowsHitTesting(false)
                     }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if storeService.isLocked(look) { LookLockGlyph() }
                 }
                 tileCaption(look.nameSplit.title, selected: selected)
             }

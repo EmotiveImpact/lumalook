@@ -1906,30 +1906,25 @@ struct CropFormatView: View {
 
             InlineSlider(title: "Zoom", value: $zoom, range: 100...300) { "\(Int($0))" }
 
-            HStack(spacing: 12) {
-                Text("Position")
-                    .font(.system(size: 17, weight: .semibold))
+            // A "Position" row used to sit here: left / centre / right buttons
+            // wired to nothing. Per-clip framing already lives in the editor
+            // (Crop and Motion), so the row is gone and the reset it carried
+            // sits under the slider it resets.
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { zoom = 100 }
+                LumaHaptics.shared.tap()
+            } label: {
+                Label("Reset zoom", systemImage: "arrow.counterclockwise")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
-                Spacer()
-                ForEach(["align.horizontal.left", "align.horizontal.center", "align.horizontal.right"], id: \.self) { icon in
-                    Button {} label: {
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 62, height: 50)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-                Button { zoom = 100 } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(LumaTheme.cardRaised))
-                }
-                .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(LumaTheme.surface, in: Capsule())
             }
+            .buttonStyle(.plain)
+            .disabled(zoom == 100)
+            .opacity(zoom == 100 ? 0.4 : 1)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .onAppear {
             format = app.editor.format
@@ -2197,8 +2192,8 @@ struct AudioView: View {
 /// here, so the language shows up as everything else: monochrome chrome, a
 /// plain Title-Case header, sentence-case rows, and mono reserved strictly for
 /// the numbers — the LUT count, the bytes on disk, the export resolution and
-/// the version. Every legally-required row and the Design Lab section stay
-/// exactly where they were.
+/// the version. Every legally-required row stays exactly where it was. The
+/// subscription card leads: it is the one thing on this screen that earns.
 struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
     @EnvironmentObject private var app: AppModel
@@ -2348,31 +2343,6 @@ struct SettingsSubscriptionView: View {
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
         List {
-            // Design previews shipped for review, not for customers. First in
-            // the list on purpose: a preview buried under About is a preview
-            // nobody opens.
-            Section("Design Lab") {
-                settingsRow(icon: "sparkles", title: "Grade Room") {
-                    app.path.append(.ldGrade)
-                }
-                settingsRow(icon: "square.grid.2x2", title: "Look Library") {
-                    app.path.append(.ldLibrary)
-                }
-                settingsRow(icon: "camera", title: "Camera") {
-                    app.path.append(.ldCamera)
-                }
-                settingsRow(icon: "timeline.selection", title: "Video Editor") {
-                    app.path.append(.ldEditor)
-                }
-                settingsRow(icon: "bag", title: "Look Store") {
-                    app.path.append(.ldStore)
-                }
-                settingsRow(icon: "square.and.arrow.up", title: "Export") {
-                    app.path.append(.ldExport)
-                }
-            }
-            .listRowBackground(LumaTheme.card)
-
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)

@@ -1,5 +1,28 @@
 import Foundation
 import StoreKit
+import RevenueCat
+
+/// RevenueCat setup. Purchases, restores and entitlements go through
+/// RevenueCat once `apiKey` holds the project's public Apple key ("appl_…").
+/// Public SDK keys are designed to ship inside the app, so it lives here.
+///
+/// While the key is empty the app talks to StoreKit directly, exactly as it
+/// did before RevenueCat, so builds keep working before the dashboard exists.
+/// Prices and trial eligibility always come straight from StoreKit.
+enum RevenueCatConfig {
+    static let apiKey = ""
+    /// The entitlement every Pro product (yearly, monthly, lifetime) grants.
+    static let proEntitlement = "pro"
+
+    static var isEnabled: Bool {
+        #if DEBUG
+        // Local runs against LumaLook.storekit can use StoreKit directly,
+        // which keeps those test purchases off the RevenueCat dashboard.
+        if ProcessInfo.processInfo.environment["LUMA_STOREKIT_DIRECT"] == "1" { return false }
+        #endif
+        return !apiKey.isEmpty
+    }
+}
 
 /// StoreKit 2 storefront (C5). Pricing set 2026-07: Pro $49.99/yr with a
 /// 7-day free trial, $9.99/mo, $119.99 lifetime, look packs $2.99–4.99.
@@ -14,8 +37,9 @@ final class StoreService: ObservableObject {
         static let proYearly = "com.emotiveimpact.lumalook.pro.yearly"
         static let proMonthly = "com.emotiveimpact.lumalook.pro.monthly"
         static let proLifetime = "com.emotiveimpact.lumalook.pro.lifetime"
+        static let packPrefix = "com.emotiveimpact.lumalook.pack."
         static func pack(_ packID: String) -> String {
-            "com.emotiveimpact.lumalook.pack.\(packID)"
+            packPrefix + packID
         }
     }
 
@@ -52,7 +76,17 @@ final class StoreService: ObservableObject {
             isPro = true
         }
         #endif
-        updatesTask = Task { await listenForTransactions() }
+        if RevenueCatConfig.isEnabled {
+            if !Purchases.isConfigured {
+                Purchases.logLevel = .warn
+                Purchases.configure(withAPIKey: RevenueCatConfig.apiKey)
+            }
+            // RevenueCat finishes transactions itself; a second listener
+            // finishing them too would fight it.
+            updatesTask = Task { await listenForCustomerInfo() }
+        } else {
+            updatesTask = Task { await listenForTransactions() }
+        }
         Task {
             await loadProducts()
             await refreshEntitlements()
@@ -68,7 +102,10 @@ final class StoreService: ObservableObject {
     func loadProducts() async {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
-        let packIDs = PackCatalog.packs.filter { !$0.isFree }.map { ProductID.pack($0.id) }
+        // The film archives come with Pro and are never sold on their own.
+        let packIDs = PackCatalog.packs
+            .filter { !$0.isFree && !$0.isProIncluded }
+            .map { ProductID.pack($0.id) }
         let ids = [ProductID.proYearly, ProductID.proMonthly, ProductID.proLifetime] + packIDs
         do {
             let products = try await Product.products(for: ids)
@@ -94,9 +131,16 @@ final class StoreService: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" { return }
         #endif
+        if RevenueCatConfig.isEnabled {
+            // A failed fetch (offline) keeps what we last knew; RevenueCat
+            // also serves its cached copy when it can't reach its servers.
+            if let info = try? await Purchases.shared.customerInfo() { apply(info) }
+            return
+        }
         var pro = false
         var packs: Set<String> = []
-        for await result in Transaction.currentEntitlements {
+        // Qualified: RevenueCat also declares a (retired) `Transaction`.
+        for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
             switch transaction.productID {
@@ -113,12 +157,72 @@ final class StoreService: ObservableObject {
         ownedPackIDs = packs
     }
 
+    /// What this person owns, as RevenueCat sees it. The "pro" entitlement is
+    /// the intended source, but the product IDs count too, so a dashboard
+    /// that hasn't attached a product to the entitlement yet can never lock
+    /// out someone who paid.
+    private func apply(_ info: CustomerInfo) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" { return }
+        #endif
+        let owned = Set(info.nonSubscriptions.map(\.productIdentifier))
+        let subscribed = !info.activeSubscriptions
+            .isDisjoint(with: [ProductID.proYearly, ProductID.proMonthly])
+        isPro = info.entitlements[RevenueCatConfig.proEntitlement]?.isActive == true
+            || subscribed
+            || owned.contains(ProductID.proLifetime)
+        ownedPackIDs = Set(owned
+            .filter { $0.hasPrefix(ProductID.packPrefix) }
+            .map { String($0.dropFirst(ProductID.packPrefix.count)) })
+    }
+
     /// A pack is usable if it's free, individually owned, or the user is
     /// Pro. Pro-included packs (the film archives) are NEVER à la carte —
     /// they exist to make the membership feel enormous.
     func ownsPack(_ packID: String) -> Bool {
         guard let pack = PackCatalog.pack(id: packID) else { return false }
         return pack.isFree || isPro || ownedPackIDs.contains(packID)
+    }
+
+    // MARK: Premium looks
+
+    /// Why a built-in look cannot leave the app for this user, or nil when it
+    /// is free to export. `LookPreset.isPremium` is the single statement of
+    /// "this look costs money"; the pack that sells its full version (if any)
+    /// is the à la carte way in, and Pro opens everything.
+    ///
+    /// Previewing is never gated: a locked look still grades the footage live
+    /// in the grade room, the editor and the camera. Only the moments a file
+    /// leaves (export, a recording, a still, a .cube) ask for the purchase.
+    func lock(forBuiltIn look: LookPreset) -> LookLock? {
+        guard look.isPremium, !isPro else { return nil }
+        let pack = LookLibraryStore.supersedingPack(forBuiltIn: look.name)
+        if let pack, ownsPack(pack.id) { return nil }
+        return LookLock(lookName: look.name, pack: pack)
+    }
+
+    /// The built-in look a stored grade resolves to (LUT grades are owned
+    /// files, so only recipe grades can be locked).
+    func lock(for grade: ClipGrade) -> LookLock? {
+        guard grade.lutID == nil, grade.settings.intensity > 0,
+              let preset = MockData.looks.first(where: { $0.name == grade.baseLookName })
+        else { return nil }
+        return lock(forBuiltIn: preset)
+    }
+
+    /// Library-tile form of the gate: true when picking this look would
+    /// grade for free but ask for a purchase at export. Drives the small lock
+    /// glyph, so the ask never arrives as a surprise.
+    func isLocked(_ look: LibraryLook) -> Bool {
+        switch look.source {
+        case .builtIn(let preset):
+            return lock(forBuiltIn: preset) != nil
+        case .saved(let saved):
+            return lock(for: ClipGrade(baseLookName: saved.baseLookName, lutID: saved.lutID,
+                                       settings: saved.settings)) != nil
+        case .lut:
+            return false
+        }
     }
 
     // MARK: Purchase
@@ -128,6 +232,24 @@ final class StoreService: ObservableObject {
         guard !purchaseInFlight else { return false }
         purchaseInFlight = true
         defer { purchaseInFlight = false }
+        if RevenueCatConfig.isEnabled {
+            do {
+                let result = try await Purchases.shared.purchase(
+                    product: StoreProduct(sk2Product: product))
+                guard !result.userCancelled else { return false }
+                apply(result.customerInfo)
+                return true
+            } catch ErrorCode.purchaseCancelledError {
+                return false   // a cancel is silent
+            } catch ErrorCode.paymentPendingError {
+                // Ask to Buy: silent, as on the StoreKit path. The unlock
+                // arrives through customerInfoStream once a parent approves.
+                return false
+            } catch {
+                lastError = error.localizedDescription
+                return false
+            }
+        }
         do {
             let result = try await product.purchase()
             switch result {
@@ -151,6 +273,14 @@ final class StoreService: ObservableObject {
     }
 
     func restorePurchases() async {
+        if RevenueCatConfig.isEnabled {
+            do {
+                apply(try await Purchases.shared.restorePurchases())
+            } catch {
+                lastError = error.localizedDescription
+            }
+            return
+        }
         do {
             try await AppStore.sync()
         } catch {
@@ -162,10 +292,30 @@ final class StoreService: ObservableObject {
     // MARK: Transaction updates
 
     private func listenForTransactions() async {
-        for await result in Transaction.updates {
+        for await result in StoreKit.Transaction.updates {
             guard case .verified(let transaction) = result else { continue }
             await transaction.finish()
             await refreshEntitlements()
         }
+    }
+
+    /// RevenueCat pushes a fresh CustomerInfo on launch, after purchases and
+    /// renewals, and when a refund or expiry lands.
+    private func listenForCustomerInfo() async {
+        for await info in Purchases.shared.customerInfoStream {
+            apply(info)
+        }
+    }
+}
+
+/// A premium built-in look the user has not unlocked, and the pack (if any)
+/// that sells it on its own. Drives `LockedLookSheet`.
+struct LookLock: Identifiable, Equatable {
+    let lookName: String
+    let pack: LookPack?
+    var id: String { lookName }
+
+    static func == (a: LookLock, b: LookLock) -> Bool {
+        a.lookName == b.lookName && a.pack?.id == b.pack?.id
     }
 }

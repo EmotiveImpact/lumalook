@@ -107,7 +107,7 @@ extension LookLibraryStore {
 //   6. Mono is for NUMBERS ONLY. Counts and strengths keep the instrument
 //      voice; names, categories, headings, badges and buttons are the system
 //      face in sentence case.
-//   7. Prefer a live value over a glyph (see `valueTool` in LDCameraDemoView).
+//   7. Prefer a live value over a glyph (see the camera drawer's value tools).
 //
 // WHAT COMPACT MODE STILL OWES THE HALF-SHEET
 // The same view is hosted at ~340 pt (grade / camera), ~620 pt (editor) and
@@ -128,6 +128,7 @@ struct LookBrowserSheet: View {
     var showsBackButton: Bool = false
 
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = LookThumbs()
     @State private var category: LookLibraryStore.Category = .all
@@ -639,7 +640,8 @@ struct LookBrowserSheet: View {
                  image: thumbs.images[look.thumbKey],
                  selected: isSelected(look),
                  isFavourite: app.library.isFavourite(look.id),
-                 compact: compact) {
+                 compact: compact,
+                 locked: storeService.isLocked(look)) {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 select(look, navigate: true)
             }
@@ -973,6 +975,26 @@ struct LookBrowserSheet: View {
     }
 }
 
+// MARK: - Lock glyph
+
+/// The one mark for a premium look this user has not unlocked: it grades for
+/// free, and exporting it will ask. Bottom-trailing on every tile, clear of the
+/// source badge and the favourite star, monochrome like the rest of the chrome.
+struct LookLockGlyph: View {
+    var compact: Bool = false
+
+    var body: some View {
+        Image(systemName: "lock.fill")
+            .font(.system(size: compact ? 7 : 8, weight: .bold))
+            .foregroundStyle(.white.opacity(0.95))
+            .frame(width: compact ? 15 : 18, height: compact ? 15 : 18)
+            .background(.black.opacity(0.6), in: Circle())
+            .padding(compact ? 3 : 5)
+            .allowsHitTesting(false)
+            .accessibilityLabel("Locked look")
+    }
+}
+
 // MARK: - Grid tile
 
 /// One look in the browser grid: the live-graded thumbnail IS the tile, with
@@ -986,6 +1008,8 @@ struct LookTile: View {
     /// Half-sheet variant: shorter thumb, one-line name, no subtitle line —
     /// so a ~340 pt panel can still show two COMPLETE, named rows.
     var compact: Bool = false
+    /// Premium and not unlocked: draws `LookLockGlyph`.
+    var locked: Bool = false
     let action: () -> Void
     var onFavourite: (() -> Void)? = nil
 
@@ -1051,6 +1075,9 @@ struct LookTile: View {
                                 .background(.black.opacity(0.6), in: Capsule())
                                 .padding(compact ? 4 : 5)
                         }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if locked { LookLockGlyph(compact: compact) }
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
 
