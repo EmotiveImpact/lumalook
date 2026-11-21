@@ -481,6 +481,10 @@ final class AppModel: ObservableObject {
             tab = seeded
         }
         guard let route = ProcessInfo.processInfo.environment["LUMA_ROUTE"] else { return }
+        // LUMA_ROUTE=launch shows the launch animation held at 1.2 s for a
+        // screenshot; =launchLive plays it. LaunchGate (LaunchView.swift)
+        // reads both. Nothing to push: Home sits underneath.
+        if route == "launch" || route == "launchLive" { return }
         let map: [String: [LumaRoute]] = [
             "selectClip": [.selectClip],
             "applyLook": [.selectClip, .applyLook],

@@ -94,6 +94,9 @@ shot() {
 # A freshly booted simulator is busy for a while; the first launch is slow.
 launch warmup 12 "${P}ROUTE=none" || true
 
+# The launch animation held at a mid-way frame (LaunchView.swift). Every
+# other screen sets a LUMA_ hook, which skips the launch layer.
+shot 00-launch 5 "${P}ROUTE=launch"
 # Any LUMA_ROUTE value skips onboarding, so "none" gives the plain tab.
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
 shot 02-home 6 "${P}ROUTE=none" "${P}TAB=Home"
@@ -117,6 +120,7 @@ xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/lumalook-preview.
   > "$OUT/logs/recording.log" 2>&1 &
 RECORDER=$!
 sleep 3
+launch video-launch 4 "${P}ROUTE=launchLive" || true
 launch video-onboarding 8 "${P}SEED_ONBOARDING=1" || true
 launch video-home 5 "${P}ROUTE=none" "${P}TAB=Home" || true
 launch video-looks 4 "${P}ROUTE=none" "${P}TAB=Looks" || true
