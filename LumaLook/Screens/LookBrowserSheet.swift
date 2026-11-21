@@ -72,23 +72,6 @@ extension AppModel {
     }
 }
 
-extension LookLibraryStore {
-    /// The bounded strip every apply surface leads with: the collection pinned
-    /// to the camera filmstrip (G3) first, then recently used, then favourites,
-    /// then the rest of the library, deduped and capped so thumbnail rendering
-    /// stays cheap. The full library lives one tap away behind "All Looks".
-    func stripLooks(limit: Int = 14) -> [LibraryLook] {
-        var seen = Set<String>()
-        var out: [LibraryLook] = []
-        for look in pinnedCollectionLooks + recents + all.filter(\.isFavourite) + all {
-            guard out.count < limit else { break }
-            guard seen.insert(look.id).inserted else { continue }
-            out.append(look)
-        }
-        return out
-    }
-}
-
 // MARK: - The browser
 
 // =============================================================================
@@ -221,6 +204,8 @@ struct LookBrowserSheet: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            // Full screen only: as a sheet, the strip behind would reshuffle.
+            if context == .library { app.library.settleOrder() }
             // Store → Library hand-off (F1): an owned pack tapped in the store
             // lands here already filtered to that pack. Consumed once.
             guard let packName = app.libraryPackFilter else { return }

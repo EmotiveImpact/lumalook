@@ -164,7 +164,10 @@ struct CameraLiveLookView: View {
         // No auto-start after a purchase: a camera that begins recording on
         // its own as a sheet slides away would catch the floor.
         .lockedLookSheet($lookLock) { flash("Look unlocked. Ready when you are") }
-        .onAppear { start() }
+        .onAppear {
+            app.library.settleOrder()
+            start()
+        }
         .onDisappear { camera.stopSession() }
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil

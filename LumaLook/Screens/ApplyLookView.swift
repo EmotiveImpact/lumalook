@@ -270,6 +270,10 @@ struct ApplyLookView: View {
     private var categories: [GradeCategory] { GradeCategory.allCases }
     private var categoryIndex: Int { categories.firstIndex(of: category) ?? 0 }
 
+    /// The look tile the user last tapped in the strip, so the strip does
+    /// not scroll after a tile that is already in front of them.
+    @State private var tappedLookID: String?
+
     /// A horizontal strip is eagerly laid out, so it stays bounded — the full
     /// library is always one tap away behind "All looks". 60 is over four times
     /// the strip the room shipped with.
@@ -383,6 +387,7 @@ struct ApplyLookView: View {
         }
         .onAppear {
             app.exportError = nil          // never a stale error from a previous flow
+            app.library.settleOrder()      // strips catch up with last visit's picks
             if showScope { panel = .scope }
             if activeTool == "Lens" { panel = .lens }
         }
@@ -729,7 +734,11 @@ struct ApplyLookView: View {
                 proxy.scrollTo(id, anchor: .center)
             }
             .onChange(of: selectedTileID) { _, new in
-                guard let new else { return }
+                // A tile the user just tapped is already under their thumb:
+                // scrolling after it would lose their place. Only a pick made
+                // elsewhere (All looks, undo, a category switch) is fetched.
+                guard let new, new != tappedLookID else { return }
+                tappedLookID = nil
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(new, anchor: .center) }
             }
             // Fixed so the drawer never jumps as categories change.
@@ -807,6 +816,7 @@ struct ApplyLookView: View {
     private func lookTile(_ look: LibraryLook) -> some View {
         let selected = app.isCurrent(look)
         return Button {
+            tappedLookID = look.id
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 app.select(look: look)
             }

@@ -201,6 +201,16 @@ final class LookLibraryStore: ObservableObject {
     /// (`AppModel.select(look:)`) so every surface feeds the same history.
     func noteUsed(_ look: LibraryLook) {
         objectWillChange.send()
+        // Freeze what is on screen BEFORE recording, so the tile the user
+        // just tapped keeps its place (see "Stable order while picking").
+        if pickingOrder == nil {
+            let fresh = freshStripOrder(all: all)
+            pickingOrder = PickingOrder(strip: fresh.ids, pinnedCount: fresh.pinnedCount,
+                                        recents: recentIDs)
+        }
+        if pickingOrder?.promoted.contains(look.id) == false {
+            pickingOrder?.promoted.insert(look.id, at: 0)
+        }
         recentIDs.removeAll { $0 == look.id }
         recentIDs.insert(look.id, at: 0)
         if recentIDs.count > Self.recentsCap {
@@ -210,9 +220,96 @@ final class LookLibraryStore: ObservableObject {
     }
 
     /// Most-recently-used first; ids whose look no longer exists drop out.
+    /// While the user is picking, the list keeps the order it had when they
+    /// started: a look already listed stays put, and a look used for the
+    /// first time this session joins at the top.
     var recents: [LibraryLook] {
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return recentIDs.compactMap { byID[$0] }
+        let ids: [String]
+        if let order = pickingOrder {
+            ids = order.promoted.filter { !order.recents.contains($0) } + order.recents
+        } else {
+            ids = recentIDs
+        }
+        return ids.compactMap { byID[$0] }
+    }
+
+    // MARK: - The strip, and a stable order while picking
+    //
+    // Every apply surface leads with the same bounded strip: the collection
+    // pinned to the camera filmstrip (G3) first, then recently used, then
+    // favourites, then the rest of the library, deduped and capped so
+    // thumbnail rendering stays cheap. The full library lives one tap away
+    // behind "All looks".
+    //
+    // Recently used comes second, so recording a pick used to move the tapped
+    // tile to the front of its strip (and the grade room then scrolled after
+    // it): the user lost their place on every tap. Now the first pick freezes
+    // the order on screen. Picks still record straight away, and the strip
+    // and the Recents grid catch up the next time a picking screen opens
+    // (`settleOrder()`).
+
+    private struct PickingOrder {
+        /// The full strip order when picking began, pinned looks first.
+        var strip: [String]
+        var pinnedCount: Int
+        /// The recents order when picking began.
+        var recents: [String]
+        /// Looks picked since, in first-pick order, newest first. Never
+        /// reordered, so picking one again can never move it.
+        var promoted: [String] = []
+    }
+
+    private var pickingOrder: PickingOrder?
+
+    /// The strip, `limit` long. While picking, a look chosen somewhere else
+    /// (the full browser, Home) that this strip is not showing joins just
+    /// after the pinned looks, so the selection is always on screen; a look
+    /// the strip already shows never moves.
+    func stripLooks(limit: Int = 14) -> [LibraryLook] {
+        let all = self.all
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        guard let order = pickingOrder else {
+            return freshStripOrder(all: all).ids.prefix(limit).compactMap { byID[$0] }
+        }
+        var ids = order.strip.filter { byID[$0] != nil }.prefix(limit).map { $0 }
+        for id in order.promoted.reversed() where !ids.contains(id) && byID[id] != nil {
+            ids.insert(id, at: min(order.pinnedCount, ids.count))
+            if ids.count > limit,
+               let drop = ids.lastIndex(where: { !order.promoted.contains($0) }) {
+                ids.remove(at: drop)
+            }
+        }
+        return ids.compactMap { byID[$0] }
+    }
+
+    /// Call when a screen that picks looks appears (camera, grade room,
+    /// editor, Looks tab), so its strips pick up the recents recorded last
+    /// time. Never call it from a sheet: the strip behind would reshuffle.
+    func settleOrder() {
+        guard pickingOrder != nil else { return }
+        objectWillChange.send()
+        pickingOrder = nil
+    }
+
+    private func freshStripOrder(all: [LibraryLook]) -> (ids: [String], pinnedCount: Int) {
+        let known = Set(all.map(\.id))
+        var seen = Set<String>()
+        var ids: [String] = []
+        for look in pinnedCollectionLooks where seen.insert(look.id).inserted {
+            ids.append(look.id)
+        }
+        let pinnedCount = ids.count
+        for id in recentIDs where known.contains(id) && seen.insert(id).inserted {
+            ids.append(id)
+        }
+        for look in all where look.isFavourite && seen.insert(look.id).inserted {
+            ids.append(look.id)
+        }
+        for look in all where seen.insert(look.id).inserted {
+            ids.append(look.id)
+        }
+        return (ids, pinnedCount)
     }
 
     // MARK: - Persistence (Documents/LookLibrary.json — NEW file, additive)
