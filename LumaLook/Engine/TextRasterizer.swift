@@ -157,10 +157,32 @@ enum TextRasterizer {
             attrs[.strokeWidth] = -(style.strokeWidth / style.pointSize) * 100
         }
 
+        // Glow: a stroke colour written "glow:#RRGGBB" draws a soft halo of
+        // that colour, `strokeWidth` points wide, instead of an outline. An
+        // older build reads it as a malformed hex and simply draws no stroke.
+        if style.strokeWidth > 0, let raw = style.strokeColorHex,
+           let halo = glowColor(from: raw) {
+            let shadow = NSShadow()
+            shadow.shadowColor = halo
+            shadow.shadowOffset = .zero
+            shadow.shadowBlurRadius = style.strokeWidth
+            attrs[.shadow] = shadow
+        }
+
         return NSAttributedString(string: text, attributes: attrs)
     }
 
     // MARK: - Helpers
+
+    /// Prefix that turns a text layer's stroke colour into a glow colour.
+    static let glowPrefix = "glow:"
+
+    /// The glow colour from a "glow:#RRGGBB" stroke value; nil for a plain
+    /// outline colour.
+    private static func glowColor(from raw: String) -> UIColor? {
+        guard raw.hasPrefix(glowPrefix) else { return nil }
+        return color(from: String(raw.dropFirst(glowPrefix.count)))
+    }
 
     private static func textAlignment(_ raw: String) -> NSTextAlignment {
         switch raw.lowercased() {

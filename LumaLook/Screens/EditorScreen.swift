@@ -3511,93 +3511,592 @@ private struct LDSoundLibrary: View {
 
 // MARK: - Speed
 
-private struct LDSpeedPanel: View {
-    @ObservedObject var editor: EditorState
+// Night Lab panel parts for the tool panels from here down (speed,
+// transitions, text and the rest). Prefixed LDP so they never collide with
+// the atoms at the top of the file.
 
-    private let presets: [Double] = [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
+extension View {
+    /// A raised tile: one step above the drawer with a hairline edge.
+    fileprivate func ldpRaisedTile(cornerRadius: CGFloat = 10) -> some View {
+        self
+            .background(LumaTheme.raised,
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+    }
+}
+
+/// The small two-or-three-way switch in a panel header ("Constant | Curve").
+private struct LDPSegmented: View {
+    let options: [String]
+    let selected: Int
+    let onSelect: (Int) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            LDCaption("Constant speed")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
-                ForEach(presets, id: \.self) { speed in
-                    let on = editor.selectedClip?.speed == speed
-                    Button {
-                        editor.setClipSpeed(speed); LumaHaptics.shared.tap()
-                    } label: {
-                        Text(String(format: "%g×", speed))
-                            .font(.luma(size: 15, weight: .medium, design: .monospaced))
-                            .foregroundStyle(on ? Color.white : .white.opacity(0.7))
-                            .frame(maxWidth: .infinity).frame(height: 38)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            .overlay {
-                                if on {
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .strokeBorder(Color.white, lineWidth: 1.2)
-                                }
+        HStack(spacing: 2) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, title in
+                Button {
+                    onSelect(index)
+                } label: {
+                    Text(title)
+                        .font(.luma(size: 12, weight: .semibold))
+                        .foregroundStyle(index == selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
+                        .padding(.horizontal, 11)
+                        .frame(height: 26)
+                        .background {
+                            if index == selected {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(LumaTheme.control)
+                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .strokeBorder(LumaTheme.border, lineWidth: 1))
                             }
-                            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    }
-                    .buttonStyle(.lumaPress)
-                }
-            }
-
-            LDCaption("Speed ramp")
-            // Each ramp draws its own curve — the tile shows what it does.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(EditorState.SpeedRamp.allCases, id: \.self) { ramp in
-                        let on = editor.selectedClip?.speedRamp == ramp.rawValue
-                        Button {
-                            editor.setSpeedRamp(ramp); LumaHaptics.shared.tap()
-                        } label: {
-                            VStack(spacing: 6) {
-                                LDRampCurve(ramp: ramp)
-                                    .frame(width: 62, height: 30)
-                                Text(ramp.label).font(.luma(size: 11, weight: .medium))
-                                    .foregroundStyle(on ? Color.white : .white.opacity(0.55))
-                                    .lineLimit(1).frame(width: 62)
-                            }
-                            .padding(6)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            .overlay {
-                                if on {
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .strokeBorder(Color.white, lineWidth: 1.2)
-                                }
-                            }
-                            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         }
-                        .buttonStyle(.lumaPress)
-                    }
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(index == selected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+    }
+}
+
+/// A chip: raised with a hairline, white with ink text when picked.
+/// `fontName` sets the label in that face, for the font picker.
+private struct LDPChip: View {
+    let title: String
+    var selected = false
+    var fontName: String? = nil
+    var enabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .lineLimit(1)
+                .foregroundStyle(selected ? LumaTheme.onLight : LumaTheme.textSecondary)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(selected ? LumaTheme.textPrimary : LumaTheme.raised,
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(selected ? Color.clear : LumaTheme.hairline, lineWidth: 1))
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.lumaPress)
+        .opacity(enabled ? 1 : 0.35)
+        .disabled(!enabled)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var label: Text {
+        if let fontName {
+            return Text(title).font(.custom(fontName, size: 13.5))
+        }
+        return Text(title).font(.luma(size: 13, weight: selected ? .semibold : .medium))
+    }
+}
+
+/// A labelled row of chips that scrolls sideways ("Font", "Colour", "Animate").
+private struct LDPRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.luma(size: 12, weight: .medium))
+                .foregroundStyle(LumaTheme.textMuted)
+                .lineLimit(1)
+                .frame(width: 56, alignment: .leading)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    content()
+                }
+                .padding(.vertical, 3)
                 .padding(.trailing, 24)
             }
             .lumaEdgeFade(leading: 0, trailing: 16)
-
-            LDNote("Audio is pitch-preserved at every speed.")
         }
     }
 }
 
-/// The ramp's real `speed(at:)` curve, plotted. Not an icon.
+/// A colour dot. The picked one wears a white ring with a gap.
+private struct LDPSwatch: View {
+    let hex: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(Color(hex: hex))
+                .frame(width: 26, height: 26)
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+                .padding(3)
+                .overlay {
+                    if selected {
+                        Circle().strokeBorder(LumaTheme.textPrimary, lineWidth: 2)
+                    }
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("Colour \(hex)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A preset tile: artwork in a raised box, its name underneath. The picked
+/// tile wears a signal ring. `width` nil stretches it to its grid column.
+private struct LDPTile<Art: View>: View {
+    let title: String
+    let selected: Bool
+    var width: CGFloat? = nil
+    var height: CGFloat = 46
+    let action: () -> Void
+    @ViewBuilder let art: () -> Art
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                art()
+                    .frame(maxWidth: width ?? .infinity)
+                    .frame(width: width, height: height)
+                    .background(LumaTheme.raised)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(selected ? LumaTheme.signal : LumaTheme.hairline,
+                                      lineWidth: selected ? 2 : 1))
+                Text(title)
+                    .font(.luma(size: 11, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: width.map { $0 + 8 } ?? .infinity)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// An index ruler like `LumaRuler` (labelled stops under a signal needle),
+/// but it commits ONCE, on release: the setters behind it snapshot undo and
+/// rebuild the composition on every call. `onPreview` follows the finger.
+private struct LDPStopRuler: View {
+    let stops: [String]
+    let index: Int
+    var enabled: Bool = true
+    var onPreview: (Int) -> Void = { _ in }
+    let onCommit: (Int) -> Void
+
+    @State private var draft: Int?
+    @State private var dragBase: Int?
+
+    /// Distance between labelled stops.
+    private let spacing: CGFloat = 56
+    /// Fine ticks between two labelled stops.
+    private let minorTicks = 4
+
+    private var shown: Int { min(max(draft ?? index, 0), max(stops.count - 1, 0)) }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Canvas { context, size in
+                let count = stops.count
+                guard count > 0 else { return }
+                let mid = size.width / 2
+                let origin = mid - CGFloat(shown) * spacing
+                let step = spacing / CGFloat(minorTicks)
+                var fine = Path()
+                var x = origin - spacing
+                let end = origin + CGFloat(count) * spacing
+                while x <= end {
+                    if x > -step, x < size.width + step {
+                        fine.move(to: CGPoint(x: x, y: 8))
+                        fine.addLine(to: CGPoint(x: x, y: 16))
+                    }
+                    x += step
+                }
+                context.stroke(fine, with: .color(.white.opacity(0.28)), lineWidth: 1)
+                for i in 0..<count {
+                    let sx = origin + CGFloat(i) * spacing
+                    guard sx > -spacing, sx < size.width + spacing else { continue }
+                    var major = Path()
+                    major.move(to: CGPoint(x: sx, y: 4))
+                    major.addLine(to: CGPoint(x: sx, y: 21))
+                    context.stroke(major, with: .color(.white.opacity(0.7)), lineWidth: 1.5)
+                    let current = i == shown
+                    let label = Text(stops[i])
+                        .font(.luma(size: 12, weight: current ? .semibold : .medium))
+                        .foregroundColor(current ? LumaTheme.textPrimary : LumaTheme.textSecondary)
+                    context.draw(label, at: CGPoint(x: sx, y: 35), anchor: .center)
+                }
+            }
+            Capsule()
+                .fill(LumaTheme.signal)
+                .frame(width: 2.5, height: 27)
+                .shadow(color: LumaTheme.signal.opacity(0.8), radius: 6)
+                .allowsHitTesting(false)
+        }
+        .frame(height: 46)
+        .frame(maxWidth: .infinity)
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: 0.16),
+                .init(color: .black, location: 0.84),
+                .init(color: .clear, location: 1),
+            ], startPoint: .leading, endPoint: .trailing)
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    let base = dragBase ?? index
+                    if dragBase == nil { dragBase = index }
+                    let steps = Int((-value.translation.width / (spacing * 0.6)).rounded())
+                    let target = min(max(base + steps, 0), max(stops.count - 1, 0))
+                    if target != shown || draft == nil {
+                        draft = target
+                        onPreview(target)
+                    }
+                }
+                .onEnded { _ in
+                    if let d = draft { onCommit(d) }
+                    draft = nil
+                    dragBase = nil
+                }
+        )
+        .sensoryFeedback(.selection, trigger: shown)
+        .opacity(enabled ? 1 : 0.35)
+        .allowsHitTesting(enabled)
+        .accessibilityElement()
+        .accessibilityValue(stops.indices.contains(shown) ? stops[shown] : "")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: if index + 1 < stops.count { onCommit(index + 1) }
+            case .decrement: if index > 0 { onCommit(index - 1) }
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// One tile on the speed panel: a curve preset, or Custom.
+private struct LDSpeedPreset: Identifiable {
+    let title: String
+    let ramp: EditorState.SpeedRamp
+    var id: String { title }
+}
+
+/// Speed (round-three mock): curve presets drawn as their own curves, a big
+/// plot of the picked curve, and a 0.1× to 10× ruler for constant speed.
+/// Presets are the engine's own `SpeedRamp` curves, built by the same
+/// slicing pass as before.
+private struct LDSpeedPanel: View {
+    @ObservedObject var editor: EditorState
+
+    private enum Mode: Int { case constant = 0, curve = 1 }
+
+    /// nil until the person picks: then the panel opens on whichever mode
+    /// the clip is already using.
+    @State private var mode: Mode?
+    @State private var showsCustom = false
+    /// The ruler's value while a finger is on it.
+    @State private var draftSpeed: Double?
+
+    private static let presets: [LDSpeedPreset] = [
+        LDSpeedPreset(title: "Normal", ramp: EditorState.SpeedRamp.none),
+        LDSpeedPreset(title: "Montage", ramp: .montage),
+        LDSpeedPreset(title: "Hero", ramp: .hero),
+        LDSpeedPreset(title: "Bullet", ramp: .bullet),
+        LDSpeedPreset(title: "Jump cut", ramp: .jumpCut),
+        LDSpeedPreset(title: "Flash in", ramp: .flashIn),
+        LDSpeedPreset(title: "Flash out", ramp: .flashOut),
+    ]
+
+    /// The engine's first four curves live under Custom.
+    private static let customRamps: [LDSpeedPreset] = [
+        LDSpeedPreset(title: "Slow to fast", ramp: .slowFast),
+        LDSpeedPreset(title: "Fast to slow", ramp: .fastSlow),
+        LDSpeedPreset(title: "Slow, fast, slow", ramp: .slowFastSlow),
+        LDSpeedPreset(title: "Fast, slow, fast", ramp: .fastSlowFast),
+    ]
+
+    /// Stops on the constant-speed ruler.
+    private static let speedStops: [Double] = [0.1, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 8, 10]
+
+    private var clip: EditorState.Clip? { editor.selectedClip }
+
+    private var ramp: EditorState.SpeedRamp {
+        EditorState.SpeedRamp(rawValue: clip?.speedRamp ?? "") ?? EditorState.SpeedRamp.none
+    }
+
+    private var isCustomRamp: Bool { Self.customRamps.contains { $0.ramp == ramp } }
+
+    private var currentMode: Mode { mode ?? (ramp == EditorState.SpeedRamp.none ? .constant : .curve) }
+
+    private var clipNumber: Int? {
+        guard let id = editor.selectedClipID,
+              let index = editor.clips.firstIndex(where: { $0.id == id }) else { return nil }
+        return index + 1
+    }
+
+    var body: some View {
+        if let clip {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                if currentMode == .curve {
+                    curveSection(clip)
+                } else {
+                    constantSection(clip)
+                }
+                LDNote("Audio keeps its pitch at every speed.")
+            }
+        } else {
+            LDNote("Select a clip on the timeline to change its speed.")
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(clipNumber.map { "Speed · clip \($0)" } ?? "Speed")
+                .font(.luma(size: 15, weight: .semibold))
+                .foregroundStyle(LumaTheme.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            LDPSegmented(options: ["Constant", "Curve"], selected: currentMode.rawValue) { index in
+                mode = Mode(rawValue: index) ?? .constant
+                LumaHaptics.shared.tap()
+            }
+        }
+    }
+
+    // MARK: Curve
+
+    @ViewBuilder
+    private func curveSection(_ clip: EditorState.Clip) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Self.presets) { preset in
+                    LDPTile(title: preset.title, selected: ramp == preset.ramp,
+                            width: 58, height: 42, action: {
+                                editor.setSpeedRamp(preset.ramp)
+                                LumaHaptics.shared.tap()
+                            }) {
+                        LDRampCurve(ramp: preset.ramp,
+                                    color: ramp == preset.ramp ? LumaTheme.signal : LumaTheme.textSecondary,
+                                    lineWidth: 1.6)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 10)
+                    }
+                }
+                LDPTile(title: "Custom", selected: isCustomRamp,
+                        width: 58, height: 42, action: {
+                            showsCustom.toggle()
+                            LumaHaptics.shared.tap()
+                        }) {
+                    LDRampCurve(ramp: isCustomRamp ? ramp : .slowFastSlow,
+                                color: isCustomRamp ? LumaTheme.signal : LumaTheme.textMuted,
+                                lineWidth: 1.6)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 10)
+                }
+            }
+            .padding(.vertical, 2)
+            .padding(.trailing, 24)
+        }
+        .lumaEdgeFade(leading: 0, trailing: 16)
+
+        if showsCustom || isCustomRamp {
+            LDPRow(label: "Custom") {
+                ForEach(Self.customRamps) { item in
+                    LDPChip(title: item.title, selected: ramp == item.ramp) {
+                        editor.setSpeedRamp(item.ramp)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+        }
+
+        LDPSpeedGraph(ramp: ramp, constantSpeed: clip.speed,
+                      progress: playheadProgress(clip))
+            .frame(height: 104)
+    }
+
+    /// Where the playhead sits inside the clip (0…1), or nil when it is
+    /// somewhere else on the timeline.
+    private func playheadProgress(_ clip: EditorState.Clip) -> Double? {
+        guard let start = editor.clipStartTimes[clip.id], clip.timelineDuration > 0 else { return nil }
+        let progress = (editor.currentTime - start) / clip.timelineDuration
+        return (progress >= 0 && progress <= 1) ? progress : nil
+    }
+
+    // MARK: Constant
+
+    @ViewBuilder
+    private func constantSection(_ clip: EditorState.Clip) -> some View {
+        let shown = draftSpeed ?? clip.speed
+        let sourceLength = max(0, clip.trimEnd - clip.trimStart)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(Self.speedLabel(shown))
+                .font(.luma(size: 30, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(LumaTheme.textPrimary)
+            Text(String(format: "Clip %.1f s", sourceLength / max(shown, 0.01)))
+                .font(.luma(size: 13, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(LumaTheme.textMuted)
+            Spacer(minLength: 0)
+        }
+        LDPStopRuler(stops: Self.speedStops.map { Self.speedLabel($0) },
+                     index: Self.nearestStop(to: clip.speed),
+                     onPreview: { draftSpeed = Self.speedStops[$0] },
+                     onCommit: { index in
+                         draftSpeed = nil
+                         applyConstant(Self.speedStops[index])
+                     })
+        if ramp != EditorState.SpeedRamp.none {
+            LDNote("A curve is on for this clip. Picking a speed here turns it off.")
+        }
+    }
+
+    /// Constant speed replaces any curve: the build ignores `speed` while a
+    /// ramp is set, so leaving the ramp on would make the ruler do nothing.
+    private func applyConstant(_ speed: Double) {
+        let clamped = min(10, max(0.1, speed))
+        if ramp != EditorState.SpeedRamp.none { editor.setSpeedRamp(EditorState.SpeedRamp.none) }
+        if abs((clip?.speed ?? 1) - clamped) > 0.0001 { editor.setSpeed(clamped) }
+        LumaHaptics.shared.tap()
+    }
+
+    private static func speedLabel(_ speed: Double) -> String {
+        String(format: "%g×", speed)
+    }
+
+    private static func nearestStop(to speed: Double) -> Int {
+        var best = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (i, stop) in speedStops.enumerated() {
+            let distance = abs(log(max(speed, 0.01)) - log(stop))
+            if distance < bestDistance {
+                bestDistance = distance
+                best = i
+            }
+        }
+        return best
+    }
+}
+
+/// The ramp's real `speed(at:)` curve, plotted on the panel's log scale
+/// (0.2× at the bottom, 5× at the top). Not an icon.
 private struct LDRampCurve: View {
     let ramp: EditorState.SpeedRamp
+    var color: Color = Color.white.opacity(0.8)
+    var lineWidth: CGFloat = 1.4
+
+    /// 0…1 height for a speed on a log scale from 0.2× (0) to 5× (1).
+    static func level(_ speed: Double) -> CGFloat {
+        let low = log(0.2)
+        let high = log(5.0)
+        let value = (log(max(speed, 0.01)) - low) / (high - low)
+        return CGFloat(min(max(value, 0), 1))
+    }
 
     var body: some View {
         GeometryReader { geo in
             Path { p in
-                let n = 24
+                let n = 32
                 for i in 0...n {
                     let t = Double(i) / Double(n)
-                    let s = ramp.speed(at: t)
-                    let y = geo.size.height * (1 - CGFloat(min(max(s / 4, 0), 1)))
+                    let y = geo.size.height * (1 - LDRampCurve.level(ramp.speed(at: t)))
                     let pt = CGPoint(x: geo.size.width * CGFloat(t), y: y)
                     if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
                 }
             }
-            .stroke(Color.white.opacity(0.8), lineWidth: 1.4)
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
         }
+    }
+}
+
+/// The picked curve, large: grid at 5×, 1× and 0.2×, the curve in signal
+/// with a soft fill, knots at the start, middle and end, and a white line
+/// where the playhead sits inside the clip.
+private struct LDPSpeedGraph: View {
+    let ramp: EditorState.SpeedRamp
+    /// Drawn flat when no curve is on.
+    let constantSpeed: Double
+    let progress: Double?
+
+    private func speed(at t: Double) -> Double {
+        ramp == EditorState.SpeedRamp.none ? constantSpeed : ramp.speed(at: t)
+    }
+
+    var body: some View {
+        Canvas { context, size in
+            let left: CGFloat = 34
+            let right: CGFloat = 16
+            let top: CGFloat = 12
+            let bottom: CGFloat = 12
+            let w = max(1, size.width - left - right)
+            let h = max(1, size.height - top - bottom)
+
+            for (value, label) in [(5.0, "5×"), (1.0, "1×"), (0.2, "0.2×")] {
+                let y = top + h * (1 - LDRampCurve.level(value))
+                var line = Path()
+                line.move(to: CGPoint(x: left - 4, y: y))
+                line.addLine(to: CGPoint(x: size.width - 8, y: y))
+                context.stroke(line, with: .color(LumaTheme.hairline), lineWidth: 1)
+                let text = Text(label)
+                    .font(.luma(size: 9.5, weight: .medium))
+                    .foregroundColor(LumaTheme.textMuted)
+                context.draw(text, at: CGPoint(x: 8, y: y), anchor: .leading)
+            }
+
+            var curve = Path()
+            let n = 64
+            for i in 0...n {
+                let t = Double(i) / Double(n)
+                let point = CGPoint(x: left + w * CGFloat(t),
+                                    y: top + h * (1 - LDRampCurve.level(speed(at: t))))
+                if i == 0 { curve.move(to: point) } else { curve.addLine(to: point) }
+            }
+            var fill = curve
+            fill.addLine(to: CGPoint(x: left + w, y: size.height))
+            fill.addLine(to: CGPoint(x: left, y: size.height))
+            fill.closeSubpath()
+            context.fill(fill, with: .color(LumaTheme.signal.opacity(0.08)))
+            context.stroke(curve, with: .color(LumaTheme.signal),
+                           style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+            for t in [0.0, 0.5, 1.0] {
+                let centre = CGPoint(x: left + w * CGFloat(t),
+                                     y: top + h * (1 - LDRampCurve.level(speed(at: t))))
+                let knot = Path(ellipseIn: CGRect(x: centre.x - 4, y: centre.y - 4, width: 8, height: 8))
+                context.fill(knot, with: .color(LumaTheme.ink))
+                context.stroke(knot, with: .color(LumaTheme.signal), lineWidth: 1.6)
+            }
+
+            if let progress {
+                let x = left + w * CGFloat(min(max(progress, 0), 1))
+                var playhead = Path()
+                playhead.move(to: CGPoint(x: x, y: 4))
+                playhead.addLine(to: CGPoint(x: x, y: size.height - 4))
+                context.stroke(playhead, with: .color(LumaTheme.textPrimary), lineWidth: 1.5)
+            }
+        }
+        .background(LumaTheme.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+        .accessibilityElement()
+        .accessibilityLabel("Speed curve")
     }
 }
 
@@ -3637,7 +4136,7 @@ private struct LDMotionPanel: View {
             LDCaption("Pan & zoom")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                 ForEach(EditorState.KenBurnsPreset.allCases, id: \.self) { preset in
-                    LDChip(title: preset.label, selected: activePreset == preset) {
+                    LDPChip(title: preset.label, selected: activePreset == preset) {
                         guard let id = editor.selectedClipID else { return }
                         editor.setKenBurns(id: id, preset: preset,
                                            easing: activeEasing ?? .easeInOut)
@@ -3649,7 +4148,7 @@ private struct LDMotionPanel: View {
                 LDCaption("Easing")
                 HStack(spacing: 8) {
                     ForEach(KeyframeEasing.allCases, id: \.self) { ease in
-                        LDChip(title: ease.label, selected: activeEasing == ease) {
+                        LDPChip(title: ease.label, selected: activeEasing == ease) {
                             editor.setKenBurnsEasing(id: clip.id, easing: ease)
                             LumaHaptics.shared.tap()
                         }
@@ -3663,93 +4162,483 @@ private struct LDMotionPanel: View {
 
 // MARK: - Transition
 
+/// Transitions (round-three mock): one tile per style the engine renders,
+/// each showing the two clips being joined under the style's glyph. The
+/// picked tile plays the transition on a loop. A length ruler sits below.
 private struct LDTransitionPanel: View {
     @ObservedObject var editor: EditorState
     let afterClipID: UUID?
 
+    /// The ruler's value while a finger is on it.
+    @State private var draftLength: Double?
+
+    private static let lengthStops: [Double] = [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0]
+
+    private var clipIndex: Int? {
+        guard let id = afterClipID else { return nil }
+        return editor.clips.firstIndex { $0.id == id }
+    }
+
     private var current: TransitionStyle {
-        guard let id = afterClipID else { return .none }
-        return editor.clips.first { $0.id == id }?.transitionAfter ?? .none
+        guard let i = clipIndex else { return .none }
+        return editor.clips[i].transitionAfter
     }
 
-    private var currentDuration: Double {
-        guard let id = afterClipID else { return 0.6 }
-        return editor.clips.first { $0.id == id }?.transitionDuration ?? current.duration
+    /// The length the person picked, or nil for the style's own default.
+    private var storedDuration: Double? {
+        guard let i = clipIndex else { return nil }
+        return editor.clips[i].transitionDuration
     }
 
-    /// The cut this panel edits still has to exist — the id is captured when a
-    /// transition chip is tapped, and a delete/undo can outlive it. Every
-    /// setter guards on the clip, so a stale id turned the grid into dead
-    /// pixels; say so instead.
+    private var currentDuration: Double { storedDuration ?? current.duration }
+
+    /// The cut this panel edits still has to exist, with a clip after it.
+    /// The id is captured when a transition chip is tapped, and a delete or
+    /// undo can outlive it. Every setter guards on the clip, so a stale id
+    /// turned the grid into dead pixels; say so instead.
     private var cutExists: Bool {
-        guard let id = afterClipID else { return false }
-        return editor.clips.contains { $0.id == id }
+        guard let i = clipIndex else { return false }
+        return i < editor.clips.count - 1
     }
 
     var body: some View {
         if !cutExists {
             LDNote("That cut is no longer on the timeline. Tap a diamond between two clips to choose its transition.")
-        } else {
-            grid
+        } else if let i = clipIndex {
+            content(index: i)
         }
     }
 
-    private var grid: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(["Basic", "Motion", "FX"], id: \.self) { group in
-                let styles = TransitionStyle.allCases.filter { $0.category == group }
-                if !styles.isEmpty {
-                    LDCaption(group)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                        ForEach(styles, id: \.self) { style in
-                            let on = current == style
-                            Button {
-                                guard let id = afterClipID else { return }
-                                editor.setTransition(afterClipID: id, style: style, duration: currentDuration)
-                                LumaHaptics.shared.tap()
-                            } label: {
-                                VStack(spacing: 6) {
-                                    Image(systemName: style.icon)
-                                        .font(.system(size: 15, weight: .light))
-                                    Text(style.label).font(.luma(size: 11, weight: .medium))
-                                        .lineLimit(1).minimumScaleFactor(0.85)
-                                }
-                                .foregroundStyle(on ? Color.white : LumaTheme.textSecondary)
-                                .frame(maxWidth: .infinity).frame(height: 56)
-                                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                .overlay {
-                                    if on {
-                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                            .strokeBorder(Color.white, lineWidth: 1.2)
-                                    }
-                                }
-                                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            }
-                            .buttonStyle(.lumaPress)
-                        }
+    @ViewBuilder
+    private func content(index i: Int) -> some View {
+        let outgoing = editor.clips[i]
+        let incoming = editor.clips[i + 1]
+        let tailFrame = outgoing.filmstrip.last ?? outgoing.thumbnail
+        let headFrame = incoming.filmstrip.first ?? incoming.thumbnail
+        VStack(alignment: .leading, spacing: 14) {
+            header(index: i)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                      spacing: 12) {
+                ForEach(TransitionStyle.allCases, id: \.self) { style in
+                    LDPTile(title: Self.title(style), selected: current == style,
+                            height: 52, action: { pick(style) }) {
+                        LDPTransitionArt(style: style, outgoing: tailFrame, incoming: headFrame,
+                                         playing: current == style)
                     }
                 }
             }
+            lengthRow
+        }
+    }
 
-            LDCaption("Duration")
-            HStack(spacing: 8) {
-                ForEach([0.3, 0.6, 1.0, 1.5], id: \.self) { seconds in
-                    LDChip(title: String(format: "%gs", seconds),
-                           selected: abs(currentDuration - seconds) < 0.01) {
-                        guard let id = afterClipID else { return }
-                        editor.setTransition(afterClipID: id, style: current, duration: seconds)
-                        LumaHaptics.shared.tap()
-                    }
-                }
-            }
-
+    private func header(index i: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("Clip \(i + 1) to clip \(i + 2)")
+                .font(.luma(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(LumaTheme.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
             if current != .none, editor.clips.count > 2 {
-                LDAction(title: "Use this transition at every cut", icon: "arrow.triangle.branch") {
-                    editor.setTransitionForAllCuts(style: current, duration: currentDuration)
+                let done = everyCutMatches
+                Button {
+                    editor.setTransitionForAllCuts(style: current, duration: storedDuration)
                     LumaHaptics.shared.tap()
+                } label: {
+                    Text(done ? "On every cut" : "Apply to all")
+                        .font(.luma(size: 12.5, weight: .medium))
+                        .foregroundStyle(done ? LumaTheme.textMuted : LumaTheme.textSecondary)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.lumaPress)
+                .disabled(done)
             }
         }
+    }
+
+    /// True once every cut already wears this style and length.
+    private var everyCutMatches: Bool {
+        let cuts = editor.clips.dropLast()
+        return cuts.allSatisfy { $0.transitionAfter == current && $0.transitionDuration == storedDuration }
+    }
+
+    @ViewBuilder
+    private var lengthRow: some View {
+        let isCut = current == .none
+        let shown = draftLength ?? currentDuration
+        HStack(alignment: .firstTextBaseline) {
+            Text("Length")
+                .font(.luma(size: 12, weight: .medium))
+                .foregroundStyle(LumaTheme.textSecondary)
+            Spacer(minLength: 6)
+            Text(isCut ? "Instant" : String(format: "%.1f s", shown))
+                .font(.luma(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(isCut ? LumaTheme.textMuted : LumaTheme.textPrimary)
+        }
+        LDPStopRuler(stops: Self.lengthStops.map { String(format: "%.1f", $0) },
+                     index: Self.nearestStop(to: isCut ? 0.6 : currentDuration),
+                     enabled: !isCut,
+                     onPreview: { draftLength = Self.lengthStops[$0] },
+                     onCommit: { index in
+                         draftLength = nil
+                         setLength(Self.lengthStops[index])
+                     })
+        if isCut {
+            LDNote("A cut is instant. Pick a transition to set its length.")
+        }
+    }
+
+    /// Picking a style keeps a length the person chose; otherwise the style
+    /// brings its own. (Passing the resolved length here gave a style picked
+    /// over a cut a length of zero, which the build skips.)
+    private func pick(_ style: TransitionStyle) {
+        guard let id = afterClipID else { return }
+        var keep: Double? = nil
+        if let stored = storedDuration, stored > 0.05 { keep = stored }
+        editor.setTransition(afterClipID: id, style: style, duration: keep)
+        LumaHaptics.shared.tap()
+    }
+
+    private func setLength(_ seconds: Double) {
+        guard let id = afterClipID, current != .none else { return }
+        if abs(currentDuration - seconds) > 0.001 || storedDuration == nil {
+            editor.setTransition(afterClipID: id, style: current, duration: seconds)
+        }
+        LumaHaptics.shared.tap()
+    }
+
+    /// "Fade Black" reads "Fade black" on the tiles.
+    private static func title(_ style: TransitionStyle) -> String {
+        let label = style.label
+        guard let first = label.first else { return label }
+        return String(first) + label.dropFirst().lowercased()
+    }
+
+    private static func nearestStop(to seconds: Double) -> Int {
+        var best = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (i, stop) in lengthStops.enumerated() {
+            let distance = abs(stop - seconds)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = i
+            }
+        }
+        return best
+    }
+}
+
+/// A transition tile's art: the outgoing clip's last frame beside the
+/// incoming clip's first, dimmed, under the style's glyph. While `playing`
+/// the two frames run the transition itself on a loop.
+private struct LDPTransitionArt: View {
+    let style: TransitionStyle
+    let outgoing: CGImage?
+    let incoming: CGImage?
+    let playing: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Hold on A, run the transition, hold on B.
+    private static let cycle: Double = 1.8
+
+    var body: some View {
+        ZStack {
+            if playing && !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
+                    animated(progress: Self.progress(at: context.date))
+                }
+                Color.black.opacity(0.22)
+            } else {
+                split
+                Color.black.opacity(0.35)
+            }
+            LDPTransitionGlyph(style: style)
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                .frame(width: 22, height: 22)
+                .shadow(color: .black.opacity(0.4), radius: 2)
+        }
+        .clipped()
+        .allowsHitTesting(false)
+    }
+
+    /// A on the left half, B on the right.
+    private var split: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                still(outgoing, fallback: Color.white.opacity(0.08))
+                    .frame(width: geo.size.width / 2, height: geo.size.height)
+                    .clipped()
+                still(incoming, fallback: Color.white.opacity(0.18))
+                    .frame(width: geo.size.width / 2, height: geo.size.height)
+                    .clipped()
+            }
+        }
+    }
+
+    private func animated(progress p: Double) -> some View {
+        let f = LDPTransitionFrame.make(style, p)
+        return GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ZStack {
+                still(outgoing, fallback: Color.white.opacity(0.08))
+                    .frame(width: w, height: h)
+                    .clipped()
+                    .scaleEffect(f.aScale)
+                    .rotationEffect(.degrees(f.aAngle))
+                    .offset(x: f.aOffset.width * w, y: f.aOffset.height * h)
+                    .opacity(f.aOpacity)
+                still(incoming, fallback: Color.white.opacity(0.18))
+                    .frame(width: w, height: h)
+                    .clipped()
+                    .scaleEffect(f.bScale)
+                    .rotationEffect(.degrees(f.bAngle))
+                    .offset(x: f.bOffset.width * w, y: f.bOffset.height * h)
+                    .opacity(f.bOpacity)
+                    .mask { reveal(f, width: w, height: h) }
+                f.veil.opacity(f.veilOpacity)
+            }
+            .frame(width: w, height: h)
+            .clipped()
+        }
+    }
+
+    /// The part of B that shows: a growing strip for a wipe, a growing
+    /// circle for a luma wipe, all of it otherwise.
+    @ViewBuilder
+    private func reveal(_ f: LDPTransitionFrame, width w: CGFloat, height h: CGFloat) -> some View {
+        if let wipe = f.wipe {
+            Rectangle()
+                .frame(width: max(0, w * wipe), height: h)
+                .frame(width: w, height: h, alignment: .leading)
+        } else if let circle = f.circle {
+            let d = max(0.001, sqrt(w * w + h * h) * circle)
+            Circle()
+                .frame(width: d, height: d)
+                .frame(width: w, height: h)
+        } else {
+            Rectangle()
+        }
+    }
+
+    @ViewBuilder
+    private func still(_ image: CGImage?, fallback: Color) -> some View {
+        if let image {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .scaledToFill()
+        } else {
+            fallback
+        }
+    }
+
+    /// 0 while holding on A, easing to 1, then holding on B.
+    private static func progress(at date: Date) -> Double {
+        let t = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
+        let raw = min(max((t - 0.35) / 0.95, 0), 1)
+        return raw * raw * (3 - 2 * raw)
+    }
+}
+
+/// Where A and B sit at one moment of a transition preview.
+private struct LDPTransitionFrame {
+    var aOpacity: Double = 1
+    var bOpacity: Double = 1
+    /// Offsets as fractions of the tile.
+    var aOffset: CGSize = .zero
+    var bOffset: CGSize = .zero
+    var aScale: CGFloat = 1
+    var bScale: CGFloat = 1
+    var aAngle: Double = 0
+    var bAngle: Double = 0
+    /// 0…1 share of B revealed from the left (wipe).
+    var wipe: CGFloat? = nil
+    /// 0…1 of the tile's diagonal revealed as a circle (luma wipe).
+    var circle: CGFloat? = nil
+    var veil: Color = .clear
+    var veilOpacity: Double = 0
+
+    static func make(_ style: TransitionStyle, _ p: Double) -> LDPTransitionFrame {
+        var f = LDPTransitionFrame()
+        let q = CGFloat(p)
+        /// 0 at the ends, 1 at the midpoint.
+        let peak = 1 - abs(2 * p - 1)
+        let second = p >= 0.5
+        switch style {
+        case .none:
+            f.bOpacity = second ? 1 : 0
+        case .dissolve:
+            f.bOpacity = p
+        case .wipe:
+            f.wipe = q
+        case .fadeBlack:
+            f.bOpacity = second ? 1 : 0
+            f.veil = .black
+            f.veilOpacity = peak
+        case .fadeWhite:
+            f.bOpacity = second ? 1 : 0
+            f.veil = .white
+            f.veilOpacity = peak
+        case .flash:
+            f.bOpacity = second ? 1 : 0
+            f.veil = .white
+            f.veilOpacity = max(0, 1 - abs(2 * p - 1) * 2.5)
+        case .slideLeft:
+            f.aOffset = CGSize(width: -q, height: 0)
+            f.bOffset = CGSize(width: 1 - q, height: 0)
+        case .slideRight:
+            f.aOffset = CGSize(width: q, height: 0)
+            f.bOffset = CGSize(width: q - 1, height: 0)
+        case .slideUp:
+            f.aOffset = CGSize(width: 0, height: -q)
+            f.bOffset = CGSize(width: 0, height: 1 - q)
+        case .slideDown:
+            f.aOffset = CGSize(width: 0, height: q)
+            f.bOffset = CGSize(width: 0, height: q - 1)
+        case .zoomIn:
+            f.aScale = 1 + 0.8 * q
+            f.aOpacity = 1 - p
+            f.bScale = 0.7 + 0.3 * q
+            f.bOpacity = p
+        case .zoomOut:
+            f.aScale = 1 - 0.35 * q
+            f.aOpacity = 1 - p
+            f.bScale = 1.6 - 0.6 * q
+            f.bOpacity = p
+        case .spin:
+            if second {
+                f.aOpacity = 0
+                f.bAngle = -180 * (1 - p)
+                f.bScale = 0.6 + 0.4 * CGFloat((p - 0.5) * 2)
+            } else {
+                f.bOpacity = 0
+                f.aAngle = 180 * p
+                f.aScale = 1 - 0.4 * CGFloat(p * 2)
+            }
+        case .glitch:
+            f.bOpacity = second ? 1 : 0
+            if p > 0.3 && p < 0.7 {
+                let jitter = CGFloat(sin(p * 90)) * 0.08
+                f.aOffset = CGSize(width: jitter, height: 0)
+                f.bOffset = CGSize(width: -jitter, height: 0)
+            }
+        case .lumaWipe:
+            f.circle = q
+        default:
+            f.bOpacity = p
+        }
+        return f
+    }
+}
+
+/// Line glyphs for the transition tiles, drawn on a 24-point grid like the
+/// mock's icons. Stroke it.
+private struct LDPTransitionGlyph: Shape {
+    let style: TransitionStyle
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        switch style {
+        case .none:
+            line(&p, 12, 4, 12, 20)
+        case .dissolve:
+            p.addEllipse(in: CGRect(x: 4, y: 7, width: 10, height: 10))
+            p.addEllipse(in: CGRect(x: 10, y: 7, width: 10, height: 10))
+        case .wipe:
+            line(&p, 5, 19, 19, 5)
+            line(&p, 5, 12, 12, 5)
+            line(&p, 12, 19, 19, 12)
+        case .fadeBlack:
+            p.addEllipse(in: CGRect(x: 5, y: 5, width: 14, height: 14))
+            line(&p, 12, 5, 12, 19)
+            line(&p, 5.7, 9, 12, 9)
+            line(&p, 5, 12, 12, 12)
+            line(&p, 5.7, 15, 12, 15)
+        case .fadeWhite:
+            p.addEllipse(in: CGRect(x: 8, y: 8, width: 8, height: 8))
+            for k in 0..<8 {
+                let a = Double(k) * .pi / 4
+                line(&p, 12 + 6.5 * cos(a), 12 + 6.5 * sin(a), 12 + 9 * cos(a), 12 + 9 * sin(a))
+            }
+        case .flash:
+            p.move(to: CGPoint(x: 13, y: 3))
+            p.addLine(to: CGPoint(x: 6, y: 13))
+            p.addLine(to: CGPoint(x: 11, y: 13))
+            p.addLine(to: CGPoint(x: 10, y: 21))
+            p.addLine(to: CGPoint(x: 17, y: 11))
+            p.addLine(to: CGPoint(x: 12, y: 11))
+            p.closeSubpath()
+        case .slideLeft:
+            slide(&p, degrees: 0)
+        case .slideUp:
+            slide(&p, degrees: 90)
+        case .slideRight:
+            slide(&p, degrees: 180)
+        case .slideDown:
+            slide(&p, degrees: 270)
+        case .zoomIn:
+            p.addEllipse(in: CGRect(x: 9, y: 9, width: 6, height: 6))
+            p.addEllipse(in: CGRect(x: 5, y: 5, width: 14, height: 14))
+        case .zoomOut:
+            p.addEllipse(in: CGRect(x: 9, y: 9, width: 6, height: 6))
+            line(&p, 4, 4, 8, 8)
+            line(&p, 20, 4, 16, 8)
+            line(&p, 4, 20, 8, 16)
+            line(&p, 20, 20, 16, 16)
+        case .spin:
+            arc(&p, centreX: 12, centreY: 12, radius: 7, from: 0, to: 315)
+            p.move(to: CGPoint(x: 19, y: 4))
+            p.addLine(to: CGPoint(x: 19, y: 8))
+            p.addLine(to: CGPoint(x: 15, y: 8))
+        case .glitch:
+            line(&p, 4, 7, 14, 7)
+            line(&p, 8, 11, 20, 11)
+            line(&p, 4, 15, 12, 15)
+            line(&p, 10, 19, 18, 19)
+        case .lumaWipe:
+            arc(&p, centreX: 12, centreY: 12, radius: 8, from: 180, to: 360)
+            arc(&p, centreX: 12, centreY: 12, radius: 4, from: 180, to: 360)
+        default:
+            p.addEllipse(in: CGRect(x: 7, y: 7, width: 10, height: 10))
+        }
+        let scale = CGAffineTransform(scaleX: rect.width / 24, y: rect.height / 24)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+        return p.applying(scale)
+    }
+
+    private func line(_ p: inout Path, _ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
+        p.move(to: CGPoint(x: x1, y: y1))
+        p.addLine(to: CGPoint(x: x2, y: y2))
+    }
+
+    /// An arc from sampled points; degrees run clockwise from three o'clock
+    /// (y points down).
+    private func arc(_ p: inout Path, centreX: Double, centreY: Double, radius: Double,
+                     from start: Double, to end: Double) {
+        let steps = 24
+        for i in 0...steps {
+            let a = (start + (end - start) * Double(i) / Double(steps)) * .pi / 180
+            let point = CGPoint(x: centreX + radius * cos(a), y: centreY + radius * sin(a))
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+    }
+
+    /// An arrow pointing left with a bar where the frame leaves from,
+    /// turned by `degrees` (90 points up).
+    private func slide(_ p: inout Path, degrees: Double) {
+        var arrow = Path()
+        line(&arrow, 18, 12, 5, 12)
+        arrow.move(to: CGPoint(x: 10, y: 7))
+        arrow.addLine(to: CGPoint(x: 5, y: 12))
+        arrow.addLine(to: CGPoint(x: 10, y: 17))
+        line(&arrow, 20, 6, 20, 18)
+        let turn = CGAffineTransform(translationX: 12, y: 12)
+            .rotated(by: CGFloat(degrees * .pi / 180))
+            .translatedBy(x: -12, y: -12)
+        p.addPath(arrow.applying(turn))
     }
 }
 
@@ -3770,13 +4659,13 @@ private struct LDMaskPanel: View {
                 LDCaption("Shape")
                 HStack(spacing: 8) {
                     ForEach(ClipMaskShape.allCases, id: \.self) { s in
-                        LDChip(title: s.label, selected: shape == s) {
+                        LDPChip(title: s.label, selected: shape == s) {
                             editor.setClipMask(id: clip.id, shape: shape == s ? nil : s)
                             LumaHaptics.shared.tap()
                         }
                     }
                     if shape != nil {
-                        LDChip(title: "Clear") {
+                        LDPChip(title: "Clear") {
                             editor.setClipMask(id: clip.id, shape: nil)
                             LumaHaptics.shared.tap()
                         }
@@ -3787,11 +4676,11 @@ private struct LDMaskPanel: View {
                     LDCaption("Effect")
                     HStack(spacing: 8) {
                         ForEach(ClipMaskEffect.allCases, id: \.self) { e in
-                            LDChip(title: e.label, selected: effect == e) {
+                            LDPChip(title: e.label, selected: effect == e) {
                                 editor.setClipMask(id: clip.id, shape: shape, effect: e)
                             }
                         }
-                        LDChip(title: "Invert", selected: clip.maskInverted) {
+                        LDPChip(title: "Invert", selected: clip.maskInverted) {
                             editor.setClipMask(id: clip.id, shape: shape, inverted: !clip.maskInverted)
                         }
                     }
@@ -3839,7 +4728,7 @@ private struct LDStickerPanel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(Array(categories.enumerated()), id: \.offset) { idx, cat in
-                        LDChip(title: cat.name, selected: idx == category) { category = idx }
+                        LDPChip(title: cat.name, selected: idx == category) { category = idx }
                     }
                 }
                 .padding(.trailing, 24)
@@ -3859,7 +4748,7 @@ private struct LDStickerPanel: View {
                         } label: {
                             Text(emoji).font(.luma(size: 25))
                                 .frame(maxWidth: .infinity).frame(height: 44)
-                                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .ldpRaisedTile(cornerRadius: 9)
                                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         }
                         .buttonStyle(.lumaPress)
@@ -3923,9 +4812,9 @@ private struct LDEffectsPanel: View {
                 Image(systemName: icon).font(.system(size: 17, weight: .light))
                 Text(title).font(.luma(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
             }
-            .foregroundStyle(Color.white.opacity(0.85))
+            .foregroundStyle(LumaTheme.textSecondary)
             .frame(maxWidth: .infinity).frame(height: 62)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .ldpRaisedTile()
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.lumaPress)
@@ -3936,11 +4825,12 @@ private struct LDEffectsPanel: View {
                      remove: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).font(.luma(size: 13.5, weight: .medium)).foregroundStyle(.white)
+                Text(title).font(.luma(size: 13.5, weight: .semibold)).foregroundStyle(LumaTheme.textPrimary)
                 Spacer()
                 Text("at \(LDFormat.secs(offset))")
-                    .font(.luma(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.luma(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(LumaTheme.textMuted)
                 Button(action: remove) {
                     Image(systemName: "trash").font(.system(size: 12, weight: .light))
                         .foregroundStyle(LumaTheme.textSecondary)
@@ -3953,7 +4843,7 @@ private struct LDEffectsPanel: View {
                            commit: setIntensity)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .ldpRaisedTile()
     }
 }
 
@@ -3967,7 +4857,7 @@ private struct LDCanvasPanel: View {
             LDCaption("Format")
             HStack(spacing: 8) {
                 ForEach(EditorFormat.allCases, id: \.self) { f in
-                    LDChip(title: f.rawValue, selected: editor.format == f) {
+                    LDPChip(title: f.rawValue, selected: editor.format == f) {
                         editor.setFormat(f, zoom: editor.zoom); LumaHaptics.shared.tap()
                     }
                 }
@@ -3975,7 +4865,7 @@ private struct LDCanvasPanel: View {
             LDCaption("Canvas")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(CanvasBackgroundMode.allCases, id: \.self) { mode in
-                    LDChip(title: mode.rawValue.capitalized, selected: editor.canvasMode == mode) {
+                    LDPChip(title: mode.rawValue.capitalized, selected: editor.canvasMode == mode) {
                         editor.setCanvasMode(mode); LumaHaptics.shared.tap()
                     }
                 }
@@ -3986,7 +4876,7 @@ private struct LDCanvasPanel: View {
             LDCaption("Frame")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(FramePreset.allCases, id: \.self) { preset in
-                    LDChip(title: preset.label, selected: editor.framePreset == preset.rawValue) {
+                    LDPChip(title: preset.label, selected: editor.framePreset == preset.rawValue) {
                         editor.setFramePreset(preset); LumaHaptics.shared.tap()
                     }
                 }
@@ -4004,11 +4894,11 @@ private struct LDAudioReactivePanel: View {
         VStack(alignment: .leading, spacing: 16) {
             LDCaption("Driven by sound")
             HStack(spacing: 8) {
-                LDChip(title: "Off", selected: editor.audioReactive == nil) {
+                LDPChip(title: "Off", selected: editor.audioReactive == nil) {
                     editor.setAudioReactive(nil); LumaHaptics.shared.tap()
                 }
                 ForEach(AudioReactiveStyle.allCases, id: \.self) { style in
-                    LDChip(title: style.label, selected: editor.audioReactive?.style == style) {
+                    LDPChip(title: style.label, selected: editor.audioReactive?.style == style) {
                         editor.setAudioReactive(.init(style: style,
                                                       strength: editor.audioReactive?.strength ?? 1.0,
                                                       sourceTrackID: editor.audioReactive?.sourceTrackID
@@ -4028,7 +4918,7 @@ private struct LDAudioReactivePanel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(editor.audioTracks) { track in
-                            LDChip(title: track.title, selected: config.sourceTrackID == track.id) {
+                            LDPChip(title: track.title, selected: config.sourceTrackID == track.id) {
                                 editor.setAudioReactive(.init(style: config.style,
                                                               strength: config.strength,
                                                               sourceTrackID: track.id))
@@ -4067,8 +4957,8 @@ private struct LDOverlayPanel: View {
 
     private var sections: [Section] {
         guard let item else { return [] }
-        var s: [Section] = [.place]
-        if item.text != nil { s.append(.text) }
+        // A text layer opens on its words: Text leads the row.
+        var s: [Section] = item.text != nil ? [.text, .place] : [.place]
         if !item.isImage || item.text == nil { s.append(contentsOf: [.pip, .blend, .chroma, .mask, .adjust, .border]) }
         s.append(contentsOf: [.motion, .sound])
         return s
@@ -4080,7 +4970,7 @@ private struct LDOverlayPanel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(sections, id: \.self) { s in
-                            LDChip(title: s.rawValue, selected: section == s) { section = s }
+                            LDPChip(title: s.rawValue, selected: section == s) { section = s }
                         }
                     }
                     .padding(.trailing, 24)
@@ -4092,7 +4982,7 @@ private struct LDOverlayPanel: View {
                 // video overlay and then opening a TEXT overlay used to render
                 // green-screen controls under a chip row that did not list them.
                 // Clamp the section to what this overlay actually supports.
-                switch sections.contains(section) ? section : .place {
+                switch sections.contains(section) ? section : (sections.first ?? .place) {
                 case .place:  place(item, id)
                 case .text:   text(item, id)
                 case .pip:    pip(id)
@@ -4110,10 +5000,18 @@ private struct LDOverlayPanel: View {
                     LumaHaptics.shared.tap()
                 }
             }
-            .onAppear { draftText = item.text ?? "" }
-            .onChange(of: overlayID) { _, _ in
+            .onAppear {
                 draftText = item.text ?? ""
-                if !sections.contains(section) { section = .place }
+                if item.text != nil { section = .text }
+            }
+            .onChange(of: overlayID) { _, newID in
+                let fresh = editor.overlays.first { $0.id == newID }
+                draftText = fresh?.text ?? ""
+                if fresh?.text != nil {
+                    section = .text
+                } else if !sections.contains(section) {
+                    section = .place
+                }
             }
         } else {
             LDNote("Select an overlay on the timeline.")
@@ -4140,21 +5038,12 @@ private struct LDOverlayPanel: View {
         // coloured on this screen.
         if item.shapeKind != nil {
             LDCaption("Fill")
-            HStack(spacing: 9) {
+            HStack(spacing: 6) {
                 ForEach(Self.swatches, id: \.self) { hex in
-                    Button { editor.setShapeDecor(id: id, fillHex: .some(hex)) } label: {
-                        Circle().fill(Color(hex: hex))
-                            .frame(width: 26, height: 26)
-                            .overlay {
-                                if (item.shapeFillHex ?? "").uppercased() == hex.uppercased() {
-                                    Circle().strokeBorder(Color.white, lineWidth: 2)
-                                } else {
-                                    Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                                }
-                            }
-                            .contentShape(Circle())
+                    LDPSwatch(hex: hex,
+                              selected: (item.shapeFillHex ?? "").uppercased() == hex.uppercased()) {
+                        editor.setShapeDecor(id: id, fillHex: .some(hex))
                     }
-                    .buttonStyle(.lumaPress)
                 }
             }
         }
@@ -4166,124 +5055,250 @@ private struct LDOverlayPanel: View {
         LDCaption("Position")
         LDNote("Drag the layer on the picture to move it. Pinch to resize, twist to rotate.")
         HStack(spacing: 8) {
-            LDChip(title: "Centre") {
+            LDPChip(title: "Centre") {
                 editor.setOverlayCenter(id: id, CGPoint(x: 0.5, y: 0.5))
                 LumaHaptics.shared.tap()
             }
-            LDChip(title: "Reset angle", enabled: abs(item.rotationDegrees) > 0.01) {
+            LDPChip(title: "Reset angle", enabled: abs(item.rotationDegrees) > 0.01) {
                 editor.setOverlayRotation(id: id, 0)
                 LumaHaptics.shared.tap()
             }
         }
         LDCaption("Stacking layer", value: "\(item.lane + 1)")
         HStack(spacing: 8) {
-            LDChip(title: "Send back", enabled: item.lane > 0) { editor.nudgeOverlayLane(id: id, by: -1) }
-            LDChip(title: "Bring forward") { editor.nudgeOverlayLane(id: id, by: 1) }
+            LDPChip(title: "Send back", enabled: item.lane > 0) { editor.nudgeOverlayLane(id: id, by: -1) }
+            LDPChip(title: "Bring forward") { editor.nudgeOverlayLane(id: id, by: 1) }
         }
         LDCaption("Trim")
         HStack(spacing: 8) {
-            LDChip(title: "Head −0.2s") { editor.trimOverlayHead(id: id, deltaSeconds: -0.2) }
-            LDChip(title: "Head +0.2s") { editor.trimOverlayHead(id: id, deltaSeconds: 0.2) }
-            LDChip(title: "Tail −0.2s") { editor.trimOverlayTail(id: id, deltaSeconds: -0.2) }
-            LDChip(title: "Tail +0.2s") { editor.trimOverlayTail(id: id, deltaSeconds: 0.2) }
+            LDPChip(title: "Head −0.2s") { editor.trimOverlayHead(id: id, deltaSeconds: -0.2) }
+            LDPChip(title: "Head +0.2s") { editor.trimOverlayHead(id: id, deltaSeconds: 0.2) }
+            LDPChip(title: "Tail −0.2s") { editor.trimOverlayTail(id: id, deltaSeconds: -0.2) }
+            LDPChip(title: "Tail +0.2s") { editor.trimOverlayTail(id: id, deltaSeconds: 0.2) }
         }
     }
 
     @ViewBuilder
     private func text(_ item: EditorState.OverlayItem, _ id: UUID) -> some View {
-        LDCaption("Content")
-        TextField("", text: $draftText, axis: .vertical)
-            .font(.luma(size: 14))
-            .foregroundStyle(.white)
-            .tint(.white)
+        TextField("", text: $draftText,
+                  prompt: Text("Type something").foregroundColor(LumaTheme.textMuted),
+                  axis: .vertical)
+            .font(.luma(size: 17, weight: .semibold))
+            .foregroundStyle(LumaTheme.textPrimary)
+            .tint(LumaTheme.signal)
             .lineLimit(1...3)
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(LumaTheme.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(LumaTheme.border, lineWidth: 1))
             .onSubmit { editor.setOverlayText(id: id, draftText) }
             .onChange(of: draftText) { _, new in editor.setOverlayText(id: id, new) }
 
-        LDCaption("Style")
-        HStack(spacing: 8) {
-            ForEach(EditorState.TextLayerStyle.allCases, id: \.self) { style in
-                LDChip(title: style.label, selected: item.textStyle == style) {
-                    editor.setOverlayTextStyle(id: id, style)
+        LDPRow(label: "Font") {
+            ForEach(fontChoices(for: item)) { choice in
+                LDPChip(title: choice.title,
+                        selected: (item.textFontName ?? item.textStyle.fontName) == choice.name,
+                        fontName: choice.name) {
+                    if item.textFontName != choice.name {
+                        editor.setTextDecor(id: id, fontName: .some(choice.name))
+                    }
+                    LumaHaptics.shared.tap()
                 }
             }
         }
 
-        LDCaption("Colour")
-        HStack(spacing: 9) {
-            ForEach(Self.swatches, id: \.self) { hex in
-                Button { editor.setOverlayTextColor(id: id, hex) } label: {
-                    Circle().fill(Color(hex: hex))
-                        .frame(width: 26, height: 26)
-                        .overlay {
-                            if item.textColorHex.uppercased() == hex.uppercased() {
-                                Circle().strokeBorder(Color.white, lineWidth: 2)
-                            } else {
-                                Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                            }
-                        }
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.lumaPress)
-            }
-        }
-
-        LDCaption("Align")
-        HStack(spacing: 8) {
-            ForEach(["left", "center", "right"], id: \.self) { align in
-                LDChip(title: align.capitalized, selected: item.textAlignment == align) {
-                    editor.setTextDecor(id: id, alignment: align)
+        LDPRow(label: "Style") {
+            ForEach(TextLook.allCases, id: \.self) { look in
+                LDPChip(title: look.rawValue, selected: isOn(look, item)) {
+                    apply(look, item, id)
                 }
             }
         }
-
-        LDCaption("Font")
-        Menu {
-            Button("Preset font") { editor.setTextDecor(id: id, fontName: .some(nil)) }
-            ForEach(FontLibrary.builtInFontNames, id: \.self) { name in
-                Button(name) { editor.setTextDecor(id: id, fontName: .some(name)) }
-            }
-        } label: {
-            HStack {
-                Text(item.textFontName ?? "Preset font")
-                    .font(.luma(size: 14, weight: .medium)).foregroundStyle(.white)
-                Spacer()
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textMuted)
-            }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        }
-
-        LDCaption("Decoration")
-        HStack(spacing: 8) {
-            LDChip(title: "Outline", selected: item.textStrokeHex != nil) {
-                editor.setTextDecor(id: id,
-                                    strokeHex: item.textStrokeHex == nil ? .some("#000000") : .some(nil),
-                                    strokeWidth: item.textStrokeHex == nil ? 2 : 0)
-            }
-            LDChip(title: "Box", selected: item.textBoxHex != nil) {
-                editor.setTextDecor(id: id, boxHex: item.textBoxHex == nil ? .some("#000000") : .some(nil))
-            }
-        }
-        if item.textStrokeHex != nil {
+        if isOn(.outline, item) {
             // Starts at 1, not 0: a zero-width outline under a chip that reads
             // "on" is a control that lies about its own state.
             LDCommitSlider(label: "Outline width", initial: max(1, item.textStrokeWidth),
                            range: 1...12, readout: { String(format: "%.1f", $0) },
                            commit: { editor.setTextDecor(id: id, strokeWidth: $0) })
+        } else if isOn(.glow, item) {
+            LDCommitSlider(label: "Glow size", initial: min(max(8, item.textStrokeWidth), 48),
+                           range: 8...48, readout: { "\(Int($0))" },
+                           commit: { editor.setTextDecor(id: id, strokeWidth: $0) })
         }
 
-        LDCaption("Animation")
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-            ForEach(TextAnimation.allCases, id: \.self) { preset in
-                LDChip(title: preset.label, selected: item.textAnimation == preset.rawValue) {
-                    editor.setTextAnimation(id: id, preset)
+        LDPRow(label: "Colour") {
+            ForEach(Self.textSwatches, id: \.self) { hex in
+                LDPSwatch(hex: hex, selected: item.textColorHex.uppercased() == hex.uppercased()) {
+                    pickColour(hex, item, id)
                 }
             }
         }
+
+        LDPRow(label: "Animate") {
+            ForEach(TextAnimation.allCases, id: \.self) { preset in
+                LDPChip(title: Self.animationTitle(preset),
+                        selected: item.textAnimation == preset.rawValue) {
+                    editor.setTextAnimation(id: id, preset)
+                    LumaHaptics.shared.tap()
+                }
+            }
+        }
+
+        LDPRow(label: "Align") {
+            ForEach([("left", "Left"), ("center", "Centre"), ("right", "Right")], id: \.0) { pair in
+                LDPChip(title: pair.1, selected: item.textAlignment == pair.0) {
+                    editor.setTextDecor(id: id, alignment: pair.0)
+                }
+            }
+        }
+    }
+
+    // MARK: text styling
+
+    /// The four looks on the Style row. Plain clears both decorations; the
+    /// others are one decoration each.
+    private enum TextLook: String, CaseIterable {
+        case plain = "Plain", box = "Box", outline = "Outline", glow = "Glow"
+    }
+
+    private struct FontChoice: Identifiable {
+        let title: String
+        let name: String
+        var id: String { name }
+    }
+
+    /// Inter first (bundled with the app), then the system faces the picker
+    /// has always offered. Anything that does not resolve on this device is
+    /// left out rather than shown as a chip that renders Helvetica.
+    private static let fontCatalogue: [FontChoice] = [
+        FontChoice(title: "Inter Heavy", name: "InterDisplay-ExtraBold"),
+        FontChoice(title: "Inter Bold", name: "Inter-Bold"),
+        FontChoice(title: "Inter Medium", name: "Inter-Medium"),
+        FontChoice(title: "Inter Light", name: "InterDisplay-Light"),
+        FontChoice(title: "Condensed", name: "DINCondensed-Bold"),
+        FontChoice(title: "Mono", name: "Menlo-Bold"),
+        FontChoice(title: "Serif", name: "Georgia-Bold"),
+        FontChoice(title: "Helvetica", name: "HelveticaNeue-Bold"),
+        FontChoice(title: "Helvetica Medium", name: "HelveticaNeue-Medium"),
+        FontChoice(title: "Avenir", name: "AvenirNext-Bold"),
+        FontChoice(title: "Futura", name: "Futura-Bold"),
+        FontChoice(title: "Script", name: "SnellRoundhand-Black"),
+        FontChoice(title: "Marker", name: "MarkerFelt-Wide"),
+        FontChoice(title: "Copperplate", name: "Copperplate-Bold"),
+        FontChoice(title: "Baskerville", name: "Baskerville-Bold"),
+    ].filter { UIFont(name: $0.name, size: 12) != nil }
+
+    /// The catalogue, led by the layer's own font when it is one the person
+    /// imported, so the row always shows what is in use.
+    private func fontChoices(for item: EditorState.OverlayItem) -> [FontChoice] {
+        guard let custom = item.textFontName,
+              !Self.fontCatalogue.contains(where: { $0.name == custom }) else { return Self.fontCatalogue }
+        return [FontChoice(title: custom, name: custom)] + Self.fontCatalogue
+    }
+
+    /// White, the signal yellow, the looks' signature colours, and ink.
+    private static let textSwatches = ["#FFFFFF", "#FFC53D", "#FFB547", "#FF3DB4",
+                                       "#FF4B3E", "#8DB3D6", "#2EC4B6", "#08090A"]
+
+    private static func animationTitle(_ preset: TextAnimation) -> String {
+        switch preset {
+        case .none:       return "None"
+        case .fadeIn:     return "Fade in"
+        case .popIn:      return "Pop"
+        case .slideUp:    return "Rise"
+        case .slideLeft:  return "Slide in"
+        case .typewriter: return "Type on"
+        case .bounce:     return "Bounce"
+        case .kenBurns:   return "Drift"
+        default:          return preset.label
+        }
+    }
+
+    private func isGlow(_ item: EditorState.OverlayItem) -> Bool {
+        item.textStrokeHex?.hasPrefix(TextRasterizer.glowPrefix) ?? false
+    }
+
+    private func isOn(_ look: TextLook, _ item: EditorState.OverlayItem) -> Bool {
+        switch look {
+        case .plain:   return item.textStrokeHex == nil && item.textBoxHex == nil
+        case .box:     return item.textBoxHex != nil
+        case .outline: return item.textStrokeHex != nil && !isGlow(item)
+        case .glow:    return isGlow(item)
+        }
+    }
+
+    private func apply(_ look: TextLook, _ item: EditorState.OverlayItem, _ id: UUID) {
+        let contrast = Self.contrastHex(for: item.textColorHex)
+        let cleared: String? = nil
+        switch look {
+        case .plain:
+            guard !isOn(.plain, item) else { return }
+            editor.setTextDecor(id: id, strokeHex: .some(cleared), strokeWidth: 0, boxHex: .some(cleared))
+        case .box:
+            let boxColour: String? = item.textBoxHex ?? contrast
+            editor.setTextDecor(id: id, strokeHex: .some(cleared), strokeWidth: 0,
+                                boxHex: .some(boxColour))
+        case .outline:
+            let already = isOn(.outline, item)
+            let strokeColour: String? = already ? item.textStrokeHex : contrast
+            let width = already ? item.textStrokeWidth : 4
+            editor.setTextDecor(id: id,
+                                strokeHex: .some(strokeColour),
+                                strokeWidth: min(max(1, width), 12),
+                                boxHex: .some(cleared))
+        case .glow:
+            let glowColour: String? = Self.glowValue(for: item.textColorHex)
+            let width = isGlow(item) ? item.textStrokeWidth : 24
+            editor.setTextDecor(id: id,
+                                strokeHex: .some(glowColour),
+                                strokeWidth: min(max(8, width), 48),
+                                boxHex: .some(cleared))
+        }
+        LumaHaptics.shared.tap()
+    }
+
+    /// Decorations follow the text colour so a box or outline never vanishes
+    /// into it, and a glow takes the new colour. They go first so the undo
+    /// snapshot they take still holds the old colour.
+    private func pickColour(_ hex: String, _ item: EditorState.OverlayItem, _ id: UUID) {
+        let contrast = Self.contrastHex(for: hex)
+        var newStroke: String? = nil
+        if isGlow(item) {
+            let glow = Self.glowValue(for: hex)
+            if item.textStrokeHex != glow { newStroke = glow }
+        } else if let current = item.textStrokeHex, current.uppercased() != contrast {
+            newStroke = contrast
+        }
+        var newBox: String? = nil
+        if let current = item.textBoxHex, current.uppercased() != contrast { newBox = contrast }
+        if newStroke != nil || newBox != nil {
+            // nil leaves that decoration alone; .some(colour) replaces it.
+            let strokeArg: String?? = newStroke.map { Optional($0) }
+            let boxArg: String?? = newBox.map { Optional($0) }
+            editor.setTextDecor(id: id, strokeHex: strokeArg, boxHex: boxArg)
+        }
+        editor.setOverlayTextColor(id: id, hex)
+        LumaHaptics.shared.tap()
+    }
+
+    /// Ink on light text, white on dark.
+    private static func contrastHex(for hex: String) -> String {
+        isLight(hex) ? "#08090A" : "#FFFFFF"
+    }
+
+    /// A glow in the text's own colour; signal when the text is too dark to
+    /// glow.
+    private static func glowValue(for hex: String) -> String {
+        TextRasterizer.glowPrefix + (isLight(hex) ? hex.uppercased() : "#FFC53D")
+    }
+
+    private static func isLight(_ hex: String) -> Bool {
+        let cleaned = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard cleaned.count == 6, let value = UInt32(cleaned, radix: 16) else { return true }
+        let r = Double((value >> 16) & 0xFF)
+        let g = Double((value >> 8) & 0xFF)
+        let b = Double(value & 0xFF)
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.45
     }
 
     @ViewBuilder
@@ -4298,9 +5313,9 @@ private struct LDOverlayPanel: View {
                         Image(systemName: preset.icon).font(.system(size: 16, weight: .light))
                         Text(preset.name).font(.luma(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
                     }
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(LumaTheme.textSecondary)
                     .frame(maxWidth: .infinity).frame(height: 62)
-                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .ldpRaisedTile()
                     .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
@@ -4313,7 +5328,7 @@ private struct LDOverlayPanel: View {
         LDCaption("Blend mode")
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
             ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
-                LDChip(title: mode.label, selected: item.effects.blendMode == mode) {
+                LDPChip(title: mode.label, selected: item.effects.blendMode == mode) {
                     editor.setOverlayBlendMode(id: id, mode)
                 }
             }
@@ -4324,26 +5339,17 @@ private struct LDOverlayPanel: View {
     private func chroma(_ item: EditorState.OverlayItem, _ id: UUID) -> some View {
         let chroma = item.effects.chroma
         LDCaption("Green screen")
-        LDChip(title: chroma == nil ? "Off" : "On", selected: chroma != nil) {
+        LDPChip(title: chroma == nil ? "Off" : "On", selected: chroma != nil) {
             editor.setOverlayChroma(id: id, chroma == nil ? ChromaKeySettings() : nil)
         }
         if let chroma {
             LDCaption("Key colour")
-            HStack(spacing: 9) {
+            HStack(spacing: 6) {
                 ForEach(["#00FF00", "#0000FF", "#00FFFF", "#FF00FF"], id: \.self) { hex in
-                    Button {
+                    LDPSwatch(hex: hex, selected: chroma.colorHex.uppercased() == hex) {
                         var c = chroma; c.colorHex = hex
                         editor.setOverlayChroma(id: id, c)
-                    } label: {
-                        Circle().fill(Color(hex: hex)).frame(width: 26, height: 26)
-                            .overlay {
-                                if chroma.colorHex.uppercased() == hex {
-                                    Circle().strokeBorder(Color.white, lineWidth: 2)
-                                }
-                            }
-                            .contentShape(Circle())
                     }
-                    .buttonStyle(.lumaPress)
                 }
             }
             LDSlider(label: "Tolerance",
@@ -4366,7 +5372,7 @@ private struct LDOverlayPanel: View {
         HStack(spacing: 8) {
             ForEach([("none", "None"), ("rect", "Rect"), ("roundedRect", "Rounded"),
                      ("ellipse", "Circle"), ("linear", "Fade")], id: \.0) { pair in
-                LDChip(title: pair.1,
+                LDPChip(title: pair.1,
                        selected: pair.0 == "none" ? m == nil : m?.shape == pair.0) {
                     if pair.0 == "none" { editor.setOverlayMask(id: id, nil) }
                     else {
@@ -4383,7 +5389,7 @@ private struct LDOverlayPanel: View {
                                     set: { var s = m; s.feather = $0 / 100
                                            editor.setOverlayMask(id: id, s, snapshot: false) }),
                      range: 0...40, readout: { "\(Int($0))" })
-            LDChip(title: "Invert", selected: m.invert) {
+            LDPChip(title: "Invert", selected: m.invert) {
                 var s = m; s.invert.toggle(); editor.setOverlayMask(id: id, s)
             }
         }
@@ -4420,26 +5426,15 @@ private struct LDOverlayPanel: View {
     private func border(_ item: EditorState.OverlayItem, _ id: UUID) -> some View {
         LDCaption("Border")
         let b = item.effects.border
-        LDChip(title: b == nil ? "Off" : "On", selected: b != nil) {
+        LDPChip(title: b == nil ? "Off" : "On", selected: b != nil) {
             editor.setOverlayBorder(id: id, b == nil ? OverlayBorderSettings() : nil)
         }
         if let b {
-            HStack(spacing: 9) {
+            HStack(spacing: 6) {
                 ForEach(["#FFFFFF", "#000000", "#F5C518", "#FF5C5C", "#7A68EE"], id: \.self) { hex in
-                    Button {
+                    LDPSwatch(hex: hex, selected: b.colorHex.uppercased() == hex) {
                         var v = b; v.colorHex = hex; editor.setOverlayBorder(id: id, v)
-                    } label: {
-                        Circle().fill(Color(hex: hex)).frame(width: 24, height: 24)
-                            .overlay {
-                                if b.colorHex.uppercased() == hex {
-                                    Circle().strokeBorder(Color.white, lineWidth: 2)
-                                } else {
-                                    Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                                }
-                            }
-                            .contentShape(Circle())
                     }
-                    .buttonStyle(.lumaPress)
                 }
             }
             LDSlider(label: "Width",
@@ -4466,7 +5461,7 @@ private struct LDOverlayPanel: View {
                 editor.clearOverlayKeyframes(id: id)
             }
         }
-        LDNote("Move the overlay, pin it, move it again — the pins animate between placements.")
+        LDNote("Move the overlay, pin it, then move it again. The pins animate between placements.")
     }
 
     @ViewBuilder
@@ -4476,7 +5471,7 @@ private struct LDOverlayPanel: View {
                  value: Binding(get: { item.volume },
                                 set: { editor.setOverlayVolume(id: id, $0) }),
                  range: 0...100, readout: { "\(Int($0))%" })
-        LDChip(title: item.isMuted ? "Unmute" : "Mute", selected: item.isMuted) {
+        LDPChip(title: item.isMuted ? "Unmute" : "Mute", selected: item.isMuted) {
             editor.setOverlayMuted(id: id, !item.isMuted)
         }
         if item.isImage {
@@ -4645,9 +5640,11 @@ private struct LDEnvelopeEditor: View {
                 let w = max(1, geo.size.width)
                 let h = max(1, geo.size.height)
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(LumaTheme.surface)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(LumaTheme.ink)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(LumaTheme.hairline, lineWidth: 1)
                     ForEach(1..<3, id: \.self) { i in
-                        Rectangle().fill(Color.white.opacity(0.07))
+                        Rectangle().fill(LumaTheme.hairline)
                             .frame(height: 1)
                             .offset(y: h * CGFloat(i) / 3)
                     }
@@ -4659,9 +5656,13 @@ private struct LDEnvelopeEditor: View {
                             else { p.addLine(to: CGPoint(x: x, y: y)) }
                         }
                     }
-                    .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+                    .stroke(LumaTheme.signal, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     ForEach(Array(points.enumerated()), id: \.offset) { idx, pt in
-                        Circle().fill(Color.white).frame(width: 13, height: 13)
+                        Circle().fill(LumaTheme.ink)
+                            .overlay(Circle().strokeBorder(LumaTheme.signal, lineWidth: 2))
+                            .frame(width: 14, height: 14)
+                            .frame(width: 30, height: 30)
+                            .contentShape(Circle())
                             .position(x: CGFloat(pt.time / dur) * w, y: h * (1 - CGFloat(pt.volume)))
                             .gesture(
                                 DragGesture(minimumDistance: 0).onChanged { g in
@@ -4682,7 +5683,7 @@ private struct LDEnvelopeEditor: View {
                             )
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .onTapGesture { location in
                     var next = points
                     next.append(AudioVolumePoint(time: min(max(0, Double(location.x / w) * dur), dur),
@@ -4693,8 +5694,8 @@ private struct LDEnvelopeEditor: View {
             }
             .frame(height: 130)
             HStack(spacing: 8) {
-                LDChip(title: "Clear") { editor.setMusicEnvelope(id: track.id, []) }
-                LDNote("Tap to add a point · drag to shape")
+                LDPChip(title: "Clear") { editor.setMusicEnvelope(id: track.id, []) }
+                LDNote("Tap to add a point, drag one to shape it.")
             }
         }
     }
@@ -4725,9 +5726,9 @@ private struct LDAudioEffects: View {
         VStack(alignment: .leading, spacing: 16) {
             if editor.isRenderingEffects {
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.mini).tint(.white)
+                    ProgressView().controlSize(.mini).tint(LumaTheme.signal)
                     Text("Baking effects…")
-                        .font(.luma(size: 13)).foregroundStyle(.white.opacity(0.6))
+                        .font(.luma(size: 13, weight: .medium)).foregroundStyle(LumaTheme.textSecondary)
                 }
             }
 
@@ -4737,7 +5738,7 @@ private struct LDAudioEffects: View {
                     // Shared with the seed harness, so a headless
                     // LUMA_SEED_EQ=<name> and a tap land on identical gains.
                     ForEach(AudioEffectsPanel.eqPresets, id: \.0) { name, gains in
-                        LDChip(title: name, selected: fx.eqPresetName == name) {
+                        LDPChip(title: name, selected: fx.eqPresetName == name) {
                             var s = fx; s.eqBandGains = gains; s.eqPresetName = name
                             commit(s)
                         }
@@ -4766,7 +5767,7 @@ private struct LDAudioEffects: View {
             LDCaption("Voice changer")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(VoiceEffect.allCases, id: \.self) { effect in
-                    LDChip(title: effect.label,
+                    LDPChip(title: effect.label,
                            selected: effect == .none ? fx.voiceEffect == nil : fx.voiceEffect == effect.rawValue) {
                         var s = fx
                         s.voiceEffect = effect == .none ? nil : effect.rawValue
@@ -4778,7 +5779,7 @@ private struct LDAudioEffects: View {
             LDCaption("Reverb")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(ReverbPreset.allCases, id: \.self) { preset in
-                    LDChip(title: preset.label,
+                    LDPChip(title: preset.label,
                            selected: preset == .none ? fx.reverbPreset == nil : fx.reverbPreset == preset.rawValue) {
                         var s = fx
                         s.reverbPreset = preset == .none ? nil : preset.rawValue
@@ -4934,11 +5935,13 @@ private struct PreviewOverlayEditor: View {
             Color.clear
                 .frame(width: max(1, rect.width), height: max(1, rect.height))
                 .overlay {
-                    // A stroke means selection and nothing else — a thin white
-                    // outline, no handles pretending to be resize grips.
+                    // A stroke means selection and nothing else: a thin white
+                    // outline with a dot at each corner (Night Lab mock). The
+                    // dots only mark the box; pinch and twist do the resizing.
                     if selected {
                         Rectangle().strokeBorder(Color.white, lineWidth: 1)
                             .shadow(color: .black.opacity(0.5), radius: 2)
+                        LDPCornerDots()
                     }
                 }
                 // The shape precedes rotation, so the hit target rotates with
@@ -5021,6 +6024,24 @@ private struct PreviewOverlayEditor: View {
     }
 }
 
+/// Four small white dots on the corners of a selected layer's box.
+private struct LDPCornerDots: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ForEach(0..<4, id: \.self) { corner in
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 7, height: 7)
+                    .shadow(color: .black.opacity(0.45), radius: 1.5)
+                    .position(x: corner % 2 == 0 ? 0 : w, y: corner < 2 ? 0 : h)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Fullscreen preview
 
 /// The footage full-screen on black: tap to play/pause, scrub bar along the
@@ -5058,9 +6079,10 @@ private struct FullscreenPreview: View {
             } label: {
                 Image(systemName: "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(LumaTheme.textPrimary)
                     .frame(width: 38, height: 38)
-                    .background(.black.opacity(0.5), in: Circle())
+                    .background(LumaTheme.ink.opacity(0.6), in: Circle())
+                    .overlay(Circle().strokeBorder(LumaTheme.border, lineWidth: 1))
                     .contentShape(Circle())
             }
             .buttonStyle(.lumaPress)
@@ -5074,12 +6096,13 @@ private struct FullscreenPreview: View {
                     get: { editor.currentTime },
                     set: { editor.seek(to: $0) }
                 ), in: 0...max(editor.totalDuration, 0.1))
-                .tint(.white)
+                .tint(LumaTheme.textPrimary)
                 Text(LDFormat.clock(editor.totalDuration))
+                    .foregroundStyle(LumaTheme.textSecondary)
             }
-            .font(.luma(size: 13, weight: .medium, design: .monospaced))
+            .font(.luma(size: 13, weight: .semibold))
             .monospacedDigit()
-            .foregroundStyle(.white)
+            .foregroundStyle(LumaTheme.textPrimary)
             .padding(.horizontal, 18)
             .padding(.bottom, 10)
         }

@@ -205,6 +205,8 @@ final class EditorState: ObservableObject {
     /// each slice so playback smoothly accelerates/decelerates.
     enum SpeedRamp: String, CaseIterable {
         case none, slowFast, fastSlow, slowFastSlow, fastSlowFast
+        // Round-three curve presets (Speed panel tiles). Same slicing build.
+        case montage, hero, bullet, jumpCut, flashIn, flashOut
 
         var label: String {
             switch self {
@@ -213,6 +215,12 @@ final class EditorState: ObservableObject {
             case .fastSlow: return "Fast → Slow"
             case .slowFastSlow: return "Slow-Fast-Slow"
             case .fastSlowFast: return "Fast-Slow-Fast"
+            case .montage: return "Montage"
+            case .hero: return "Hero"
+            case .bullet: return "Bullet"
+            case .jumpCut: return "Jump cut"
+            case .flashIn: return "Flash in"
+            case .flashOut: return "Flash out"
             }
         }
 
@@ -225,6 +233,25 @@ final class EditorState: ObservableObject {
             case .fastSlow: return fast + (slow - fast) * t
             case .slowFastSlow: return slow + (fast - slow) * (1 - abs(2 * t - 1))
             case .fastSlowFast: return fast + (slow - fast) * (1 - abs(2 * t - 1))
+            case .montage:
+                // Normal, a fast push, normal, a slow drift, normal.
+                return pow(2.4, sin(2 * Double.pi * t))
+            case .hero:
+                // Fast in, a smooth dip to slow motion mid-clip, fast out.
+                return 0.3 + 2.3 * (0.5 + 0.5 * cos(2 * Double.pi * t))
+            case .bullet:
+                // Fast, then a long held slow-motion stretch, then fast.
+                func ease(_ a: Double, _ b: Double, _ x: Double) -> Double {
+                    let u = min(max((x - a) / (b - a), 0), 1)
+                    return u * u * (3 - 2 * u)
+                }
+                let held = ease(0.08, 0.3, t) * (1 - ease(0.7, 0.92, t))
+                return 2.5 + (0.25 - 2.5) * held
+            case .jumpCut:
+                // Normal speed with a hard fast burst through the middle.
+                return (t >= 0.35 && t < 0.65) ? 3.5 : 1
+            case .flashIn: return 1 + 3 * t * t * t
+            case .flashOut: return 1 + 3 * pow(1 - t, 3)
             }
         }
     }
