@@ -1621,27 +1621,41 @@ final class EditorState: ObservableObject {
     /// Combined head-trim used by the lane's leading handle: content trims
     /// AND the bar's timeline position advances, so the tail stays anchored
     /// (standard NLE behaviour). One undo entry.
+    /// How far `trimMusicHead` would move the in-point and the bar for this
+    /// drag, so the lane can preview the trim live.
+    func musicHeadTrim(id: UUID, deltaSeconds: Double) -> (trimShift: Double, offsetShift: Double) {
+        guard let track = audioTracks.first(where: { $0.id == id }) else { return (0, 0) }
+        let newStart = min(max(0, track.trimStart + deltaSeconds), track.trimEnd - 0.2)
+        let applied = newStart - track.trimStart
+        let newOffset = min(max(0, track.timelineOffset + applied), max(0, totalDuration - 0.2))
+        return (applied, newOffset - track.timelineOffset)
+    }
+
     func trimMusicHead(id: UUID, deltaSeconds: Double) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
         let track = audioTracks[i]
-        let newStart = min(max(0, track.trimStart + deltaSeconds), track.trimEnd - 0.2)
-        let applied = newStart - track.trimStart
-        guard abs(applied) > 0.01 else { return }
+        let shift = musicHeadTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(shift.trimShift) > 0.01 else { return }
         pushUndoSnapshot()
-        audioTracks[i].trimStart = newStart
-        audioTracks[i].timelineOffset = min(max(0, track.timelineOffset + applied),
-                                            max(0, totalDuration - 0.2))
+        audioTracks[i].trimStart = track.trimStart + shift.trimShift
+        audioTracks[i].timelineOffset = track.timelineOffset + shift.offsetShift
         rebuild()
+    }
+
+    /// How far `trimMusicTail` would move the out-point for this drag.
+    func musicTailTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let track = audioTracks.first(where: { $0.id == id }) else { return 0 }
+        let newEnd = max(min(track.assetDuration, track.trimEnd + deltaSeconds),
+                         track.trimStart + 0.2)
+        return newEnd - track.trimEnd
     }
 
     func trimMusicTail(id: UUID, deltaSeconds: Double) {
         guard let i = audioTracks.firstIndex(where: { $0.id == id }) else { return }
-        let track = audioTracks[i]
-        let newEnd = max(min(track.assetDuration, track.trimEnd + deltaSeconds),
-                         track.trimStart + 0.2)
-        guard abs(newEnd - track.trimEnd) > 0.01 else { return }
+        let change = musicTailTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(change) > 0.01 else { return }
         pushUndoSnapshot()
-        audioTracks[i].trimEnd = newEnd
+        audioTracks[i].trimEnd = audioTracks[i].trimEnd + change
         rebuild()
     }
 
@@ -2367,14 +2381,21 @@ final class EditorState: ObservableObject {
     /// Overlay trim (gap fix): the lane bar's leading handle trims content
     /// AND advances the bar so the out-point stays anchored; the trailing
     /// handle adjusts duration. One undo entry per drag.
-    func trimOverlayHead(id: UUID, deltaSeconds: Double) {
-        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
-        let item = overlays[i]
+    /// The shift `trimOverlayHead` would apply for this drag, so the bar can
+    /// preview exactly where its edge will land before anything commits.
+    func overlayHeadTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let item = overlays.first(where: { $0.id == id }) else { return 0 }
         var applied = min(deltaSeconds, item.duration - 0.2)
         if !item.isImage && item.text == nil {
             applied = max(applied, -item.mediaStart)   // no material before 0
         }
-        applied = max(applied, -item.timelineOffset)   // can't start before 0
+        return max(applied, -item.timelineOffset)      // can't start before 0
+    }
+
+    func trimOverlayHead(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let item = overlays[i]
+        let applied = overlayHeadTrim(id: id, deltaSeconds: deltaSeconds)
         guard abs(applied) > 0.01 else { return }
         pushUndoSnapshot()
         if !item.isImage && item.text == nil {
@@ -2385,9 +2406,9 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
-    func trimOverlayTail(id: UUID, deltaSeconds: Double) {
-        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
-        let item = overlays[i]
+    /// The change in length `trimOverlayTail` would apply for this drag.
+    func overlayTailTrim(id: UUID, deltaSeconds: Double) -> Double {
+        guard let item = overlays.first(where: { $0.id == id }) else { return 0 }
         var maxDuration = max(0.2, totalDuration - item.timelineOffset)
         if !item.isImage && item.text == nil {
             maxDuration = min(maxDuration, item.mediaDuration - item.mediaStart)
@@ -2397,10 +2418,15 @@ final class EditorState: ObservableObject {
             .min(by: { $0.timelineOffset < $1.timelineOffset }) {
             maxDuration = min(maxDuration, next.timelineOffset - item.timelineOffset)
         }
-        let newDuration = min(max(0.2, item.duration + deltaSeconds), maxDuration)
-        guard abs(newDuration - item.duration) > 0.01 else { return }
+        return min(max(0.2, item.duration + deltaSeconds), maxDuration) - item.duration
+    }
+
+    func trimOverlayTail(id: UUID, deltaSeconds: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }) else { return }
+        let change = overlayTailTrim(id: id, deltaSeconds: deltaSeconds)
+        guard abs(change) > 0.01 else { return }
         pushUndoSnapshot()
-        overlays[i].duration = newDuration
+        overlays[i].duration = overlays[i].duration + change
         rebuild()
     }
 

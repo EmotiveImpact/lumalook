@@ -56,7 +56,8 @@ private struct LDToolItem: View {
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    // Floor at ~10 pt; every current label fits 64 pt at 11.
+                    .minimumScaleFactor(0.9)
                     .foregroundStyle(.white.opacity(active ? 0.7 : 0.5))
             }
             .foregroundStyle(active ? Color.white : .white.opacity(0.62))
@@ -85,7 +86,8 @@ private struct LDValueTool: View {
                     .font(.system(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(active ? .white : .white.opacity(0.82))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    // Floor at ~13 pt so a long value still reads.
+                    .minimumScaleFactor(0.85)
                 Text(label)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(active ? 0.7 : 0.45))
@@ -1997,34 +1999,45 @@ private struct EditorContent: View {
                 if editor.isRebuilding {
                     ProgressView().controlSize(.mini).tint(LumaTheme.textMuted)
                 }
+                // Glyphs stay small; each touch area is ~44 pt square.
                 Button { magnetOn.toggle(); LumaHaptics.shared.tap() } label: {
                     Image(systemName: magnetOn ? "magnet.fill" : "magnet")
                         .font(.system(size: 13, weight: .light))
                         .foregroundStyle(magnetOn ? Color.white : LumaTheme.textMuted)
                         .frame(width: 26, height: 30)
-                        .contentShape(Rectangle())
+                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
                 }
                 .buttonStyle(.lumaPress)
+                .accessibilityLabel(magnetOn ? "Snapping on" : "Snapping off")
                 Button(action: onFullscreen) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 13, weight: .light))
                         .frame(width: 26, height: 30)
-                        .contentShape(Rectangle())
+                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
+                .accessibilityLabel("Full screen preview")
                 Button {
                     timelineZoom = nextZoom(timelineZoom)
                     LumaHaptics.shared.tap()
                 } label: {
-                    // The control has a value, so it shows the value.
-                    Text(String(format: "%.1f×", timelineZoom / 50))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(minWidth: 34, minHeight: 30)
-                        .contentShape(Rectangle())
+                    // The control has a value, so it shows the value. Zoom
+                    // reads as a percentage beside a magnifier; "×" belongs
+                    // to Speed alone, so the two can't be mistaken.
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus.magnifyingglass")
+                            .font(.system(size: 11, weight: .regular))
+                        Text("\(Int((timelineZoom / 50 * 100).rounded()))%")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(minWidth: 34, minHeight: 30)
+                    .contentShape(HitSlop(horizontal: 4, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
+                .accessibilityLabel("Timeline zoom")
+                .accessibilityValue("\(Int((timelineZoom / 50 * 100).rounded())) percent")
             }
             .foregroundStyle(LumaTheme.textSecondary)
             .frame(maxWidth: .infinity)
