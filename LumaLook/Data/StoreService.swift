@@ -16,8 +16,8 @@ enum RevenueCatConfig {
 
     static var isEnabled: Bool {
         #if DEBUG
-        // Local runs against LumaLook.storekit skip RevenueCat, whose servers
-        // can't validate transactions from a StoreKit configuration file.
+        // Local runs against LumaLook.storekit can use StoreKit directly,
+        // which keeps those test purchases off the RevenueCat dashboard.
         if ProcessInfo.processInfo.environment["LUMA_STOREKIT_DIRECT"] == "1" { return false }
         #endif
         return !apiKey.isEmpty
