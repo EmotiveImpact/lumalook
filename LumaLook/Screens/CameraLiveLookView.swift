@@ -262,7 +262,7 @@ struct CameraLiveLookView: View {
                 // The one number that must never leave the top line: what the
                 // lens is actually doing. The tool row scrolls; this does not.
                 Text(String(format: "%.1f×", camera.zoomFactor))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 12, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.8))
             }
@@ -287,7 +287,7 @@ struct CameraLiveLookView: View {
                     Text(Timecode.string(
                         seconds: context.date.timeIntervalSince(recordStart ?? context.date),
                         fps: Double(max(1, camera.activeSpec.fps))))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 12, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white)
                 }
@@ -297,7 +297,7 @@ struct CameraLiveLookView: View {
                     .grayscale(1)
             } else if let statusCaption {
                 Text(statusCaption)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
                     .id(statusCaption)
@@ -306,7 +306,7 @@ struct CameraLiveLookView: View {
                 // With nothing happening the line still earns its space: it
                 // states the exposure the camera has settled on.
                 Text(idleStatusLine)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 11, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.34))
                     .lineLimit(1)
@@ -394,7 +394,7 @@ struct CameraLiveLookView: View {
             .overlay(alignment: .top) {
                 if camera.aeafLocked {
                     Text("AE/AF locked")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -431,21 +431,21 @@ struct CameraLiveLookView: View {
                 .foregroundStyle(.white.opacity(0.8))
             if camera.permissionDenied {
                 Text("Camera access is off")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.75))
             } else if camera.cameraUnavailable {
                 Text("No camera on this device")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Run LumaLook on an iPhone to shoot with live looks.")
-                    .font(.system(size: 12))
+                    .font(.luma(size: 12))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.5))
             } else {
@@ -501,11 +501,11 @@ struct CameraLiveLookView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(scopeName(scopeMode))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.luma(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
                 Text("Reading the graded frame")
-                    .font(.system(size: 11))
+                    .font(.luma(size: 11))
                     .foregroundStyle(.white.opacity(0.35))
                     .lineLimit(2)
                 Button {
@@ -513,7 +513,7 @@ struct CameraLiveLookView: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("Next scope")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                         .contentShape(Rectangle())
                 }
@@ -556,11 +556,11 @@ struct CameraLiveLookView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .foregroundStyle(.white.opacity(strength == 0 ? 0.5 : 0.95))
                         .lineLimit(1)
                     Text(strength == 0 ? "Off" : "\(strength)%")
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 13, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -573,7 +573,7 @@ struct CameraLiveLookView: View {
                 LumaHaptics.shared.tap()
             } label: {
                 Text("All looks")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.62))
                     .contentShape(Rectangle())
             }
@@ -649,7 +649,7 @@ struct CameraLiveLookView: View {
             // competes with the grade it sits on.
             if let badge = sourceBadge(look) {
                 Text(badge)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.luma(size: 9, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1.5)
@@ -704,7 +704,7 @@ struct CameraLiveLookView: View {
                 .frame(width: 56, height: 56)
                 .overlay {
                     Text("Off")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(active ? 0.95 : 0.45))
                 }
                 .overlay {
@@ -723,12 +723,12 @@ struct CameraLiveLookView: View {
     private var intensityRow: some View {
         HStack(spacing: 12) {
             Text("Strength")
-                .font(.system(size: 12, weight: .medium))
+                .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
             Slider(value: $app.settings.intensity, in: 0...100)
                 .tint(.white.opacity(0.85))
             Text("\(Int(app.settings.intensity.rounded()))%")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.luma(size: 13, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, alignment: .trailing)
@@ -832,13 +832,13 @@ struct CameraLiveLookView: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(on ? .white : .white.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -856,7 +856,7 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -910,7 +910,7 @@ struct CameraLiveLookView: View {
         VStack(alignment: .leading, spacing: 10) {
             if camera.isRecording || camera.isPreparingRecording {
                 Text("Stop recording to change format.")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
             // Options this camera cannot shoot are dimmed rather than offered
@@ -932,7 +932,7 @@ struct CameraLiveLookView: View {
             }
             if let note = formatFallbackNote {
                 Text(note)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -969,7 +969,7 @@ struct CameraLiveLookView: View {
                                         pick: @escaping (T) -> Void) -> some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.luma(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.45))
                 .frame(width: 84, alignment: .leading)
             ForEach(options, id: \.self) { option in
@@ -981,7 +981,7 @@ struct CameraLiveLookView: View {
                     // but selection is the ring, and everything else is a
                     // bare word.
                     Text(label(option))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 12, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(isOn(option) ? 0.95 : 0.42))
                         .padding(.horizontal, 12)
@@ -1288,11 +1288,11 @@ private struct CameraProReadout: View {
             VStack(spacing: 3) {
                 HStack(spacing: 3) {
                     Text(parameter.rawValue)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.luma(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(active ? 0.8 : 0.4))
                     if auto {
                         Text("auto")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.luma(size: 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.35))
                     }
                 }
@@ -1300,7 +1300,7 @@ private struct CameraProReadout: View {
                 .minimumScaleFactor(0.8)
 
                 Text(value)
-                    .font(.system(size: 15, weight: active ? .bold : .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: active ? .bold : .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(active ? 1 : (auto ? 0.42 : 0.62)))
                     .lineLimit(1)
@@ -1339,7 +1339,7 @@ private struct CameraRulerDial: View {
                             .fill(.white.opacity(current ? 0.95 : 0.20))
                             .frame(width: current ? 2 : 1, height: current ? 15 : 9)
                         Text(ticks[i])
-                            .font(.system(size: current ? 12 : 10,
+                            .font(.luma(size: current ? 12 : 10,
                                           weight: current ? .bold : .regular,
                                           design: .monospaced))
                             .monospacedDigit()
@@ -1449,7 +1449,7 @@ private struct CameraHandOffCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Text("Clip saved · look baked in")
-                .font(.system(size: 12, weight: .medium))
+                .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
 
             HStack(spacing: 0) {
@@ -1475,7 +1475,7 @@ private struct CameraHandOffCard: View {
     private func handButton(_ title: String, solid: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(solid ? .black : .white.opacity(0.72))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)

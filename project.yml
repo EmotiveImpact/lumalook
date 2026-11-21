@@ -37,6 +37,16 @@ targets:
         # destination for LUTs from Files/Mail/Safari.
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
+        # Night Lab type: Inter (SIL OFL 1.1), bundled in Resources/Fonts.
+        UIAppFonts:
+          - Inter-Regular.otf
+          - Inter-Medium.otf
+          - Inter-SemiBold.otf
+          - Inter-Bold.otf
+          - InterDisplay-Light.otf
+          - InterDisplay-SemiBold.otf
+          - InterDisplay-Bold.otf
+          - InterDisplay-ExtraBold.otf
         CFBundleDocumentTypes:
           - CFBundleTypeName: Cube LUT
             LSHandlerRank: Owner

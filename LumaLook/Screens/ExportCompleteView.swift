@@ -180,12 +180,12 @@ struct ExportCompleteView: View {
         VStack(spacing: 0) {
             HStack {
                 Text(hasArtefact ? "Export complete" : "Export unavailable")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.luma(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer(minLength: 0)
                 if let status = photosStatus {
                     Text(status)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
@@ -199,7 +199,7 @@ struct ExportCompleteView: View {
             // so this line stays mono in full.
             if !info.readout.isEmpty {
                 Text(info.readout)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -260,7 +260,7 @@ struct ExportCompleteView: View {
     /// the words are the warning.
     private func noticeBar(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12.5))
+            .font(.luma(size: 12.5))
             .foregroundStyle(.white.opacity(0.85))
             .lineSpacing(2)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -310,7 +310,7 @@ struct ExportCompleteView: View {
                             Image(systemName: "square.stack.3d.down.forward")
                                 .font(.system(size: 17)).frame(height: 20)
                             Text("Share GIF")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.luma(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.45))
                                 .lineLimit(1)
                         }
@@ -353,7 +353,7 @@ struct ExportCompleteView: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -383,7 +383,7 @@ struct ExportCompleteView: View {
             .accessibilityLabel("Back")
             Spacer(minLength: 8)
             Text(barSentence)
-                .font(.system(size: 14, weight: .medium))
+                .font(.luma(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -407,7 +407,7 @@ struct ExportCompleteView: View {
 
     private func filledLabel(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.luma(size: 15, weight: .semibold))
             .foregroundStyle(.black)
             .padding(.horizontal, 18)
             .frame(height: 40)

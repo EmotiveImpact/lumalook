@@ -43,6 +43,17 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Inter-Regular.otf</string>
+		<string>Inter-Medium.otf</string>
+		<string>Inter-SemiBold.otf</string>
+		<string>Inter-Bold.otf</string>
+		<string>InterDisplay-Light.otf</string>
+		<string>InterDisplay-SemiBold.otf</string>
+		<string>InterDisplay-Bold.otf</string>
+		<string>InterDisplay-ExtraBold.otf</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>

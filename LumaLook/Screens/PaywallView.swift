@@ -79,10 +79,10 @@ struct PaywallView: View {
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("LumaLook Pro")
-                            .font(.title2.weight(.bold))
+                            .font(.luma(.title2, weight: .bold))
                             .foregroundStyle(.white)
                         Text("Every look. Every pack. Every tool.")
-                            .font(.subheadline)
+                            .font(.luma(.subheadline))
                             .foregroundStyle(.white.opacity(0.85))
                     }
                     .padding(16)
@@ -204,10 +204,10 @@ struct PaywallView: View {
                     ProgressView().tint(.white)
                 } else {
                     Text(callToAction)
-                        .font(.headline)
+                        .font(.luma(.headline))
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(LumaTheme.onSignal)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 15))
@@ -217,7 +217,7 @@ struct PaywallView: View {
         .overlay(alignment: .bottom) {
             if let note = renewalNote {
                 Text(note)
-                    .font(.caption)
+                    .font(.luma(.caption))
                     .foregroundStyle(LumaTheme.textSecondary)
                     .offset(y: 22)
             }
@@ -236,7 +236,7 @@ struct PaywallView: View {
             Button("Terms") { LumaLegal.open(LumaLegal.terms) }
             Button("Privacy") { LumaLegal.open(LumaLegal.privacy) }
         }
-        .font(.footnote)
+        .font(.luma(.footnote))
         .foregroundStyle(LumaTheme.textSecondary)
         .padding(.top, 6)
     }
@@ -255,10 +255,10 @@ private struct PaywallFeatureRow: View {
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.luma(.subheadline, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(detail)
-                    .font(.footnote)
+                    .font(.luma(.footnote))
                     .foregroundStyle(LumaTheme.textSecondary)
             }
         }
@@ -280,17 +280,17 @@ private struct PaywallPlanRow: View {
                     .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.body.weight(.semibold))
+                        .font(.luma(.body, weight: .semibold))
                         .foregroundStyle(.white)
                     Text(price)
-                        .font(.footnote)
+                        .font(.luma(.footnote))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .font(.luma(.caption, weight: .semibold))
+                        .foregroundStyle(selected ? LumaTheme.onSignal : LumaTheme.textSecondary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(selected ? LumaTheme.accent : LumaTheme.surface,
@@ -389,13 +389,13 @@ struct LockedLookSheet: View {
                 .accessibilityHidden(true)
 
             Text(lock.lookName)
-                .font(.system(size: 22, weight: .bold))
+                .font(.luma(size: 22, weight: .bold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.top, 16)
 
             Text(message)
-                .font(.system(size: 14))
+                .font(.luma(size: 14))
                 .foregroundStyle(.white.opacity(0.62))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -424,7 +424,7 @@ struct LockedLookSheet: View {
                                                      : "Restore Purchases")
                         }
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .frame(height: 30)
                 }
@@ -474,7 +474,7 @@ struct LockedLookSheet: View {
                     ProgressView().tint(.black)
                 } else {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.luma(size: 16, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -490,7 +490,7 @@ struct LockedLookSheet: View {
     private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.luma(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
@@ -587,8 +587,8 @@ struct OnboardingView: View {
                         }
                     } label: {
                         Text(page < pages.count - 1 ? "Continue" : "Try LumaLook Pro")
-                            .font(.headline)
-                            .foregroundStyle(.white)
+                            .font(.luma(.headline))
+                            .foregroundStyle(LumaTheme.onSignal)
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
                             .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 15))
@@ -599,7 +599,7 @@ struct OnboardingView: View {
                         finish()
                     } label: {
                         Text(page < pages.count - 1 ? "Skip" : "Continue with Free")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.luma(.subheadline, weight: .semibold))
                             .foregroundStyle(LumaTheme.textSecondary)
                             .frame(height: 34)
                     }
@@ -630,11 +630,11 @@ struct OnboardingView: View {
                 }
             VStack(spacing: 9) {
                 Text(page.title)
-                    .font(.title.weight(.bold))
+                    .font(.luma(.title, weight: .bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                 Text(page.detail)
-                    .font(.body)
+                    .font(.luma(.body))
                     .foregroundStyle(LumaTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)

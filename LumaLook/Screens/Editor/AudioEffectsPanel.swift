@@ -26,15 +26,15 @@ struct AudioEffectsPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("Audio Effects").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    Text("Audio Effects").font(.luma(size: 17, weight: .semibold)).foregroundStyle(.white)
                     if editor.isRenderingEffects {
                         ProgressView().tint(LumaTheme.accentBright).scaleEffect(0.8)
                     }
                     Spacer()
                     Button("Reset") { apply(AudioEffectSettings()) }
-                        .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.textSecondary)
+                        .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textSecondary)
                     Button("Done", action: onClose)
-                        .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.accentBright)
+                        .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
                 }
 
                 section("Equaliser") {
@@ -51,7 +51,7 @@ struct AudioEffectsPanel: View {
                         ForEach(0..<5, id: \.self) { i in
                             VStack(spacing: 4) {
                                 let g = fx.eqBandGains?[safe: i] ?? 0
-                                Text("\(Int(g))").font(.system(size: 9)).foregroundStyle(LumaTheme.textMuted)
+                                Text("\(Int(g))").font(.luma(size: 9)).foregroundStyle(LumaTheme.textMuted)
                                 Slider(value: Binding(
                                     get: { fx.eqBandGains?[safe: i] ?? 0 },
                                     set: { v in
@@ -68,7 +68,7 @@ struct AudioEffectsPanel: View {
                                     .frame(width: 90)
                                     .rotationEffect(.degrees(-90))
                                     .frame(width: 46, height: 96)
-                                Text(bandLabels[i]).font(.system(size: 9)).foregroundStyle(LumaTheme.textSecondary)
+                                Text(bandLabels[i]).font(.luma(size: 9)).foregroundStyle(LumaTheme.textSecondary)
                             }
                         }
                     }
@@ -77,7 +77,7 @@ struct AudioEffectsPanel: View {
                 section("Pitch") {
                     HStack {
                         Text("\(fx.pitchSemitones > 0 ? "+" : "")\(Int(fx.pitchSemitones)) st")
-                            .font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
+                            .font(.luma(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
                         Spacer()
                         Stepper("", value: Binding(
                             get: { fx.pitchSemitones },
@@ -122,14 +122,14 @@ struct AudioEffectsPanel: View {
                         Task { await editor.normalizeTrack(id: trackID, targetLUFS: -14) }
                     } label: {
                         Label("Normalize to −14 LUFS", systemImage: "waveform.badge.magnifyingglass")
-                            .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                            .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.onSignal)
                             .padding(.horizontal, 14).padding(.vertical, 9)
                             .background(LumaTheme.accent, in: Capsule())
                     }
                     .buttonStyle(.lumaPress)
                     if abs(fx.gainDB) > 0.05 {
                         Text(String(format: "gain %+.1f dB", fx.gainDB))
-                            .font(.caption).foregroundStyle(LumaTheme.textSecondary)
+                            .font(.luma(.caption)).foregroundStyle(LumaTheme.textSecondary)
                     }
                 }
             }
@@ -144,7 +144,7 @@ struct AudioEffectsPanel: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.system(size: 10, weight: .bold))
+            Text(title.uppercased()).font(.luma(size: 10, weight: .bold))
                 .foregroundStyle(LumaTheme.textMuted)
             content()
         }
@@ -154,7 +154,7 @@ struct AudioEffectsPanel: View {
         Button {
             action(); LumaHaptics.shared.tap()
         } label: {
-            Text(label).font(.system(size: 12, weight: .semibold))
+            Text(label).font(.luma(size: 12, weight: .semibold))
                 .foregroundStyle(on ? .black : .white)
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(on ? AnyShapeStyle(LumaTheme.accentBright) : AnyShapeStyle(LumaTheme.surface),

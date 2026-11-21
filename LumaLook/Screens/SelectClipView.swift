@@ -101,7 +101,7 @@ struct SelectClipView: View {
                             LumaHaptics.shared.tap()
                         } label: {
                             Text("Multiple")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.luma(size: 13, weight: .semibold))
                                 .foregroundStyle(batchMode ? .black : .white.opacity(0.7))
                                 .padding(.horizontal, 13)
                                 .frame(height: 34)
@@ -140,7 +140,7 @@ struct SelectClipView: View {
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.luma(size: 16, weight: .semibold))
                     .padding(.horizontal, 18)
                     .frame(height: 48)
                     .lumaCard(cornerRadius: 14)
@@ -179,26 +179,26 @@ struct SelectClipView: View {
                             HStack(spacing: 8) {
                                 ProgressView().tint(.white)
                                 Text("Preparing…")
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(.luma(size: 17, weight: .semibold))
                                     .foregroundStyle(.white)
                             }
                             if loadIsSlow {
                                 Text("Clips in iCloud can take a moment to download.")
-                                    .font(.system(size: 13))
+                                    .font(.luma(size: 13))
                                     .foregroundStyle(LumaTheme.textSecondary)
                                     .lineLimit(2)
                             }
                         }
                     } else if let loadFailure {
                         Text(loadFailure.detail)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.luma(size: 14, weight: .semibold))
                             .foregroundStyle(LumaTheme.textSecondary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(pickerItems.count > 1 && hasSelection ? "\(pickerItems.count) selected for batch"
                              : (hasSelection ? "1 clip selected" : "No clip selected"))
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.luma(size: 17, weight: .semibold))
                             .foregroundStyle(hasSelection ? .white : LumaTheme.textMuted)
                     }
                     Spacer(minLength: 12)
@@ -208,7 +208,7 @@ struct SelectClipView: View {
                             load(pickerItems)
                         } label: {
                             Text("Try again")
-                                .font(.body.weight(.semibold))
+                                .font(.luma(.body, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 132, height: 52)
                                 .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 14))
@@ -219,8 +219,8 @@ struct SelectClipView: View {
                             app.path.append(.applyLook)
                         } label: {
                             Text("Next")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.white)
+                                .font(.luma(.body, weight: .semibold))
+                                .foregroundStyle(LumaTheme.onSignal)
                                 .frame(width: 132, height: 52)
                                 .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                         }
@@ -239,14 +239,14 @@ struct SelectClipView: View {
         .sheet(isPresented: $showInfo) {
             VStack(alignment: .leading, spacing: 14) {
                 Label("What can I pick?", systemImage: "info.circle")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.luma(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.top, 26)
                 Text("Pick any video or photo from your library, including HEVC, ProRes and Log footage. The first item you pick becomes the live grading preview.")
-                    .font(.system(size: 15))
+                    .font(.luma(size: 15))
                     .foregroundStyle(LumaTheme.textSecondary)
                 Text("Select up to 10 photos to batch-grade: one grade is dialled in on the first photo, then applied to the whole set on export. Items stored in iCloud may take a moment to download.")
-                    .font(.system(size: 15))
+                    .font(.luma(size: 15))
                     .foregroundStyle(LumaTheme.textSecondary)
                 Spacer()
             }

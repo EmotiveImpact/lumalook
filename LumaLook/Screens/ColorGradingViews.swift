@@ -38,7 +38,7 @@ struct CurveEditorPanel: View {
                         LumaHaptics.shared.tap()
                     } label: {
                         Text(channelNames[i])
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.luma(size: 13, weight: .bold))
                             .foregroundStyle(channel == i ? .white : LumaTheme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .frame(height: 38)
@@ -57,11 +57,11 @@ struct CurveEditorPanel: View {
 
             HStack {
                 Text("Tap to add a point · drag off to delete")
-                    .font(.footnote)
+                    .font(.luma(.footnote))
                     .foregroundStyle(LumaTheme.textMuted)
                 Spacer()
                 Button("Reset") { setPoints([]) }
-                    .font(.footnote.weight(.semibold))
+                    .font(.luma(.footnote, weight: .semibold))
                     .foregroundStyle(LumaTheme.accentBright)
                     .disabled(points.isEmpty)
             }
@@ -183,7 +183,7 @@ struct ColorWheelsPanel: View {
                 ColorWheelMasterSlider(zone: .gain, wheels: bindingOrDefault)
             }
             Button("Reset Wheels") { wheels = nil }
-                .font(.footnote.weight(.semibold))
+                .font(.luma(.footnote, weight: .semibold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .disabled(wheels?.isIdentity ?? true)
         }
@@ -251,7 +251,7 @@ private struct ColorWheelPad: View {
     var body: some View {
         VStack(spacing: 8) {
             Text(zone.title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.luma(size: 12, weight: .semibold))
                 .foregroundStyle(LumaTheme.textSecondary)
             let diameter: CGFloat = 92
             let center = CGPoint(x: diameter / 2, y: diameter / 2)
@@ -367,7 +367,7 @@ struct SplitTonePanel: View {
                 $0 < -0.05 ? "Shadows" : $0 > 0.05 ? "Highlights" : "Even"
             }
             Button("Reset Split Tone") { tone = nil }
-                .font(.footnote.weight(.semibold))
+                .font(.luma(.footnote, weight: .semibold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .disabled(tone?.isIdentity ?? true)
         }
@@ -376,7 +376,7 @@ struct SplitTonePanel: View {
     private func toneZone(_ label: String, hue: Binding<Double>, sat: Binding<Double>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(label).font(.luma(.subheadline, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
                 Circle().fill(Color(hue: hue.wrappedValue / 360, saturation: 0.9, brightness: 0.95))
                     .frame(width: 20, height: 20)
@@ -437,7 +437,7 @@ struct HSLPanel: View {
                 }
             }
             Text(HSLBands.names[band])
-                .font(.subheadline.weight(.semibold))
+                .font(.luma(.subheadline, weight: .semibold))
                 .foregroundStyle(.white)
 
             InlineSlider(title: "Hue", value: comp(\.hue), range: -1...1) { String(format: "%+.0f°", $0 * 30) }
@@ -445,7 +445,7 @@ struct HSLPanel: View {
             InlineSlider(title: "Luminance", value: comp(\.lum), range: -1...1) { "\(Int($0 * 100))" }
 
             Button("Reset HSL") { hsl = nil }
-                .font(.footnote.weight(.semibold))
+                .font(.luma(.footnote, weight: .semibold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .disabled(hsl?.isIdentity ?? true)
         }

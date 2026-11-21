@@ -225,6 +225,16 @@
 		FDCF6C03A26097C6598C089E /* FS_MS7.cube in Resources */ = {isa = PBXBuildFile; fileRef = C6D8B84208BCDA1900855A3E /* FS_MS7.cube */; };
 		FE277A40D2B2BFFB99B02B43 /* FS_PX100C.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4DA7C8BD45757B0C5EBF05F8 /* FS_PX100C.cube */; };
 		FE4BDA0FC9925E8CC913532D /* FS_RR80.cube in Resources */ = {isa = PBXBuildFile; fileRef = C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */; };
+		000F6BCF80D7A5496D08DDF0 /* Inter-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = CCEFB213A72EE3B38252C330 /* Inter-Bold.otf */; };
+		9B77B303421C3018640F068E /* Inter-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 93FE87D9C443CA7167B1C3E6 /* Inter-Medium.otf */; };
+		AEC097C557D05230F1236C92 /* Inter-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8214600D7CF9E95FD906C755 /* Inter-OFL.txt */; };
+		1777F7CBE8E45960E2A2F673 /* Inter-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 38EED36739F98B693CF75A2E /* Inter-Regular.otf */; };
+		DC96086A7FF0CFFC4506AF10 /* Inter-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = AF2C55918F638B461F0CA807 /* Inter-SemiBold.otf */; };
+		6DC2EE917F99447B1E57449D /* InterDisplay-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = F283371F7A68217785B09BBD /* InterDisplay-Bold.otf */; };
+		B991AAF920DC6697BE11DF86 /* InterDisplay-ExtraBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = FDF0318C9DBC53530CDD233F /* InterDisplay-ExtraBold.otf */; };
+		DB89C038C955EA77E6119553 /* InterDisplay-Light.otf in Resources */ = {isa = PBXBuildFile; fileRef = 56DF42ADC202BC6B6B0BAC3D /* InterDisplay-Light.otf */; };
+		B9440A39FD954A90BB867B71 /* InterDisplay-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = D2D38FCF1BEFD78196884417 /* InterDisplay-SemiBold.otf */; };
+		0864E58FD0108F10A3E4BC4F /* LumaType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C73B4E2ECA0C074393E45C3 /* LumaType.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -446,6 +456,16 @@
 		FD72C902555C7738AE0D8BCE /* FS_KC25.cube */ = {isa = PBXFileReference; path = FS_KC25.cube; sourceTree = "<group>"; };
 		FD762DD38BFEE29B06287806 /* CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CREDITS.md; sourceTree = "<group>"; };
 		FF6FEEFAD7324BDEA8FB4BAD /* FS_PC35.cube */ = {isa = PBXFileReference; path = FS_PC35.cube; sourceTree = "<group>"; };
+		CCEFB213A72EE3B38252C330 /* Inter-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter-Bold.otf; sourceTree = "<group>"; };
+		93FE87D9C443CA7167B1C3E6 /* Inter-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter-Medium.otf; sourceTree = "<group>"; };
+		8214600D7CF9E95FD906C755 /* Inter-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Inter-OFL.txt; sourceTree = "<group>"; };
+		38EED36739F98B693CF75A2E /* Inter-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter-Regular.otf; sourceTree = "<group>"; };
+		AF2C55918F638B461F0CA807 /* Inter-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Inter-SemiBold.otf; sourceTree = "<group>"; };
+		F283371F7A68217785B09BBD /* InterDisplay-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterDisplay-Bold.otf; sourceTree = "<group>"; };
+		FDF0318C9DBC53530CDD233F /* InterDisplay-ExtraBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterDisplay-ExtraBold.otf; sourceTree = "<group>"; };
+		56DF42ADC202BC6B6B0BAC3D /* InterDisplay-Light.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterDisplay-Light.otf; sourceTree = "<group>"; };
+		D2D38FCF1BEFD78196884417 /* InterDisplay-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterDisplay-SemiBold.otf; sourceTree = "<group>"; };
+		6C73B4E2ECA0C074393E45C3 /* LumaType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaType.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -653,9 +673,10 @@
 		724A9FEAD7FA7A997F12F421 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */,
 				2612D9983A53F020F0DEFAFF /* AudioLibrary */,
+				8756A65E8DDFA1DB8072029F /* CompositorBlank.mp4 */,
 				6EC71ABFE9EB7CF4B5BDE3A6 /* FilmLUTs */,
+				D05438F98A27BC39A60EE06E /* Fonts */,
 				A70BF1FE09932FEDB170F061 /* HeroPhotos */,
 				4954251587B54116361ABC7F /* SampleLUTs */,
 			);
@@ -691,6 +712,7 @@
 				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
 				4D43F2BD3901B8346CB884BF /* LumaTheme.swift */,
+				6C73B4E2ECA0C074393E45C3 /* LumaType.swift */,
 				79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */,
 				2F70A80B7D8BB9D25AD81CF5 /* SceneArt.swift */,
 			);
@@ -797,6 +819,22 @@
 			path = Data;
 			sourceTree = "<group>";
 		};
+		D05438F98A27BC39A60EE06E /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				CCEFB213A72EE3B38252C330 /* Inter-Bold.otf */,
+				93FE87D9C443CA7167B1C3E6 /* Inter-Medium.otf */,
+				8214600D7CF9E95FD906C755 /* Inter-OFL.txt */,
+				38EED36739F98B693CF75A2E /* Inter-Regular.otf */,
+				AF2C55918F638B461F0CA807 /* Inter-SemiBold.otf */,
+				F283371F7A68217785B09BBD /* InterDisplay-Bold.otf */,
+				FDF0318C9DBC53530CDD233F /* InterDisplay-ExtraBold.otf */,
+				56DF42ADC202BC6B6B0BAC3D /* InterDisplay-Light.otf */,
+				D2D38FCF1BEFD78196884417 /* InterDisplay-SemiBold.otf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -865,8 +903,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				5BEB2F788B8C18ED93D77E08 /* Assets.xcassets in Resources */,
-				D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */,
+				6D256DE46137863C52EA8993 /* click.m4a in Resources */,
 				948F360D69F5D1C62E354691 /* CompositorBlank.mp4 in Resources */,
+				D4A850F63BFE6CEEAE99517C /* CREDITS.md in Resources */,
+				CEC11B6C97D1320B32AADFBF /* ding.m4a in Resources */,
 				43B6BBEA0F03D814152B4832 /* FILM_LUTS_CREDITS.md in Resources */,
 				68875AAF217C2B56E82B5614 /* FS_AP100.cube in Resources */,
 				3849E449A879062F20389775 /* FS_APX100.cube in Resources */,
@@ -970,25 +1010,32 @@
 				3934AA68236DAAE15D0C78CD /* FS_VV50.cube in Resources */,
 				75F812E8CA2261FE7EFE9D7B /* FS_XP2.cube in Resources */,
 				C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */,
-				6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */,
-				6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */,
-				BBACF9D433FD4220DBDCC5EB /* PrivacyInfo.xcprivacy in Resources */,
-				DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */,
-				A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */,
-				6D256DE46137863C52EA8993 /* click.m4a in Resources */,
-				CEC11B6C97D1320B32AADFBF /* ding.m4a in Resources */,
 				747808BC766732C06D30E348 /* glitch.m4a in Resources */,
 				6C92A115EA77837121CD8C1E /* hero_coast.jpg in Resources */,
 				D263D4D79D4145CA5CC501FA /* hero_desert.jpg in Resources */,
 				260B372FC2D8DF33CEC0CF93 /* hero_golden.jpg in Resources */,
 				916E958ACCF0A7B1117F3A79 /* hero_neon.jpg in Resources */,
 				7B0B4B2AFFAD2E51FB985BDD /* hero_night.jpg in Resources */,
+				6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */,
 				8109C03DBA5C939837678385 /* impact.m4a in Resources */,
+				000F6BCF80D7A5496D08DDF0 /* Inter-Bold.otf in Resources */,
+				9B77B303421C3018640F068E /* Inter-Medium.otf in Resources */,
+				AEC097C557D05230F1236C92 /* Inter-OFL.txt in Resources */,
+				1777F7CBE8E45960E2A2F673 /* Inter-Regular.otf in Resources */,
+				DC96086A7FF0CFFC4506AF10 /* Inter-SemiBold.otf in Resources */,
+				6DC2EE917F99447B1E57449D /* InterDisplay-Bold.otf in Resources */,
+				B991AAF920DC6697BE11DF86 /* InterDisplay-ExtraBold.otf in Resources */,
+				DB89C038C955EA77E6119553 /* InterDisplay-Light.otf in Resources */,
+				B9440A39FD954A90BB867B71 /* InterDisplay-SemiBold.otf in Resources */,
+				6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */,
 				951ED3C908AFE99C2BBD7E51 /* manifest.json in Resources */,
 				5E5AA2388B0F7858C6336223 /* pad_bright.m4a in Resources */,
 				83D15C7631AF00A808DCD5AB /* pad_warm.m4a in Resources */,
 				D07041195B830006997EEAD4 /* pop.m4a in Resources */,
+				BBACF9D433FD4220DBDCC5EB /* PrivacyInfo.xcprivacy in Resources */,
 				C8C8FA0E35440005949F470D /* swipe.m4a in Resources */,
+				DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */,
+				A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */,
 				C3C80CDA64D4DA86BA105B79 /* whoosh.m4a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1000,8 +1047,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				49EC96A150DB992461300428 /* AppModel.swift in Sources */,
 				6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */,
+				49EC96A150DB992461300428 /* AppModel.swift in Sources */,
 				1897C4E6F336473E03F66598 /* AudioEffectsPanel.swift in Sources */,
 				B942BA213ADA05C65D4FE0AF /* AudioEffectsRenderer.swift in Sources */,
 				D11661955EF372A07B43E71C /* AudioEnvelopeEditor.swift in Sources */,
@@ -1037,12 +1084,6 @@
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
-				BF8BB581CF07B507BD5FE445 /* LUTCompareView.swift in Sources */,
-				F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */,
-				BE83A421AC308AA8A22A9220 /* LUTImportSheet.swift in Sources */,
-				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
-				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
-				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
 				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
 				7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */,
 				703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */,
@@ -1060,6 +1101,13 @@
 				8EE6ED8BE3608634B5D7A85D /* LumaModels.swift in Sources */,
 				300D011F00E071B6B81B4D62 /* LumaRootView.swift in Sources */,
 				AE56ED21FE4137D90E420895 /* LumaTheme.swift in Sources */,
+				0864E58FD0108F10A3E4BC4F /* LumaType.swift in Sources */,
+				BF8BB581CF07B507BD5FE445 /* LUTCompareView.swift in Sources */,
+				F4F993791084C056EE3D750E /* LUTDensifier.swift in Sources */,
+				BE83A421AC308AA8A22A9220 /* LUTImportSheet.swift in Sources */,
+				183E82F5EB1FB2FE07DA4A08 /* LUTManagerView.swift in Sources */,
+				83263D90A5FA9516C464CD4D /* LUTParser.swift in Sources */,
+				A880F214F1F064C6168E03EC /* LUTRepository.swift in Sources */,
 				537EFD60A2E4D87BCF893229 /* MaskPanel.swift in Sources */,
 				C5CD14F371ED4259C2147F3E /* MaskRenderer.swift in Sources */,
 				22149D2B572771131F02C893 /* MockData.swift in Sources */,

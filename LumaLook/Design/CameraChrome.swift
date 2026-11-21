@@ -28,7 +28,7 @@ struct TechReadout: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: size, weight: .medium, design: .monospaced))
+            .font(.luma(size: size, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .kerning(1.2)
             .textCase(.uppercase)
@@ -122,7 +122,7 @@ struct CaptureFormatChip: View {
 
     var body: some View {
         Text("\(spec.resolution.rawValue) · \(spec.fps) · \(spec.codec.rawValue)")
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.luma(size: 12, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(.white.opacity(0.9))
             .lineLimit(1)
@@ -252,7 +252,7 @@ struct ProReadout: View {
                 TechReadout(auto ? "\(parameter.rawValue) A" : parameter.rawValue, size: 8,
                             color: active ? LumaTheme.accentBright : LumaTheme.textMuted)
                 Text(value)
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .font(.luma(size: 15, weight: .bold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(active ? LumaTheme.accentBright : .white)
                     .opacity(auto ? 0.6 : 1)
@@ -296,7 +296,7 @@ struct RulerDial: View {
                                           : AnyShapeStyle(Color.white.opacity(0.22)))
                             .frame(width: current ? 2 : 1, height: current ? 15 : 9)
                         Text(ticks[i])
-                            .font(.system(size: current ? 12 : 10,
+                            .font(.luma(size: current ? 12 : 10,
                                           weight: current ? .bold : .regular,
                                           design: .monospaced))
                             .monospacedDigit()
@@ -355,7 +355,7 @@ struct CameraAssistChip: View {
                              : AnyShapeStyle(Color.white.opacity(0.22)))
                     .frame(width: 5, height: 5)
                 Text(title)
-                    .font(.system(size: 11, weight: on ? .bold : .medium))
+                    .font(.luma(size: 11, weight: on ? .bold : .medium))
                     .foregroundStyle(on ? LumaTheme.accentBright : .white.opacity(0.72))
                     .lineLimit(1)
                     .fixedSize()
@@ -392,7 +392,7 @@ struct WipeHandle: View {
                         Image(systemName: "chevron.left")
                         Image(systemName: "chevron.right")
                     }
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.luma(size: 10, weight: .bold))
                     .foregroundStyle(.black.opacity(0.72))
                 }
         }

@@ -23,7 +23,7 @@ struct StickerLibraryView: View {
                     ForEach(Array(categories.enumerated()), id: \.offset) { index, cat in
                         Button { category = index } label: {
                             Text(cat.name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.luma(size: 13, weight: .semibold))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .foregroundStyle(category == index ? .black : .white)
@@ -41,7 +41,7 @@ struct StickerLibraryView: View {
                     ForEach(cat.emojis, id: \.self) { emoji in
                         Button { add(emoji) } label: {
                             Text(emoji)
-                                .font(.system(size: 34))
+                                .font(.luma(size: 34))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 62)
                                 .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
@@ -53,7 +53,7 @@ struct StickerLibraryView: View {
             }
 
             Text("Tap a sticker to drop it at the playhead. Drag it in the preview, then keyframe or blend it like any layer.")
-                .font(.system(size: 12))
+                .font(.luma(size: 12))
                 .foregroundStyle(LumaTheme.textMuted)
                 .padding(.top, 4)
         }

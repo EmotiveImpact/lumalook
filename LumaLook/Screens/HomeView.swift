@@ -134,7 +134,7 @@ struct HomeView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "crown.fill").font(.system(size: 12))
                     Text("Pro")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 11)
@@ -299,14 +299,14 @@ private struct HomeSectionHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.luma(size: 16, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
             Spacer(minLength: 8)
             if let actionTitle {
                 Button { action?() } label: {
                     Text(actionTitle)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.luma(size: 13, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .contentShape(Rectangle())
                 }
@@ -325,7 +325,7 @@ private struct PosterStamp: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.luma(size: 10, weight: .semibold))
             .foregroundStyle(.black)
             .lineLimit(1)
             .padding(.horizontal, 7)
@@ -471,7 +471,7 @@ private struct HomePanel: View {
                 plate
                 artwork
                 Text(title)
-                    .font(.system(size: 16.5, weight: .semibold))
+                    .font(.luma(size: 16.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -557,10 +557,10 @@ private struct EmptyWorkCard: View {
                     .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 14))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Nothing saved yet")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.luma(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
                     Text("Projects and grades you save land here. Meanwhile your look library is already stocked.")
-                        .font(.system(size: 12.5))
+                        .font(.luma(size: 12.5))
                         .foregroundStyle(LumaTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
@@ -641,14 +641,14 @@ private struct ProjectPoster: View {
                 Poster.scrim
                 VStack(alignment: .leading, spacing: 3) {
                     Text(project.title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     // A duration is a NUMBER, so it keeps the mono face — but
                     // plainly, without the tracked-out caps treatment that made
                     // every small readout on the page look timid.
                     Text(Poster.duration(project.duration))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.75))
                 }
                 .padding(10)
@@ -692,11 +692,11 @@ private struct GradeSessionPoster: View {
                 Poster.scrim
                 VStack(alignment: .leading, spacing: 3) {
                     Text(session.baseLookName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Text(session.updatedAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.luma(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 .padding(10)
@@ -763,7 +763,7 @@ private struct PackTile: View {
                 .frame(width: size.width, height: size.height)
                 Poster.scrim
                 Text(pack.name)
-                    .font(.system(size: isLarge ? 14 : 11, weight: .semibold))
+                    .font(.luma(size: isLarge ? 14 : 11, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

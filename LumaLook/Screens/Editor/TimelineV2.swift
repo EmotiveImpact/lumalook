@@ -325,11 +325,11 @@ struct TimelineV2View: View {
             HStack {
                 // Numbers are mono; the word beside them is not.
                 Text("00:00.00")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(LumaTheme.textMuted)
                 Spacer()
                 Text("Timeline")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.4))
             }
             .frame(height: LaneMetrics.ruler)
@@ -512,10 +512,10 @@ struct ClipAudioLane: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: editor.muteAudio
                                           ? "speaker.slash.fill" : "waveform")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.luma(size: 9, weight: .bold))
                                     if w > 96 {
                                         Text("Clip audio")
-                                            .font(.system(size: 10, weight: .semibold))
+                                            .font(.luma(size: 10, weight: .semibold))
                                             .lineLimit(1)
                                     }
                                 }
@@ -562,12 +562,12 @@ struct EmptyLaneRow: View {
                 Image(systemName: icon)
                     .font(.system(size: height > 40 ? 12 : 10, weight: .semibold))
                 Text(label)
-                    .font(.system(size: height > 40 ? 12 : 11, weight: .semibold))
+                    .font(.luma(size: height > 40 ? 12 : 11, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if let caption {
                     Text(caption)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.luma(size: 10, weight: .semibold))
                         .lineLimit(1)
                         .foregroundStyle(LumaTheme.textMuted)
                 } else {
@@ -601,7 +601,7 @@ struct AddAudioRow: View {
                 Image(systemName: "music.note")
                     .font(.system(size: 11, weight: .semibold))
                 Text("Add audio")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                 Spacer(minLength: 0)
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
@@ -643,7 +643,7 @@ struct RulerLane: View {
                 )
                 if isLabelTick {
                     let label = Text(Self.label(for: s))
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.45))
                     context.draw(label,
                                  at: CGPoint(x: s == 0 ? x + 2 : x, y: 4),
@@ -951,10 +951,10 @@ struct TimelineClipCell: View {
                 HStack(spacing: 3) {
                     if clip.speed != 1 {
                         Text(String(format: "%g×", clip.speed))
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.luma(size: 10, weight: .medium, design: .monospaced))
                     }
                     Text(String(format: "%.1fs", clip.timelineDuration))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 10, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                 }
                 .foregroundStyle(.white)
@@ -980,7 +980,7 @@ struct TimelineClipCell: View {
                         // A look NAME is a name, so it keeps its own case and
                         // the system font. The cell is already the grade.
                         Text(name)
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.luma(size: 9, weight: .semibold))
                             .lineLimit(1)
                     }
                 }
@@ -1078,7 +1078,7 @@ struct OverlayAddButton: View {
                 Image(systemName: "square.2.layers.3d.top.filled")
                     .font(.system(size: 10, weight: .semibold))
                 Text("Overlay & text")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                 Spacer(minLength: 0)
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
@@ -1144,11 +1144,11 @@ private struct OverlayBar: View {
             }
             if barWidth > 90 {
                 Text(item.text ?? item.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .lineLimit(1)
                 Spacer(minLength: 2)
                 Text(String(format: "%.1fs", shownDuration))
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 9.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .opacity(0.8)
             }
@@ -1352,13 +1352,13 @@ struct MusicLane: View {
             // duration glyphs sat straight on the waveform bars.
             if barWidth > 132 {
                 Text(music.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .lineLimit(1)
             }
             Spacer(minLength: 2)
             if barWidth > 176 {
                 Text(String(format: "%.1fs", rendered))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 10, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     // An opaque plate so the readout never overprints waveform.
                     .padding(.horizontal, 5)

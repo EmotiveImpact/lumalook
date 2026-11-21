@@ -139,10 +139,10 @@ final class LumaHaptics {
             Button(action: fire) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.luma(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                     Text(subtitle)
-                        .font(.system(size: 13))
+                        .font(.luma(size: 13))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -299,14 +299,14 @@ struct LookBrowserSheet: View {
     /// only part that earns mono; "looks" is not a readout.
     private func countText(_ value: Int, _ word: String, size: CGFloat) -> Text {
         Text("\(value)")
-            .font(.system(size: size, weight: .medium, design: .monospaced))
+            .font(.luma(size: size, weight: .medium, design: .monospaced))
         + Text(" \(word)")
-            .font(.system(size: size, weight: .medium))
+            .font(.luma(size: size, weight: .medium))
     }
 
     private var totals: Text {
         countText(app.library.all.count, "looks", size: 12)
-            + Text(" · ").font(.system(size: 12, weight: .medium))
+            + Text(" · ").font(.luma(size: 12, weight: .medium))
             + countText(app.lutRepository.collections.count, "collections", size: 12)
     }
 
@@ -318,7 +318,7 @@ struct LookBrowserSheet: View {
             if isSheet {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Looks")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.luma(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                     if !compact {
                         totals
@@ -366,7 +366,7 @@ struct LookBrowserSheet: View {
                     openLibrary()
                 } label: {
                     Text("Open library")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.luma(size: 13, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                 }
@@ -376,7 +376,7 @@ struct LookBrowserSheet: View {
                     dismiss()
                 } label: {
                     Text("Done")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -427,7 +427,7 @@ struct LookBrowserSheet: View {
             HStack(spacing: 0) {
                 neighbour(at: categoryIndex - 1, alignment: .leading)
                 Text(title(categories[categoryIndex]))
-                    .font(.system(size: compact ? 15 : 17, weight: .semibold))
+                    .font(.luma(size: compact ? 15 : 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .padding(.horizontal, 10)
@@ -458,7 +458,7 @@ struct LookBrowserSheet: View {
                 step(index - categoryIndex)
             } label: {
                 Text(title(categories[index]))
-                    .font(.system(size: compact ? 12 : 13, weight: .medium))
+                    .font(.luma(size: compact ? 12 : 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: alignment)
@@ -485,7 +485,7 @@ struct LookBrowserSheet: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white.opacity(0.38))
             TextField("Search looks, packs, tags…", text: $search)
-                .font(.system(size: 15))
+                .font(.luma(size: 15))
                 .foregroundStyle(.white)
                 .tint(.white)
                 .autocorrectionDisabled()
@@ -563,7 +563,7 @@ struct LookBrowserSheet: View {
                 HStack {
                     // A section heading should read as a heading.
                     Text("Collections")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.luma(size: 16, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.95))
                     Spacer()
                     Button {
@@ -571,7 +571,7 @@ struct LookBrowserSheet: View {
                         LumaHaptics.shared.tap()
                     } label: {
                         Text("Manage")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.75))
                     }
                     .buttonStyle(.plain)
@@ -586,15 +586,15 @@ struct LookBrowserSheet: View {
                             // The collection's name is a name; only its size
                             // is a number.
                             Text(group.collection.name)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.luma(size: 14, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.9))
                                 .lineLimit(1)
                             Text("\(group.looks.count)")
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(.luma(size: 12, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.5))
                             if group.collection.pinnedToCamera == true {
                                 Text("Pinned")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.luma(size: 10, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 2.5)
@@ -603,7 +603,7 @@ struct LookBrowserSheet: View {
                         }
                         if group.looks.isEmpty {
                             Text("Long-press any look to add it here.")
-                                .font(.system(size: 13))
+                                .font(.luma(size: 13))
                                 .foregroundStyle(.white.opacity(0.5))
                         } else {
                             LazyVGrid(columns: columns, spacing: rowSpacing) {
@@ -621,12 +621,12 @@ struct LookBrowserSheet: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text(search.isEmpty ? "Nothing here yet" : "No looks match “\(search)”")
-                .font(.system(size: compact ? 15 : 17, weight: .semibold))
+                .font(.luma(size: compact ? 15 : 17, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.95))
             if !compact {
                 Text(search.isEmpty ? "Import a .cube or buy a pack to fill this shelf."
                                     : "Try a pack name, a look code, or a tag.")
-                    .font(.system(size: 13))
+                    .font(.luma(size: 13))
                     .foregroundStyle(.white.opacity(0.55))
                     .multilineTextAlignment(.center)
             }
@@ -671,7 +671,7 @@ struct LookBrowserSheet: View {
                     .aspectRatio(1, contentMode: .fit)
                     .overlay {
                         Text(context == .camera ? "Off" : "None")
-                            .font(.system(size: compact ? 12 : 14, weight: .semibold))
+                            .font(.luma(size: compact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(active ? .white : .white.opacity(0.55))
                     }
                     .overlay {
@@ -681,14 +681,14 @@ struct LookBrowserSheet: View {
                     }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Original")
-                        .font(.system(size: 13, weight: active ? .semibold : .medium))
+                        .font(.luma(size: 13, weight: active ? .semibold : .medium))
                         .foregroundStyle(active ? .white : .white.opacity(0.72))
                         .lineLimit(compact ? 1 : 2)
                         .frame(height: compact ? LookTile.compactCaptionHeight : 32,
                                alignment: .top)
                     if !compact {
                         Text("No look")
-                            .font(.system(size: 11))
+                            .font(.luma(size: 11))
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
@@ -785,7 +785,7 @@ struct LookBrowserSheet: View {
             if canApplyToAllClips {
                 Button(action: applyToAllClips) {
                     Text("Apply to all clips")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
@@ -812,14 +812,14 @@ struct LookBrowserSheet: View {
     private func intensityRow(_ intensity: Binding<Double>) -> some View {
         HStack(spacing: 12) {
             Text("Intensity")
-                .font(.system(size: 12, weight: .medium))
+                .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
                 .fixedSize()
             Slider(value: intensity, in: 0...100)
                 .tint(.white)
             // The one genuine instrument value in this row — mono stays.
             Text("\(Int(intensity.wrappedValue))%")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.luma(size: 13, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.2), value: Int(intensity.wrappedValue))
@@ -835,7 +835,7 @@ struct LookBrowserSheet: View {
         let comparing = compareStashedIntensity != nil
         let canCompare = intensity.wrappedValue > 0 || comparing
         return Text("Compare")
-            .font(.system(size: 13, weight: .semibold))
+            .font(.luma(size: 13, weight: .semibold))
             .foregroundStyle(comparing ? .black : .white.opacity(0.8))
             .frame(width: 84, height: compact ? 30 : 32)
             .background {
@@ -880,13 +880,13 @@ struct LookBrowserSheet: View {
     private var instructionBar: some View {
         HStack(spacing: 10) {
             Text(instruction)
-                .font(.system(size: 15, weight: instructionIsName ? .semibold : .medium))
+                .font(.luma(size: 15, weight: instructionIsName ? .semibold : .medium))
                 .foregroundStyle(.white.opacity(instructionIsName ? 0.95 : 0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             if let intensity, !noneActive {
                 Text("\(Int(intensity.wrappedValue))%")
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.55))
             }
             Spacer(minLength: 8)
@@ -899,7 +899,7 @@ struct LookBrowserSheet: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("New look")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
@@ -1068,7 +1068,7 @@ struct LookTile: View {
                     .overlay(alignment: .topLeading) {
                         if let badge {
                             Text(badge)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.luma(size: 10, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.95))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2.5)
@@ -1083,7 +1083,7 @@ struct LookTile: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(split.title)
-                        .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                        .font(.luma(size: 13, weight: selected ? .semibold : .medium))
                         .foregroundStyle(selected ? .white : .white.opacity(0.8))
                         .lineLimit(compact ? 1 : 2)
                         .minimumScaleFactor(compact ? 0.82 : 0.85)
@@ -1095,7 +1095,7 @@ struct LookTile: View {
                                alignment: .top)
                     if !compact {
                         Text(subtitle)
-                            .font(.system(size: 11))
+                            .font(.luma(size: 11))
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
@@ -1169,7 +1169,7 @@ struct LookStripTile: View {
                 .overlay(alignment: .topLeading) {
                     if let badge {
                         Text(badge)
-                            .font(.system(size: 8, weight: .heavy))
+                            .font(.luma(size: 8, weight: .heavy))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
@@ -1182,7 +1182,7 @@ struct LookStripTile: View {
                     // the half of the name that actually tells looks apart
                     // ("KD52 · Cine N…"), and the badge already carries source.
                     Text(look.nameSplit.title)
-                        .font(.system(size: size.width > 80 ? 13 : 12,
+                        .font(.luma(size: size.width > 80 ? 13 : 12,
                                       weight: selected ? .semibold : .regular))
                         .foregroundStyle(selected ? .white
                                          : onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
@@ -1223,7 +1223,7 @@ struct AllLooksTile: View {
 
                 if showsName {
                     Text("All Looks")
-                        .font(.system(size: size.width > 80 ? 13 : 12))
+                        .font(.luma(size: size.width > 80 ? 13 : 12))
                         .foregroundStyle(onMedia ? .white.opacity(0.7) : LumaTheme.textSecondary)
                         .shadow(color: onMedia ? .black.opacity(0.6) : .clear, radius: 2, y: 1)
                         .lineLimit(1)
