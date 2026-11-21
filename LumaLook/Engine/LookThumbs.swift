@@ -22,6 +22,17 @@ final class LookThumbs: ObservableObject {
     /// band, so twelve different grades read as twelve different tiles.
     static let fallbackFrame: CIImage = LookSwatch.referenceFrame
 
+    /// A portrait for the Looks tab's poster tiles: every look shown on a
+    /// face, without the calibration band the strip swatch carries.
+    static let portraitFrame: CIImage = {
+        guard let photo = HeroPhoto.bridge.ciImage else { return fallbackFrame }
+        let longest = max(photo.extent.width, photo.extent.height)
+        let scale = longest > 900 ? 900 / longest : 1
+        let scaled = photo.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return scaled.transformed(by: CGAffineTransform(
+            translationX: -scaled.extent.minX, y: -scaled.extent.minY))
+    }()
+
     /// One render job per library look, resolved on the main actor so the
     /// detached render loop never touches the repository.
     private struct Job {
@@ -85,7 +96,8 @@ final class LookThumbs: ObservableObject {
     /// pipeline: builtIn → recipe, lut → cube, saved → recipe + the user's
     /// saved settings + optional cube. `fileURL` resolves a LUT's cube path
     /// (pass `lutRepository.fileURL(for:)`).
-    func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL) {
+    func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL,
+                maxDimension: CGFloat = 220) {
         let frame = source ?? Self.fallbackFrame
         var fullStrength = LookSettings()
         fullStrength.intensity = 100
@@ -131,7 +143,7 @@ final class LookThumbs: ObservableObject {
                     guard let parsed = try? pipeline.loadLUT(at: url) else { continue }
                     state.lut = parsed
                 }
-                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220),
+                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: maxDimension),
                    !Task.isCancelled {
                     await MainActor.run {
                         guard self?.lastStamp == stamp else { return }

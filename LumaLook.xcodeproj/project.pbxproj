@@ -239,6 +239,7 @@
 		6465C55BE5115C437BFEE662 /* hero_skate.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7CFFB316ED67BA29ADC7D148 /* hero_skate.jpg */; };
 		6FFB5783902CC5CA822E8135 /* hero_gig.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 62866CA9B13DDC48B526E11D /* hero_gig.jpg */; };
 		87580A9E5BA1CF97192B0F70 /* hero_campaign.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */; };
+		584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16781F8A536C51EF97E6CBA /* LookSignature.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -474,6 +475,7 @@
 		7CFFB316ED67BA29ADC7D148 /* hero_skate.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_skate.jpg; sourceTree = "<group>"; };
 		62866CA9B13DDC48B526E11D /* hero_gig.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_gig.jpg; sourceTree = "<group>"; };
 		2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_campaign.jpg; sourceTree = "<group>"; };
+		D16781F8A536C51EF97E6CBA /* LookSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookSignature.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -716,6 +718,7 @@
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
 				8722C35F72247FE70F9AF07F /* InputMeterView.swift */,
 				89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */,
+				D16781F8A536C51EF97E6CBA /* LookSignature.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
 				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
 				92128D25DF2BBA1841CA3DFA /* LumaHaptics.swift */,
@@ -1107,6 +1110,7 @@
 				EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
+				584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				63774835EFEEFA197D828A1C /* LoudnessAnalyzer.swift in Sources */,
 				52C5E80C91DDF7D681FA62F1 /* LumaComponents.swift in Sources */,

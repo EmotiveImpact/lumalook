@@ -58,9 +58,9 @@ private struct LDToolItem: View {
                     .lineLimit(1)
                     // Floor at ~10 pt; every current label fits 64 pt at 11.
                     .minimumScaleFactor(0.9)
-                    .foregroundStyle(.white.opacity(active ? 0.7 : 0.5))
+                    .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textSecondary)
             }
-            .foregroundStyle(active ? Color.white : .white.opacity(0.62))
+            .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textPrimary.opacity(0.85))
             .frame(width: 64, height: 46)
             .contentShape(Rectangle())
         }
@@ -1769,64 +1769,108 @@ private struct EditorContent: View {
     // MARK: Top bar — monochrome, Export is a plain word
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
+        ZStack {
+            HStack(spacing: 4) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
 
+                Button { editor.undo() } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(editor.canUndo ? LumaTheme.textSecondary : LumaTheme.textMuted.opacity(0.6))
+                        .frame(width: 32, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress).disabled(!editor.canUndo)
+                .accessibilityLabel("Undo")
+
+                Button { editor.redo() } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(editor.canRedo ? LumaTheme.textSecondary : LumaTheme.textMuted.opacity(0.6))
+                        .frame(width: 32, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress).disabled(!editor.canRedo)
+                .accessibilityLabel("Redo")
+
+                Spacer(minLength: 4)
+
+                Button(action: onExport) {
+                    Text("Export")
+                        .font(.luma(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.onLight)
+                        .padding(.horizontal, 16)
+                        .frame(height: 36)
+                        .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+                .opacity(editor.isEmpty ? 0.35 : 1)
+                // Looked disabled but still opened the export sheet on an empty
+                // timeline, erroring only after the user picked a spec.
+                .disabled(editor.isEmpty)
+            }
+
+            // Title and the edit at a glance, centred like the mock.
             Menu {
                 Button("New Project") { editor.startNewProject(); tool = .none }
                 Button("Open Project Library") { onOpenProjects() }
             } label: {
-                HStack(spacing: 5) {
-                    Text(editor.projectTitle)
-                        .font(.luma(size: 15, weight: .semibold))
+                VStack(spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(editor.projectTitle)
+                            .font(.luma(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(LumaTheme.textMuted)
+                    }
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    Text(editSummary)
+                        .font(.luma(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(LumaTheme.textMuted)
                         .lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
                 }
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: 150)
             }
-
-            Spacer(minLength: 4)
-
-            Button { editor.undo() } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundStyle(editor.canUndo ? Color.white : LumaTheme.textMuted)
-                    .frame(width: 30, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress).disabled(!editor.canUndo)
-
-            Button { editor.redo() } label: {
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundStyle(editor.canRedo ? Color.white : LumaTheme.textMuted)
-                    .frame(width: 30, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress).disabled(!editor.canRedo)
-
-            Button(action: onExport) {
-                Text("Export")
-                    .font(.luma(size: 14, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 15).padding(.vertical, 8)
-                    .background(Color.white, in: Capsule())
-            }
-            .buttonStyle(.lumaPress)
-            .opacity(editor.isEmpty ? 0.35 : 1)
-            // Looked disabled but still opened the export sheet on an empty
-            // timeline, erroring only after the user picked a spec.
-            .disabled(editor.isEmpty)
         }
         .padding(.horizontal, 12)
+    }
+
+    /// "4 clips · 0:12" under the title.
+    private var editSummary: String {
+        let count = editor.clips.count
+        guard count > 0 else { return "Empty edit" }
+        let total = max(0, editor.totalDuration)
+        let length = String(format: "%d:%02d", Int(total) / 60, Int(total) % 60)
+        return "\(count) \(count == 1 ? "clip" : "clips") · \(length)"
+    }
+
+    /// The grade under the playhead: the clip's own look if it has one, else
+    /// the look on the whole edit. Shown as the look chip on the preview.
+    private var lookAtPlayhead: (name: String, colour: Color)? {
+        guard !editor.isEmpty else { return nil }
+        let starts = editor.clipStartTimes
+        let t = editor.currentTime
+        let clip = editor.clips.first { c in
+            guard let start = starts[c.id] else { return false }
+            return t >= start && t < start + c.timelineDuration
+        } ?? editor.clips.last
+        if let grade = clip?.grade {
+            let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { return (name, LookSignature.colour(forLookNamed: name)) }
+            if grade.lutID != nil { return ("LUT", LookSignature.neutral) }
+        }
+        guard app.settings.intensity > 0 else { return nil }
+        if let lut = app.selectedLUT { return (lut.displayName, LookSignature.colour(name: lut.displayName)) }
+        return (app.selectedLook.name, app.selectedLook.signature)
     }
 
     // MARK: Preview — the image is the interface. Never covered.
@@ -1860,6 +1904,17 @@ private struct EditorContent: View {
                     .allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .topLeading) {
+            if audioFocus == nil, let look = lookAtPlayhead {
+                LookChip(name: look.name, colour: look.colour, size: 11)
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .animation(.easeOut(duration: 0.18), value: look.name)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .animation(.easeInOut(duration: 0.22), value: audioFocusKey)

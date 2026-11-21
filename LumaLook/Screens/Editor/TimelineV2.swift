@@ -467,21 +467,22 @@ struct TransitionChip: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(style == .none ? AnyShapeStyle(LumaTheme.surfaceStrong)
-                                     : AnyShapeStyle(Color.white))
-                .frame(width: 22, height: 22)
-                .rotationEffect(.degrees(45))
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(style == .none ? AnyShapeStyle(LumaTheme.raised) : AnyShapeStyle(LumaTheme.textPrimary))
+                .frame(width: 20, height: 20)
                 .overlay {
                     Image(systemName: style == .none ? "plus" : style.icon)
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(style == .none ? Color.white.opacity(0.7) : .black)
+                        .foregroundStyle(style == .none ? LumaTheme.textSecondary : LumaTheme.ink)
                 }
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(Color(hex: 0x050506), lineWidth: 2))
                 .shadow(color: .black.opacity(0.5), radius: 3)
                 .contentShape(Rectangle().inset(by: -8))
         }
         .buttonStyle(.lumaPress)
         .frame(height: LaneMetrics.video)
+        .accessibilityLabel(style == .none ? "Add transition" : "Transition")
     }
 }
 
@@ -906,24 +907,29 @@ private struct ClipTrimHandles: View {
     }
 }
 
-/// Filmstrip cell at an explicit time-derived width: the frame repeats in
-/// square tiles across the clip, like a real NLE track.
+/// Film-strip cell at an explicit time-derived width: real frames on a black
+/// film base with sprocket holes top and bottom, and the clip's look label in
+/// its signature colour, so the lane reads as film rather than a grey bar.
 struct TimelineClipCell: View {
     let clip: EditorState.Clip
     let width: CGFloat
     let selected: Bool
 
+    /// Height of the sprocket band above and below the frames.
+    private let band: CGFloat = 9
+
     var body: some View {
-        Group {
+        ZStack {
+            Color(hex: 0x050506)
             if clip.thumbnail != nil || !clip.filmstrip.isEmpty {
                 // Real filmstrip: each tile shows the frame at that point in
                 // the clip; falls back to the poster frame until the strip
                 // renders.
                 let tiles = max(1, Int(ceil(width / 44)))
-                HStack(spacing: 0) {
+                HStack(spacing: 1.5) {
                     ForEach(0..<tiles, id: \.self) { i in
                         Color.clear
-                            .frame(width: 44, height: LaneMetrics.video)
+                            .frame(width: 42.5, height: LaneMetrics.video - band * 2)
                             .overlay {
                                 if let frame = frameForTile(i, of: tiles) {
                                     Image(decorative: frame, scale: 1)
@@ -934,81 +940,76 @@ struct TimelineClipCell: View {
                             .clipped()
                     }
                 }
-                .frame(width: width, alignment: .leading)
+                .frame(width: max(0, width - 4), alignment: .leading)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             } else {
                 LumaTheme.surfaceStrong
+                    .padding(.vertical, band)
             }
         }
+        .overlay { SprocketRows(band: band) }
         .frame(width: width, height: LaneMetrics.video)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         // `clipShape` clips PIXELS, not TOUCHES, and the filmstrip is tiled in
         // fixed 44 pt squares that can overrun the cell's own width by up to
         // 43 pt. Without this the last tile stole the next clip's taps.
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .bottomLeading) {
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+        .overlay(alignment: .bottomTrailing) {
             if width > 48 {
-                // Instrument values, so mono — and only these.
                 HStack(spacing: 3) {
                     if clip.speed != 1 {
                         Text(String(format: "%g×", clip.speed))
-                            .font(.luma(size: 10, weight: .medium, design: .monospaced))
                     }
                     Text(String(format: "%.1fs", clip.timelineDuration))
-                        .font(.luma(size: 10, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
                 }
+                .font(.luma(size: 10, weight: .semibold))
+                .monospacedDigit()
                 .foregroundStyle(.white)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(.black.opacity(0.55), in: Capsule())
-                .padding(4)
-                // A selected clip wears a 17 pt trim grip on its leading edge,
-                // which used to swallow the first characters ("8.0s" read as
-                // ".0s"). Clear the grip exactly when it is there.
-                .padding(.leading, selected ? 17 : 0)
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .padding(.bottom, band + 3)
+                .padding(.trailing, selected ? 19 : 5)
             }
         }
         .overlay(alignment: .topLeading) {
-            // Per-clip look tag: the clip wears the name of its own grade, so
-            // a graded cut is identifiable at a glance (B2). Narrow cells fall
-            // back to the glyph alone.
-            if let grade = clip.grade {
-                HStack(spacing: 3) {
-                    Image(systemName: "camera.filters")
-                        .font(.system(size: 8, weight: .semibold))
-                    if width > 92, let name = lookTag(grade) {
-                        // A look NAME is a name, so it keeps its own case and
-                        // the system font. The cell is already the grade.
-                        Text(name)
-                            .font(.luma(size: 9, weight: .semibold))
-                            .lineLimit(1)
-                    }
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2.5)
-                .background(.black.opacity(0.55), in: Capsule())
-                .padding(4)
+            // Per-clip look label, filled with the look's signature colour, so
+            // a graded cut is identifiable at a glance.
+            if let grade = clip.grade, let label = lookTag(grade) {
+                Text(width > 70 ? label : String(label.prefix(3)))
+                    .font(.luma(size: 10, weight: .bold))
+                    .lineLimit(1)
+                    .foregroundStyle(Color(hex: 0x0B0B0C))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(signature(grade), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .padding(.top, band + 3)
+                    .padding(.leading, selected ? 19 : 5)
             }
         }
-        // A stroke means selection and nothing else. Unselected clips separate
-        // by their own fill and the lane gaps, not by an outline each.
+        // A stroke means selection and nothing else, in signal yellow.
         .overlay {
             if selected {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(LumaTheme.signal, lineWidth: 2)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 
-    /// Short tag for the clip's grade. A LUT-backed grade carries no preset
-    /// name, so it tags as "LUT" rather than an empty capsule.
+    /// Short label for the clip's grade: the stock code where there is one
+    /// ("KD2"), else the look's name. A LUT-backed grade tags as "LUT".
     private func lookTag(_ grade: ClipGrade) -> String? {
         let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
         if name.isEmpty { return grade.lutID == nil ? nil : "LUT" }
-        // Keep the distinctive part: "Kodak 2383" reads as "2383" at 9pt.
-        return String(name.split(separator: " ").last ?? "")
+        return LookSignature.code(in: name) ?? LookSignature.title(in: name)
+    }
+
+    private func signature(_ grade: ClipGrade) -> Color {
+        let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? LookSignature.neutral : LookSignature.colour(forLookNamed: name)
     }
 
     /// Maps a tile position to its filmstrip frame (time-proportional),
@@ -1019,6 +1020,31 @@ struct TimelineClipCell: View {
         let frameIndex = min(clip.filmstrip.count - 1,
                              Int(position * Double(clip.filmstrip.count)))
         return clip.filmstrip[frameIndex]
+    }
+}
+
+/// Sprocket holes along the top and bottom edge of a film-strip cell.
+private struct SprocketRows: View {
+    let band: CGFloat
+
+    var body: some View {
+        Canvas { context, size in
+            let hole = CGSize(width: 4, height: 3)
+            let pitch: CGFloat = 9
+            var x: CGFloat = 4
+            var path = Path()
+            while x + hole.width <= size.width - 2 {
+                let topY = (band - hole.height) / 2
+                let bottomY = size.height - band + (band - hole.height) / 2
+                path.addRoundedRect(in: CGRect(origin: CGPoint(x: x, y: topY), size: hole),
+                                    cornerSize: CGSize(width: 1, height: 1))
+                path.addRoundedRect(in: CGRect(origin: CGPoint(x: x, y: bottomY), size: hole),
+                                    cornerSize: CGSize(width: 1, height: 1))
+                x += pitch
+            }
+            context.fill(path, with: .color(.white.opacity(0.26)))
+        }
+        .allowsHitTesting(false)
     }
 }
 

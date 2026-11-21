@@ -153,7 +153,7 @@ struct LookBrowserSheet: View {
     /// Square tiles mean the COLUMN COUNT carries the density difference
     /// between the half-sheet and the full screen, instead of the tile shape.
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: compact ? 4 : 3)
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: compact ? 4 : (isSheet ? 3 : 2))
     }
 
     private var categories: [LookLibraryStore.Category] { LookLibraryStore.Category.allCases }
@@ -194,16 +194,17 @@ struct LookBrowserSheet: View {
                 }
         }
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
-            thumbs.render(source: app.previewFrame, library: app.library.all,
-                          fileURL: { app.lutRepository.fileURL(for: $0) })
-        }
-        // Only the full-screen host draws a hero, and it re-renders on the
-        // applied look — never on a keystroke in the search field.
-        .task(id: heroKey) {
-            guard !isSheet else { return }
-            let source = app.previewFrame ?? HeroPhoto.golden.ciImage ?? LookThumbs.fallbackFrame
-            heroImage = LookPipeline.shared.gradedStill(source, state: app.lookState,
-                                                        maxDimension: 900)
+            // The Looks tab shows every look on a face, at poster size; the
+            // sheets keep grading the user's own frame.
+            if isSheet {
+                thumbs.render(source: app.previewFrame, library: app.library.all,
+                              fileURL: { app.lutRepository.fileURL(for: $0) })
+            } else {
+                thumbs.render(source: app.previewFrame ?? LookThumbs.portraitFrame,
+                              library: app.library.all,
+                              fileURL: { app.lutRepository.fileURL(for: $0) },
+                              maxDimension: 520)
+            }
         }
         .alert("Rename LUT", isPresented: Binding(
             get: { renameLUT != nil },
@@ -239,12 +240,7 @@ struct LookBrowserSheet: View {
     }
 
     private var panel: some View {
-        VStack(spacing: 0) {
-            if !isSheet {
-                media.frame(height: heroHeight)
-            }
-            drawer
-        }
+        drawer
     }
 
     // MARK: Media — the live grade, uncovered (full-screen hosting only)
@@ -275,11 +271,19 @@ struct LookBrowserSheet: View {
 
     private var drawer: some View {
         VStack(spacing: 0) {
-            header
-                .padding(.top, compact ? 10 : 14)
-                .padding(.bottom, compact ? 10 : 12)
-            categoryBar
-                .padding(.bottom, compact ? 10 : 12)
+            if isSheet {
+                header
+                    .padding(.top, compact ? 10 : 14)
+                    .padding(.bottom, compact ? 10 : 12)
+                categoryBar
+                    .padding(.bottom, compact ? 10 : 12)
+            } else {
+                pageHeader
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
+                categoryPills
+                    .padding(.bottom, 16)
+            }
             if searchExpanded {
                 searchField
                     .padding(.bottom, compact ? 8 : 12)
@@ -308,6 +312,69 @@ struct LookBrowserSheet: View {
         countText(app.library.all.count, "looks", size: 12)
             + Text(" · ").font(.luma(size: 12, weight: .medium))
             + countText(app.lutRepository.collections.count, "collections", size: 12)
+    }
+
+    /// Looks tab: the page title, search and import.
+    private var pageHeader: some View {
+        HStack(spacing: 8) {
+            if showsBackButton {
+                BackArrow()
+            }
+            Text("Looks")
+                .font(.luma(size: 30, weight: .bold))
+                .kerning(-1.2)
+                .foregroundStyle(LumaTheme.textPrimary)
+            Spacer(minLength: 6)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    searchExpanded.toggle()
+                    if !searchExpanded { search = "" }
+                }
+                LumaHaptics.shared.tap()
+            } label: {
+                glyph(searchExpanded ? "xmark" : "magnifyingglass", active: searchExpanded)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(searchExpanded ? "Close search" : "Search looks")
+
+            LUTImportButton { imported in
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    select(LibraryLook(lut: imported), navigate: false)
+                }
+            } label: {
+                glyph("square.and.arrow.down", active: false)
+            }
+            .accessibilityLabel("Import a LUT")
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Looks tab: categories as pills, the current one filled white.
+    private var categoryPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(categories) { cat in
+                    let on = cat == category
+                    Button {
+                        withAnimation(.snappy(duration: 0.22)) { category = cat }
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        Text(title(cat))
+                            .font(.luma(size: 14, weight: .medium))
+                            .foregroundStyle(on ? LumaTheme.onLight : LumaTheme.textSecondary)
+                            .padding(.horizontal, 14)
+                            .frame(height: 32)
+                            .background(on ? LumaTheme.textPrimary : Color.clear, in: Capsule())
+                            .overlay(Capsule().strokeBorder(on ? LumaTheme.textPrimary : LumaTheme.hairline,
+                                                            lineWidth: 1))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 
     private var header: some View {
@@ -389,11 +456,12 @@ struct LookBrowserSheet: View {
         let side: CGFloat = compact ? 30 : 34
         return Image(systemName: name)
             .font(.system(size: compact ? 13 : 14, weight: .medium))
-            .foregroundStyle(active ? .black : .white.opacity(0.8))
+            .foregroundStyle(active ? LumaTheme.onLight : LumaTheme.textSecondary)
             .frame(width: side, height: side)
             .background {
-                Circle().fill(active ? AnyShapeStyle(.white) : AnyShapeStyle(Color(white: 0.13)))
+                Circle().fill(active ? AnyShapeStyle(LumaTheme.textPrimary) : AnyShapeStyle(LumaTheme.raised))
             }
+            .overlay(Circle().strokeBorder(LumaTheme.hairline, lineWidth: active ? 0 : 1))
     }
 
     /// Leave the sheet for the full Looks library. The push has to wait for the
@@ -515,15 +583,15 @@ struct LookBrowserSheet: View {
             if category == .collections {
                 collectionsBody
             } else {
-                LazyVGrid(columns: columns, spacing: rowSpacing) {
-                    if search.isEmpty, category == .all || category == .recents {
+                LazyVGrid(columns: columns, spacing: isSheet ? rowSpacing : 10) {
+                    if isSheet, search.isEmpty, category == .all || category == .recents {
                         noneTile
                     }
                     ForEach(visibleLooks) { look in
                         tile(for: look)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, isSheet ? 20 : 16)
                 // Clears the pinned footer by more than one caption block, so
                 // a partly-scrolled row degrades into the fade below rather
                 // than being sliced through its own text.
@@ -635,7 +703,29 @@ struct LookBrowserSheet: View {
         .padding(.vertical, compact ? 26 : 44)
     }
 
+    @ViewBuilder
     private func tile(for look: LibraryLook) -> some View {
+        if isSheet {
+            sheetTile(for: look)
+        } else {
+            LookPosterTile(look: look,
+                           image: thumbs.images[look.thumbKey],
+                           selected: isSelected(look),
+                           isFavourite: app.library.isFavourite(look.id),
+                           locked: storeService.isLocked(look)) {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    select(look, navigate: true)
+                }
+                LumaHaptics.shared.tap()
+            } onFavourite: {
+                app.library.toggleFavourite(look)
+                LumaHaptics.shared.tap()
+            }
+            .contextMenu { contextMenu(for: look) }
+        }
+    }
+
+    private func sheetTile(for look: LibraryLook) -> some View {
         LookTile(look: look,
                  image: thumbs.images[look.thumbKey],
                  selected: isSelected(look),
@@ -1113,6 +1203,120 @@ struct LookTile: View {
                         .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
                         .background(.black.opacity(0.45), in: Circle())
                         .padding(compact ? 3 : 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
+            }
+        }
+    }
+}
+
+// MARK: - Poster tile (Looks tab)
+
+/// A look as a poster: graded on a face, its code large in the look's
+/// signature colour, the name and source along the bottom.
+struct LookPosterTile: View {
+    let look: LibraryLook
+    var image: CGImage? = nil
+    var selected: Bool = false
+    var isFavourite: Bool = false
+    var locked: Bool = false
+    let action: () -> Void
+    var onFavourite: (() -> Void)? = nil
+
+    private var split: (title: String, code: String?) { look.nameSplit }
+
+    /// The stock code, or the name's initials for looks without one
+    /// ("Neon Nights" reads as NN).
+    private var code: String {
+        if let code = split.code { return code }
+        let initials = split.title.split(separator: " ").prefix(2).compactMap(\.first)
+        return initials.isEmpty ? "—" : String(initials).uppercased()
+    }
+
+    private var subtitle: String {
+        if case .lut(let f) = look.source, f.packID == nil { return f.isLogTarget ? "Log" : "LUT" }
+        if case .saved = look.source { return "Yours" }
+        return look.packName ?? "Signature"
+    }
+
+    private let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Button(action: action) {
+                Color.clear
+                    .aspectRatio(0.8, contentMode: .fit)
+                    .overlay {
+                        if let image {
+                            Image(decorative: image, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            LumaTheme.raised
+                        }
+                    }
+                    .overlay {
+                        LinearGradient(stops: [
+                            .init(color: .black.opacity(0.3), location: 0),
+                            .init(color: .clear, location: 0.3),
+                            .init(color: .clear, location: 0.52),
+                            .init(color: .black.opacity(0.82), location: 1),
+                        ], startPoint: .top, endPoint: .bottom)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        Text(code)
+                            .font(.luma(size: 30, weight: .heavy))
+                            .kerning(-1.4)
+                            .foregroundStyle(look.signature)
+                            .shadow(color: .black.opacity(0.4), radius: 10, y: 1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 9)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        HStack(alignment: .lastTextBaseline, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(split.title)
+                                    .font(.luma(size: 14, weight: .semibold))
+                                    .kerning(-0.2)
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Text(subtitle)
+                                    .font(.luma(size: 11))
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            if locked {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .accessibilityLabel("Locked")
+                            }
+                        }
+                        .padding(12)
+                    }
+                    .clipShape(shape)
+                    // scaledToFill overflows: confine touches to the tile.
+                    .contentShape(shape)
+                    .overlay(shape.strokeBorder(selected ? look.signature : LumaTheme.hairline,
+                                                lineWidth: selected ? 2 : 1))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel(look.name)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+
+            if let onFavourite {
+                Button(action: onFavourite) {
+                    Image(systemName: isFavourite ? "star.fill" : "star")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(isFavourite ? LumaTheme.signal : .white.opacity(0.75))
+                        .frame(width: 28, height: 28)
+                        .background(.black.opacity(0.4), in: Circle())
+                        .padding(7)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
