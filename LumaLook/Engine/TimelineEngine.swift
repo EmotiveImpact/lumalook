@@ -621,6 +621,7 @@ final class EditorState: ObservableObject {
 
     /// Debounced auto-save after every timeline mutation.
     private func scheduleAutosave() {
+        mutationCount &+= 1
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -761,6 +762,8 @@ final class EditorState: ObservableObject {
         muteAudio = project.muteAudio
         undoStack.removeAll()
         redoStack.removeAll()
+        toolSession = nil
+        pendingToolOrigin = nil
         updateHistoryFlags()
         clips = project.clips.compactMap { stored in
             let url = store.clipURL(for: stored)
@@ -894,6 +897,8 @@ final class EditorState: ObservableObject {
         resetProjectDefaults()
         undoStack.removeAll()
         redoStack.removeAll()
+        toolSession = nil
+        pendingToolOrigin = nil
         updateHistoryFlags()
         rebuild(keepPosition: false)
     }
@@ -2763,10 +2768,38 @@ final class EditorState: ObservableObject {
                  audioReactive: audioReactive)
     }
 
+    /// How many steps Undo remembers. Every snapshot carries each clip's
+    /// thumbnail and filmstrip, so an unbounded history grew with every edit
+    /// until iOS killed a long session. Forty steps is well past what anyone
+    /// walks back through, and the images are shared, not copied, so the cap
+    /// is what bounds the memory.
+    private static let undoLimit = 40
+
     private func pushUndoSnapshot() {
         undoStack.append(currentSnapshot())
+        trimUndoHistory()
         redoStack.removeAll()
+        mutationCount &+= 1
         updateHistoryFlags()
+    }
+
+    /// Drops the oldest steps past `undoLimit`. An open tool session's
+    /// recorded depth moves with them, so ✕ still trims exactly the entries
+    /// the tool pushed.
+    private func trimUndoHistory() {
+        let overflow = undoStack.count - Self.undoLimit
+        guard overflow > 0 else { return }
+        undoStack.removeFirst(overflow)
+        if let session = toolSession {
+            toolSession = ToolSession(start: session.start,
+                                      undoDepth: max(0, session.undoDepth - overflow),
+                                      mutationMark: session.mutationMark)
+        }
+        if let origin = pendingToolOrigin {
+            pendingToolOrigin = ToolSession(start: origin.start,
+                                            undoDepth: max(0, origin.undoDepth - overflow),
+                                            mutationMark: origin.mutationMark)
+        }
     }
 
     func undo() {
@@ -2778,7 +2811,78 @@ final class EditorState: ObservableObject {
     func redo() {
         guard let snapshot = redoStack.popLast() else { return }
         undoStack.append(currentSnapshot())
+        trimUndoHistory()
         restore(snapshot)
+    }
+
+    // MARK: - Tool sessions (✕ means "put it back")
+
+    /// The project as it stood when an editor tool opened. Most tools commit
+    /// live (sliders write straight to the model so the frame updates), which
+    /// made ✕ identical to ✓. Snapshotting on open and restoring on ✕ makes
+    /// Cancel honest for every tool at once, whatever mutations it made.
+    private struct ToolSession {
+        let start: Snapshot
+        let undoDepth: Int
+        let mutationMark: Int
+    }
+    private var toolSession: ToolSession?
+    /// Captured just before an "add, then open its tool" action (Text, a
+    /// sticker, overlay media), so ✕ takes away the thing that was added,
+    /// not only the edits made to it afterwards.
+    private var pendingToolOrigin: ToolSession?
+    /// Bumped by every undoable push and every autosave-worthy change, so
+    /// ✕ on a tool that changed nothing skips the restore and its rebuild.
+    private var mutationCount = 0
+
+    /// Call immediately before an action that adds an element and then opens
+    /// its tool. Used only if exactly one undo step lands before the tool
+    /// opens (the add itself); anything else falls back to a fresh snapshot.
+    func prepareToolSessionForAdd() {
+        pendingToolOrigin = ToolSession(start: currentSnapshot(),
+                                        undoDepth: undoStack.count,
+                                        mutationMark: mutationCount)
+    }
+
+    func beginToolSession() {
+        defer { pendingToolOrigin = nil }
+        if let origin = pendingToolOrigin, undoStack.count == origin.undoDepth + 1 {
+            toolSession = origin
+        } else {
+            toolSession = ToolSession(start: currentSnapshot(),
+                                      undoDepth: undoStack.count,
+                                      mutationMark: mutationCount)
+        }
+    }
+
+    /// ✓, or the tool closing itself: keep everything, history as made.
+    func commitToolSession() {
+        toolSession = nil
+    }
+
+    /// ✕: put the project back exactly as the tool found it. The steps the
+    /// tool pushed leave Undo (so Undo cannot replay a cancelled change), and
+    /// the cancelled state waits on Redo, so a mistaken ✕ is one tap from
+    /// coming back.
+    func cancelToolSession() {
+        guard let session = toolSession else { return }
+        toolSession = nil
+        guard mutationCount != session.mutationMark else { return }
+        let cancelled = currentSnapshot()
+        if undoStack.count > session.undoDepth {
+            undoStack.removeSubrange(session.undoDepth...)
+        }
+        redoStack = [cancelled]
+        restore(session.start)
+    }
+
+    /// Re-renders the paused frame. A paused AVPlayer never re-runs the
+    /// compositor on its own, so changes the composition reads live (the
+    /// shared timeline grade) need a nudge to show.
+    func refreshPausedFrame() {
+        guard let player, player.timeControlStatus != .playing else { return }
+        let time = player.currentTime()
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     private func restore(_ snapshot: Snapshot) {

@@ -681,6 +681,35 @@ final class AppModel: ObservableObject {
         settings = saved.settings
     }
 
+    // MARK: - Grade stash (editor ✕)
+
+    /// The whole global grade as one value, so a tool that changes it (the
+    /// editor's whole-edit Looks) can put it back exactly when cancelled.
+    struct GradeStash {
+        let look: LookPreset
+        let lut: LUTFile?
+        let settings: LookSettings
+        let creativeOpacity: Double
+        let creativeBlend: LUTBlendMode
+    }
+
+    func stashGrade() -> GradeStash {
+        GradeStash(look: selectedLook, lut: selectedLUT, settings: settings,
+                   creativeOpacity: creativeOpacity, creativeBlend: creativeBlend)
+    }
+
+    /// Restores a stash without the side effects of a fresh pick: no
+    /// remembered-strength load and no per-LUT strength write-back.
+    func restoreGrade(_ stash: GradeStash) {
+        isRestoringSession = true
+        selectedLook = stash.look
+        selectedLUT = stash.lut
+        creativeOpacity = stash.creativeOpacity
+        creativeBlend = stash.creativeBlend
+        settings = stash.settings
+        isRestoringSession = false
+    }
+
     // MARK: - Premium gate
 
     /// The locked look in the grade-room grade (video, still, camera), or nil.

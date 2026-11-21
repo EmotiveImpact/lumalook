@@ -588,8 +588,11 @@ struct EditorTimelineView: View {
                 defer { isLoadingClip = false }
                 let before = Set(editor.overlays.map(\.id))
                 if let video = try? await newItem.loadTransferable(type: PickedVideo.self) {
+                    // ✕ on the Overlay panel this opens removes the new media.
+                    editor.prepareToolSessionForAdd()
                     await editor.addOverlay(from: video.url, isImage: false)
                 } else if let imageURL = await Self.pickedImageFile(from: newItem) {
+                    editor.prepareToolSessionForAdd()
                     await editor.addOverlay(from: imageURL, isImage: true)
                 }
                 // Open the panel on the freshly added overlay (the array is
@@ -1685,6 +1688,10 @@ private struct EditorContent: View {
     /// for the session — the music lane has always shown genuine RMS data and
     /// the clip-sound card has no reason to differ.
     @State private var clipWaveforms: [UUID: [Float]] = [:]
+    /// The global grade (and the None tile's parked strength) as the
+    /// whole-edit Looks tool found them, so ✕ can put them back. The project
+    /// itself is snapshotted by `EditorState.beginToolSession()`.
+    @State private var looksStash: (grade: AppModel.GradeStash, parkedIntensity: Double?)?
 
     private var toolIsOpen: Bool { tool != .none }
     private var hasClips: Bool { !editor.isEmpty }
@@ -1731,9 +1738,16 @@ private struct EditorContent: View {
             thumbs.render(source: app.previewFrame, library: app.library.all,
                           fileURL: { app.lutRepository.fileURL(for: $0) })
         }
-        .onChange(of: tool) { _, new in
+        .onChange(of: tool) { old, new in
             if new == .clipAudio { loadClipWaveformIfNeeded() }
+            toolSessionChanged(from: old, to: new)
         }
+        // The timeline grade is read live by the compositor, and a paused
+        // player never re-renders on its own: without this a whole-edit look
+        // picked (or put back by ✕) while paused did not show until Play.
+        .onChange(of: app.selectedLook.id) { _, _ in editor.refreshPausedFrame() }
+        .onChange(of: app.selectedLUT?.id) { _, _ in editor.refreshPausedFrame() }
+        .onChange(of: app.settings) { _, _ in editor.refreshPausedFrame() }
         .onChange(of: editor.selectedClipID) { _, _ in
             if tool == .clipAudio { loadClipWaveformIfNeeded() }
         }
@@ -2065,14 +2079,42 @@ private struct EditorContent: View {
         LumaHaptics.shared.tap()
     }
 
-    /// ✕ means "put it back". Only Trim holds a revertible draft — its sliders
-    /// commit live so the frame updates, which would otherwise make ✕ a lie.
+    /// ✕ means "put it back", for every tool. Sliders commit live so the frame
+    /// updates as you drag, which used to make ✕ exactly the same as ✓ for all
+    /// but Trim. Now the project is snapshotted when the drawer opens and
+    /// restored here; the cancelled state waits on Redo in case ✕ was a slip.
     private func cancelTool() {
-        if tool == .trim, let original = trimOriginal, let clip = editor.selectedClip,
-           abs(clip.trimStart - original.start) > 0.001 || abs(clip.trimEnd - original.end) > 0.001 {
-            editor.applyTrim(start: original.start, end: original.end)
+        if let stash = looksStash {
+            app.restoreGrade(stash.grade)
+            stashedIntensity = stash.parkedIntensity
+            looksStash = nil
         }
+        editor.cancelToolSession()
         closeTool()
+    }
+
+    /// One opening of the drawer is one session. Switching tools inside it
+    /// (Shape, then the new shape's Overlay panel) continues the session, so
+    /// ✕ undoes the whole visit, including the shape that was added.
+    private func toolSessionChanged(from old: EditorTool, to new: EditorTool) {
+        // Voiceover records on its own clock and lands its take after the
+        // writer closes; a snapshot restore could race it, so ✕ there simply
+        // closes, as it always has.
+        if new == .voice {
+            editor.commitToolSession()
+            looksStash = nil
+            return
+        }
+        if old == .none, new != .none {
+            editor.beginToolSession()
+            looksStash = nil
+        } else if new == .none {
+            editor.commitToolSession()
+            looksStash = nil
+        }
+        if new == .looks, looksStash == nil {
+            looksStash = (app.stashGrade(), stashedIntensity)
+        }
     }
 
     /// The tool row swaps on selection — context decides the tools.
@@ -2727,6 +2769,8 @@ private struct EditorContent: View {
 
     private func addText() {
         let before = Set(editor.overlays.map(\.id))
+        // ✕ on the panel this opens should take the new text away too.
+        editor.prepareToolSessionForAdd()
         editor.addTextOverlay()
         if let added = editor.overlays.first(where: { !before.contains($0.id) }) {
             selectedOverlayID = added.id
