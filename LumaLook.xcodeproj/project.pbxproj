@@ -241,6 +241,8 @@
 		87580A9E5BA1CF97192B0F70 /* hero_campaign.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */; };
 		584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16781F8A536C51EF97E6CBA /* LookSignature.swift */; };
 		CC0609EE675EBE8F45B02D45 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFC01F23C4BE58816C73D67 /* LaunchView.swift */; };
+		71011323E9A1DC9BB2A72D32 /* SelectClipsLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28AA1221C29EBE0D3FA04CFD /* SelectClipsLibrary.swift */; };
+		97A3002FA6477CD76EB78F29 /* SelectClipsParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 266E6BD472DD0A08B1385490 /* SelectClipsParts.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -478,6 +480,8 @@
 		2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_campaign.jpg; sourceTree = "<group>"; };
 		D16781F8A536C51EF97E6CBA /* LookSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookSignature.swift; sourceTree = "<group>"; };
 		3AFC01F23C4BE58816C73D67 /* LaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchView.swift; sourceTree = "<group>"; };
+		28AA1221C29EBE0D3FA04CFD /* SelectClipsLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipsLibrary.swift; sourceTree = "<group>"; };
+		266E6BD472DD0A08B1385490 /* SelectClipsParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipsParts.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -513,6 +517,8 @@
 				982FBAAA5098559374D20381 /* LUTManagerView.swift */,
 				5082DDECC065F7185E2AD705 /* MoreScreens.swift */,
 				9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */,
+				28AA1221C29EBE0D3FA04CFD /* SelectClipsLibrary.swift */,
+				266E6BD472DD0A08B1385490 /* SelectClipsParts.swift */,
 				C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */,
 			);
 			path = Screens;
@@ -1146,6 +1152,8 @@
 				CE80855BE2146D1F066D1268 /* PipPresets.swift in Sources */,
 				4D273A899E6DF996CB0620C9 /* SceneArt.swift in Sources */,
 				7191972FF427F33077859C6F /* Scopes.swift in Sources */,
+				71011323E9A1DC9BB2A72D32 /* SelectClipsLibrary.swift in Sources */,
+				97A3002FA6477CD76EB78F29 /* SelectClipsParts.swift in Sources */,
 				369ADC7B9BE13C9C434307CF /* SelectClipView.swift in Sources */,
 				E5201804C48E20F8255CAED5 /* ShapeRenderer.swift in Sources */,
 				0360C6C2F8A6E390528707AF /* SkinFirstPresets.swift in Sources */,
