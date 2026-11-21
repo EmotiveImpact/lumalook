@@ -855,7 +855,7 @@ extension EditorTimelineView {
     /// media files on the host, SIMCTL_CHILD_LUMA_SEED_PLAY=1 starts
     /// playback once seeded. SIMCTL_CHILD_LUMA_SEED_EDITOR_DEMO=1 builds the
     /// demo edit from bundled photos (no host media needed), and
-    /// LUMA_SEED_EDITOR_STATE=clip|look|more opens that state on top.
+    /// LUMA_SEED_EDITOR_STATE=clip|look|more|captions opens that state on top.
     private func applyDebugSeed() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
@@ -1768,6 +1768,10 @@ extension EditorTimelineView {
         case "more":
             editor.selectedClipID = nil
             showMoreTools = true
+        case "captions":
+            editor.selectedClipID = nil
+            editor.seek(to: 0.8)
+            tool = .captions
         default:
             break
         }
@@ -2789,7 +2793,7 @@ private struct EditorContent: View {
         case .adjLayer:      return "Grade a span of the timeline"
         case .template:      return "Pick a template to restyle the cut"
         case .canvas:        return "Set the frame this project renders into"
-        case .captions:      return "Transcribe speech into text overlays"
+        case .captions:      return "Words light up as they are spoken"
         case .audioReactive: return "Let the sound drive the picture"
         case .audioAdd:      return "Add music, sound effects or a file"
         case .voice:         return "Record a voiceover over the timeline"
