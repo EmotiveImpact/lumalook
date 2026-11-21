@@ -49,7 +49,7 @@ final class PackThumbs: ObservableObject {
     /// five photos walked in sequence no two neighbouring rows can collide.
     /// The pack-detail hero calls this too, so a tile and its detail screen
     /// always show the same source frame.
-    static let previewPhotos: [HeroPhoto] = [.golden, .coast, .desert, .night, .neon]
+    static let previewPhotos: [HeroPhoto] = [.golden, .neon, .drive, .rain, .party, .skate, .gig, .campaign, .bridge]
 
     static func previewPhoto(for pack: LookPack) -> HeroPhoto {
         guard let idx = PackCatalog.packs.firstIndex(where: { $0.id == pack.id })
@@ -762,14 +762,9 @@ struct FilterPackDetailView: View {
     /// user has no media of their own — otherwise the try-on panel renders a
     /// pixel-identical copy of the hero 400pt above it and adds nothing.
     private var sampleFallbackSource: CIImage {
-        let alternate: HeroPhoto
-        switch heroPhoto {
-        case .golden: alternate = .coast
-        case .coast:  alternate = .desert
-        case .desert: alternate = .night
-        case .night:  alternate = .neon
-        case .neon:   alternate = .golden
-        }
+        let all = HeroPhoto.allCases
+        let index = all.firstIndex(of: heroPhoto) ?? 0
+        let alternate = all[(index + 1) % all.count]
         return alternate.ciImage ?? heroSource
     }
 
@@ -1551,7 +1546,7 @@ struct ProjectLibraryView: View {
             if let newest {
                 ProjectThumb(project: newest, store: app.store, radius: 22)
             } else {
-                HeroImage(photo: .coast, radius: 22)
+                HeroImage(photo: .campaign, radius: 22)
             }
         }
         .padding(.horizontal, 10)
@@ -1941,7 +1936,7 @@ struct CropFormatView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            HeroImage(photo: .coast)
+            HeroImage(photo: .drive)
         }
     }
 

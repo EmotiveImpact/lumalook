@@ -885,7 +885,7 @@ private final class HomePackThumbs: ObservableObject {
 
     /// Every frame the rails may draw from. The catalog only tags packs with
     /// four of these, and reuses them, hence `assignedPhotos` below.
-    private static let allPhotos: [HeroPhoto] = [.golden, .coast, .desert, .neon, .night]
+    private static let allPhotos: [HeroPhoto] = HeroPhoto.allCases
 
     /// How many neighbours a frame must stay clear of. Roughly a screenful of
     /// tiles, so two identical base images can never be visible together.

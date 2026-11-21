@@ -561,7 +561,7 @@ struct OnboardingView: View {
         Page(photo: .neon, icon: "cube.transparent",
              title: "Grade Anything",
              detail: "Apply looks and .cube LUTs to photos and video, stack conversion and creative slots, and compare before and after."),
-        Page(photo: .night, icon: "film.stack",
+        Page(photo: .gig, icon: "film.stack",
              title: "Edit It Together",
              detail: "Multi-track timeline with music, overlays, transitions and per-clip looks — then export in up to 4K."),
     ]

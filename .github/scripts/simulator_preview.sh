@@ -103,8 +103,8 @@ shot 05-looks 6 "${P}ROUTE=none" "${P}TAB=Looks"
 shot 06-profile 5 "${P}ROUTE=none" "${P}TAB=Profile"
 shot 07-select-clip 5 "${P}ROUTE=selectClip"
 shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg"
-shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_coast.jpg"
-shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_coast.jpg"
+shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"
+shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_drive.jpg"
 shot 11-camera 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
 shot 12-filter-pack 6 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-stocks-01"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
@@ -120,8 +120,8 @@ sleep 3
 launch video-onboarding 8 "${P}SEED_ONBOARDING=1" || true
 launch video-home 5 "${P}ROUTE=none" "${P}TAB=Home" || true
 launch video-looks 4 "${P}ROUTE=none" "${P}TAB=Looks" || true
-launch video-grade 7 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_desert.jpg" || true
-launch video-editor 9 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_night.jpg" "${P}SEED_PLAY=1" || true
+launch video-grade 7 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_party.jpg" || true
+launch video-editor 9 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_rain.jpg" "${P}SEED_PLAY=1" || true
 launch video-camera 6 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" || true
 kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
