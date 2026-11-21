@@ -36,7 +36,7 @@ jobs:
   build:
     name: Archive (Release, iPhone)
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       TEAM_ID: FC88M2P4F9
       ARCHIVE: ${{ github.workspace }}/build/LumaLook.xcarchive
@@ -157,3 +157,19 @@ jobs:
             tail -150 "$LOG"
             exit 1
           fi
+
+      - name: Wait for TestFlight processing
+        if: steps.gate.outputs.upload == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          BUNDLE_ID: com.emotiveimpact.lumalook
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet "pyjwt[crypto]==2.10.1"
+          "$RUNNER_TEMP/venv/bin/python" .github/scripts/testflight_status.py
