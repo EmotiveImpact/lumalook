@@ -85,6 +85,12 @@ final class AppModel: ObservableObject {
     @Published var batchItems: [PhotosPickerItem] = []
     @Published var batchStatus: String?
 
+    /// Select clips hand-off (see `openSelectClips(_:templateID:)` in
+    /// SelectClipsLibrary.swift): what the picker was opened for, and a template
+    /// picked before it. The picker reads both once, then resets them.
+    var selectClipIntent: SelectClipIntent = .grade
+    var pendingTemplateID: String?
+
     /// Applies the current grade to every batch item sequentially, saving
     /// each to Photos. Returns how many succeeded.
     func runBatchExport(spec: ExportSpec) async -> Int {
