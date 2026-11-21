@@ -174,18 +174,6 @@ struct PackStatePill: View {
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .background(Color(white: 0.18), in: Capsule())
-        } else if pack.isProIncluded {
-            HStack(spacing: 5) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.9))
-                Text("Pro")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(Color(white: 0.18), in: Capsule())
         } else {
             // A price is a number, and it is one of the two things on this
             // screen that must read instantly from across the room.
@@ -642,7 +630,6 @@ struct FilterStoreView: View {
 enum StoreNav {
     static func price(_ pack: LookPack, _ storeService: StoreService) -> String {
         if pack.isFree { return "Free" }
-        if pack.isProIncluded { return "Pro" }
         return storeService.packProducts[pack.id]?.displayPrice ?? pack.price
     }
 
@@ -1051,17 +1038,17 @@ struct FilterPackDetailView: View {
     private var priceBlock: some View {
         // A bare price is a number and stays mono; "Free" / "Included with Pro"
         // / "In your library" are words, and words are set in the reading face.
-        let isNumericPrice = !installed && !pack.isFree && !pack.isProIncluded
+        let isNumericPrice = !installed && !pack.isFree && !storeService.isPro
         return HStack(alignment: .lastTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(installed ? "Status"
                      : pack.isFree ? "Price"
-                     : pack.isProIncluded ? "Subscription" : "One-time purchase")
+                     : storeService.isPro ? "Price" : "One-time purchase")
                     .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(installed ? "In your library"
                      : pack.isFree ? "Free"
-                     : pack.isProIncluded ? "Included with Pro"
+                     : storeService.isPro ? "Included with Pro"
                      : StoreNav.price(pack, storeService))
                     .font(.luma(size: 22, weight: .bold,
                                   design: isNumericPrice ? .monospaced : .default))
@@ -1118,8 +1105,6 @@ struct FilterPackDetailView: View {
                             Image(systemName: "arrow.right")
                         } else if unlocked {
                             Text(pack.isFree ? "Install Free" : "Install")
-                        } else if pack.isProIncluded {
-                            Label("Unlock with Pro", systemImage: "crown.fill")
                         } else {
                             Text("Buy pack · \(StoreNav.price(pack, storeService))")
                         }
@@ -1157,7 +1142,7 @@ struct FilterPackDetailView: View {
                 }
                 .buttonStyle(.plain)
             }
-            if !unlocked && !pack.isProIncluded {
+            if !unlocked {
                 Button { showPaywall = true } label: {
                     Text("Or get every pack with Pro")
                         .font(.luma(size: 13, weight: .semibold))

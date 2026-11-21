@@ -114,10 +114,13 @@ shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golde
 shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"
 shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_drive.jpg"
 shot 11-camera 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
-shot 12-filter-pack 6 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-stocks-01"
+shot 12-filter-pack 6 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
+# The export lock with its three ways on, one of them free.
+shot 16-locked-look 10 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_party.jpg" \
+  "${P}SEED_LOCK=Night Drive"
 
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.

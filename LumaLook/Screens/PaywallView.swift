@@ -3,10 +3,11 @@ import StoreKit
 
 // MARK: - Paywall (C5)
 
-/// Pro paywall. Pricing locked (StoreService.LockedPricing): $49.99/yr with a
-/// 7-day free trial, $9.99/mo or $119.99 lifetime. No WEEKLY tier, matching
-/// the anti-subscription wave in the LUT niche. Presented as a sheet from Settings, onboarding,
-/// premium looks, and pack purchases.
+/// Pro paywall. Pricing (StoreService.LockedPricing): $34.99 a year with a
+/// 7-day free trial, $5.99 a month, or $79.99 once for Lifetime, which keeps
+/// Pro and every pack, including packs released later. No WEEKLY tier,
+/// matching the anti-subscription wave in the LUT niche. Presented as a sheet
+/// from Settings, onboarding, premium looks, and pack purchases.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
@@ -29,6 +30,15 @@ struct PaywallView: View {
     }
     private var lifetimePrice: String {
         storeService.proLifetime?.displayPrice ?? StoreService.LockedPricing.lifetime
+    }
+    /// The yearly price spread over twelve months, in the storefront's own
+    /// currency once StoreKit has answered ("$2.92").
+    private var yearlyPerMonth: String {
+        if let product = storeService.proYearly {
+            return (product.price / 12).formatted(product.priceFormatStyle)
+        }
+        return (StoreService.LockedPricing.yearlyAmount / 12)
+            .formatted(.currency(code: "USD"))
     }
 
     /// The look the cover portrait wears.
@@ -162,7 +172,7 @@ struct PaywallView: View {
                 ? "\(yearlyPrice) per year. Cancel anytime."
                 : "Then \(yearlyPrice) per year. Cancel anytime."
         case .monthly:  return "\(monthlyPrice) per month. Cancel anytime."
-        case .lifetime: return nil
+        case .lifetime: return "One payment. No subscription."
         }
     }
 
@@ -171,6 +181,7 @@ struct PaywallView: View {
             PaywallPlanRow(
                 title: "Yearly",
                 price: "\(yearlyPrice) / year",
+                detail: "\(yearlyPerMonth) a month, billed yearly",
                 // The trial badge is a promise, so it shows only when StoreKit
                 // says THIS account can take the offer (same rule as the CTA).
                 badge: yearlyTrialLabel ?? "Best Value",
@@ -179,12 +190,14 @@ struct PaywallView: View {
             PaywallPlanRow(
                 title: "Monthly",
                 price: "\(monthlyPrice) / month",
+                detail: nil,
                 badge: nil,
                 selected: plan == .monthly
             ) { plan = .monthly }
             PaywallPlanRow(
                 title: "Lifetime",
                 price: "\(lifetimePrice) once",
+                detail: "Every pack, including future ones",
                 badge: "Pay Once",
                 selected: plan == .lifetime
             ) { plan = .lifetime }
@@ -268,6 +281,9 @@ private struct PaywallFeatureRow: View {
 private struct PaywallPlanRow: View {
     let title: String
     let price: String
+    /// A quieter third line: the yearly plan's monthly equivalent, or what
+    /// Lifetime keeps.
+    let detail: String?
     let badge: String?
     let selected: Bool
     let action: () -> Void
@@ -283,6 +299,14 @@ private struct PaywallPlanRow: View {
                         .font(.luma(size: 13))
                         .monospacedDigit()
                         .foregroundStyle(LumaTheme.textSecondary)
+                    if let detail {
+                        Text(detail)
+                            .font(.luma(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(LumaTheme.textMuted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
                 }
                 Spacer()
                 if let badge {
@@ -313,30 +337,57 @@ private struct PaywallPlanRow: View {
 
 // MARK: - Locked look
 
+/// Where a premium look was stopped, which decides how its free way out is
+/// worded.
+enum LockedLookContext {
+    /// A file is about to leave the app: an export or a .cube.
+    case export
+    /// The camera, about to record or take a still.
+    case camera
+}
+
 extension View {
-    /// Presents `LockedLookSheet` while `lock` is non-nil. If the purchase
+    /// Presents `LockedLookSheet` while `lock` is non-nil. If a purchase
     /// lands, `onUnlocked` runs once the sheet has fully gone, so the caller
     /// can carry straight on with the export the user asked for instead of
-    /// making them find the button again.
+    /// making them find the button again. `onUseFreeLook` is the free way
+    /// out: the caller swaps in the closest free look and carries on, again
+    /// once the sheet has gone.
     func lockedLookSheet(_ lock: Binding<LookLock?>,
-                         onUnlocked: @escaping () -> Void) -> some View {
-        modifier(LockedLookPresenter(lock: lock, onUnlocked: onUnlocked))
+                         context: LockedLookContext = .export,
+                         onUnlocked: @escaping () -> Void,
+                         onUseFreeLook: (() -> Void)? = nil) -> some View {
+        modifier(LockedLookPresenter(lock: lock, context: context,
+                                     onUnlocked: onUnlocked, onUseFreeLook: onUseFreeLook))
     }
 }
 
 private struct LockedLookPresenter: ViewModifier {
     @Binding var lock: LookLock?
+    let context: LockedLookContext
     let onUnlocked: () -> Void
+    let onUseFreeLook: (() -> Void)?
     @State private var didUnlock = false
+    @State private var choseFreeLook = false
 
     func body(content: Content) -> some View {
         content.sheet(item: $lock, onDismiss: {
-            guard didUnlock else { return }
-            didUnlock = false
-            onUnlocked()
+            if didUnlock {
+                didUnlock = false
+                choseFreeLook = false
+                onUnlocked()
+            } else if choseFreeLook {
+                choseFreeLook = false
+                onUseFreeLook?()
+            }
         }) { shown in
-            LockedLookSheet(lock: shown) { didUnlock = true }
-                .presentationDetents([.medium])
+            LockedLookSheet(lock: shown, context: context,
+                            offersFreeLook: onUseFreeLook != nil,
+                            onUnlocked: { didUnlock = true },
+                            onUseFreeLook: { choseFreeLook = true })
+                // Fitted to the three choices; it can still be pulled up if
+                // a large text size needs the room.
+                .presentationDetents([.height(context == .export ? 448 : 424), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color.black)
         }
@@ -345,11 +396,16 @@ private struct LockedLookPresenter: ViewModifier {
 
 /// Shown when a premium look is about to leave the app (an export, a
 /// recording, a still, a .cube). The look has already graded the footage for
-/// free; this sheet sells the one pack that contains it, or Pro, and gets out
-/// of the way the moment either purchase lands.
+/// free. The sheet offers three ways on and no dead end: buy the one pack that
+/// contains the look and keep it, go Pro for every look, or carry on with the
+/// closest free look, keeping every other edit. It gets out of the way the
+/// moment a purchase lands.
 struct LockedLookSheet: View {
     let lock: LookLock
+    let context: LockedLookContext
+    let offersFreeLook: Bool
     let onUnlocked: () -> Void
+    let onUseFreeLook: () -> Void
 
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
@@ -359,6 +415,10 @@ struct LockedLookSheet: View {
     @State private var errorMessage: String?
 
     private var preset: LookPreset? { MockData.looks.first { $0.name == lock.lookName } }
+    /// The free look the third choice swaps in.
+    private var freeLook: LookPreset? {
+        preset.map(MockData.freeAlternative(to:)).flatMap { $0.isPremium ? nil : $0 }
+    }
     private var isUnlocked: Bool {
         guard let preset else { return true }
         return storeService.lock(forBuiltIn: preset) == nil
@@ -366,50 +426,38 @@ struct LockedLookSheet: View {
     private var packProduct: Product? {
         lock.pack.flatMap { storeService.packProducts[$0.id] }
     }
-    private var swatch: [Color] {
-        let colours = preset?.colours ?? []
+    private var swatch: [Color] { Self.swatch(for: preset) }
+
+    private static func swatch(for look: LookPreset?) -> [Color] {
+        let colours = look?.colours ?? []
         return colours.count >= 2 ? colours : [Color(white: 0.3), Color(white: 0.12)]
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(LinearGradient(colors: swatch, startPoint: .topLeading,
-                                     endPoint: .bottomTrailing))
-                .frame(width: 76, height: 76)
-                .overlay {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
-                }
-                .padding(.top, 26)
-                .accessibilityHidden(true)
-
-            Text(lock.lookName)
-                .font(.luma(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .padding(.top, 16)
-
-            Text(message)
-                .font(.luma(size: 14))
-                .foregroundStyle(.white.opacity(0.62))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-                .padding(.horizontal, 28)
+            header
+                .padding(.top, 30)
+                .padding(.horizontal, 22)
 
             Spacer(minLength: 18)
 
             VStack(spacing: 10) {
                 if let pack = lock.pack {
-                    primaryButton(packButtonTitle(pack)) { buyPack() }
+                    primaryButton("Buy \(pack.name) · \(packPrice(pack))") { buyPack() }
                         .disabled(packProduct == nil || storeService.purchaseInFlight)
                         .opacity(packProduct == nil ? 0.45 : 1)
-                    secondaryButton("Unlock every look with Pro") { showPaywall = true }
+                    secondaryButton("Get Pro for every look") { showPaywall = true }
                 } else {
-                    primaryButton("Unlock with Pro") { showPaywall = true }
+                    primaryButton("Get Pro for every look") { showPaywall = true }
+                }
+                if offersFreeLook, let freeLook {
+                    freeLookButton(freeLook)
+                }
+                if context == .export {
+                    Text("Your edit is saved either way")
+                        .font(.luma(size: 12))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 2)
                 }
                 Button {
                     restore()
@@ -453,16 +501,52 @@ struct LockedLookSheet: View {
         }
     }
 
-    private var message: String {
-        if let pack = lock.pack {
-            return "Part of \(pack.name). Preview it as much as you like; to export it, get the pack or go Pro."
+    /// The look's swatch with a lock on it, beside what the look is and what
+    /// it costs, so the price is the first thing read and never a surprise.
+    private var header: some View {
+        HStack(alignment: .center, spacing: 14) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LinearGradient(colors: swatch, startPoint: .topLeading,
+                                     endPoint: .bottomTrailing))
+                .frame(width: 62, height: 62)
+                .overlay {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+                }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(context == .export ? "This edit uses" : "This shot uses")
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(lock.lookName)
+                    .font(.luma(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(subtitle)
+                    .font(.luma(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
-        return "A Pro look. Preview it as much as you like; to export it, go Pro."
+        .accessibilityElement(children: .combine)
     }
 
-    private func packButtonTitle(_ pack: LookPack) -> String {
-        let price = packProduct?.displayPrice ?? pack.price
-        return "Get \(pack.name) · \(price)"
+    private var subtitle: String {
+        if let pack = lock.pack {
+            return "\(pack.name) · \(packPrice(pack)) · yours to keep"
+        }
+        return "Included with Pro"
+    }
+
+    private func packPrice(_ pack: LookPack) -> String {
+        packProduct?.displayPrice ?? pack.price
     }
 
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -496,6 +580,37 @@ struct LockedLookSheet: View {
         }
         .buttonStyle(.lumaPress)
         .disabled(storeService.purchaseInFlight)
+    }
+
+    /// The free way out, set apart as an outline so it never competes with
+    /// the purchase, and naming the exact look it swaps in.
+    private func freeLookButton(_ look: LookPreset) -> some View {
+        Button {
+            LumaHaptics.shared.tap()
+            onUseFreeLook()
+            dismiss()
+        } label: {
+            HStack(spacing: 9) {
+                Circle()
+                    .fill(LinearGradient(colors: Self.swatch(for: look),
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 14, height: 14)
+                    .accessibilityHidden(true)
+                Text("\(context == .export ? "Export" : "Shoot") with \(look.name)")
+                    .font(.luma(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(storeService.purchaseInFlight)
+        .accessibilityHint("Swaps in a free look and keeps your other edits")
     }
 
     private func buyPack() {

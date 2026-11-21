@@ -1753,6 +1753,22 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// Rewrites clip and adjustment-layer grades in one undo step. `change`
+    /// returns the new grade, or nil to leave that one alone.
+    func replaceGrades(_ change: (ClipGrade) -> ClipGrade?) {
+        let clipChanges = clips.indices.compactMap { i in
+            clips[i].grade.flatMap(change).map { (i, $0) }
+        }
+        let layerChanges = adjustmentLayers.indices.compactMap { i in
+            change(adjustmentLayers[i].grade).map { (i, $0) }
+        }
+        guard !clipChanges.isEmpty || !layerChanges.isEmpty else { return }
+        pushUndoSnapshot()
+        for (i, grade) in clipChanges { clips[i].grade = grade }
+        for (i, grade) in layerChanges { adjustmentLayers[i].grade = grade }
+        rebuild()
+    }
+
     /// Copy-grade-to-all: every clip wears the same override in one undo step.
     func applyGradeToAllClips(_ grade: ClipGrade?) {
         guard clips.contains(where: { $0.grade != grade }) else { return }
