@@ -925,6 +925,9 @@ extension EditorTimelineView {
                     tool = .trim
                 case "speed":     tool = .speed
                 case "clipaudio": tool = .clipAudio
+                case "transition":
+                    transitionAfterID = editor.clips.first?.id
+                    tool = .transition
                 case "overlay":
                     selectedOverlayID = editor.overlays.first?.id
                     if editor.overlays.first != nil { tool = .overlay }
@@ -2398,7 +2401,10 @@ private struct EditorContent: View {
                            onTapOverlay: { id in selectedOverlayID = id; tool = .overlay },
                            onRecordVoiceover: { tool = .voice },
                            onAddClip: onAddClip,
-                           zoom: $timelineZoom)
+                           zoom: $timelineZoom,
+                           onAddText: addText,
+                           globalLookName: (app.settings.intensity > 0 && app.selectedLUT == nil)
+                               ? app.selectedLook.name : nil)
                 .padding(.bottom, 8)
         }
     }
