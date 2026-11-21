@@ -1651,7 +1651,7 @@ final class EditorState: ObservableObject {
             let url = track.url
             let id = track.id
             Task.detached(priority: .utility) {
-                let samples = Self.waveformSamples(url: url)
+                let samples = await Self.waveformSamples(url: url)
                 await MainActor.run { [weak self] in
                     guard let self,
                           let i = self.audioTracks.firstIndex(where: { $0.id == id }) else { return }
@@ -1661,9 +1661,12 @@ final class EditorState: ObservableObject {
         }
     }
 
-    nonisolated static func waveformSamples(url: URL, buckets: Int = 140) -> [Float] {
+    /// Async so the track and duration load the iOS 16 way; being
+    /// nonisolated, the decode itself also runs off the main actor.
+    nonisolated static func waveformSamples(url: URL, buckets: Int = 140) async -> [Float] {
         let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .audio).first,
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first,
+              let totalSeconds = try? await asset.load(.duration).seconds,
               let reader = try? AVAssetReader(asset: asset) else { return [] }
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
@@ -1678,7 +1681,6 @@ final class EditorState: ObservableObject {
 
         var sums = [Double](repeating: 0, count: buckets)
         var counts = [Int](repeating: 0, count: buckets)
-        let totalSeconds = asset.duration.seconds
         guard totalSeconds > 0 else { return [] }
 
         while reader.status == .reading, let buffer = output.copyNextSampleBuffer() {
@@ -3575,7 +3577,7 @@ final class EditorState: ObservableObject {
            let src = audioTracks.first(where: { $0.id == cfg.sourceTrackID }) ?? audioTracks.first {
             let frames = max(1, Int(cursor.seconds * 30) + 1)
             var levels = [Float](repeating: 0, count: frames)
-            let srcBuckets = Self.waveformSamples(url: src.renderedFileURL ?? src.url,
+            let srcBuckets = await Self.waveformSamples(url: src.renderedFileURL ?? src.url,
                                                   buckets: max(2, Int(src.timelineDuration * 30)))
             let maxV = srcBuckets.max() ?? 1
             let startFrame = Int(src.timelineOffset * 30)

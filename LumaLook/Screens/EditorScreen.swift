@@ -1895,7 +1895,7 @@ private struct EditorContent: View {
         let url = clip.url
         Task {
             let samples = await Task.detached(priority: .utility) {
-                EditorState.waveformSamples(url: url)
+                await EditorState.waveformSamples(url: url)
             }.value
             if !samples.isEmpty { clipWaveforms[id] = samples }
         }
