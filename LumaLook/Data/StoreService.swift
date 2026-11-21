@@ -139,7 +139,7 @@ final class StoreService: ObservableObject {
         }
         var pro = false
         var packs: Set<String> = []
-        // Qualified: RevenueCat also declares a (retired) `Transaction`.
+        // Qualified to keep StoreKit's Transaction apart from RevenueCat's types.
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
