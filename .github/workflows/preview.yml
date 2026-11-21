@@ -1,0 +1,157 @@
+# Preview: see the app running without a Mac or an iPhone.
+#
+# Builds the Debug app for the iOS Simulator on a GitHub macOS runner, opens
+# each main screen in an iPhone simulator, and keeps what it saw as the
+# "lumalook-preview" artifact on the run's page: a screenshot of every
+# screen, a short screen recording, and the logs.
+#
+# It also keeps "lumalook-simulator-app", a zipped simulator build that runs
+# in a web browser on Appetize (appetize.io): upload the zip there, choose
+# iOS, and the app opens in a streamed iPhone. To have each run do that
+# itself, add an Appetize API token as the repository secret
+# APPETIZE_API_TOKEN. The first upload prints a link; save its key as the
+# repository variable APPETIZE_PUBLIC_KEY and later runs update that same
+# link instead of making a new one.
+name: Preview
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Simulator preview
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      BUNDLE_ID: com.emotiveimpact.lumalook
+      OUT: ${{ github.workspace }}/preview
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build for the iOS Simulator (Debug)
+        run: |
+          xcodebuild -version
+          LOG="$RUNNER_TEMP/build.log"
+          # Debug keeps the launch hooks that open each screen directly.
+          # Apple silicon simulator only, which is also what Appetize prefers.
+          if xcodebuild build \
+              -project LumaLook.xcodeproj \
+              -scheme LumaLook \
+              -configuration Debug \
+              -destination 'generic/platform=iOS Simulator' \
+              -derivedDataPath "$RUNNER_TEMP/dd" \
+              -disableAutomaticPackageResolution \
+              -skipPackagePluginValidation \
+              -skipMacroValidation \
+              ARCHS=arm64 \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              > "$LOG" 2>&1; then
+            APP=$(find "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name '*.app' | head -1)
+            # The simulator only runs signed code; an ad hoc signature is enough.
+            codesign --force --deep --sign - "$APP"
+            echo "APP=$APP" >> "$GITHUB_ENV"
+            echo "Built $APP"
+          else
+            tail -150 "$LOG" || true
+            echo "Errors (deduplicated):"
+            grep -E 'error: ' "$LOG" | sed "s|$GITHUB_WORKSPACE/||" | sort -u | head -100 || true
+            exit 1
+          fi
+
+      - name: Package the simulator build for Appetize
+        run: |
+          mkdir -p "$RUNNER_TEMP/appetize"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/appetize/LumaLook-simulator.zip"
+          ls -lh "$RUNNER_TEMP/appetize"
+
+      - name: Open each screen in the simulator
+        run: bash .github/scripts/simulator_preview.sh "$APP" "$OUT"
+
+      - name: Keep the screenshots, recording and logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: lumalook-preview
+          path: preview
+          if-no-files-found: warn
+
+      - name: Keep the simulator build
+        uses: actions/upload-artifact@v5
+        with:
+          name: lumalook-simulator-app
+          path: ${{ runner.temp }}/appetize/LumaLook-simulator.zip
+
+      - name: Put it on Appetize (when a token is set)
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_PUBLIC_KEY: ${{ vars.APPETIZE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then
+            echo "No APPETIZE_API_TOKEN secret, so the zip is only kept as an artifact."
+            exit 0
+          fi
+          URL=https://api.appetize.io/v1/apps
+          if [ -n "$APPETIZE_PUBLIC_KEY" ]; then URL="$URL/$APPETIZE_PUBLIC_KEY"; fi
+          RESPONSE=$(curl -sS --fail-with-body -X POST "$URL" \
+            -H "X-API-KEY: $APPETIZE_API_TOKEN" \
+            -F "file=@$RUNNER_TEMP/appetize/LumaLook-simulator.zip" \
+            -F "platform=ios" \
+            --form-string "note=${GITHUB_REF_NAME} ${GITHUB_SHA:0:7}")
+          KEY=$(printf '%s' "$RESPONSE" | python3 -c 'import json, sys; print(json.load(sys.stdin)["publicKey"])')
+          LINK="https://appetize.io/app/$KEY"
+          echo "::notice::Try LumaLook in the browser: $LINK"
+          echo "### Try it in the browser: $LINK" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+            echo "Save $KEY as the repository variable APPETIZE_PUBLIC_KEY to keep this link for later runs."
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## LumaLook preview"
+            cat "$OUT/summary.txt" 2>/dev/null || echo "The simulator step did not finish."
+            echo
+            echo "Screenshots and the recording are in the lumalook-preview artifact below."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Small copies of the screenshots and the recording, printed as text so
+      # tools that can read the log but not download artifacts can show them.
+      - name: Print small copies for log readers
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/small"
+          emit() {
+            echo "=====LUMA-FILE-BEGIN $(basename "$1")====="
+            base64 -i "$1" | fold -w 8000
+            echo "=====LUMA-FILE-END====="
+          }
+          for png in "$OUT"/screens/*.png; do
+            [ -f "$png" ] || continue
+            jpg="$RUNNER_TEMP/small/$(basename "${png%.png}").jpg"
+            sips -s format jpeg -s formatOptions 72 -Z 1400 "$png" --out "$jpg" > /dev/null
+            emit "$jpg"
+          done
+          VIDEO="$OUT/lumalook-preview.mp4"
+          if [ -f "$VIDEO" ]; then
+            SMALL="$RUNNER_TEMP/small/lumalook-preview.mp4"
+            if [ "$(stat -f %z "$VIDEO")" -le 4000000 ]; then
+              cp "$VIDEO" "$SMALL"
+            else
+              avconvert --source "$VIDEO" --output "$SMALL" --preset Preset1280x720 > /dev/null 2>&1 || true
+            fi
+            if [ -f "$SMALL" ] && [ "$(stat -f %z "$SMALL")" -le 6000000 ]; then
+              emit "$SMALL"
+            fi
+          fi
