@@ -925,6 +925,7 @@ extension EditorTimelineView {
                     tool = .trim
                 case "speed":     tool = .speed
                 case "clipaudio": tool = .clipAudio
+                case "audioAdd":  tool = .audioAdd
                 case "transition":
                     transitionAfterID = editor.clips.first?.id
                     tool = .transition

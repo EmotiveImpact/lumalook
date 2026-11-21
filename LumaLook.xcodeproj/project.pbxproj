@@ -247,6 +247,10 @@
 		D8DF3BCB067AF4690548272E /* CaptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE94653316DEC2E97CB9739 /* CaptionsPanel.swift */; };
 		131BF97D5BB50B59B8A67D58 /* GradeWipeStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88EECED87B24E55280559CBD /* GradeWipeStage.swift */; };
 		BD4C9B50C63A9CB36727E70F /* PhotoEditParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360C6B45AED41EB753BA1533 /* PhotoEditParts.swift */; };
+		38394547F09451CBD7BF145F /* MusicSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25292B95B57D029BB26D42BB /* MusicSynth.swift */; };
+		12603F97C2AC7AD4BA6ABD85 /* MusicCatalogue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3703D5225ED1B555905607FE /* MusicCatalogue.swift */; };
+		C008E6877980CC8CE5716134 /* EdgeStripRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F53129116AE3AE05A47B1F39 /* EdgeStripRenderer.swift */; };
+		9499CB13C195D4C8A2DD68A3 /* MusicLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBB92B2FCCF82A31F28E985 /* MusicLibraryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -490,6 +494,10 @@
 		0DE94653316DEC2E97CB9739 /* CaptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionsPanel.swift; sourceTree = "<group>"; };
 		88EECED87B24E55280559CBD /* GradeWipeStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradeWipeStage.swift; sourceTree = "<group>"; };
 		360C6B45AED41EB753BA1533 /* PhotoEditParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoEditParts.swift; sourceTree = "<group>"; };
+		25292B95B57D029BB26D42BB /* MusicSynth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSynth.swift; sourceTree = "<group>"; };
+		3703D5225ED1B555905607FE /* MusicCatalogue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCatalogue.swift; sourceTree = "<group>"; };
+		F53129116AE3AE05A47B1F39 /* EdgeStripRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeStripRenderer.swift; sourceTree = "<group>"; };
+		FCBB92B2FCCF82A31F28E985 /* MusicLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -581,6 +589,7 @@
 				460EE20F6C05E2ED3E53AE8E /* CropStraightenView.swift */,
 				D4DD4DDD981844A8DA82DBE6 /* EditorToolPanel.swift */,
 				3DBC4F6939DD535E66444EAD /* MaskPanel.swift */,
+				FCBB92B2FCCF82A31F28E985 /* MusicLibraryView.swift */,
 				B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */,
 				57D85C68EA6204E1F8006C6F /* PipPresets.swift */,
 				A25EF472896C678306B040FD /* StickerLibraryView.swift */,
@@ -808,6 +817,7 @@
 				B147754600B3B5803C3E0583 /* ClipBaker.swift */,
 				05BB58FB882FE612A9E05282 /* ColorMath.swift */,
 				7AA08992541F083516DB8EDC /* CompareRenderer.swift */,
+				F53129116AE3AE05A47B1F39 /* EdgeStripRenderer.swift */,
 				F0D5019E6B352C1E5949AED6 /* EffectRenderer.swift */,
 				E65F3D06E343A952A0D76E59 /* FocusPeakingRenderer.swift */,
 				3147E19399C92E044FD19FA1 /* FontLibrary.swift */,
@@ -823,6 +833,8 @@
 				76D8A73C3269BB88CFCC25E0 /* LUTParser.swift */,
 				07F185F22913641FEE760D92 /* LUTRepository.swift */,
 				8BE5250A66AE2808502F169B /* MaskRenderer.swift */,
+				3703D5225ED1B555905607FE /* MusicCatalogue.swift */,
+				25292B95B57D029BB26D42BB /* MusicSynth.swift */,
 				27BDCC75439CF538EEC13FFC /* OverlayEffects.swift */,
 				0D865130564F1DCF5BD588FA /* OverlayMaskRenderer.swift */,
 				E4FF77FE3E2BBB2267FBEF59 /* ParticleRenderer.swift */,
@@ -1112,6 +1124,7 @@
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
 				0B9B56EF76DDB1F7FED0BF62 /* CompareRenderer.swift in Sources */,
 				30146DEC8AFAB24B50660895 /* CropStraightenView.swift in Sources */,
+				C008E6877980CC8CE5716134 /* EdgeStripRenderer.swift in Sources */,
 				1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */,
 				E53EB01F9C05F5E275459125 /* EditorScreen.swift in Sources */,
 				28EB20FD36E33D16C6DF53D2 /* EditorToolPanel.swift in Sources */,
@@ -1157,6 +1170,9 @@
 				C5CD14F371ED4259C2147F3E /* MaskRenderer.swift in Sources */,
 				22149D2B572771131F02C893 /* MockData.swift in Sources */,
 				EC8683A582BBE2FBFF7BBA91 /* MoreScreens.swift in Sources */,
+				12603F97C2AC7AD4BA6ABD85 /* MusicCatalogue.swift in Sources */,
+				9499CB13C195D4C8A2DD68A3 /* MusicLibraryView.swift in Sources */,
+				38394547F09451CBD7BF145F /* MusicSynth.swift in Sources */,
 				6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */,
 				798655A76AD5DCFEC392AC32 /* OverlayEffects.swift in Sources */,
 				6430F8F146CF27F16B0FCB7D /* OverlayEffectsPanel.swift in Sources */,

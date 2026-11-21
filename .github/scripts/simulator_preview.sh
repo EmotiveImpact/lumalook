@@ -116,6 +116,7 @@ shot 10d-editor-more 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_ED
 shot 10e-editor-captions 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=captions"
 shot 10f-editor-speed 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_RAMP=hero" "${P}SEED_TOOLPANEL=speed"
 shot 10g-editor-transition 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=transition"
+shot 10h-editor-music 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
 shot 11-camera 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
 shot 12-filter-pack 6 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
