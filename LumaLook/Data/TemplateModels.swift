@@ -131,7 +131,7 @@ enum TemplateLibrary {
             icon: "waveform",
             aspect: "9:16",
             slots: run(8, duration: 0.5, transition: "slideLeft", transitionDuration: 0.12),
-            lookName: "Neon Nights",
+            lookName: "AG60 · London Rain",
             audioReactive: "pulse"
         ),
         VideoTemplate(
@@ -159,7 +159,7 @@ enum TemplateLibrary {
                 TemplateSlot(duration: 2.0, transitionAfter: "dissolve", transitionDuration: 0.3, kenBurns: "zoomOut"),
                 TemplateSlot(duration: 2.0, kenBurns: "zoomOut")
             ],
-            lookName: "CN83 · Teal & Orange"
+            lookName: "KD4 · Clean Neutral"
         )
     ]
 

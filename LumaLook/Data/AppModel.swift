@@ -214,7 +214,7 @@ final class AppModel: ObservableObject {
             self?.previewFrame = CIImage(cgImage: result.image)
         }
     }
-    @Published var selectedLook: LookPreset = MockData.looks[2] {
+    @Published var selectedLook: LookPreset = MockData.defaultLook {
         didSet { syncLookState() }
     }
     @Published var selectedLUT: LUTFile? {
