@@ -523,43 +523,34 @@ struct BeforeAfterView: View {
 
     private var instructionBar: some View {
         let strength = Int(app.settings.intensity.rounded())
-        return ZStack {
+        let colour = app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+            ?? app.selectedLook.signature
+        return HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Back to looks")
+
+            Spacer(minLength: 0)
             Group {
                 if strength == 0 {
-                    Text("Showing the original")
-                        .font(.luma(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                    Text("Original")
+                        .font(.luma(size: 14, weight: .medium))
+                        .foregroundStyle(LumaTheme.textMuted)
                 } else {
-                    HStack(spacing: 7) {
-                        Text(lookName)
-                            .font(.luma(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                        Text("\(strength)%")
-                            .font(.luma(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    LookChip(name: lookName, colour: colour, size: 12)
                 }
             }
             .lineLimit(1)
-            // Clears the wider of the two edge controls on both sides, so the
-            // statement is optically centred and can never slide under the CTA.
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 132)
             .allowsHitTesting(false)
+            Spacer(minLength: 0)
 
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Back to looks")
-                Spacer(minLength: 0)
-                exportButton
-            }
+            exportButton
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
@@ -582,10 +573,11 @@ struct BeforeAfterView: View {
         } label: {
             Text("Apply & export")
                 .font(.luma(size: 15, weight: .semibold))
-                .foregroundStyle(.black)
+                .foregroundStyle(LumaTheme.onLight)
                 .padding(.horizontal, 18)
-                .frame(height: 40)
-                .background(.white, in: Capsule())
+                .frame(height: 42)
+                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
     }

@@ -1001,7 +1001,9 @@ struct FilterPackDetailView: View {
             }
             .padding(.vertical, 2)
         }
-        .lumaEdgeFade()
+        // A light leading fade, so the first tile's caption is not eaten at
+        // rest; the trailing fade still says the rail scrolls.
+        .lumaEdgeFade(leading: 6, trailing: 24)
     }
 
     // MARK: Try before buy

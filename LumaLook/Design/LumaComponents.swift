@@ -531,7 +531,10 @@ struct LumaTabBar: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(leading, id: \.self) { tabButton($0) }
-            Color.clear.frame(width: 84)
+            // Room for the shutter. Height is pinned: an unsized Color is
+            // greedy, and inside the bottom safe-area inset it stretched the
+            // whole bar up the screen.
+            Color.clear.frame(width: 84, height: 1)
             ForEach(trailing, id: \.self) { tabButton($0) }
         }
         .padding(.horizontal, 8)
