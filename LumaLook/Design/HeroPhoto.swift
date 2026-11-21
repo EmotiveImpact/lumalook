@@ -67,6 +67,13 @@ enum HeroPhoto: String, CaseIterable {
         }
     }
 
+    /// The crop anchor that keeps `focus` in frame when the photo fills a
+    /// box of a different shape.
+    var cropAlignment: Alignment {
+        Alignment(horizontal: focus.x < 0.4 ? .leading : (focus.x > 0.6 ? .trailing : .center),
+                  vertical: focus.y < 0.4 ? .top : (focus.y > 0.6 ? .bottom : .center))
+    }
+
     private static var cache: [String: UIImage] = [:]
 
     var url: URL? { Bundle.main.url(forResource: rawValue, withExtension: "jpg") }
@@ -108,8 +115,7 @@ struct HeroImage: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height,
-                                   alignment: Alignment(horizontal: photo.focus.x < 0.4 ? .leading : (photo.focus.x > 0.6 ? .trailing : .center),
-                                                        vertical: photo.focus.y < 0.4 ? .top : (photo.focus.y > 0.6 ? .bottom : .center)))
+                                   alignment: photo.cropAlignment)
                     }
                 } else {
                     LumaTheme.surfaceStrong
@@ -121,5 +127,49 @@ struct HeroImage: View {
             // beside) a Button would steal taps from its neighbours. Match the
             // touch region to the visible shape.
             .contentShape(RoundedRectangle(cornerRadius: radius))
+    }
+}
+
+/// A sample photo graded with one of the built-in looks, rendered once off
+/// the main thread through the real pipeline. Shows the ungraded photo until
+/// the grade is ready.
+struct GradedHeroImage: View {
+    let photo: HeroPhoto
+    let lookName: String
+    var radius: CGFloat = 0
+    @State private var image: CGImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let image {
+                    GeometryReader { geo in
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height,
+                                   alignment: photo.cropAlignment)
+                    }
+                    .transition(.opacity)
+                } else {
+                    HeroImage(photo: photo)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .contentShape(RoundedRectangle(cornerRadius: radius))
+            .animation(.easeOut(duration: 0.6), value: image != nil)
+            .task(id: "\(photo.rawValue)|\(lookName)") {
+                let recipe = MockData.looks.first { $0.name == lookName }?.recipe ?? LookRecipe()
+                let source = photo
+                image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+                    guard let ci = source.ciImage else { return nil }
+                    let state = LookState()
+                    state.recipe = recipe
+                    var settings = LookSettings()
+                    settings.intensity = 100
+                    state.settings = settings
+                    return LookPipeline.shared.gradedStill(ci, state: state, maxDimension: 1200)
+                }.value
+            }
     }
 }

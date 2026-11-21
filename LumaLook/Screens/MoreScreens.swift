@@ -776,10 +776,10 @@ struct FilterPackDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LumaTheme.ink.ignoresSafeArea()
             VStack(spacing: 0) {
                 heroBlock
-                    .frame(height: 250)
+                    .frame(height: 270)
                 drawer
             }
         }
@@ -817,6 +817,8 @@ struct FilterPackDetailView: View {
 
     // MARK: Hero — the pack's own grade, never stock art, never written over
 
+    /// Full-bleed cover in the pack's own grade, fading into ink, with the
+    /// count in a glass pill.
     private var heroBlock: some View {
         GeometryReader { geo in
             Group {
@@ -829,13 +831,30 @@ struct FilterPackDetailView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipped()
             // Hero overflows its frame; confine hit-testing so it cannot cover
             // the controls sitting under it.
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(Rectangle())
+            .overlay {
+                LinearGradient(stops: [
+                    .init(color: .black.opacity(0.35), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: LumaTheme.ink.opacity(0.4), location: 0.62),
+                    .init(color: LumaTheme.ink, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
+        .ignoresSafeArea(edges: .top)
+        .overlay(alignment: .topTrailing) {
+            Text("\(pack.looks.count) looks")
+                .font(.luma(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lumaGlassPill()
+                .padding(.trailing, 16)
+                .padding(.top, 6)
+        }
     }
 
     // MARK: Drawer
@@ -895,16 +914,21 @@ struct FilterPackDetailView: View {
         .background(Color.black)
     }
 
+    /// "Film Stocks 01" sets as a light "Film Stocks" and a heavy "01".
+    private var nameParts: (light: String, heavy: String) {
+        let words = pack.name.split(separator: " ").map(String.init)
+        guard words.count > 1, let last = words.last else { return ("", pack.name) }
+        return (words.dropLast().joined(separator: " "), last)
+    }
+
     private var titleBlock: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                (wordText("Pack · ", 12, 0.55)
-                 + numText("\(pack.looks.count)", 13, 0.72)
-                 + wordText(" looks", 12, 0.55))
+                Text("Pack · \(pack.eraTag)")
+                    .font(.luma(size: 13, weight: .semibold))
+                    .foregroundStyle(LumaTheme.signal)
                     .lineLimit(1)
-                Text(pack.name)
-                    .font(.luma(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+                LumaHeadline(light: nameParts.light, heavy: nameParts.heavy, size: 32)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                 // A look NAME is a name, not a readout.
@@ -952,10 +976,16 @@ struct FilterPackDetailView: View {
                             // the tile so it cannot steal its neighbour's tap.
                             .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                             .overlay {
-                                if active {
-                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                        .strokeBorder(.white, lineWidth: 2)
-                                }
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .strokeBorder(active ? look.signature : LumaTheme.hairline,
+                                                  lineWidth: active ? 2 : 1)
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                Circle()
+                                    .fill(look.signature)
+                                    .frame(width: 7, height: 7)
+                                    .shadow(color: look.signature, radius: 4)
+                                    .padding(6)
                             }
                             Text(look.name)
                                 .font(.luma(size: 11.5, weight: active ? .semibold : .medium))
@@ -1093,12 +1123,15 @@ struct FilterPackDetailView: View {
                         }
                     }
                     .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.black)
+                    // Paying or unlocking is the screen's one main action, so
+                    // it speaks signal; installing and opening stay white.
+                    .foregroundStyle(unlocked || installed ? LumaTheme.onLight : LumaTheme.onSignal)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(unlocked || installed ? LumaTheme.textPrimary : LumaTheme.signal,
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
                 .disabled(storeService.purchaseInFlight)
@@ -2198,6 +2231,7 @@ struct SettingsSubscriptionView: View {
     @State private var showPaywall = false
     @State private var showExportQuality = false
     @State private var showAbout = false
+    @State private var showPhotoCredits = false
     @State private var showManageSubscriptions = false
     @State private var showLanguageNotice = false
     @State private var showStorageDetail = false
@@ -2239,6 +2273,11 @@ struct SettingsSubscriptionView: View {
             aboutSheet
                 .presentationDetents([.medium])
                 .presentationBackground(Color.black)
+        }
+        .sheet(isPresented: $showPhotoCredits) {
+            PhotoCreditsSheet()
+                .presentationDetents([.medium, .large])
+                .presentationBackground(LumaTheme.ink)
         }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         // Every restore says what happened — success, nothing found, or error.
@@ -2414,6 +2453,9 @@ struct SettingsSubscriptionView: View {
                 settingsRow(icon: "doc.text", title: "Terms of Use",
                             opensExternally: true) {
                     LumaLegal.open(LumaLegal.terms)
+                }
+                settingsRow(icon: "photo.on.rectangle", title: "Photo credits") {
+                    showPhotoCredits = true
                 }
                 settingsRow(icon: "info.circle", title: "About LumaLook",
                             value: "v\(Self.appVersion)", valueIsNumber: true) {
@@ -2672,5 +2714,54 @@ struct SettingsSubscriptionView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Photo credits
+
+/// The photographers behind the sample photos, with a link to each original.
+/// Unsplash Licence: credit is not required, but it is the right thing to do.
+struct PhotoCreditsSheet: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Photo credits")
+                    .font(.luma(size: 22, weight: .bold))
+                    .kerning(-0.6)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .padding(.top, 26)
+                Text("Sample photos are from Unsplash, used under the Unsplash Licence.")
+                    .font(.luma(size: 14))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .padding(.top, 4)
+                    .padding(.bottom, 16)
+                ForEach(HeroPhoto.allCases, id: \.self) { photo in
+                    Button {
+                        if let url = photo.sourceURL { openURL(url) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            HeroImage(photo: photo, radius: 9)
+                                .frame(width: 44, height: 44)
+                            Text(photo.photographer)
+                                .font(.luma(size: 15, weight: .medium))
+                                .foregroundStyle(LumaTheme.textPrimary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(LumaTheme.textMuted)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("Photo by \(photo.photographer), opens Unsplash")
+                    Rectangle().fill(LumaTheme.hairline).frame(height: 1)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 24)
+        }
     }
 }

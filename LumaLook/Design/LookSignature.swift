@@ -269,6 +269,85 @@ struct LumaRuler: View {
     }
 }
 
+// MARK: - Continuous ruler
+
+/// The strength ruler: fine ticks every 2.5, labelled every 25, dragged
+/// continuously under a needle in the look's colour. Light haptic every 5.
+struct LumaStrengthRuler: View {
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...100
+    var needle: Color = LumaTheme.signal
+
+    @State private var dragStart: Double?
+    private let pointsPerUnit: CGFloat = 2.6
+    private var detent: Int { Int(value / 5) }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Canvas { context, size in
+                let mid = size.width / 2
+                var unit = range.lowerBound
+                var fine = Path()
+                var major = Path()
+                while unit <= range.upperBound + 0.001 {
+                    let x = mid + CGFloat(unit - value) * pointsPerUnit
+                    if x > -20, x < size.width + 20 {
+                        let isMajor = Int(unit.rounded()) % 25 == 0
+                        if isMajor {
+                            major.move(to: CGPoint(x: x, y: 4))
+                            major.addLine(to: CGPoint(x: x, y: 22))
+                            let label = Text("\(Int(unit.rounded()))")
+                                .font(.luma(size: 12, weight: .medium))
+                                .monospacedDigit()
+                                .foregroundStyle(LumaTheme.textSecondary)
+                            context.draw(label, at: CGPoint(x: x, y: 36), anchor: .center)
+                        } else {
+                            fine.move(to: CGPoint(x: x, y: 8))
+                            fine.addLine(to: CGPoint(x: x, y: 17))
+                        }
+                    }
+                    unit += 2.5
+                }
+                context.stroke(fine, with: .color(.white.opacity(0.3)), lineWidth: 1)
+                context.stroke(major, with: .color(.white.opacity(0.72)), lineWidth: 1.5)
+            }
+            Capsule()
+                .fill(needle)
+                .frame(width: 2.5, height: 28)
+                .shadow(color: needle.opacity(0.8), radius: 6)
+                .allowsHitTesting(false)
+        }
+        .frame(height: 48)
+        .frame(maxWidth: .infinity)
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: 0.2),
+                .init(color: .black, location: 0.8),
+                .init(color: .clear, location: 1),
+            ], startPoint: .leading, endPoint: .trailing)
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { drag in
+                    if dragStart == nil { dragStart = value }
+                    let delta = Double(-drag.translation.width / pointsPerUnit)
+                    value = min(max(range.lowerBound, (dragStart ?? value) + delta), range.upperBound)
+                }
+                .onEnded { _ in dragStart = nil }
+        )
+        .sensoryFeedback(.selection, trigger: detent)
+        .accessibilityElement()
+        .accessibilityLabel("Strength")
+        .accessibilityValue("\(Int(value.rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            let step: Double = direction == .increment ? 5 : -5
+            value = min(max(range.lowerBound, value + step), range.upperBound)
+        }
+    }
+}
+
 // MARK: - Glass pill
 
 extension View {
