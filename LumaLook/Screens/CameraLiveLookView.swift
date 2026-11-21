@@ -67,6 +67,7 @@ import Photos
 
 struct CameraLiveLookView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraController()
     @StateObject private var thumbs = LookThumbs()
@@ -95,6 +96,9 @@ struct CameraLiveLookView: View {
         ProcessInfo.processInfo.environment["LUMA_SEED_BROWSER"] == "1"
     /// OFF-tile stash so tapping OFF twice restores the previous strength.
     @State private var stashedLookIntensity: Double?
+    /// A premium look is live on the viewfinder but not unlocked: shooting
+    /// with it asks first (framing and previewing it stays free).
+    @State private var lookLock: LookLock?
 
     // MARK: - Body
 
@@ -134,6 +138,9 @@ struct CameraLiveLookView: View {
         .lumaToolSheet(isPresented: $showLookBrowser, style: .panel) {
             LookBrowserSheet(context: .camera, intensity: $app.settings.intensity)
         }
+        // No auto-start after a purchase: a camera that begins recording on
+        // its own as a sheet slides away would catch the floor.
+        .lockedLookSheet($lookLock) { flash("Look unlocked. Ready when you are") }
         .onAppear { start() }
         .onDisappear { camera.stopSession() }
         .onChange(of: camera.isRecording) { _, recording in
@@ -650,6 +657,9 @@ struct CameraLiveLookView: View {
                     .padding(4)
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if storeService.isLocked(look) { LookLockGlyph(compact: true) }
+        }
         .overlay {
             if app.isCurrent(look) {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -966,6 +976,13 @@ struct CameraLiveLookView: View {
     private var captureRow: some View {
         ZStack {
             CameraShutterButton(isRecording: camera.isRecording) {
+                // Stopping a take is never gated; only starting one with a
+                // locked look on the viewfinder asks first.
+                if !camera.isRecording, !camera.isPreparingRecording,
+                   let lock = app.lockedLookInGrade(storeService) {
+                    lookLock = lock
+                    return
+                }
                 camera.toggleRecording()
             }
             HStack {
@@ -1052,6 +1069,10 @@ struct CameraLiveLookView: View {
     /// Full sensor resolution through AVCapturePhotoOutput, graded with the
     /// live look. Sim falls back to the preview buffer.
     private func captureStill() {
+        if let lock = app.lockedLookInGrade(storeService) {
+            lookLock = lock
+            return
+        }
         if camera.canCaptureFullRes {
             camera.captureFullResStill { cg in
                 guard let cg else {

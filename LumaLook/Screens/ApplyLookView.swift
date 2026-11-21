@@ -836,6 +836,9 @@ struct ApplyLookView: View {
                             .allowsHitTesting(false)
                     }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    if storeService.isLocked(look) { LookLockGlyph() }
+                }
                 tileCaption(look.nameSplit.title, selected: selected)
             }
         }

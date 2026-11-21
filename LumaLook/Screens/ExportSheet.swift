@@ -102,7 +102,7 @@ enum GradeCubeBaker {
 // MARK: - Export spec sheet (frame G1)
 
 /// Delivery spec before the render, in the shipping design language proved by
-/// `LDExportDemoView`: resolution as three tap-cards that LEAD WITH THE VALUE,
+/// the retired Design Lab export preview: resolution as three tap-cards that LEAD WITH THE VALUE,
 /// frame rate / bitrate / codec as labelled option rows (a slider for five
 /// discrete values is a dial pretending to be continuous), the HDR, GIF, audio
 /// and .cube capabilities as an unboxed tool row, a live size estimate and a

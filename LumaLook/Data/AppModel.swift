@@ -681,6 +681,31 @@ final class AppModel: ObservableObject {
         settings = saved.settings
     }
 
+    // MARK: - Premium gate
+
+    /// The locked look in the grade-room grade (video, still, camera), or nil.
+    /// A LUT in the creative slot replaces the recipe entirely, and LUTs are
+    /// files the user already owns, so only a recipe grade can be locked.
+    func lockedLookInGrade(_ store: StoreService) -> LookLock? {
+        // Strength 0 is the Original/OFF tile: the look renders nothing.
+        guard selectedLUT == nil, settings.intensity > 0 else { return nil }
+        return store.lock(forBuiltIn: selectedLook)
+    }
+
+    /// The first locked look anywhere in the editor project: any clip that
+    /// follows the timeline grade, every per-clip grade and every adjustment
+    /// layer. Checked at export so a premium look cannot ride out on a clip.
+    func lockedLookInProject(_ store: StoreService) -> LookLock? {
+        if editor.clips.contains(where: { $0.grade == nil }),
+           let lock = lockedLookInGrade(store) {
+            return lock
+        }
+        for grade in editor.clips.compactMap(\.grade) + editor.adjustmentLayers.map(\.grade) {
+            if let lock = store.lock(for: grade) { return lock }
+        }
+        return nil
+    }
+
     // MARK: - Export
 
     func exportCurrentVideo(spec: ExportSpec = ExportSpec()) async -> Bool {

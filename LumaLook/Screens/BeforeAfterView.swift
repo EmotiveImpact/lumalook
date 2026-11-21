@@ -47,6 +47,7 @@ import AVKit
 
 struct BeforeAfterView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
 
     enum CompareMode: String, CaseIterable, Identifiable {
@@ -82,6 +83,8 @@ struct BeforeAfterView: View {
     // Export
     @State private var showExportSheet = false
     @State private var isExporting = false
+    /// Set when the grade uses a premium look this user has not unlocked.
+    @State private var lookLock: LookLock?
 
     private var modes: [CompareMode] { CompareMode.allCases }
     private var modeIndex: Int { modes.firstIndex(of: mode) ?? 0 }
@@ -138,6 +141,9 @@ struct BeforeAfterView: View {
             app.lookState.splitFraction = nil
             app.refreshPreviewFrame()
         }
+        // Previewing a premium look is free; exporting it asks once, and a
+        // purchase carries straight on into the export sheet.
+        .lockedLookSheet($lookLock) { openExportSheet() }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : duration,
                             gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",
@@ -567,15 +573,12 @@ struct BeforeAfterView: View {
                 app.path = [.selectClip]
                 return
             }
-            // Commit the grade as compared: drop the wipe (it is preview
-            // chrome, never baked) and open the export sheet with the same
-            // lookState.
-            releaseHold()
-            app.lookState.splitFraction = nil
-            app.saveGradeSession()
-            app.exportError = nil
             LumaHaptics.shared.tap()
-            showExportSheet = true
+            if let lock = app.lockedLookInGrade(storeService) {
+                lookLock = lock
+                return
+            }
+            openExportSheet()
         } label: {
             Text("Apply & export")
                 .font(.system(size: 15, weight: .semibold))
@@ -585,6 +588,16 @@ struct BeforeAfterView: View {
                 .background(.white, in: Capsule())
         }
         .buttonStyle(.lumaPress)
+    }
+
+    /// Commit the grade as compared: drop the wipe (it is preview chrome,
+    /// never baked) and open the export sheet with the same lookState.
+    private func openExportSheet() {
+        releaseHold()
+        app.lookState.splitFraction = nil
+        app.saveGradeSession()
+        app.exportError = nil
+        showExportSheet = true
     }
 
     // MARK: - Playback

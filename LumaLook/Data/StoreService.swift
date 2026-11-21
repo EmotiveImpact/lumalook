@@ -121,6 +121,47 @@ final class StoreService: ObservableObject {
         return pack.isFree || isPro || ownedPackIDs.contains(packID)
     }
 
+    // MARK: Premium looks
+
+    /// Why a built-in look cannot leave the app for this user, or nil when it
+    /// is free to export. `LookPreset.isPremium` is the single statement of
+    /// "this look costs money"; the pack that sells its full version (if any)
+    /// is the à la carte way in, and Pro opens everything.
+    ///
+    /// Previewing is never gated: a locked look still grades the footage live
+    /// in the grade room, the editor and the camera. Only the moments a file
+    /// leaves (export, a recording, a still, a .cube) ask for the purchase.
+    func lock(forBuiltIn look: LookPreset) -> LookLock? {
+        guard look.isPremium, !isPro else { return nil }
+        let pack = LookLibraryStore.supersedingPack(forBuiltIn: look.name)
+        if let pack, ownsPack(pack.id) { return nil }
+        return LookLock(lookName: look.name, pack: pack)
+    }
+
+    /// The built-in look a stored grade resolves to (LUT grades are owned
+    /// files, so only recipe grades can be locked).
+    func lock(for grade: ClipGrade) -> LookLock? {
+        guard grade.lutID == nil, grade.settings.intensity > 0,
+              let preset = MockData.looks.first(where: { $0.name == grade.baseLookName })
+        else { return nil }
+        return lock(forBuiltIn: preset)
+    }
+
+    /// Library-tile form of the gate: true when picking this look would
+    /// grade for free but ask for a purchase at export. Drives the small lock
+    /// glyph, so the ask never arrives as a surprise.
+    func isLocked(_ look: LibraryLook) -> Bool {
+        switch look.source {
+        case .builtIn(let preset):
+            return lock(forBuiltIn: preset) != nil
+        case .saved(let saved):
+            return lock(for: ClipGrade(baseLookName: saved.baseLookName, lutID: saved.lutID,
+                                       settings: saved.settings)) != nil
+        case .lut:
+            return false
+        }
+    }
+
     // MARK: Purchase
 
     @discardableResult
@@ -167,5 +208,17 @@ final class StoreService: ObservableObject {
             await transaction.finish()
             await refreshEntitlements()
         }
+    }
+}
+
+/// A premium built-in look the user has not unlocked, and the pack (if any)
+/// that sells it on its own. Drives `LockedLookSheet`.
+struct LookLock: Identifiable, Equatable {
+    let lookName: String
+    let pack: LookPack?
+    var id: String { lookName }
+
+    static func == (a: LookLock, b: LookLock) -> Bool {
+        a.lookName == b.lookName && a.pack?.id == b.pack?.id
     }
 }

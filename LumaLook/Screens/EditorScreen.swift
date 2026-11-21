@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
 
 // =============================================================================
 // EditorTimelineView — the SHIPPING video editor, in the approved design
-// language (promoted from LDEditorDemoView after a line-by-line parity pass).
+// language (promoted from the retired Design Lab editor after a line-by-line
+// parity pass).
 //
 // THE LANGUAGE
 //   1. The image is the interface. The preview is never covered; opening a tool
@@ -441,6 +442,7 @@ private enum EditorTool: Hashable {
 
 struct EditorTimelineView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
 
     // Which tool owns the drawer. One value replaces the old parallel
@@ -481,6 +483,8 @@ struct EditorTimelineView: View {
     @State private var showExportSheet = false
     @State private var isExporting = false
     @State private var exportError: String?
+    /// A premium look somewhere in the project that is not unlocked yet.
+    @State private var lookLock: LookLock?
 
     @State private var isCaptioning = false
     /// Strength parked by the whole-edit "None" tile so the next look restores it.
@@ -527,7 +531,13 @@ struct EditorTimelineView: View {
                 onOpenCropSheet: { showCropPanel = true },
                 onOpenLookBrowser: { showLookBrowser = true },
                 onFullscreen: { showFullscreenPreview = true },
-                onExport: { showExportSheet = true },
+                onExport: {
+                    if let lock = app.lockedLookInProject(storeService) {
+                        lookLock = lock
+                    } else {
+                        showExportSheet = true
+                    }
+                },
                 onRecordFootage: { app.path.append(.camera) },
                 onOpenProjects: { app.path.append(.projectLibrary) },
                 onOpenAdjust: { app.path.append(.customLook) },
@@ -642,6 +652,15 @@ struct EditorTimelineView: View {
             // audio, and silently binning it would be the worse failure.
             if editor.isRecordingVoiceover { editor.stopVoiceover() }
             editor.saveProject()
+        }
+        .lockedLookSheet($lookLock) {
+            // One purchase may not cover every locked look in the project
+            // (two packs); check again rather than assume.
+            if let next = app.lockedLookInProject(storeService) {
+                lookLock = next
+            } else {
+                showExportSheet = true
+            }
         }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: editor.totalDuration,
@@ -1627,6 +1646,7 @@ extension EditorTimelineView {
 private struct EditorContent: View {
     @ObservedObject var editor: EditorState
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @StateObject private var thumbs = LookThumbs()
 
     @Binding var tool: EditorTool
@@ -2290,6 +2310,9 @@ private struct EditorContent: View {
                             // clipShape clips PIXELS, not TOUCHES: without this
                             // the overflowing fill steals its neighbour's taps.
                             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .overlay(alignment: .bottomTrailing) {
+                                if storeService.isLocked(look) { LookLockGlyph(compact: true) }
+                            }
                             .overlay {
                                 if isLookActive(look, clipID: clipID) {
                                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -2452,6 +2475,9 @@ private struct EditorContent: View {
                             .frame(width: 62, height: 62)
                             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .overlay(alignment: .bottomTrailing) {
+                                if storeService.isLocked(look) { LookLockGlyph(compact: true) }
+                            }
                             Text(look.name).font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.55)).lineLimit(1).frame(width: 62)
                         }
