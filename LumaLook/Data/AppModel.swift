@@ -681,6 +681,14 @@ final class AppModel: ObservableObject {
         settings = saved.settings
     }
 
+    /// True when the grade-room grade changes the picture at all. Strength 0
+    /// dissolves the look and the user adjustments back to the original; a
+    /// lens sits outside that blend, so it counts on its own.
+    var gradeIsApplied: Bool {
+        let lens = LensKind(rawValue: settings.lensKind) ?? .none
+        return settings.intensity > 0 || lens != .none
+    }
+
     // MARK: - Grade stash (editor ✕)
 
     /// The whole global grade as one value, so a tool that changes it (the
@@ -764,6 +772,10 @@ final class AppModel: ObservableObject {
                 lastExportURL = output
                 return true
             }
+            // Belt and braces for the sheet's own check: an HLG tag is only
+            // honest on an ungraded frame (HDRDelivery).
+            var spec = spec
+            if spec.hdr && gradeIsApplied { spec.hdr = false }
             let output = try await exporter.export(videoURL: url, lookState: lookState, spec: spec)
             lastExportSavedToPhotos = await exporter.saveToPhotos(url: output)
             lastExportImage = nil

@@ -563,6 +563,7 @@ struct ExportSpecSheet: View {
         HDRDelivery.availability(
             sourceIsHLG: sourceIsHLG,
             logConversionActive: app.conversionProfile != nil || app.conversionLUT != nil,
+            gradeApplied: app.gradeIsApplied,
             spec: spec,
             isTimeline: gradeCubeTitle == nil)
     }
