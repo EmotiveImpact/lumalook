@@ -34,8 +34,9 @@ struct LUTCompareView: View {
             .padding(.horizontal, 20)
             .padding(.top, 18)
 
-            TechReadout("SAME GRADE • DIFFERENT LUT — TAP TO APPLY", size: 9,
-                        color: LumaTheme.textMuted)
+            Text("Same grade, different LUT. Tap one to apply it.")
+                .font(.luma(size: 12, weight: .medium))
+                .foregroundStyle(LumaTheme.textMuted)
                 .padding(.horizontal, 20)
 
             ScrollView {
@@ -68,14 +69,10 @@ struct LUTCompareView: View {
                                     }
                                 }
                                 .frame(height: 148)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                                // MEANINGFUL: marks which candidate is live.
-                                .overlay {
-                                    if isCurrent {
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .stroke(LumaTheme.accentBright, lineWidth: 2)
-                                    }
-                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                // The live candidate wears the picked ring.
+                                .pickedRing(isCurrent, cornerRadius: 14)
                                 Text(candidate?.file.displayName ?? "Original")
                                     .font(.luma(size: 12, weight: isCurrent ? .semibold : .regular))
                                     .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)

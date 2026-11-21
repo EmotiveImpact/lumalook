@@ -870,3 +870,17 @@ extension AVMutableVideoComposition {
         colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
     }
 }
+
+// MARK: - Photo edit (crop and mask)
+
+extension AppModel {
+    /// Photo edit: swaps the still for an edited copy (crop, mask) without
+    /// detaching the grade session or clearing the source conversion. The
+    /// next autosave writes the edited pixels into the same Recent project.
+    func replaceSelectedStill(with image: CIImage) {
+        isRestoringSession = true
+        selectedImage = image
+        isRestoringSession = false
+        sessionMediaFileName = nil
+    }
+}
