@@ -119,7 +119,7 @@ struct LookPreviewSurface: View {
 struct EmptyMediaHint: View {
     var body: some View {
         Label("Preview — pick a clip to grade live", systemImage: "film")
-            .font(.system(size: 12, weight: .medium))
+            .font(.luma(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.85))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -426,7 +426,7 @@ struct ApplyLookView: View {
     private var exportErrorToast: some View {
         if let error = app.exportError {
             Text(error)
-                .font(.system(size: 14, weight: .medium))
+                .font(.luma(size: 14, weight: .medium))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -483,7 +483,7 @@ struct ApplyLookView: View {
     private var peekBadge: some View {
         if holdingOriginal {
             Text("Original")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -503,7 +503,7 @@ struct ApplyLookView: View {
                 ZStack(alignment: .top) {
                     Color.white.opacity(0.001)
                     Text("Tap something that should be neutral grey or white")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.luma(size: 13, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 7)
                         .background(.black.opacity(0.6), in: Capsule())
@@ -612,13 +612,13 @@ struct ApplyLookView: View {
         HStack(spacing: 10) {
             if !hasRealMedia {
                 Text("Previewing the sample photo — pick a clip to grade your own")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             } else if let mediaReadout {
                 Text(mediaReadout)
-                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 11.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
             }
@@ -626,10 +626,10 @@ struct ApplyLookView: View {
             if !app.batchItems.isEmpty {
                 HStack(spacing: 4) {
                     Text("\(app.batchItems.count)")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.luma(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.9))
                     Text("clips queued")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
@@ -638,7 +638,7 @@ struct ApplyLookView: View {
                     HStack(spacing: 5) {
                         Circle().fill(.white.opacity(0.85)).frame(width: 5, height: 5)
                         Text("Log LUT")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.luma(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.8))
                     }
                     .contentShape(Rectangle())
@@ -658,7 +658,7 @@ struct ApplyLookView: View {
             categoryLabel(at: categoryIndex - 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(category.title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .fixedSize()
             categoryLabel(at: categoryIndex + 1)
@@ -686,7 +686,7 @@ struct ApplyLookView: View {
         if categories.indices.contains(index) {
             Button { stepCategory(to: index) } label: {
                 Text(categories[index].title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
                     .contentShape(Rectangle())
@@ -739,7 +739,7 @@ struct ApplyLookView: View {
 
     /// One shared tile geometry, so a look, a preset and the original all read
     /// as the same object at the same size.
-    private func tileFrame<Content: View>(selected: Bool,
+    private func tileFrame<Content: View>(selected: Bool, ring: Color = .white,
                                           @ViewBuilder content: () -> Content) -> some View {
         content()
             .frame(width: Self.tile, height: Self.tile)
@@ -751,15 +751,15 @@ struct ApplyLookView: View {
             .overlay {
                 if selected {
                     RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous)
-                        .strokeBorder(.white, lineWidth: 2)
+                        .strokeBorder(ring, lineWidth: 2)
                 }
             }
     }
 
     private func tileCaption(_ text: String, selected: Bool) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? .white : .white.opacity(0.62))
+            .font(.luma(size: 12, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
             .frame(width: Self.tile)
@@ -813,7 +813,7 @@ struct ApplyLookView: View {
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 7) {
-                tileFrame(selected: selected) {
+                tileFrame(selected: selected, ring: look.signature) {
                     Group {
                         if let cg = thumbs.images[look.thumbKey] {
                             Image(decorative: cg, scale: 1)
@@ -827,7 +827,7 @@ struct ApplyLookView: View {
                 .overlay(alignment: .bottomLeading) {
                     if let badge = sourceBadge(look) {
                         Text(badge)
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.luma(size: 9, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -999,12 +999,12 @@ struct ApplyLookView: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(on ? .white : .white.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1025,7 +1025,7 @@ struct ApplyLookView: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1122,46 +1122,38 @@ struct ApplyLookView: View {
 
     private var instructionBar: some View {
         let name = app.selectedLUT?.displayName ?? app.selectedLook.name
+        let colour = app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+            ?? app.selectedLook.signature
         let strength = Int(app.settings.intensity.rounded())
-        return ZStack {
-            // Centred absolutely rather than between two unequal buttons, so
-            // the statement sits on the optical middle of the bar.
+        return HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Text("Cancel")
+                    .font(.luma(size: 15, weight: .medium))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .frame(height: 44)
+                    .padding(.horizontal, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Close the grade room")
+
+            Spacer(minLength: 0)
             Group {
                 if strength == 0 {
-                    Text("Showing the original")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                    Text("Original")
+                        .font(.luma(size: 14, weight: .medium))
+                        .foregroundStyle(LumaTheme.textMuted)
                 } else {
-                    HStack(spacing: 7) {
-                        Text(name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                        Text("\(strength)%")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    LookChip(name: name, colour: colour, size: 12)
                 }
             }
             .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 104)
             .allowsHitTesting(false)
+            Spacer(minLength: 0)
 
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Close the grade room")
-                Spacer(minLength: 0)
-                applyButton
-            }
+            applyButton
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.bottom, 6)
     }
 
@@ -1169,12 +1161,13 @@ struct ApplyLookView: View {
     /// current look at the current strength is always a valid answer.
     private var applyButton: some View {
         Button { applyAndAdvance() } label: {
-            Text("Apply")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.black)
-                .padding(.horizontal, 20)
-                .frame(height: 40)
-                .background(.white, in: Capsule())
+            Text("Apply look")
+                .font(.luma(size: 15, weight: .semibold))
+                .foregroundStyle(LumaTheme.onLight)
+                .padding(.horizontal, 18)
+                .frame(height: 42)
+                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Apply this look and compare")
@@ -1254,7 +1247,7 @@ extension ApplyLookView {
                     }
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Text(lens.label)
-                    .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                    .font(.luma(size: 11, weight: selected ? .semibold : .medium))
                     .foregroundStyle(selected ? .white : .white.opacity(0.55))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1310,17 +1303,17 @@ extension ApplyLookView {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(scopeTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 Text("Reading the graded frame")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.4))
                 Button {
                     scopeModeRaw = scopeMode.next.rawValue
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("Next scope")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                         .contentShape(Rectangle())
                 }
@@ -1408,7 +1401,7 @@ extension ApplyLookView {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text(mode.label)
-                        .font(.system(size: 11.5, weight: on ? .semibold : .medium))
+                        .font(.luma(size: 11.5, weight: on ? .semibold : .medium))
                         .foregroundStyle(on ? .white : .white.opacity(0.5))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -1438,7 +1431,7 @@ extension ApplyLookView {
                             LumaHaptics.shared.tap()
                         } label: {
                             Text(profile.label)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.luma(size: 13, weight: .semibold))
                                 .fixedSize()
                                 .foregroundStyle(on ? .black : .white.opacity(0.85))
                                 .padding(.horizontal, 13).padding(.vertical, 8)
@@ -1485,7 +1478,7 @@ extension ApplyLookView {
 
     private func pickerHeading(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.luma(size: 12, weight: .semibold))
             .foregroundStyle(.white.opacity(0.55))
             .padding(.horizontal, 22)
     }
@@ -1496,12 +1489,12 @@ extension ApplyLookView {
                 .font(.system(size: 17))
                 .foregroundStyle(selected ? .white : .white.opacity(0.35))
             Text(name)
-                .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                .font(.luma(size: 15, weight: selected ? .semibold : .regular))
                 .foregroundStyle(.white)
                 .lineLimit(1)
             if let tag {
                 Text(tag)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.luma(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -1531,11 +1524,11 @@ private struct GradeSlotRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(kind)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.45))
                     .frame(width: 52, alignment: .leading)
                 Text(name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(isActive ? .white.opacity(0.95) : .white.opacity(0.4))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1543,7 +1536,7 @@ private struct GradeSlotRow: View {
                 // An empty slot has no strength to report — an em dash matches
                 // the empty track and the dimmed "None" title.
                 Text(isActive ? "\(Int(opacity.rounded()))%" : "—")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 12, weight: .medium, design: .monospaced))
                     .contentTransition(.numericText())
                     .foregroundStyle(isActive ? .white.opacity(0.85) : .white.opacity(0.35))
             }
@@ -1596,19 +1589,20 @@ private struct GradeRulerDial: View {
         VStack(spacing: 5) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text("\(Int(value.rounded()))")
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.15), value: Int(value))
                     .foregroundStyle(.white)
             }
             ZStack {
                 ruler
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: 2, height: 22)
+                Capsule()
+                    .fill(LumaTheme.signal)
+                    .frame(width: 2.5, height: 22)
+                    .shadow(color: LumaTheme.signal.opacity(0.7), radius: 5)
             }
             .frame(height: 30)
             .contentShape(Rectangle())
@@ -1687,7 +1681,7 @@ struct LookThumbCell: View {
                     .overlay(alignment: .topLeading) {
                         if let badge {
                             Text(badge)
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.luma(size: 9, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.9))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
@@ -1696,7 +1690,7 @@ struct LookThumbCell: View {
                         }
                     }
                 Text(title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .font(.luma(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -1709,30 +1703,35 @@ struct LookThumbCell: View {
 
 /// The pinned strength row. Shared by the grade room and the compare screen so
 /// the control that decides how strong a look is looks and feels identical in
-/// both. Label in the system font, value in mono — it is a number.
+/// both: the name and the value on one line, the ruler beneath, its needle in
+/// the look's signature colour.
 struct GradeOpacityRow: View {
+    @EnvironmentObject private var app: AppModel
     var title: String = "Strength"
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...100
 
-    // Same 5-unit detents as the ruler dial, so the two feel like one control.
-    private var detent: Int { Int(value / 5) }
+    private var needle: Color {
+        if let lut = app.selectedLUT { return LookSignature.colour(name: lut.displayName) }
+        return app.selectedLook.signature
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
-                .frame(width: 58, alignment: .leading)
-            Slider(value: $value, in: range)
-                .tint(.white.opacity(0.85))
-            Text("\(Int(value.rounded()))%")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .contentTransition(.numericText())
-                .animation(.snappy(duration: 0.15), value: Int(value))
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 42, alignment: .trailing)
+        VStack(spacing: 2) {
+            HStack {
+                Text(title)
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                Spacer(minLength: 0)
+                Text("\(Int(value.rounded()))%")
+                    .font(.luma(size: 15, weight: .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.15), value: Int(value))
+                    .foregroundStyle(LumaTheme.textPrimary)
+            }
+            .padding(.horizontal, 4)
+            LumaStrengthRuler(value: $value, range: range, needle: needle)
         }
-        .sensoryFeedback(.selection, trigger: detent)
     }
 }

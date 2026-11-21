@@ -105,7 +105,7 @@ struct LUTImportSheet: View {
                         .allowsHitTesting(!isRejected)
                     if let saveError {
                         Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
+                            .font(.luma(.footnote))
                             .foregroundStyle(LumaTheme.orange)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -145,11 +145,11 @@ struct LUTImportSheet: View {
     private var header: some View {
         HStack {
             Text("Import LUT")
-                .font(.system(size: 17, weight: .heavy))
+                .font(.luma(size: 17, weight: .heavy))
                 .foregroundStyle(.white)
             Spacer()
             Button("Cancel") { dismiss() }
-                .font(.subheadline)
+                .font(.luma(.subheadline))
                 .foregroundStyle(LumaTheme.textSecondary)
         }
         .padding(.horizontal, 20)
@@ -165,7 +165,7 @@ struct LUTImportSheet: View {
                 .allowsHitTesting(canSave)
             if inspection != nil && inspection?.isValid == false {
                 Text("Fix or choose a different file — invalid LUTs are not saved.")
-                    .font(.caption)
+                    .font(.luma(.caption))
                     .foregroundStyle(LumaTheme.textMuted)
             }
         }
@@ -191,12 +191,12 @@ struct LUTImportSheet: View {
                 )
             VStack(alignment: .leading, spacing: 3) {
                 Text(fileName)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.luma(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(subtitleText)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.luma(size: 11, design: .monospaced))
                     .foregroundStyle(LumaTheme.textMuted)
             }
             Spacer(minLength: 8)
@@ -215,7 +215,7 @@ struct LUTImportSheet: View {
                 Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 Text(ok ? "Valid" : "Invalid")
             }
-            .font(.system(size: 10.5, weight: .bold))
+            .font(.luma(size: 10.5, weight: .bold))
             .foregroundStyle(ok ? LumaTheme.teal : LumaTheme.orange)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
@@ -231,7 +231,7 @@ struct LUTImportSheet: View {
     private var failureReason: some View {
         if let reason = inspection?.failure {
             Text(reason)
-                .font(.footnote)
+                .font(.luma(.footnote))
                 .foregroundStyle(LumaTheme.orange)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -245,7 +245,7 @@ struct LUTImportSheet: View {
             ForEach(LUTParser.Format.allCases, id: \.self) { format in
                 let detected = inspection?.format == format
                 Text(format.rawValue)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.luma(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(detected ? LumaTheme.accentBright : LumaTheme.textSecondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -257,7 +257,7 @@ struct LUTImportSheet: View {
                     .opacity(detected ? 1 : 0.55)
             }
             Text("supported formats")
-                .font(.system(size: 11))
+                .font(.luma(size: 11))
                 .foregroundStyle(LumaTheme.textMuted)
             Spacer(minLength: 0)
         }
@@ -323,7 +323,7 @@ struct LUTImportSheet: View {
                 .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(LumaTheme.textMuted)
             Text("No preview — this file can't be graded.")
-                .font(.system(size: 12))
+                .font(.luma(size: 12))
                 .foregroundStyle(LumaTheme.textMuted)
                 .multilineTextAlignment(.center)
         }
@@ -333,7 +333,7 @@ struct LUTImportSheet: View {
 
     private func label(_ text: String, alignment: Alignment, bright: Bool) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .font(.luma(size: 10, weight: .semibold, design: .monospaced))
             .foregroundStyle(bright ? .white : LumaTheme.textSecondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
@@ -348,7 +348,7 @@ struct LUTImportSheet: View {
     private var nameField: some View {
         HStack(spacing: 10) {
             TextField("Look name", text: $name)
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(.luma(size: 13.5, weight: .semibold))
                 .foregroundStyle(.white)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
@@ -365,7 +365,7 @@ struct LUTImportSheet: View {
     private var collectionRow: some View {
         HStack {
             Text("Add to collection")
-                .font(.system(size: 13))
+                .font(.luma(size: 13))
                 .foregroundStyle(LumaTheme.textSecondary)
             Spacer()
             Menu {
@@ -389,7 +389,7 @@ struct LUTImportSheet: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(selectedCollectionName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                     Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
                 }
                 .foregroundStyle(LumaTheme.accentBright)

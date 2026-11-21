@@ -243,7 +243,7 @@ struct ExportSpecSheet: View {
                 // The HDR toggle is only honest when the pipeline can honour
                 // it, so the reason it cannot is stated rather than hidden.
                 Text(reason)
-                    .font(.system(size: 12))
+                    .font(.luma(size: 12))
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,22 +260,22 @@ struct ExportSpecSheet: View {
     private var sourceLine: some View {
         HStack(spacing: 8) {
             Text(sourceTitle)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.luma(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
             if durationSeconds > 0 {
                 Text(clock(durationSeconds))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.6))
             }
             Spacer(minLength: 0)
             if !app.batchItems.isEmpty, gradeCubeTitle != nil {
                 HStack(spacing: 5) {
                     Text("Batch")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                     Text("\(app.batchItems.count)")
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 13, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.85))
                 }
             }
@@ -316,13 +316,13 @@ struct ExportSpecSheet: View {
         } label: {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 18, weight: selected ? .heavy : .semibold,
+                    .font(.luma(size: 18, weight: selected ? .heavy : .semibold,
                                   design: .monospaced))
                     .foregroundStyle(.white.opacity(selected ? 1 : 0.6))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(name)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.luma(size: 11.5, weight: .medium))
                     .foregroundStyle(.white.opacity(selected ? 0.7 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -357,7 +357,7 @@ struct ExportSpecSheet: View {
                                         pick: @escaping (T) -> Void) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(1)
                 .frame(width: 84, alignment: .leading)
@@ -369,7 +369,7 @@ struct ExportSpecSheet: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text(label(option))
-                        .font(.system(size: numeric ? 14 : 13,
+                        .font(.luma(size: numeric ? 14 : 13,
                                       weight: on ? .semibold : .medium,
                                       design: numeric ? .monospaced : .default))
                         .foregroundStyle(.white.opacity(on ? 1 : 0.5))
@@ -447,7 +447,7 @@ struct ExportSpecSheet: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -471,12 +471,12 @@ struct ExportSpecSheet: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(on ? .white : .white.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -493,7 +493,7 @@ struct ExportSpecSheet: View {
     private var cubePanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Bake this grade as a .cube — LUT, curves, wheels, HSL, split.")
-                .font(.system(size: 12))
+                .font(.luma(size: 12))
                 .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(2)
             HStack(spacing: 8) {
@@ -505,7 +505,7 @@ struct ExportSpecSheet: View {
                     } label: {
                         // A grid size is a number: mono stays.
                         Text("\(size)³")
-                            .font(.system(size: 14,
+                            .font(.luma(size: 14,
                                           weight: cubeSize == size ? .semibold : .medium,
                                           design: .monospaced))
                             .foregroundStyle(.white.opacity(cubeSize == size ? 1 : 0.5))
@@ -523,7 +523,7 @@ struct ExportSpecSheet: View {
                 if let cubeURL {
                     ShareLink(item: cubeURL) {
                         Text("Share")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -542,7 +542,7 @@ struct ExportSpecSheet: View {
                         }
                     } label: {
                         Text(isBaking ? "Baking…" : "Bake")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -574,21 +574,21 @@ struct ExportSpecSheet: View {
         HStack(spacing: 8) {
             if let value = estimateValue {
                 Text("Est. size")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(value)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.9))
             } else {
                 Text("Still image")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
             Spacer(minLength: 0)
             // Format designations, not prose — this line stays in the
             // instrument voice, just brighter and a size you can read.
             Text(deliverySpecLine)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.luma(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.45))
                 .lineLimit(1)
         }
@@ -637,7 +637,7 @@ struct ExportSpecSheet: View {
     private func sourceRateNote(_ match: Int) -> some View {
         HStack(spacing: 10) {
             Text("Your footage is \(match) fps. Exporting at \(spec.fps) changes how it moves.")
-                .font(.system(size: 12))
+                .font(.luma(size: 12))
                 .foregroundStyle(.white.opacity(0.55))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -646,7 +646,7 @@ struct ExportSpecSheet: View {
                 LumaHaptics.shared.tap()
             } label: {
                 Text("Match")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.luma(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .frame(height: 30)
@@ -675,7 +675,7 @@ struct ExportSpecSheet: View {
     /// the words are the warning.
     private func noticeBar(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12.5))
+            .font(.luma(size: 12.5))
             .foregroundStyle(.white.opacity(0.85))
             .lineSpacing(2)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -700,7 +700,7 @@ struct ExportSpecSheet: View {
             .accessibilityLabel("Close")
             Spacer(minLength: 8)
             Text(spec.audioOnly ? "Set the audio delivery" : "Set the delivery")
-                .font(.system(size: 14, weight: .medium))
+                .font(.luma(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -714,7 +714,7 @@ struct ExportSpecSheet: View {
                 onExport(spec)
             } label: {
                 Text(spec.audioOnly ? "Export audio" : "Export")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 18)
                     .frame(height: 40)

@@ -49,7 +49,7 @@ final class PackThumbs: ObservableObject {
     /// five photos walked in sequence no two neighbouring rows can collide.
     /// The pack-detail hero calls this too, so a tile and its detail screen
     /// always show the same source frame.
-    static let previewPhotos: [HeroPhoto] = [.golden, .coast, .desert, .night, .neon]
+    static let previewPhotos: [HeroPhoto] = [.golden, .neon, .drive, .rain, .party, .skate, .gig, .campaign, .bridge]
 
     static func previewPhoto(for pack: LookPack) -> HeroPhoto {
         guard let idx = PackCatalog.packs.firstIndex(where: { $0.id == pack.id })
@@ -119,7 +119,7 @@ enum StoreCategory: String, CaseIterable, Identifiable {
 /// A number, in the instrument voice. Prices, counts, sizes — data only.
 private func numText(_ text: String, _ size: CGFloat, _ opacity: Double) -> Text {
     Text(text)
-        .font(.system(size: size, weight: .medium, design: .monospaced))
+        .font(.luma(size: size, weight: .medium, design: .monospaced))
         .foregroundStyle(.white.opacity(opacity))
 }
 
@@ -127,7 +127,7 @@ private func numText(_ text: String, _ size: CGFloat, _ opacity: Double) -> Text
 private func wordText(_ text: String, _ size: CGFloat, _ opacity: Double,
               weight: Font.Weight = .medium) -> Text {
     Text(text)
-        .font(.system(size: size, weight: weight))
+        .font(.luma(size: size, weight: weight))
         .foregroundStyle(.white.opacity(opacity))
 }
 
@@ -163,13 +163,13 @@ struct PackStatePill: View {
                     .frame(width: 18, height: 18)
                     .background(.white, in: Circle())
                 Text("In library")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
             }
         } else if pack.isFree {
             Text("Free")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
@@ -180,7 +180,7 @@ struct PackStatePill: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.9))
                 Text("Pro")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
             }
             .padding(.horizontal, 11)
@@ -190,7 +190,7 @@ struct PackStatePill: View {
             // A price is a number, and it is one of the two things on this
             // screen that must read instantly from across the room.
             Text(price)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.luma(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .padding(.horizontal, 11)
@@ -362,10 +362,10 @@ struct FilterStoreView: View {
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(isSearchActive || category != .all ? "First result" : "Featured pack")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(pack.name)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.luma(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -386,7 +386,7 @@ struct FilterStoreView: View {
             HStack(spacing: 0) {
                 neighbour(at: categoryIndex - 1, alignment: .leading)
                 Text(activeCategories[categoryIndex].title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .padding(.horizontal, 10)
@@ -422,11 +422,11 @@ struct FilterStoreView: View {
             } label: {
                 VStack(spacing: 1) {
                     Text(activeCategories[index].title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.luma(size: 14, weight: .medium))
                         .foregroundStyle(.white.opacity(0.42))
                     // A count IS a number: it keeps the mono voice.
                     Text("\(PackCatalog.packs.filter(activeCategories[index].contains).count)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.32))
                 }
                 .lineLimit(1)
@@ -452,7 +452,7 @@ struct FilterStoreView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white.opacity(0.38))
             TextField("Search packs and looks", text: $query)
-                .font(.system(size: 15))
+                .font(.luma(size: 15))
                 .foregroundStyle(.white)
                 .tint(.white)
                 .autocorrectionDisabled()
@@ -490,14 +490,14 @@ struct FilterStoreView: View {
                     Text(needle.isEmpty
                          ? "No packs in this category yet."
                          : "No packs or looks match “\(query)”.")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.luma(size: 15, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 44)
                 }
                 Text(MockData.namingDisclaimer)
-                    .font(.system(size: 11.5))
+                    .font(.luma(size: 11.5))
                     .foregroundStyle(.white.opacity(0.42))
                     .lineSpacing(2)
                     .padding(.top, 14)
@@ -544,7 +544,7 @@ struct FilterStoreView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(pack.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.luma(size: 16, weight: .semibold))
                         .foregroundStyle(installed ? .white : .white.opacity(0.92))
                         .lineLimit(1)
                     packMetaLine(pack)
@@ -598,7 +598,7 @@ struct FilterStoreView: View {
                          + wordText(" packs", 15, 0.7))
                     } else {
                         Text("Tap a pack to preview it")
-                            .font(.system(size: 15))
+                            .font(.luma(size: 15))
                     }
                 }
                 .foregroundStyle(.white.opacity(0.75))
@@ -762,14 +762,9 @@ struct FilterPackDetailView: View {
     /// user has no media of their own — otherwise the try-on panel renders a
     /// pixel-identical copy of the hero 400pt above it and adds nothing.
     private var sampleFallbackSource: CIImage {
-        let alternate: HeroPhoto
-        switch heroPhoto {
-        case .golden: alternate = .coast
-        case .coast:  alternate = .desert
-        case .desert: alternate = .night
-        case .night:  alternate = .neon
-        case .neon:   alternate = .golden
-        }
+        let all = HeroPhoto.allCases
+        let index = all.firstIndex(of: heroPhoto) ?? 0
+        let alternate = all[(index + 1) % all.count]
         return alternate.ciImage ?? heroSource
     }
 
@@ -781,10 +776,10 @@ struct FilterPackDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LumaTheme.ink.ignoresSafeArea()
             VStack(spacing: 0) {
                 heroBlock
-                    .frame(height: 250)
+                    .frame(height: 270)
                 drawer
             }
         }
@@ -822,6 +817,8 @@ struct FilterPackDetailView: View {
 
     // MARK: Hero — the pack's own grade, never stock art, never written over
 
+    /// Full-bleed cover in the pack's own grade, fading into ink, with the
+    /// count in a glass pill.
     private var heroBlock: some View {
         GeometryReader { geo in
             Group {
@@ -834,13 +831,30 @@ struct FilterPackDetailView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipped()
             // Hero overflows its frame; confine hit-testing so it cannot cover
             // the controls sitting under it.
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(Rectangle())
+            .overlay {
+                LinearGradient(stops: [
+                    .init(color: .black.opacity(0.35), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: LumaTheme.ink.opacity(0.4), location: 0.62),
+                    .init(color: LumaTheme.ink, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
+        .ignoresSafeArea(edges: .top)
+        .overlay(alignment: .topTrailing) {
+            Text("\(pack.looks.count) looks")
+                .font(.luma(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lumaGlassPill()
+                .padding(.trailing, 16)
+                .padding(.top, 6)
+        }
     }
 
     // MARK: Drawer
@@ -851,18 +865,18 @@ struct FilterPackDetailView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     titleBlock
                     Text(pack.familyLine)
-                        .font(.system(size: 14.5))
+                        .font(.luma(size: 14.5))
                         .foregroundStyle(.white.opacity(0.65))
                         .lineSpacing(3)
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Inside the pack")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.luma(size: 13, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.72))
                             Spacer()
                             Text("Tap to preview")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.luma(size: 12, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         looksRail
@@ -870,7 +884,7 @@ struct FilterPackDetailView: View {
                         // describes — tight to the rail, not floating midway
                         // between the rail and the sample panel.
                         Text(techClaim)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.luma(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
                     }
 
@@ -878,7 +892,7 @@ struct FilterPackDetailView: View {
                     priceBlock
 
                     Text(MockData.namingDisclaimer)
-                        .font(.system(size: 11.5))
+                        .font(.luma(size: 11.5))
                         .foregroundStyle(.white.opacity(0.42))
                         .lineSpacing(2)
                         .padding(.top, 4)
@@ -900,21 +914,26 @@ struct FilterPackDetailView: View {
         .background(Color.black)
     }
 
+    /// "Film Stocks 01" sets as a light "Film Stocks" and a heavy "01".
+    private var nameParts: (light: String, heavy: String) {
+        let words = pack.name.split(separator: " ").map(String.init)
+        guard words.count > 1, let last = words.last else { return ("", pack.name) }
+        return (words.dropLast().joined(separator: " "), last)
+    }
+
     private var titleBlock: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                (wordText("Pack · ", 12, 0.55)
-                 + numText("\(pack.looks.count)", 13, 0.72)
-                 + wordText(" looks", 12, 0.55))
+                Text("Pack · \(pack.eraTag)")
+                    .font(.luma(size: 13, weight: .semibold))
+                    .foregroundStyle(LumaTheme.signal)
                     .lineLimit(1)
-                Text(pack.name)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+                LumaHeadline(light: nameParts.light, heavy: nameParts.heavy, size: 32)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                 // A look NAME is a name, not a readout.
                 Text(activeLook.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
             }
@@ -957,13 +976,19 @@ struct FilterPackDetailView: View {
                             // the tile so it cannot steal its neighbour's tap.
                             .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                             .overlay {
-                                if active {
-                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                        .strokeBorder(.white, lineWidth: 2)
-                                }
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .strokeBorder(active ? look.signature : LumaTheme.hairline,
+                                                  lineWidth: active ? 2 : 1)
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                Circle()
+                                    .fill(look.signature)
+                                    .frame(width: 7, height: 7)
+                                    .shadow(color: look.signature, radius: 4)
+                                    .padding(6)
                             }
                             Text(look.name)
-                                .font(.system(size: 11.5, weight: active ? .semibold : .medium))
+                                .font(.luma(size: 11.5, weight: active ? .semibold : .medium))
                                 .foregroundStyle(active ? .white : .white.opacity(0.58))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
@@ -976,7 +1001,9 @@ struct FilterPackDetailView: View {
             }
             .padding(.vertical, 2)
         }
-        .lumaEdgeFade()
+        // A light leading fade, so the first tile's caption is not eaten at
+        // rest; the trailing fade still says the rail scrolls.
+        .lumaEdgeFade(leading: 6, trailing: 24)
     }
 
     // MARK: Try before buy
@@ -1009,7 +1036,7 @@ struct FilterPackDetailView: View {
             Text(tryOnIsUserMedia
                  ? "Your most recent footage, graded with \(activeLook.name) before you buy."
                  : "Import or record something and this panel grades your own footage instead.")
-                .font(.system(size: 12.5))
+                .font(.luma(size: 12.5))
                 .foregroundStyle(.white.opacity(0.5))
         }
     }
@@ -1030,13 +1057,13 @@ struct FilterPackDetailView: View {
                 Text(installed ? "Status"
                      : pack.isFree ? "Price"
                      : pack.isProIncluded ? "Subscription" : "One-time purchase")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(installed ? "In your library"
                      : pack.isFree ? "Free"
                      : pack.isProIncluded ? "Included with Pro"
                      : StoreNav.price(pack, storeService))
-                    .font(.system(size: 22, weight: .bold,
+                    .font(.luma(size: 22, weight: .bold,
                                   design: isNumericPrice ? .monospaced : .default))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -1051,7 +1078,7 @@ struct FilterPackDetailView: View {
                 // the catalog, so it reads as one instead of being shouted in
                 // tracked caps.
                 Text(pack.eraTag)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.48))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
@@ -1097,13 +1124,16 @@ struct FilterPackDetailView: View {
                             Text("Buy pack · \(StoreNav.price(pack, storeService))")
                         }
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.black)
+                    .font(.luma(size: 15, weight: .semibold))
+                    // Paying or unlocking is the screen's one main action, so
+                    // it speaks signal; installing and opening stay white.
+                    .foregroundStyle(unlocked || installed ? LumaTheme.onLight : LumaTheme.onSignal)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(unlocked || installed ? LumaTheme.textPrimary : LumaTheme.signal,
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
                 .disabled(storeService.purchaseInFlight)
@@ -1122,7 +1152,7 @@ struct FilterPackDetailView: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("Or grade your current media now")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
                 }
                 .buttonStyle(.plain)
@@ -1130,7 +1160,7 @@ struct FilterPackDetailView: View {
             if !unlocked && !pack.isProIncluded {
                 Button { showPaywall = true } label: {
                     Text("Or get every pack with Pro")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
                 }
                 .buttonStyle(.plain)
@@ -1302,7 +1332,7 @@ struct CustomLookBuilderView: View {
                    trailingAction: { showSaveDialog = true }) {
             if savedConfirmation {
                 Label("Look saved", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(LumaTheme.teal)
             }
             LookPreviewSurface(radius: 18)
@@ -1313,9 +1343,9 @@ struct CustomLookBuilderView: View {
                     ForEach(["ADJUST", "CURVES", "WHEELS", "HSL", "SPLIT", "EFFECTS"], id: \.self) { segment in
                         Button { tab = segment } label: {
                             Text(segment)
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.luma(size: 12, weight: .bold))
                                 .tracking(0.8)
-                                .foregroundStyle(tab == segment ? .white : LumaTheme.textSecondary)
+                                .foregroundStyle(tab == segment ? LumaTheme.onSignal : LumaTheme.textSecondary)
                                 .padding(.horizontal, 16)
                                 .frame(height: 42)
                                 .background(tab == segment ? LumaTheme.accent : LumaTheme.surface,
@@ -1360,7 +1390,7 @@ struct CustomLookBuilderView: View {
             } else if tab == "EFFECTS" {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Lens")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.luma(.subheadline, weight: .semibold))
                         .foregroundStyle(LumaTheme.textSecondary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
@@ -1379,7 +1409,7 @@ struct CustomLookBuilderView: View {
                                     VStack(spacing: 6) {
                                         Image(systemName: lens.icon)
                                             .font(.system(size: 20, weight: .medium))
-                                            .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                                            .foregroundStyle(selected ? LumaTheme.onSignal : LumaTheme.textSecondary)
                                             .frame(width: 62, height: 48)
                                             .background(selected ? LumaTheme.accent : LumaTheme.surface,
                                                         in: RoundedRectangle(cornerRadius: 12))
@@ -1394,7 +1424,7 @@ struct CustomLookBuilderView: View {
                                                 }
                                             }
                                         Text(lens.label)
-                                            .font(.system(size: 11))
+                                            .font(.luma(size: 11))
                                             .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
                                             .lineLimit(1)
                                             .frame(width: 70)
@@ -1406,7 +1436,7 @@ struct CustomLookBuilderView: View {
                     }
                     if let lens = LensKind(rawValue: app.settings.lensKind), lens != .none {
                         Text(lens.blurb)
-                            .font(.footnote)
+                            .font(.luma(.footnote))
                             .foregroundStyle(LumaTheme.textMuted)
                         GradeSlider(title: "Lens Strength", value: Binding(
                             get: { app.settings.lensAmount },
@@ -1414,7 +1444,7 @@ struct CustomLookBuilderView: View {
                     }
 
                     Text("Film Texture")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.luma(.subheadline, weight: .semibold))
                         .foregroundStyle(LumaTheme.textSecondary)
                         .padding(.top, 4)
                     GradeSlider(title: "Grain", value: Binding(
@@ -1437,7 +1467,7 @@ struct CustomLookBuilderView: View {
                         .font(.system(size: 28))
                         .foregroundStyle(LumaTheme.textMuted)
                     Text("\(tab.capitalized) tools are coming soon")
-                        .font(.system(size: 15))
+                        .font(.luma(size: 15))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -1452,7 +1482,7 @@ struct CustomLookBuilderView: View {
                     app.settings = LookSettings()
                 } label: {
                     Text("Reset")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.luma(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 28)
                         .frame(height: 52)
@@ -1497,13 +1527,13 @@ private struct GradeSlider: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 104, alignment: .leading)
             Slider(value: $value, in: -100...100)
                 .tint(LumaTheme.accent)
             Text(format?(value) ?? String(format: "%+d", Int(value)))
-                .font(.system(size: 16, weight: .bold))
+                .font(.luma(size: 16, weight: .bold))
                 .foregroundStyle(.white)
                 .monospacedDigit()
                 .frame(width: 62, alignment: .trailing)
@@ -1551,7 +1581,7 @@ struct ProjectLibraryView: View {
             if let newest {
                 ProjectThumb(project: newest, store: app.store, radius: 22)
             } else {
-                HeroImage(photo: .coast, radius: 22)
+                HeroImage(photo: .campaign, radius: 22)
             }
         }
         .padding(.horizontal, 10)
@@ -1593,10 +1623,10 @@ struct ProjectLibraryView: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(newest == nil ? "Projects" : "Most recent")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(newest?.title ?? "Nothing here yet")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.luma(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -1604,7 +1634,7 @@ struct ProjectLibraryView: View {
                     ProjectMeta.line(newest).lineLimit(1)
                 } else {
                     Text("Edits auto-save here as you work.")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                 }
@@ -1621,10 +1651,10 @@ struct ProjectLibraryView: View {
     private var emptyBody: some View {
         VStack(spacing: 8) {
             Text("No projects yet")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.95))
             Text("Start one and every trim, grade and export lands back here.")
-                .font(.system(size: 13))
+                .font(.luma(size: 13))
                 .foregroundStyle(.white.opacity(0.55))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 34)
@@ -1649,7 +1679,7 @@ struct ProjectLibraryView: View {
             Text(app.store.projects.isEmpty
                  ? "Nothing to open yet"
                  : "Swipe a project to delete it")
-                .font(.system(size: 14))
+                .font(.luma(size: 14))
                 .foregroundStyle(.white.opacity(0.5))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -1661,7 +1691,7 @@ struct ProjectLibraryView: View {
                 LumaHaptics.shared.tap()
             } label: {
                 Text("New project")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .frame(height: 36)
@@ -1724,7 +1754,7 @@ private struct ProjectList: View {
                                 .frame(width: 72, height: 44)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(project.title)
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.luma(size: 15, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
                                 // Metadata is a glanceable single line;
@@ -1854,7 +1884,7 @@ struct CropFormatView: View {
             // Canvas background: how the clip sits inside the frame (fill vs
             // fit with a background painted in the bars).
             Text("Canvas")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -1864,7 +1894,7 @@ struct CropFormatView: View {
                             VStack(spacing: 6) {
                                 Image(systemName: mode.icon)
                                     .font(.system(size: 20, weight: .medium))
-                                Text(mode.label).font(.system(size: 12))
+                                Text(mode.label).font(.luma(size: 12))
                             }
                             .frame(width: 72, height: 62)
                             .foregroundStyle(canvasMode == mode ? .black : .white)
@@ -1880,7 +1910,7 @@ struct CropFormatView: View {
             // Frame: a border composited over the finished picture — drawn
             // last, so nothing upstream grades or wipes across it.
             Text("Frame")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -1890,7 +1920,7 @@ struct CropFormatView: View {
                             VStack(spacing: 6) {
                                 Image(systemName: preset.icon)
                                     .font(.system(size: 20, weight: .medium))
-                                Text(preset.label).font(.system(size: 12))
+                                Text(preset.label).font(.luma(size: 12))
                                     .lineLimit(1).minimumScaleFactor(0.8)
                             }
                             .frame(width: 82, height: 62)
@@ -1915,7 +1945,7 @@ struct CropFormatView: View {
                 LumaHaptics.shared.tap()
             } label: {
                 Label("Reset zoom", systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .frame(height: 40)
@@ -1941,7 +1971,7 @@ struct CropFormatView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            HeroImage(photo: .coast)
+            HeroImage(photo: .drive)
         }
     }
 
@@ -2005,12 +2035,12 @@ struct AudioView: View {
             // never one behind it.
             HStack {
                 Text("Music")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.luma(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                 Spacer()
                 if let importError {
                     Text(importError)
-                        .font(.system(size: 13))
+                        .font(.luma(size: 13))
                         .foregroundStyle(LumaTheme.orange)
                         .lineLimit(1)
                 }
@@ -2026,10 +2056,10 @@ struct AudioView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Voiceover")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.luma(size: 20, weight: .bold))
                         .foregroundStyle(.white)
                     Text(voiceoverSubtitle)
-                        .font(.system(size: 14))
+                        .font(.luma(size: 14))
                         .foregroundStyle(LumaTheme.textMuted)
                 }
                 Spacer()
@@ -2049,7 +2079,7 @@ struct AudioView: View {
                               : AnyShapeStyle(LumaTheme.surfaceStrong))
                         .frame(width: 56, height: 56)
                         .overlay(Image(systemName: app.editor.isRecordingVoiceover ? "stop.fill" : "mic")
-                            .font(.system(size: 21, weight: .medium))
+                            .font(.luma(size: 21, weight: .medium))
                             .foregroundStyle(.white))
                 }
                 .buttonStyle(.plain)
@@ -2061,7 +2091,7 @@ struct AudioView: View {
 
             Toggle(isOn: $mute) {
                 Text("Mute Clip Audio")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.luma(size: 20, weight: .bold))
                     .foregroundStyle(.white)
             }
             .tint(LumaTheme.accent)
@@ -2107,16 +2137,16 @@ struct AudioView: View {
                     .fill(musicTrack == nil ? LumaTheme.surfaceStrong : LumaTheme.accentDeep)
                     .frame(width: 46, height: 46)
                     .overlay(Image(systemName: musicTrack == nil ? "plus" : "waveform")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.luma(size: 18, weight: .semibold))
                         .foregroundStyle(.white))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(musicTrack?.title ?? "No music")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.luma(size: 18, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Text(musicTrack.map { clock($0.timelineDuration) }
                          ?? "Add a track to score this project")
-                        .font(.system(size: 14))
+                        .font(.luma(size: 14))
                         .foregroundStyle(LumaTheme.textMuted)
                 }
                 Spacer()
@@ -2125,7 +2155,7 @@ struct AudioView: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text(musicTrack == nil ? "Add" : "Change")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.luma(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
@@ -2203,6 +2233,7 @@ struct SettingsSubscriptionView: View {
     @State private var showPaywall = false
     @State private var showExportQuality = false
     @State private var showAbout = false
+    @State private var showPhotoCredits = false
     @State private var showManageSubscriptions = false
     @State private var showLanguageNotice = false
     @State private var showStorageDetail = false
@@ -2244,6 +2275,11 @@ struct SettingsSubscriptionView: View {
             aboutSheet
                 .presentationDetents([.medium])
                 .presentationBackground(Color.black)
+        }
+        .sheet(isPresented: $showPhotoCredits) {
+            PhotoCreditsSheet()
+                .presentationDetents([.medium, .large])
+                .presentationBackground(LumaTheme.ink)
         }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         // Every restore says what happened — success, nothing found, or error.
@@ -2301,7 +2337,7 @@ struct SettingsSubscriptionView: View {
     private var header: some View {
         ZStack {
             Text("Settings")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
             HStack {
                 if !isRoot {
@@ -2420,6 +2456,9 @@ struct SettingsSubscriptionView: View {
                             opensExternally: true) {
                     LumaLegal.open(LumaLegal.terms)
                 }
+                settingsRow(icon: "photo.on.rectangle", title: "Photo credits") {
+                    showPhotoCredits = true
+                }
                 settingsRow(icon: "info.circle", title: "About LumaLook",
                             value: "v\(Self.appVersion)", valueIsNumber: true) {
                     showAbout = true
@@ -2459,12 +2498,12 @@ struct SettingsSubscriptionView: View {
                     .foregroundStyle(.white.opacity(0.75))
                     .frame(width: 28)
                 Text(title)
-                    .font(.system(size: 16))
+                    .font(.luma(size: 16))
                     .foregroundStyle(.white)
                 Spacer()
                 if let value {
                     Text(value)
-                        .font(.system(size: 15, weight: .medium,
+                        .font(.luma(size: 15, weight: .medium,
                                       design: valueIsNumber ? .monospaced : .default))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -2538,11 +2577,11 @@ struct SettingsSubscriptionView: View {
         ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 6) {
             Text("Export quality")
-                .font(.system(size: 19, weight: .bold))
+                .font(.luma(size: 19, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.bottom, 2)
             Text("Default resolution for every export. You can still change it per-export on the export sheet.")
-                .font(.system(size: 13))
+                .font(.luma(size: 13))
                 .foregroundStyle(.white.opacity(0.55))
                 .padding(.bottom, 10)
             ForEach(ExportSpec.Resolution.allCases, id: \.rawValue) { res in
@@ -2557,10 +2596,10 @@ struct SettingsSubscriptionView: View {
                         // A resolution and its pixel dimensions are both
                         // numbers, so both keep the instrument voice.
                         Text(res.rawValue)
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .font(.luma(size: 16, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.white)
                         Text(Self.pixelDimensions(res))
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .font(.luma(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.45))
                         Spacer()
                         if chosen {
@@ -2602,17 +2641,17 @@ struct SettingsSubscriptionView: View {
                 .fill(Color(white: 0.13))
                 .frame(width: 76, height: 76)
                 .overlay(Image(systemName: "camera.filters")
-                    .font(.system(size: 34, weight: .medium))
+                    .font(.luma(size: 34, weight: .medium))
                     .foregroundStyle(.white))
                 .padding(.top, 30)
             Text("LumaLook")
-                .font(.system(size: 24, weight: .bold))
+                .font(.luma(size: 24, weight: .bold))
                 .foregroundStyle(.white)
             // A version and a build are numbers.
             (wordText("Version ", 14, 0.62, weight: .semibold)
              + numText("\(Self.appVersion) (\(Self.appBuild))", 14, 0.82))
             Text("Cinematic looks, live LUT grading and video editing.\nMade by Emotive Impact.")
-                .font(.system(size: 14))
+                .font(.luma(size: 14))
                 .foregroundStyle(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
             Button {
@@ -2623,7 +2662,7 @@ struct SettingsSubscriptionView: View {
                 }
             } label: {
                 Label("Contact — emotiveimpact@gmail.com", systemImage: "envelope")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 46)
@@ -2647,16 +2686,16 @@ struct SettingsSubscriptionView: View {
                 .fill(Color(white: 0.16))
                 .frame(width: 58, height: 58)
                 .overlay(Image(systemName: storeService.isPro ? "crown.fill" : "person.fill")
-                    .font(.system(size: storeService.isPro ? 22 : 26))
+                    .font(.luma(size: storeService.isPro ? 22 : 26))
                     .foregroundStyle(.white.opacity(0.85)))
             VStack(alignment: .leading, spacing: 4) {
                 Text(storeService.isPro ? "LumaLook Pro" : "LumaLook Free")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.luma(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(storeService.isPro ? "Unlimited access" : "Upgrade for every look")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.luma(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(storeService.isPro ? 0.8 : 0.55))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -2667,7 +2706,7 @@ struct SettingsSubscriptionView: View {
                 showPaywall = true
             } label: {
                 Text(storeService.isPro ? "Manage" : "Get Pro")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .fixedSize()
                     .padding(.horizontal, 18)
@@ -2677,5 +2716,54 @@ struct SettingsSubscriptionView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Photo credits
+
+/// The photographers behind the sample photos, with a link to each original.
+/// Unsplash Licence: credit is not required, but it is the right thing to do.
+struct PhotoCreditsSheet: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Photo credits")
+                    .font(.luma(size: 22, weight: .bold))
+                    .kerning(-0.6)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .padding(.top, 26)
+                Text("Sample photos are from Unsplash, used under the Unsplash Licence.")
+                    .font(.luma(size: 14))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .padding(.top, 4)
+                    .padding(.bottom, 16)
+                ForEach(HeroPhoto.allCases, id: \.self) { photo in
+                    Button {
+                        if let url = photo.sourceURL { openURL(url) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            HeroImage(photo: photo, radius: 9)
+                                .frame(width: 44, height: 44)
+                            Text(photo.photographer)
+                                .font(.luma(size: 15, weight: .medium))
+                                .foregroundStyle(LumaTheme.textPrimary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(LumaTheme.textMuted)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("Photo by \(photo.photographer), opens Unsplash")
+                    Rectangle().fill(LumaTheme.hairline).frame(height: 1)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 24)
+        }
     }
 }

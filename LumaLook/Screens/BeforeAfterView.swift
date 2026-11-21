@@ -162,7 +162,7 @@ struct BeforeAfterView: View {
                     .overlay(alignment: .top) {
                         if let status = app.batchStatus {
                             Text(status)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.luma(size: 13, weight: .medium))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
@@ -178,7 +178,7 @@ struct BeforeAfterView: View {
     private var exportErrorToast: some View {
         if let error = app.exportError, !isExporting {
             Text(error)
-                .font(.system(size: 14, weight: .medium))
+                .font(.luma(size: 14, weight: .medium))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -277,7 +277,7 @@ struct BeforeAfterView: View {
 
     private func wipeLabel(_ text: String, bright: Bool) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.luma(size: 12, weight: .semibold))
             .foregroundStyle(.white.opacity(bright ? 0.95 : 0.7))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
@@ -293,7 +293,7 @@ struct BeforeAfterView: View {
                 // The instruction IS the affordance — the point of this mode is
                 // that nothing about it is discovered by accident.
                 Text(holdingOriginal ? "Original" : "Press and hold to flip")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(holdingOriginal ? 1 : 0.8))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -355,7 +355,7 @@ struct BeforeAfterView: View {
     private var originalPaneView: some View {
         pane(originalPane) {
             Text("Original")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.luma(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.7))
         }
     }
@@ -364,10 +364,10 @@ struct BeforeAfterView: View {
         pane(gradedPane) {
             HStack(spacing: 6) {
                 Text("Graded")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.luma(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.95))
                 Text("\(Int(app.settings.intensity.rounded()))%")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.6))
             }
         }
@@ -456,7 +456,7 @@ struct BeforeAfterView: View {
                 Text(modeBlurb)
             }
         }
-        .font(.system(size: 12, weight: .medium))
+        .font(.luma(size: 12, weight: .medium))
         .foregroundStyle(.white.opacity(0.5))
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -480,7 +480,7 @@ struct BeforeAfterView: View {
             modeLabel(at: modeIndex - 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(mode.title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .fixedSize()
             modeLabel(at: modeIndex + 1)
@@ -508,7 +508,7 @@ struct BeforeAfterView: View {
         if modes.indices.contains(index) {
             Button { stepMode(to: index) } label: {
                 Text(modes[index].title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
                     .contentShape(Rectangle())
@@ -523,43 +523,34 @@ struct BeforeAfterView: View {
 
     private var instructionBar: some View {
         let strength = Int(app.settings.intensity.rounded())
-        return ZStack {
+        let colour = app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+            ?? app.selectedLook.signature
+        return HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Back to looks")
+
+            Spacer(minLength: 0)
             Group {
                 if strength == 0 {
-                    Text("Showing the original")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                    Text("Original")
+                        .font(.luma(size: 14, weight: .medium))
+                        .foregroundStyle(LumaTheme.textMuted)
                 } else {
-                    HStack(spacing: 7) {
-                        Text(lookName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                        Text("\(strength)%")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    LookChip(name: lookName, colour: colour, size: 12)
                 }
             }
             .lineLimit(1)
-            // Clears the wider of the two edge controls on both sides, so the
-            // statement is optically centred and can never slide under the CTA.
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 132)
             .allowsHitTesting(false)
+            Spacer(minLength: 0)
 
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Back to looks")
-                Spacer(minLength: 0)
-                exportButton
-            }
+            exportButton
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
@@ -581,11 +572,12 @@ struct BeforeAfterView: View {
             openExportSheet()
         } label: {
             Text("Apply & export")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.black)
+                .font(.luma(size: 15, weight: .semibold))
+                .foregroundStyle(LumaTheme.onLight)
                 .padding(.horizontal, 18)
-                .frame(height: 40)
-                .background(.white, in: Capsule())
+                .frame(height: 42)
+                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
     }
@@ -618,7 +610,7 @@ struct BeforeAfterView: View {
             .buttonStyle(.lumaPress)
 
             Text(timeString(progress * duration))
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(.luma(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.85))
                 .contentTransition(.numericText())
 
@@ -635,7 +627,7 @@ struct BeforeAfterView: View {
             .tint(.white.opacity(0.85))
 
             Text(timeString(duration))
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(.luma(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.45))
         }
         .padding(.horizontal, 20)

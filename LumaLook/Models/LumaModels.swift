@@ -406,13 +406,25 @@ enum LumaTab: String, CaseIterable {
     case looks = "Looks"
     case profile = "Profile"
 
+    /// Label in the tab bar. Night Lab shows four tabs (Home, Looks, Projects,
+    /// You); the Store folds into Looks and keeps its case for deep links.
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .store: return "Store"
+        case .projects: return "Projects"
+        case .looks: return "Looks"
+        case .profile: return "You"
+        }
+    }
+
     var icon: String {
         switch self {
-        case .home: return "house.fill"
+        case .home: return "house"
         case .store: return "bag"
-        case .projects: return "folder"
-        case .looks: return "cube.transparent"
-        case .profile: return "person"
+        case .projects: return "film.stack"
+        case .looks: return "square.grid.2x2"
+        case .profile: return "person.crop.circle"
         }
     }
 }

@@ -87,9 +87,9 @@ struct SelectClipView: View {
 
     var body: some View {
         ZStack {
-            LumaTheme.background.ignoresSafeArea()
+            LumaTheme.ink.ignoresSafeArea()
             VStack(spacing: 0) {
-                LumaScreenHeaderBar(title: "Select Clip", trailingIcon: "info.circle",
+                LumaScreenHeaderBar(title: "Select clip", trailingIcon: "info.circle",
                                     trailingAction: { showInfo = true })
 
                 VStack(spacing: 16) {
@@ -101,7 +101,7 @@ struct SelectClipView: View {
                             LumaHaptics.shared.tap()
                         } label: {
                             Text("Multiple")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.luma(size: 13, weight: .semibold))
                                 .foregroundStyle(batchMode ? .black : .white.opacity(0.7))
                                 .padding(.horizontal, 13)
                                 .frame(height: 34)
@@ -124,26 +124,30 @@ struct SelectClipView: View {
                                 .foregroundStyle(LumaTheme.orange)
                             Text(loadFailure.title).foregroundStyle(LumaTheme.orange)
                         } else if app.selectedVideoURL != nil {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(LumaTheme.teal)
-                            Text("Video selected").foregroundStyle(LumaTheme.teal)
+                            Circle().fill(LumaTheme.signal).frame(width: 7, height: 7)
+                                .shadow(color: LumaTheme.signal, radius: 4)
+                            Text("Video selected").foregroundStyle(LumaTheme.textPrimary)
                         } else if app.selectedImage != nil {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(LumaTheme.teal)
+                            Circle().fill(LumaTheme.signal).frame(width: 7, height: 7)
+                                .shadow(color: LumaTheme.signal, radius: 4)
                             Text(pickerItems.count > 1 ? "\(pickerItems.count) photos, one grade"
                                                        : "Photo selected")
-                                .foregroundStyle(LumaTheme.teal)
+                                .foregroundStyle(LumaTheme.textPrimary)
                         } else {
                             Text(mode == "All" ? "Whole library: videos and photos"
-                                 : (pickingPhotos ? "All Photos" : "All Videos"))
-                                .foregroundStyle(.white)
+                                 : (pickingPhotos ? "All photos" : "All videos"))
+                                .foregroundStyle(LumaTheme.textSecondary)
                         }
                         Spacer()
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-                    .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, 18)
-                    .frame(height: 48)
-                    .lumaCard(cornerRadius: 14)
+                    .font(.luma(size: 14, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .frame(height: 44)
+                    .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(LumaTheme.hairline, lineWidth: 1))
                     .padding(.horizontal, 22)
 
                     // The real photo library, embedded in our chrome — every
@@ -179,26 +183,26 @@ struct SelectClipView: View {
                             HStack(spacing: 8) {
                                 ProgressView().tint(.white)
                                 Text("Preparing…")
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(.luma(size: 17, weight: .semibold))
                                     .foregroundStyle(.white)
                             }
                             if loadIsSlow {
                                 Text("Clips in iCloud can take a moment to download.")
-                                    .font(.system(size: 13))
+                                    .font(.luma(size: 13))
                                     .foregroundStyle(LumaTheme.textSecondary)
                                     .lineLimit(2)
                             }
                         }
                     } else if let loadFailure {
                         Text(loadFailure.detail)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.luma(size: 14, weight: .semibold))
                             .foregroundStyle(LumaTheme.textSecondary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(pickerItems.count > 1 && hasSelection ? "\(pickerItems.count) selected for batch"
                              : (hasSelection ? "1 clip selected" : "No clip selected"))
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.luma(size: 17, weight: .semibold))
                             .foregroundStyle(hasSelection ? .white : LumaTheme.textMuted)
                     }
                     Spacer(minLength: 12)
@@ -208,7 +212,7 @@ struct SelectClipView: View {
                             load(pickerItems)
                         } label: {
                             Text("Try again")
-                                .font(.body.weight(.semibold))
+                                .font(.luma(.body, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 132, height: 52)
                                 .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 14))
@@ -218,20 +222,22 @@ struct SelectClipView: View {
                         Button {
                             app.path.append(.applyLook)
                         } label: {
+                            // Disabled reads as a quiet grey control rather
+                            // than a dimmed yellow, which turned muddy brown.
                             Text("Next")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.white)
+                                .font(.luma(size: 16, weight: .semibold))
+                                .foregroundStyle(hasSelection ? LumaTheme.onSignal : LumaTheme.textMuted)
                                 .frame(width: 132, height: 52)
-                                .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                                .background(hasSelection ? LumaTheme.signal : LumaTheme.control,
+                                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .disabled(!hasSelection)
-                        .opacity(hasSelection ? 1 : 0.4)
                     }
                 }
                 .padding(.horizontal, 22)
                 .padding(.vertical, 12)
-                .background(LumaTheme.background)
+                .background(LumaTheme.ink)
             }
         }
         .navigationBarBackButtonHidden()
@@ -239,14 +245,14 @@ struct SelectClipView: View {
         .sheet(isPresented: $showInfo) {
             VStack(alignment: .leading, spacing: 14) {
                 Label("What can I pick?", systemImage: "info.circle")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.luma(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.top, 26)
                 Text("Pick any video or photo from your library, including HEVC, ProRes and Log footage. The first item you pick becomes the live grading preview.")
-                    .font(.system(size: 15))
+                    .font(.luma(size: 15))
                     .foregroundStyle(LumaTheme.textSecondary)
                 Text("Select up to 10 photos to batch-grade: one grade is dialled in on the first photo, then applied to the whole set on export. Items stored in iCloud may take a moment to download.")
-                    .font(.system(size: 15))
+                    .font(.luma(size: 15))
                     .foregroundStyle(LumaTheme.textSecondary)
                 Spacer()
             }

@@ -17,11 +17,11 @@ struct LumaDial: View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.luma(size: 11, weight: .bold))
                     .tracking(1.6)
                     .foregroundStyle(LumaTheme.textSecondary)
                 Text("\(Int(value))")
-                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    .font(.luma(size: 15, weight: .bold).monospacedDigit())
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.15), value: Int(value))
                     .foregroundStyle(.white)

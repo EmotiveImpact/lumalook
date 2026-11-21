@@ -1,15 +1,78 @@
 import SwiftUI
 import CoreImage
 
-/// Bundled CC0 photography (sources in Resources/HeroPhotos/CREDITS.md)
-/// used for hero surfaces and empty states until the user's own media
-/// takes over. Real imagery is what separates the app from a mockup.
-enum HeroPhoto: String {
+/// Bundled sample photography for hero surfaces, look previews and empty
+/// states until the user's own media takes over. Every sample has a person in
+/// it, because skin is the proof that a grade works.
+///
+/// All from Unsplash under the Unsplash Licence (commercial use allowed, no
+/// permission needed). Photographers are credited in Settings, Photo credits,
+/// and in Resources/HeroPhotos/CREDITS.md.
+enum HeroPhoto: String, CaseIterable {
     case golden = "hero_golden"
-    case coast = "hero_coast"
-    case desert = "hero_desert"
     case neon = "hero_neon"
-    case night = "hero_night"
+    case drive = "hero_drive"
+    case rain = "hero_rain"
+    case party = "hero_party"
+    case skate = "hero_skate"
+    case gig = "hero_gig"
+    case campaign = "hero_campaign"
+    case bridge = "hero_bridge"
+
+    /// Photographer, for the credits page.
+    var photographer: String {
+        switch self {
+        case .golden: return "Diana Simumpande"
+        case .neon: return "Italo Guimas"
+        case .drive: return "Bobby Thapa"
+        case .rain: return "Matt Antonioli"
+        case .party: return "Jared Pizarro"
+        case .skate: return "Ash Edmonds"
+        case .gig: return "Anthony Delanoix"
+        case .campaign: return "Lola Azizada"
+        case .bridge: return "Chuko Cribb"
+        }
+    }
+
+    /// Where the photo lives on Unsplash.
+    var sourceURL: URL? {
+        let slug: String
+        switch self {
+        case .golden: slug = "woman-wearing-beige-off-shoulder-top-xZgkFQ4Hijc"
+        case .neon: slug = "young-woman-illuminated-by-red-and-green-lights-SVuwruJJiZg"
+        case .drive: slug = "person-in-car-under-red-light-SN72o2xIO5w"
+        case .rain: slug = "red-bus-parking-beside-walkway-MJ611qxf5Bk"
+        case .party: slug = "people-dancing-and-enjoying-a-lively-party-atmosphere-b7IkZFcCRDI"
+        case .skate: slug = "woman-in-white-shirt-and-black-pants-jumping-on-black-round-trampoline-during-daytime-oqyoL_G6ZHA"
+        case .gig: slug = "person-performing-heart-hand-gesture-hzgs56Ze49s"
+        case .campaign: slug = "a-woman-with-an-afro-standing-in-front-of-a-red-background-HyoTmwZQwWU"
+        case .bridge: slug = "a-man-in-an-orange-jacket-standing-on-a-bridge-bYTmw7nc7K4"
+        }
+        return URL(string: "https://unsplash.com/photos/\(slug)")
+    }
+
+    /// Where the subject sits in the frame (unit point), so tight crops keep
+    /// the face instead of the background.
+    var focus: UnitPoint {
+        switch self {
+        case .golden: return UnitPoint(x: 0.55, y: 0.35)
+        case .neon: return UnitPoint(x: 0.5, y: 0.4)
+        case .drive: return UnitPoint(x: 0.7, y: 0.5)
+        case .rain: return UnitPoint(x: 0.55, y: 0.5)
+        case .party: return UnitPoint(x: 0.45, y: 0.6)
+        case .skate: return UnitPoint(x: 0.5, y: 0.35)
+        case .gig: return UnitPoint(x: 0.5, y: 0.45)
+        case .campaign: return UnitPoint(x: 0.5, y: 0.32)
+        case .bridge: return UnitPoint(x: 0.5, y: 0.35)
+        }
+    }
+
+    /// The crop anchor that keeps `focus` in frame when the photo fills a
+    /// box of a different shape.
+    var cropAlignment: Alignment {
+        Alignment(horizontal: focus.x < 0.4 ? .leading : (focus.x > 0.6 ? .trailing : .center),
+                  vertical: focus.y < 0.4 ? .top : (focus.y > 0.6 ? .bottom : .center))
+    }
 
     private static var cache: [String: UIImage] = [:]
 
@@ -26,11 +89,14 @@ enum HeroPhoto: String {
 
     static func forScene(_ scene: MockScene) -> HeroPhoto {
         switch scene {
-        case .sunsetRoad, .goldenField, .forest: return .golden
-        case .cityNight, .rainyCity: return .night
-        case .neonStreet, .duskPurple: return .neon
-        case .coast: return .coast
-        case .desert: return .desert
+        case .sunsetRoad, .goldenField: return .golden
+        case .forest: return .skate
+        case .cityNight: return .drive
+        case .rainyCity: return .rain
+        case .neonStreet: return .neon
+        case .duskPurple: return .gig
+        case .coast: return .bridge
+        case .desert: return .party
         }
     }
 }
@@ -44,9 +110,13 @@ struct HeroImage: View {
         Color.clear
             .overlay {
                 if let ui = photo.uiImage {
-                    Image(uiImage: ui)
-                        .resizable()
-                        .scaledToFill()
+                    GeometryReader { geo in
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height,
+                                   alignment: photo.cropAlignment)
+                    }
                 } else {
                     LumaTheme.surfaceStrong
                 }
@@ -57,5 +127,49 @@ struct HeroImage: View {
             // beside) a Button would steal taps from its neighbours. Match the
             // touch region to the visible shape.
             .contentShape(RoundedRectangle(cornerRadius: radius))
+    }
+}
+
+/// A sample photo graded with one of the built-in looks, rendered once off
+/// the main thread through the real pipeline. Shows the ungraded photo until
+/// the grade is ready.
+struct GradedHeroImage: View {
+    let photo: HeroPhoto
+    let lookName: String
+    var radius: CGFloat = 0
+    @State private var image: CGImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let image {
+                    GeometryReader { geo in
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height,
+                                   alignment: photo.cropAlignment)
+                    }
+                    .transition(.opacity)
+                } else {
+                    HeroImage(photo: photo)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .contentShape(RoundedRectangle(cornerRadius: radius))
+            .animation(.easeOut(duration: 0.6), value: image != nil)
+            .task(id: "\(photo.rawValue)|\(lookName)") {
+                let recipe = MockData.looks.first { $0.name == lookName }?.recipe ?? LookRecipe()
+                let source = photo
+                image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+                    guard let ci = source.ciImage else { return nil }
+                    let state = LookState()
+                    state.recipe = recipe
+                    var settings = LookSettings()
+                    settings.intensity = 100
+                    state.settings = settings
+                    return LookPipeline.shared.gradedStill(ci, state: state, maxDimension: 1200)
+                }.value
+            }
     }
 }

@@ -549,6 +549,16 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    /// Jumps to a display zoom (0.5x ultra-wide, 1x wide, 2x, 3x…), ramped.
+    /// Out-of-range values clamp to what the device has, so the lens ruler can
+    /// offer the same stops on every iPhone.
+    func setDisplayZoom(_ display: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeVideoDevice else { return }
+            self.applyDisplayZoom(display, on: device, ramped: true)
+        }
+    }
+
     /// C2 — continuous pinch. Call `beginPinch` on gesture start, then
     /// `updatePinch(scale:)` with the live magnification.
     func beginPinch() {

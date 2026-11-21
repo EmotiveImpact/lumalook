@@ -15,10 +15,10 @@ struct AudioLibrarySheet: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("Sound Library").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                Text("Sound Library").font(.luma(size: 17, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
                 Button("Done", action: onClose)
-                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.accentBright)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
             }
 
             Picker("", selection: $category) {
@@ -53,9 +53,9 @@ struct AudioLibrarySheet: View {
             }
             .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(entry.title).font(.luma(size: 15, weight: .semibold)).foregroundStyle(.white)
                 Text(String(format: "%.1fs", entry.duration))
-                    .font(.system(size: 12)).foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(size: 12)).foregroundStyle(LumaTheme.textSecondary)
             }
             Spacer()
             Button {
@@ -68,7 +68,7 @@ struct AudioLibrarySheet: View {
                     }
                 }
             } label: {
-                Text("Add").font(.footnote.weight(.bold)).foregroundStyle(.white)
+                Text("Add").font(.luma(.footnote, weight: .bold)).foregroundStyle(LumaTheme.onSignal)
                     .padding(.horizontal, 16).padding(.vertical, 8)
                     .background(LumaTheme.accent, in: Capsule())
             }

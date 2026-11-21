@@ -239,13 +239,13 @@ struct LUTManagerView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(option)
-                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                .font(.luma(size: 13, weight: selected ? .semibold : .regular))
                             Text("\(count(for: option))")
-                                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                .font(.luma(size: 10, weight: .bold).monospacedDigit())
                                 .foregroundStyle(selected ? .white.opacity(0.85)
                                                           : LumaTheme.textMuted)
                         }
-                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .foregroundStyle(selected ? LumaTheme.onSignal : LumaTheme.textSecondary)
                         .padding(.horizontal, 13)
                         .padding(.vertical, 8)
                         .background {
@@ -273,7 +273,7 @@ struct LUTManagerView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(LumaTheme.textMuted)
             TextField("Search LUTs and tags", text: $searchText)
-                .font(.system(size: 15))
+                .font(.luma(size: 15))
                 .foregroundStyle(.white)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -298,7 +298,7 @@ struct LUTManagerView: View {
             if let importError {
                 Section {
                     Label(importError, systemImage: "exclamationmark.triangle")
-                        .font(.subheadline)
+                        .font(.luma(.subheadline))
                         .foregroundStyle(LumaTheme.orange)
                         .listRowBackground(LumaTheme.surface)
                 }
@@ -314,18 +314,18 @@ struct LUTManagerView: View {
                             .font(.system(size: 34))
                             .foregroundStyle(LumaTheme.textMuted)
                         Text("No LUTs Here Yet")
-                            .font(.headline)
+                            .font(.luma(.headline))
                             .foregroundStyle(LumaTheme.textSecondary)
                         Text("Import a .cube file to get started.")
-                            .font(.subheadline)
+                            .font(.luma(.subheadline))
                             .foregroundStyle(LumaTheme.textMuted)
                         Button {
                             showImporter = true
                             LumaHaptics.shared.tap()
                         } label: {
                             Label("Import LUT", systemImage: "plus")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .font(.luma(size: 13, weight: .semibold))
+                                .foregroundStyle(LumaTheme.onSignal)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                                 .background(LumaTheme.accent, in: Capsule())
@@ -403,7 +403,7 @@ private struct LUTRow: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(LumaTheme.surfaceStrong)
                         .overlay(Image(systemName: "cube.transparent")
-                            .font(.system(size: 14))
+                            .font(.luma(size: 14))
                             .foregroundStyle(LumaTheme.textMuted))
                 }
             }
@@ -411,7 +411,7 @@ private struct LUTRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(lut.displayName)
-                        .font(.body.weight(.semibold))
+                        .font(.luma(.body, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -422,7 +422,7 @@ private struct LUTRow: View {
                     }
                 }
                 Text(agoText)
-                    .font(.footnote)
+                    .font(.luma(.footnote))
                     .foregroundStyle(LumaTheme.textMuted)
             }
             Spacer()

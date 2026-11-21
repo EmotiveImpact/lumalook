@@ -26,10 +26,10 @@ struct LUTCompareView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Compare LUTs")
-                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    .font(.luma(size: 17, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
                 Button("Done") { dismiss() }
-                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.accentBright)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -77,7 +77,7 @@ struct LUTCompareView: View {
                                     }
                                 }
                                 Text(candidate?.file.displayName ?? "Original")
-                                    .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
+                                    .font(.luma(size: 12, weight: isCurrent ? .semibold : .regular))
                                     .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)
                                     .lineLimit(1)
                             }
