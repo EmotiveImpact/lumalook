@@ -2067,7 +2067,7 @@ private struct EditorContent: View {
                     }
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(minWidth: 34, minHeight: 30)
-                    .contentShape(HitSlop(horizontal: 4, vertical: 7))
+                    .contentShape(HitSlop(horizontal: 5, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
                 .accessibilityLabel("Timeline zoom")
