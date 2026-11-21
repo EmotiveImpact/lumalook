@@ -1944,36 +1944,66 @@ private struct EditorContent: View {
 
     // MARK: Transport — every number in mono
 
-    private var transport: some View {
-        HStack(spacing: 0) {
+    /// Playhead, length and (with frames on) the rate. The play button sits
+    /// dead centre, so this gets a third of the row: about 130 pt on a 6.3"
+    /// phone, where the one-line frames form (about 190 pt) used to wrap
+    /// mid-number. It now picks the first layout that fits.
+    private var timeReadout: some View {
+        let current = showFrames
+            ? LDFormat.timecode(editor.currentTime, frameDuration: editor.frameDuration)
+            : LDFormat.clock(editor.currentTime)
+        let total = showFrames
+            ? LDFormat.timecode(editor.totalDuration, frameDuration: editor.frameDuration)
+            : LDFormat.clock(editor.totalDuration)
+        // Frames are only meaningful with their rate beside them.
+        let rate = showFrames ? LDFormat.rate(editor.frameRate) : nil
+        let playhead = Text(current)
+            .font(.system(size: 14, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(.white.opacity(0.95))
+        return ViewThatFits(in: .horizontal) {
+            // One line when there's room (the minutes:seconds form fits).
             HStack(spacing: 5) {
-                Text(showFrames
-                     ? LDFormat.timecode(editor.currentTime, frameDuration: editor.frameDuration)
-                     : LDFormat.clock(editor.currentTime))
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.95))
+                playhead
                 Text("/")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.28))
-                Text(showFrames
-                     ? LDFormat.timecode(editor.totalDuration, frameDuration: editor.frameDuration)
-                     : LDFormat.clock(editor.totalDuration))
+                Text(total)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
-                if showFrames {
-                    // Frames are only meaningful with their rate beside them.
-                    Text(LDFormat.rate(editor.frameRate))
+                if let rate {
+                    Text(rate)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.35))
-                        .lineLimit(1)
-                        .fixedSize()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onLongPressGesture { showFrames.toggle(); LumaHaptics.shared.tap() }
+            .lineLimit(1)
+            .fixedSize()
+            // Otherwise the playhead keeps its size and the length and rate
+            // sit beneath it, smaller.
+            VStack(alignment: .leading, spacing: 1) {
+                playhead
+                Text(rate.map { "\(total) · \($0)" } ?? total)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .lineLimit(1)
+            .fixedSize()
+            // Last resort: the playhead alone, shrinking rather than wrapping.
+            playhead
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    private var transport: some View {
+        HStack(spacing: 0) {
+            timeReadout
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onLongPressGesture { showFrames.toggle(); LumaHaptics.shared.tap() }
 
             HStack(spacing: 24) {
                 Button {} label: { Image(systemName: "backward.end").font(.system(size: 14, weight: .light)) }
@@ -1994,8 +2024,9 @@ private struct EditorContent: View {
             .opacity(editor.isEmpty ? 0.3 : 1)
             .disabled(editor.isEmpty)
 
-            HStack(spacing: 16) {
-                Spacer(minLength: 0)
+            // Spacing 10, not 16: at 16 the three controls outgrew their
+            // third of the row on 6.3" phones and the zoom value wrapped.
+            HStack(spacing: 10) {
                 if editor.isRebuilding {
                     ProgressView().controlSize(.mini).tint(LumaTheme.textMuted)
                 }
@@ -2030,6 +2061,8 @@ private struct EditorContent: View {
                         Text("\(Int((timelineZoom / 50 * 100).rounded()))%")
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(minWidth: 34, minHeight: 30)
@@ -2040,7 +2073,7 @@ private struct EditorContent: View {
                 .accessibilityValue("\(Int((timelineZoom / 50 * 100).rounded())) percent")
             }
             .foregroundStyle(LumaTheme.textSecondary)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
