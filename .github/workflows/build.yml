@@ -21,7 +21,7 @@ name: Build
 
 on:
   push:
-    branches: [master, "claude/**"]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -47,6 +47,8 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -showsdks | grep -i iphoneos || true
+          # Report every compiler error in one run, not just the first batch.
+          defaults write com.apple.dt.Xcode IDEBuildingContinueBuildingAfterErrors -bool YES
 
       - name: Archive (unsigned)
         run: |

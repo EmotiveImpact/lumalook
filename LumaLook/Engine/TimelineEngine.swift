@@ -3640,7 +3640,7 @@ final class EditorState: ObservableObject {
                              overlaySourceExtents: Dictionary(uniqueKeysWithValues:
                                 overlaySpecs.map { ($0.id, $0.sourceExtent) }),
                              duration: duration,
-                             frameRate: projectRate)
+                             frameRate: projectRate ?? 30)
     }
 
     /// Segments the timeline into `LumaCompositionInstruction`s. Boundaries
