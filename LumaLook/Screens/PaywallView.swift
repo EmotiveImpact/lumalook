@@ -3,9 +3,9 @@ import StoreKit
 
 // MARK: - Paywall (C5)
 
-/// Pro paywall. Pricing locked: $24.99/yr with a 7-day free trial or
-/// $119.99 lifetime, $9.99/mo — no WEEKLY tier, matching the anti-subscription
-/// wave in the LUT niche. Presented as a sheet from Settings, onboarding,
+/// Pro paywall. Pricing locked (StoreService.LockedPricing): $49.99/yr with a
+/// 7-day free trial, $9.99/mo or $119.99 lifetime. No WEEKLY tier, matching
+/// the anti-subscription wave in the LUT niche. Presented as a sheet from Settings, onboarding,
 /// premium looks, and pack purchases.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
@@ -100,7 +100,7 @@ struct PaywallView: View {
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 13) {
             PaywallFeatureRow(icon: "camera.filters", title: "All Looks & Packs",
-                              detail: "16 cinematic looks plus every future pack.")
+                              detail: "All \(PackCatalog.totalLookCount) pack looks and every signature look, plus every future pack.")
             PaywallFeatureRow(icon: "square.stack.3d.up", title: "LUT Stacking",
                               detail: "Conversion and creative slots with per-slot strength.")
             PaywallFeatureRow(icon: "square.and.arrow.up.on.square", title: "Batch Export",
@@ -166,7 +166,9 @@ struct PaywallView: View {
             PaywallPlanRow(
                 title: "Yearly",
                 price: "\(yearlyPrice) / year",
-                badge: "7-Day Free Trial",
+                // The trial badge is a promise, so it shows only when StoreKit
+                // says THIS account can take the offer (same rule as the CTA).
+                badge: yearlyTrialLabel ?? "Best Value",
                 selected: plan == .yearly
             ) { plan = .yearly }
             PaywallPlanRow(
