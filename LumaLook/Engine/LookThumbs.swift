@@ -25,10 +25,22 @@ final class LookThumbs: ObservableObject {
     /// A portrait for the Looks tab's poster tiles: every look shown on a
     /// face, without the calibration band the strip swatch carries.
     static let portraitFrame: CIImage = {
-        guard let photo = HeroPhoto.bridge.ciImage else { return fallbackFrame }
-        let longest = max(photo.extent.width, photo.extent.height)
+        // A close portrait with skin and foliage, so warm, cool and green
+        // shifts all read. Cropped 4:5 around the face to match the tiles.
+        let sample = HeroPhoto.golden
+        guard let photo = sample.ciImage else { return fallbackFrame }
+        let full = photo.extent
+        let width = min(full.width, full.height * 0.8)
+        let height = width / 0.8
+        // Core Image counts y from the bottom; HeroPhoto.focus counts from the top.
+        let centreX = full.minX + full.width * sample.focus.x
+        let centreY = full.minY + full.height * (1 - sample.focus.y)
+        let x = min(max(full.minX, centreX - width / 2), full.maxX - width)
+        let y = min(max(full.minY, centreY - height / 2), full.maxY - height)
+        let cropped = photo.cropped(to: CGRect(x: x, y: y, width: width, height: height))
+        let longest = max(cropped.extent.width, cropped.extent.height)
         let scale = longest > 900 ? 900 / longest : 1
-        let scaled = photo.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let scaled = cropped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         return scaled.transformed(by: CGAffineTransform(
             translationX: -scaled.extent.minX, y: -scaled.extent.minY))
     }()

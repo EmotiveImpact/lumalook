@@ -200,7 +200,7 @@ struct LookBrowserSheet: View {
                 thumbs.render(source: app.previewFrame, library: app.library.all,
                               fileURL: { app.lutRepository.fileURL(for: $0) })
             } else {
-                thumbs.render(source: app.previewFrame ?? LookThumbs.portraitFrame,
+                thumbs.render(source: LookThumbs.portraitFrame,
                               library: app.library.all,
                               fileURL: { app.lutRepository.fileURL(for: $0) },
                               maxDimension: 520)
