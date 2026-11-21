@@ -41,6 +41,21 @@ import Photos
 //   ✓ Camera-unavailable / permission-denied fallback with Settings deep link
 //   ✓ LUMA_SEED_CAMFRAME / _CAMASSIST / _CAMPRO / _BROWSER seeding (carried)
 //
+//   Night Lab round two:
+//   ✓ Live histogram pill (top right, on by default, tap hides it)
+//   ✓ Corner focus brackets: faint at rest, lit where you tap, then settle
+//   ✓ Modes Photo · Video · Slo-mo · Portrait (Slo-mo and Portrait only on
+//     cameras that can; all four in the DEBUG preview)
+//   ✓ Slo-mo: highest-rate format (120 / 240, 1080p preferred), conformed to
+//     30 fps when the take ends so it plays back slowed everywhere
+//   ✓ Last shot by the shutter (this session, else the newest library item)
+//   ✓ Photo pill "HEIF · 24 MP": format and the sizes this camera supports
+//   ✓ Roll mode: 36 frames counted down on a signal-yellow shutter, Roll done
+//     with Develop / New roll, persisted, toggled in the photo format panel
+//   ✓ Portrait: depth (and the portrait matte) with each still, background
+//     blur at the ruler's aperture, f/1.4 to f/16
+//   ✓ LUMA_SEED_CAMMODE / _CAMROLL / _CAMFOCUS seeding
+//
 //   DEVICE QA only (wired here, but the simulator cannot exercise them): the
 //   sensor writes — flip, full-res still, ISO/shutter/WB/focus/zoom lock-and-set
 //   — and the AVAssetWriter recording path. The CAMFRAME stub feeds
@@ -82,11 +97,31 @@ struct CameraLiveLookView: View {
     @State private var activeProParam: ProParameter = .shutter
 
     /// What the main ruler is driving. Tapping a readout cell re-targets it.
-    private enum RulerTarget: Equatable { case look, lens, shutter, iso }
+    /// Aperture only exists in Portrait.
+    private enum RulerTarget: Equatable { case look, lens, shutter, iso, aperture }
     @State private var rulerTarget: RulerTarget = .lens
-    /// Photo takes a graded still; Video records with the look baked in.
-    private enum CaptureMode: String, CaseIterable { case photo = "Photo", video = "Video" }
+    /// Photo takes a graded still; Video records with the look baked in;
+    /// Slo-mo records at the camera's highest rate and plays back slowed;
+    /// Portrait takes a still with a depth blur. Slo-mo and Portrait only
+    /// show on cameras that can do them.
+    private enum CaptureMode: String, CaseIterable {
+        case photo = "Photo", video = "Video", slowMo = "Slo-mo", portrait = "Portrait"
+
+        var takesStills: Bool { self == .photo || self == .portrait }
+    }
     @State private var captureMode: CaptureMode = .video
+    /// Portrait's f-number, as an index into `apertureStops` (f/2.8).
+    @State private var apertureIndex = 2
+    /// The live histogram pill, on by default; tap hides it to a small glyph.
+    @AppStorage("lumalook.camera.histogram") private var showHistogram = true
+    @State private var histogram: CameraHistogram?
+    /// Roll mode: an optional roll of 36 that the shutter counts down.
+    /// Persists across launches, off by default.
+    @AppStorage("lumalook.camera.rollOn") private var rollOn = false
+    @AppStorage("lumalook.camera.rollLeft") private var rollLeft = 36
+    @State private var showRollDone = false
+    /// The newest capture (or library item) for the button by the shutter.
+    @State private var lastShot: LastShot?
     /// The 120 ms white blink when a still is taken.
     @State private var shutterFlash = false
 
@@ -100,8 +135,14 @@ struct CameraLiveLookView: View {
     @State private var recordStart: Date?
     @State private var statusCaption: String?
     @State private var stillSavedFlash = 0
-    @State private var reticlePoint: CGPoint?
-    @State private var reticlePulse = false
+    /// Where the focus brackets sit (nil: centred at rest, faint), whether
+    /// they are still lit from the tap, and a counter that restarts the
+    /// animate-in on every tap.
+    @State private var focusPoint: CGPoint?
+    @State private var focusActive = false
+    @State private var focusTapID = 0
+    /// DEBUG only: a unit point for lit brackets in the preview screenshot.
+    @State private var focusSeed: CGPoint?
     @State private var isPinching = false
     /// Unified look browser over the viewfinder (mid detent, undimmed).
     @State private var showLookBrowser =
@@ -115,6 +156,29 @@ struct CameraLiveLookView: View {
     // MARK: - Body
 
     var body: some View {
+        mainBody
+            .onChange(of: captureMode) { old, new in
+                modeChanged(from: old, to: new)
+            }
+            // A camera that loses a mode (the front camera has no depth, or
+            // no high frame rate) drops back to its plain sibling.
+            .onChange(of: camera.slowMotionFPS) { _, fps in
+                if fps == nil, captureMode == .slowMo, !showsAllModesForPreview { captureMode = .video }
+            }
+            .onChange(of: camera.depthSupported) { _, supported in
+                if !supported, captureMode == .portrait, !showsAllModesForPreview { captureMode = .photo }
+            }
+            .onChange(of: camera.lastRecordingURL) { _, url in
+                if let url { rememberClip(url) }
+            }
+            .onChange(of: camera.isConformingSlowMo) { _, conforming in
+                if conforming { flash("Slowing the clip down") }
+            }
+            .task(id: showHistogram) { await runHistogramLoop() }
+            .task { await loadLibraryThumb() }
+    }
+
+    private var mainBody: some View {
         ZStack(alignment: .top) {
             LumaTheme.ink.ignoresSafeArea()
 
@@ -150,6 +214,17 @@ struct CameraLiveLookView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
                     .zIndex(50)
             }
+
+            if showRollDone {
+                CameraRollDoneCard(frames: Self.rollLength,
+                                   onNewRoll: { loadNewRoll() },
+                                   onDevelop: { developRoll() })
+                    .frame(maxWidth: 360)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(.horizontal, 24)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    .zIndex(51)
+            }
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -159,6 +234,7 @@ struct CameraLiveLookView: View {
         .animation(.easeOut(duration: 0.18), value: frameGuide)
         .animation(.spring(response: 0.34, dampingFraction: 0.85),
                    value: camera.lastRecordingURL != nil)
+        .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showRollDone)
         // The full library over the viewfinder: opens at a mid detent so the
         // live feed stays visible, undimmed and interactive above the sheet.
         .lumaToolSheet(isPresented: $showLookBrowser, style: .panel) {
@@ -189,7 +265,7 @@ struct CameraLiveLookView: View {
             if let error { flash(error) }
         }
         .onChange(of: camera.microphoneDenied) { _, denied in
-            if denied { flash("Microphone access is off — recordings will be silent") }
+            if denied { flash("Microphone access is off, so recordings will be silent") }
         }
         // The controller writes the finished take to the photo library on its
         // own clock, well after the writer closes. Confirm it when it actually
@@ -236,6 +312,26 @@ struct CameraLiveLookView: View {
                 $0.rawValue.lowercased() == pro.lowercased()
             }) { activeProParam = match }
         }
+        // Verification: open on another mode, with a roll loaded, or with
+        // the focus brackets lit, e.g. LUMA_SEED_CAMMODE=photo
+        // LUMA_SEED_CAMROLL=24 LUMA_SEED_CAMFOCUS=1.
+        let env = ProcessInfo.processInfo.environment
+        if let mode = env["LUMA_SEED_CAMMODE"] {
+            switch mode.lowercased() {
+            case "photo": captureMode = .photo
+            case "slomo", "slo-mo": captureMode = .slowMo
+            case "portrait": captureMode = .portrait
+            default: break
+            }
+        }
+        if let roll = env["LUMA_SEED_CAMROLL"], let left = Int(roll) {
+            rollOn = true
+            rollLeft = min(max(left, 0), Self.rollLength)
+        }
+        if env["LUMA_SEED_CAMFOCUS"] == "1" {
+            focusSeed = CGPoint(x: 0.56, y: 0.3)
+            focusActive = true
+        }
         #endif
         thumbs.render(source: liveThumbSource, library: stripLooks,
                       fileURL: { app.lutRepository.fileURL(for: $0) })
@@ -260,6 +356,19 @@ struct CameraLiveLookView: View {
         }
     }
 
+    /// ~4 Hz histogram for the pill, from a 64 px sample of the graded
+    /// preview off the main thread, so it never costs the viewfinder a frame.
+    private func runHistogramLoop() async {
+        guard showHistogram else { histogram = nil; return }
+        while !Task.isCancelled {
+            if let frame = camera.previewImage {
+                let next = await CameraHistogram.compute(frame)
+                if !Task.isCancelled, let next { histogram = next }
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+    }
+
     // MARK: - Top matte
     //
     // The first half of the point of this screen: this row is chrome sitting on
@@ -268,60 +377,29 @@ struct CameraLiveLookView: View {
     private var topMatte: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
-                        .contentShape(Circle())
+                closeButton
+                if captureMode.takesStills {
+                    photoPills
+                } else {
+                    videoFormatButton
                 }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Close camera")
-
-                // Live from the ACTIVE spec, so the HUD never lies. Tap to
-                // change resolution, frame rate and codec.
-                Button {
-                    panel = panel == .format ? .none : .format
-                    LumaHaptics.shared.tap()
-                } label: {
-                    CaptureFormatChip(spec: camera.activeSpec)
-                        .lumaGlassPill()
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.lumaPress)
-                .disabled(camera.isRecording || camera.isPreparingRecording)
-                .accessibilityHint(camera.isRecording || camera.isPreparingRecording
-                                   ? "Stop recording to change the capture format"
-                                   : "Change resolution, frame rate, and codec")
 
                 Spacer(minLength: 0)
 
                 if camera.isRecording {
-                    HStack(spacing: 6) {
-                        RecordTally()
-                        TimelineView(.periodic(from: recordStart ?? Date(),
-                                               by: 1.0 / Double(max(1, camera.activeSpec.fps)))) { context in
-                            Text(Timecode.string(
-                                seconds: context.date.timeIntervalSince(recordStart ?? context.date),
-                                fps: Double(max(1, camera.activeSpec.fps))))
-                                .font(.luma(size: 12, weight: .semibold))
-                                .monospacedDigit()
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .lumaGlassPill()
-                    .transition(.opacity)
+                    recordTimer
                 }
 
-                // What the lens is doing never leaves the top line.
-                Text(String(format: "%.1f×", camera.zoomFactor))
-                    .font(.luma(size: 12, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .lumaGlassPill()
+                if captureMode.takesStills {
+                    focusModePill
+                } else {
+                    // What the lens is doing never leaves the top line.
+                    Text(String(format: "%.1f×", camera.zoomFactor))
+                        .font(.luma(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .lumaGlassPill()
+                }
             }
 
             statusLine
@@ -329,6 +407,110 @@ struct CameraLiveLookView: View {
         .padding(.horizontal, 14)
         .padding(.top, 4)
         .animation(.easeOut(duration: 0.18), value: camera.isRecording)
+        .animation(.easeOut(duration: 0.18), value: captureMode)
+    }
+
+    private var closeButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(.ultraThinMaterial, in: Circle())
+                .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("Close camera")
+    }
+
+    /// Live from the ACTIVE spec, so the HUD never lies. Tap to change
+    /// resolution, frame rate and codec.
+    private var videoFormatButton: some View {
+        Button {
+            panel = panel == .format ? .none : .format
+            LumaHaptics.shared.tap()
+        } label: {
+            CaptureFormatChip(spec: camera.activeSpec)
+                .lumaGlassPill()
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(camera.isRecording || camera.isPreparingRecording)
+        .accessibilityHint(camera.isRecording || camera.isPreparingRecording
+                           ? "Stop recording to change the capture format"
+                           : "Change resolution, frame rate, and codec")
+    }
+
+    /// Photo modes: the still format and size, and the roll when one is
+    /// loaded. Either opens the photo format panel.
+    private var photoPills: some View {
+        HStack(spacing: 8) {
+            Button {
+                panel = panel == .format ? .none : .format
+                LumaHaptics.shared.tap()
+            } label: {
+                PhotoFormatChip(format: camera.photoSpec.format.rawValue,
+                                megapixels: camera.activePhotoMegapixels)
+                    .lumaGlassPill()
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityHint("Change the photo format and size")
+
+            if rollOn {
+                Button {
+                    panel = panel == .format ? .none : .format
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Text("Roll · \(rollLeft) left")
+                        .font(.luma(size: 12, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .padding(.vertical, 5)
+                        .lumaGlassPill()
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// Photo modes show the focus mode where video shows zoom: AF, MF, or
+    /// AF L while AE/AF is locked. Tap opens the focus dial.
+    private var focusModePill: some View {
+        Button { openPro(.focus) } label: {
+            Text(camera.aeafLocked ? "AF L" : (camera.manualFocus ? "MF" : "AF"))
+                .font(.luma(size: 12, weight: .semibold))
+                .foregroundStyle(camera.aeafLocked ? LumaTheme.signal : .white)
+                .lineLimit(1)
+                .lumaGlassPill()
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("Focus")
+    }
+
+    private var recordTimer: some View {
+        // Slo-mo runs at 120 / 240: the timecode keeps a readable frame
+        // count and redraws at no more than 60 Hz.
+        let fps = min(max(1, camera.activeSpec.fps), 60)
+        return HStack(spacing: 6) {
+            RecordTally()
+            TimelineView(.periodic(from: recordStart ?? Date(), by: 1.0 / Double(fps))) { context in
+                Text(Timecode.string(
+                    seconds: context.date.timeIntervalSince(recordStart ?? context.date),
+                    fps: Double(fps)))
+                    .font(.luma(size: 12, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+        }
+        .lumaGlassPill()
+        .transition(.opacity)
     }
 
     /// Captions and the live mic meter, in a pill over the picture.
@@ -349,9 +531,45 @@ struct CameraLiveLookView: View {
                     .transition(.opacity)
             }
             Spacer(minLength: 0)
+            histogramControl
         }
         .frame(minHeight: 28)
         .animation(.easeOut(duration: 0.18), value: statusCaption)
+        .animation(.easeOut(duration: 0.18), value: showHistogram)
+    }
+
+    /// The histogram pill, or a small glyph to bring it back.
+    @ViewBuilder
+    private var histogramControl: some View {
+        if showHistogram {
+            Button {
+                showHistogram = false
+                LumaHaptics.shared.tap()
+            } label: {
+                CameraHistogramPill(histogram: histogram)
+                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityHint("Hide the histogram")
+            .transition(.opacity)
+        } else {
+            Button {
+                showHistogram = true
+                LumaHaptics.shared.tap()
+            } label: {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 30, height: 30)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Show histogram")
+            .transition(.opacity)
+        }
     }
 
     private var idleStatusLine: String {
@@ -388,15 +606,8 @@ struct CameraLiveLookView: View {
                         onTapUnit: { unit, viewPoint in
                             if camera.aeafLocked { camera.unlockAEAF() }
                             camera.focusExpose(at: unit)
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                reticlePoint = viewPoint
-                                reticlePulse.toggle()
-                            }
+                            placeFocusBrackets(at: viewPoint)
                             LumaHaptics.shared.tap()
-                            Task {                       // reticle fades after 1.1 s
-                                try? await Task.sleep(nanoseconds: 1_100_000_000)
-                                withAnimation(.easeOut(duration: 0.3)) { reticlePoint = nil }
-                            }
                         },
                         onLongPress: {
                             camera.toggleAEAFLock()
@@ -422,13 +633,7 @@ struct CameraLiveLookView: View {
                         .transition(.opacity)
                 }
             }
-            .overlay {
-                if let p = reticlePoint {
-                    CameraFocusReticle(pulse: reticlePulse)
-                        .position(p)
-                        .transition(.opacity)
-                }
-            }
+            .overlay { focusBracketsLayer }
             .overlay(alignment: .top) {
                 if camera.aeafLocked {
                     Text("AE/AF locked")
@@ -498,6 +703,81 @@ struct CameraLiveLookView: View {
             }
         }
         .padding(20)
+    }
+
+    // MARK: Focus brackets
+    //
+    // Four signal-yellow corners. At rest they sit faint around the middle
+    // of the clear picture; a tap snaps them to that point, they animate in
+    // lit, then settle dimmer where focus and exposure are now held.
+
+    private var focusBracketsLayer: some View {
+        GeometryReader { geo in
+            let point = focusPoint ?? seededFocusPoint(in: geo.size)
+            ZStack {
+                if let point {
+                    CameraFocusBrackets(colour: LumaTheme.signal.opacity(bracketOpacity),
+                                        lineWidth: 2, arm: 16)
+                        .frame(width: 84, height: 84)
+                        .position(point)
+                        .id(focusTapID)
+                        .transition(.scale(scale: 1.45).combined(with: .opacity))
+                } else {
+                    let rest = restBracketRect(in: geo.size)
+                    CameraFocusBrackets(colour: LumaTheme.signal.opacity(camera.aeafLocked ? 1 : 0.42),
+                                        lineWidth: 1.5, arm: 18)
+                        .frame(width: rest.width, height: rest.height)
+                        .position(x: rest.midX, y: rest.midY)
+                        .transition(.opacity)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.35), value: focusActive)
+        .animation(.easeOut(duration: 0.18), value: camera.aeafLocked)
+    }
+
+    /// Lit just after a tap or while AE/AF is locked, then settled.
+    private var bracketOpacity: Double {
+        camera.aeafLocked || focusActive ? 1 : 0.6
+    }
+
+    /// The resting frame: in the part of the picture left clear between the
+    /// top pills (and histogram) and the drawer, as on the approved mock.
+    private func restBracketRect(in size: CGSize) -> CGRect {
+        let inset: CGFloat = 26
+        let top = size.height * 0.235
+        let height = size.height * 0.35
+        return CGRect(x: inset, y: top, width: max(0, size.width - inset * 2), height: height)
+    }
+
+    private func seededFocusPoint(in size: CGSize) -> CGPoint? {
+        guard let seed = focusSeed else { return nil }
+        return CGPoint(x: seed.x * size.width, y: seed.y * size.height)
+    }
+
+    private func placeFocusBrackets(at point: CGPoint) {
+        focusTapID += 1
+        let tap = focusTapID
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+            focusPoint = point
+            focusActive = true
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard tap == focusTapID else { return }
+            focusActive = false
+        }
+    }
+
+    /// Back to the faint resting frame (auto all, a flip).
+    private func resetFocusBrackets() {
+        focusTapID += 1
+        focusSeed = nil
+        withAnimation(.easeOut(duration: 0.25)) {
+            focusPoint = nil
+            focusActive = false
+        }
     }
 
     // MARK: - Drawer
@@ -807,8 +1087,15 @@ struct CameraLiveLookView: View {
         return HStack(spacing: 6) {
             ReadoutCell(label: "Look", value: strength == 0 ? "Off" : "\(strength)%",
                         active: rulerTarget == .look) { retarget(.look) }
-            ReadoutCell(label: "Lens", value: "\(Self.millimetres(camera.zoomFactor)) mm",
-                        active: rulerTarget == .lens) { retarget(.lens) }
+            // Portrait trades the lens readout for the aperture (pinch still
+            // zooms).
+            if captureMode == .portrait {
+                ReadoutCell(label: "Aperture", value: Self.fNumber(apertureIndex),
+                            active: rulerTarget == .aperture) { retarget(.aperture) }
+            } else {
+                ReadoutCell(label: "Lens", value: "\(Self.millimetres(camera.zoomFactor)) mm",
+                            active: rulerTarget == .lens) { retarget(.lens) }
+            }
             ReadoutCell(label: "Shutter", value: readout(for: .shutter), dimmed: isAuto(.shutter),
                         active: rulerTarget == .shutter) { retarget(.shutter) }
             ReadoutCell(label: "ISO", value: readout(for: .iso), dimmed: isAuto(.iso),
@@ -833,6 +1120,18 @@ struct CameraLiveLookView: View {
 
     private static let strengthStops: [Double] = stride(from: 0.0, through: 100.0, by: 10.0).map { $0 }
     private static let lensStops: [CGFloat] = [0.5, 1, 1.5, 2, 3, 5]
+    /// Portrait's f-numbers: f/1.4 blurs the most, f/16 barely at all.
+    private static let apertureStops: [Double] = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
+    /// A roll of film, as on the approved mock.
+    static let rollLength = 36
+
+    /// "f/1.4", "f/2", "f/11" for an index into `apertureStops`.
+    private static func fNumber(_ index: Int) -> String {
+        guard apertureStops.indices.contains(index) else { return "f/2.8" }
+        let value = apertureStops[index]
+        if value == value.rounded() { return "f/\(Int(value))" }
+        return String(format: "f/%.1f", value)
+    }
 
     /// 35 mm-equivalent focal length for a display zoom, from the familiar
     /// iPhone marks (0.5× 13 mm, 1× 24 mm, 2× 48 mm, 3× 77 mm, 5× 120 mm).
@@ -852,6 +1151,7 @@ struct CameraLiveLookView: View {
         case .lens:    return Self.lensStops.map { "\(Self.millimetres($0))" }
         case .shutter: return dialTicks(for: .shutter)
         case .iso:     return dialTicks(for: .iso)
+        case .aperture: return Self.apertureStops.indices.map { Self.fNumber($0) }
         }
     }
 
@@ -869,6 +1169,7 @@ struct CameraLiveLookView: View {
             } ?? 1
         case .shutter: return dialIndex(for: .shutter)
         case .iso:     return dialIndex(for: .iso)
+        case .aperture: return apertureIndex
         }
     }
 
@@ -882,13 +1183,37 @@ struct CameraLiveLookView: View {
             camera.setDisplayZoom(Self.lensStops[index])
         case .shutter: applyDial(index, to: .shutter)
         case .iso:     applyDial(index, to: .iso)
+        case .aperture:
+            guard Self.apertureStops.indices.contains(index) else { return }
+            apertureIndex = index
         }
     }
 
-    /// Photo or Video. Locked while a take is rolling.
+    /// The modes this camera can shoot. Slo-mo needs a high-frame-rate
+    /// format and Portrait needs depth; DEBUG preview shows every mode,
+    /// because the simulator has no camera to ask.
+    private var visibleModes: [CaptureMode] {
+        CaptureMode.allCases.filter { mode in
+            switch mode {
+            case .photo, .video: return true
+            case .slowMo:        return camera.slowMotionFPS != nil || showsAllModesForPreview
+            case .portrait:      return camera.depthSupported || showsAllModesForPreview
+            }
+        }
+    }
+
+    private var showsAllModesForPreview: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"] != nil
+        #else
+        return false
+        #endif
+    }
+
+    /// Photo, Video, Slo-mo, Portrait. Locked while a take is rolling.
     private var modeSwitch: some View {
-        HStack(spacing: 28) {
-            ForEach(CaptureMode.allCases, id: \.self) { mode in
+        HStack(spacing: 24) {
+            ForEach(visibleModes, id: \.self) { mode in
                 Button {
                     captureMode = mode
                     LumaHaptics.shared.tap()
@@ -966,7 +1291,9 @@ struct CameraLiveLookView: View {
                 }
                 .accessibilityHint(camera.isRecording || camera.isPreparingRecording
                                    ? "Stop recording to change the capture format"
-                                   : "Change resolution, frame rate, and codec")
+                                   : (captureMode.takesStills
+                                      ? "Change the photo format, size and roll"
+                                      : "Change resolution, frame rate, and codec"))
                 tool("a.circle", "Auto all", on: false) { autoAll() }
             }
             .padding(.horizontal, 16)
@@ -1062,8 +1389,19 @@ struct CameraLiveLookView: View {
     }
 
     // MARK: Format panel — resolution / fps / codec, in the drawer
+    //
+    // The photo modes swap it for the still format, size and roll.
 
+    @ViewBuilder
     private var formatPanel: some View {
+        if captureMode.takesStills {
+            photoFormatPanel
+        } else {
+            videoFormatPanel
+        }
+    }
+
+    private var videoFormatPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             if camera.isRecording || camera.isPreparingRecording {
                 Text("Stop recording to change format.")
@@ -1072,15 +1410,15 @@ struct CameraLiveLookView: View {
             }
             // Options this camera cannot shoot are dimmed rather than offered
             // and then quietly swapped for something else. Selection shows what
-            // is actually running.
+            // is actually running. Slo-mo owns the size and rate.
             formatRow("Resolution", options: CameraSpec.Resolution.allCases,
                       label: { $0.rawValue }, isOn: { camera.activeSpec.resolution == $0 },
-                      enabled: { resolutionAvailable($0) }) { r in
+                      enabled: { captureMode != .slowMo && resolutionAvailable($0) }) { r in
                 var s = camera.spec; s.resolution = r; camera.setSpec(s)
             }
             formatRow("Frame rate", options: CameraSpec.fpsOptions,
                       label: { "\($0)" }, isOn: { camera.activeSpec.fps == $0 },
-                      enabled: { fpsAvailable($0) }) { f in
+                      enabled: { captureMode != .slowMo && fpsAvailable($0) }) { f in
                 var s = camera.spec; s.fps = f; camera.setSpec(s)
             }
             formatRow("Codec", options: CameraSpec.Codec.allCases,
@@ -1114,9 +1452,76 @@ struct CameraLiveLookView: View {
     /// Says so when the camera is running something other than what was
     /// picked (4K on the front camera, 60 at a size that tops out at 30).
     private var formatFallbackNote: String? {
+        if captureMode == .slowMo {
+            return "Slo-mo shoots \(camera.activeSpec.resolution.rawValue) at \(camera.activeSpec.fps) fps and plays back at 30, so it's slowed down."
+        }
         let asked = camera.spec, running = camera.activeSpec
         guard asked.resolution != running.resolution || asked.fps != running.fps else { return nil }
         return "This camera can't shoot \(asked.resolution.rawValue) at \(asked.fps) fps, so it's recording \(running.resolution.rawValue) at \(running.fps) fps."
+    }
+
+    /// Still format, size and the roll. Sizes are only the ones this camera
+    /// can deliver right now.
+    private var photoFormatPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            formatRow("Format", options: PhotoCaptureSpec.Format.allCases,
+                      label: { $0.rawValue }, isOn: { camera.photoSpec.format == $0 }) { format in
+                var spec = camera.photoSpec
+                spec.format = format
+                camera.setPhotoSpec(spec)
+            }
+            formatRow("Size", options: offeredPhotoSizes,
+                      label: { $0.label }, isOn: { photoSizeIsOn($0) }) { size in
+                var spec = camera.photoSpec
+                spec.size = size
+                camera.setPhotoSpec(spec)
+            }
+            if captureMode == .portrait {
+                Text("Portrait shoots at up to 12 MP, where depth is available.")
+                    .font(.luma(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            formatRow("Roll", options: [false, true],
+                      label: { $0 ? "\(Self.rollLength) frames" : "Off" },
+                      isOn: { rollOn == $0 }) { on in
+                setRoll(on)
+            }
+            if rollOn {
+                HStack(spacing: 10) {
+                    Text(rollLeft == 0 ? "Roll done" : "\(rollLeft) of \(Self.rollLength) left")
+                        .font(.luma(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.55))
+                    Button {
+                        loadNewRoll()
+                    } label: {
+                        Text("New roll")
+                            .font(.luma(size: 11, weight: .semibold))
+                            .foregroundStyle(LumaTheme.signal)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.lumaPress)
+                    .disabled(rollLeft == Self.rollLength)
+                    .opacity(rollLeft == Self.rollLength ? 0.4 : 1)
+                }
+                .padding(.leading, 94)
+            }
+        }
+        .padding(.horizontal, 18)
+        .transition(.opacity)
+    }
+
+    /// Sizes the camera reported; before it has (or in the simulator) only
+    /// the size in force.
+    private var offeredPhotoSizes: [PhotoCaptureSpec.Size] {
+        if !camera.photoSizes.isEmpty { return camera.photoSizes }
+        return [camera.activePhotoSize ?? camera.photoSpec.size]
+    }
+
+    private func photoSizeIsOn(_ size: PhotoCaptureSpec.Size) -> Bool {
+        if let active = camera.activePhotoSize { return active == size }
+        return camera.photoSpec.size == size
     }
 
     private func formatRow<T: Hashable>(_ title: String, options: [T],
@@ -1165,24 +1570,16 @@ struct CameraLiveLookView: View {
     /// a fourth control creeping toward the middle.
     private var captureRow: some View {
         HStack(spacing: 0) {
-            Button { app.path = [.selectClip] } label: {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(LumaTheme.textPrimary)
-                    .frame(width: 46, height: 46)
-                    .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(LumaTheme.border, lineWidth: 1))
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("Open your clips")
+            // The last shot replaces the gallery glyph once there is one.
+            CameraLastShotButton(image: lastShot?.thumbnail) { openLastShot() }
+                .animation(.easeOut(duration: 0.25), value: lastShot?.id)
 
             Spacer(minLength: 0)
 
             CameraShutterButton(isRecording: camera.isRecording,
-                                photoMode: captureMode == .photo) {
-                if captureMode == .photo {
+                                photoMode: captureMode.takesStills,
+                                rollCount: captureMode.takesStills && rollOn ? rollLeft : nil) {
+                if captureMode.takesStills {
                     captureStill()
                     return
                 }
@@ -1200,6 +1597,7 @@ struct CameraLiveLookView: View {
 
             Button {
                 camera.flipCamera()
+                resetFocusBrackets()
                 LumaHaptics.shared.tap()
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -1250,6 +1648,7 @@ struct CameraLiveLookView: View {
         camera.resetAutoWB()
         camera.resetAutoFocus()
         camera.unlockAEAF()
+        resetFocusBrackets()
         flash("Everything back to auto")
         LumaHaptics.shared.tap()
     }
@@ -1290,30 +1689,50 @@ struct CameraLiveLookView: View {
         app.path = [.editor]
     }
 
-    /// Full sensor resolution through AVCapturePhotoOutput, graded with the
-    /// live look. Sim falls back to the preview buffer.
+    /// Full sensor resolution through AVCapturePhotoOutput at the chosen
+    /// size, graded with the live look and saved as HEIF or JPEG. Portrait
+    /// adds the depth blur at the ruler's aperture. Sim falls back to the
+    /// preview buffer. With a roll loaded, every press spends a frame.
     private func captureStill() {
         if let lock = app.lockedLookInGrade(storeService) {
             lookLock = lock
             return
         }
+        if rollOn, rollLeft <= 0 {
+            showRollDone = true
+            return
+        }
         shutterFlash = true
         withAnimation(.easeOut(duration: 0.12).delay(0.06)) { shutterFlash = false }
+        let aperture: Double? = captureMode == .portrait && Self.apertureStops.indices.contains(apertureIndex)
+            ? Self.apertureStops[apertureIndex] : nil
         if camera.canCaptureFullRes {
-            camera.captureFullResStill { cg in
-                guard let cg else {
+            camera.captureStill(portraitAperture: aperture) { still in
+                if let still {
+                    saveStill(still)
+                } else if let frame = camera.previewImage,
+                          let fallback = camera.makeStill(fromPreview: frame) {
                     // Sensor capture failed — degrade gracefully to the preview.
-                    if let frame = camera.previewImage { saveStill(UIImage(cgImage: frame)) }
-                    return
+                    saveStill(fallback)
                 }
-                saveStill(UIImage(cgImage: cg))
             }
-        } else if let frame = camera.previewImage {
-            saveStill(UIImage(cgImage: frame))
+        } else if let frame = camera.previewImage, let still = camera.makeStill(fromPreview: frame) {
+            saveStill(still)
         }
+        spendRollFrame()
     }
 
-    private func saveStill(_ image: UIImage) {
+    private func saveStill(_ still: CapturedStill) {
+        // Keep a copy for the last-shot button, so tapping it opens this
+        // photo in the grade room.
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumaLook_Still_\(UUID().uuidString).\(still.fileExtension)")
+        let wrote = (try? still.data.write(to: file)) != nil
+        if let thumb = still.thumbnail {
+            lastShot = LastShot(thumbnail: UIImage(cgImage: thumb),
+                                source: wrote ? .still(file) : .library)
+        }
+        let data = still.data
         Task {
             let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
             guard status == .authorized || status == .limited else {
@@ -1328,12 +1747,139 @@ struct CameraLiveLookView: View {
                 }
                 return
             }
-            try? await PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            do {
+                // Added as a resource so the file stays the HEIF or JPEG the
+                // format pill promised.
+                try await PHPhotoLibrary.shared().performChanges {
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, data: data, options: nil)
+                }
+                stillSavedFlash += 1
+                flash("Saved to Photos")
+            } catch {
+                flash("Couldn't save the photo")
             }
-            stillSavedFlash += 1
-            flash("Saved to Photos")
         }
+    }
+
+    // MARK: Roll
+
+    private func spendRollFrame() {
+        guard rollOn, rollLeft > 0 else { return }
+        rollLeft -= 1
+        guard rollLeft == 0 else { return }
+        // Let the flash land before the roll-done card comes up.
+        Task {
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            if rollOn, rollLeft == 0 { showRollDone = true }
+        }
+    }
+
+    private func setRoll(_ on: Bool) {
+        rollOn = on
+        if on, rollLeft <= 0 { rollLeft = Self.rollLength }
+        if !on { showRollDone = false }
+        flash(on ? "Roll loaded · \(rollLeft) frames" : "Roll off")
+    }
+
+    private func loadNewRoll() {
+        rollLeft = Self.rollLength
+        showRollDone = false
+        flash("New roll loaded")
+        LumaHaptics.shared.tap()
+    }
+
+    /// Develop: open the photos, with a fresh roll loaded for next time.
+    private func developRoll() {
+        rollLeft = Self.rollLength
+        showRollDone = false
+        app.path = [.selectClip]
+    }
+
+    // MARK: Modes
+
+    private func modeChanged(from old: CaptureMode, to new: CaptureMode) {
+        if panel == .format { panel = .none }
+        if old == .slowMo, new != .slowMo { camera.setSlowMotion(false) }
+        if old == .portrait, new != .portrait {
+            camera.setDepthCapture(false)
+            if rulerTarget == .aperture { rulerTarget = .lens }
+        }
+        switch new {
+        case .slowMo:
+            camera.setSlowMotion(true)
+            if let fps = camera.slowMotionFPS {
+                flash("Slo-mo · \(fps) fps")
+            } else {
+                flash("Slo-mo")
+            }
+        case .portrait:
+            camera.setDepthCapture(true)
+            rulerTarget = .aperture
+            flash("Background blur goes on as you shoot")
+        case .photo, .video:
+            if rulerTarget == .aperture { rulerTarget = .lens }
+        }
+    }
+
+    // MARK: Last shot
+
+    /// The newest capture opens in the grade room, as the hand-off card's
+    /// Grade does; with only a library item to show it opens your clips, as
+    /// the gallery button did.
+    private func openLastShot() {
+        LumaHaptics.shared.tap()
+        guard let shot = lastShot else {
+            app.path = [.selectClip]
+            return
+        }
+        switch shot.source {
+        case .clip(let url):
+            if FileManager.default.fileExists(atPath: url.path) {
+                handOffToGrade(url)
+            } else {
+                app.path = [.selectClip]
+            }
+        case .still(let url):
+            if let image = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) {
+                app.selectedImage = image
+                app.path = [.selectClip, .applyLook]
+            } else {
+                app.path = [.selectClip]
+            }
+        case .library:
+            app.path = [.selectClip]
+        }
+    }
+
+    /// A finished take becomes the last shot.
+    private func rememberClip(_ url: URL) {
+        Task {
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 240, height: 240)
+            guard let frame = try? await generator.image(
+                at: CMTime(seconds: 0.05, preferredTimescale: 600)).image else { return }
+            lastShot = LastShot(thumbnail: UIImage(cgImage: frame), source: .clip(url))
+        }
+    }
+
+    /// Before anything is shot this session, the newest library item (only
+    /// when Photos access is already granted; the camera never asks).
+    private func loadLibraryThumb() async {
+        guard lastShot == nil else { return }
+        if let image = await CameraLibraryThumb.latest(side: 160) {
+            if lastShot == nil { lastShot = LastShot(thumbnail: image, source: .library) }
+            return
+        }
+        #if DEBUG
+        // The simulator's library can be empty: show the seeded frame.
+        if lastShot == nil,
+           let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
+           let image = UIImage(contentsOfFile: path) {
+            lastShot = LastShot(thumbnail: image, source: .library)
+        }
+        #endif
     }
 
     // MARK: - Dial stops (cine practice: discrete, repeatable between takes)
@@ -1571,10 +2117,13 @@ private struct CameraRulerDial: View {
 }
 
 /// White ring. Video mode has a red core that squares off while rolling;
-/// photo mode has a white core.
+/// photo mode has a white core, or a signal-yellow frame counter while a
+/// roll is loaded.
 private struct CameraShutterButton: View {
     let isRecording: Bool
     var photoMode: Bool = false
+    /// Frames left on the roll; nil when no roll is loaded.
+    var rollCount: Int? = nil
     let action: () -> Void
 
     var body: some View {
@@ -1583,38 +2132,59 @@ private struct CameraShutterButton: View {
                 Circle()
                     .stroke(.white, lineWidth: 3)
                     .frame(width: 70, height: 70)
-                RoundedRectangle(cornerRadius: isRecording ? 8 : 28)
-                    .fill(photoMode ? Color.white : LumaTheme.recordRed)
-                    .frame(width: isRecording ? 28 : 56, height: isRecording ? 28 : 56)
+                if photoMode, let rollCount {
+                    rollCore(rollCount)
+                } else {
+                    RoundedRectangle(cornerRadius: isRecording ? 8 : 28)
+                        .fill(photoMode ? Color.white : LumaTheme.recordRed)
+                        .frame(width: isRecording ? 28 : 56, height: isRecording ? 28 : 56)
+                }
             }
             .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isRecording)
             .animation(.easeOut(duration: 0.18), value: photoMode)
+            .animation(.snappy(duration: 0.2), value: rollCount)
             .contentShape(Circle())
         }
         .buttonStyle(.lumaPress)
-        .accessibilityLabel(photoMode ? "Take photo" : (isRecording ? "Stop recording" : "Record"))
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private func rollCore(_ count: Int) -> some View {
+        ZStack {
+            Circle()
+                .fill(LumaTheme.signal)
+                .frame(width: 56, height: 56)
+            Text("\(count)")
+                .font(.luma(size: 22, weight: .bold))
+                .kerning(-0.6)
+                .monospacedDigit()
+                .foregroundStyle(LumaTheme.onSignal)
+                .contentTransition(.numericText(countsDown: true))
+        }
+    }
+
+    private var accessibilityText: String {
+        if photoMode, let rollCount { return "Take photo, \(rollCount) frames left" }
+        if photoMode { return "Take photo" }
+        return isRecording ? "Stop recording" : "Record"
     }
 }
 
-/// Tap-to-focus reticle — monochrome, because a gold box over footage biases
-/// the very perception the screen exists to serve. Pure chrome; the device work
-/// happens in the controller.
-private struct CameraFocusReticle: View {
-    var pulse: Bool
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(.white, lineWidth: 1.2)
-            .frame(width: 72, height: 72)
-            .overlay {
-                RoundedRectangle(cornerRadius: 2)
-                    .stroke(.white.opacity(0.9), lineWidth: 1)
-                    .frame(width: 7, height: 7)
-            }
-            .transition(.scale(scale: 1.3).combined(with: .opacity))
-            .allowsHitTesting(false)
-            .shadow(color: .black.opacity(0.5), radius: 4)
+/// The newest capture for the button by the shutter, and what tapping it
+/// opens.
+private struct LastShot {
+    enum Source {
+        /// A still from this session, kept as a file for the grade room.
+        case still(URL)
+        /// A take from this session.
+        case clip(URL)
+        /// The newest library item (or the DEBUG seed frame).
+        case library
     }
+
+    let id = UUID()
+    let thumbnail: UIImage
+    let source: Source
 }
 
 /// The take returns a result: the clip is written, now choose where it goes.
