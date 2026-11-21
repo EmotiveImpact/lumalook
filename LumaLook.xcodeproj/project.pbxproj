@@ -240,6 +240,7 @@
 		6FFB5783902CC5CA822E8135 /* hero_gig.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 62866CA9B13DDC48B526E11D /* hero_gig.jpg */; };
 		87580A9E5BA1CF97192B0F70 /* hero_campaign.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */; };
 		584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16781F8A536C51EF97E6CBA /* LookSignature.swift */; };
+		CC0609EE675EBE8F45B02D45 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFC01F23C4BE58816C73D67 /* LaunchView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -476,6 +477,7 @@
 		62866CA9B13DDC48B526E11D /* hero_gig.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_gig.jpg; sourceTree = "<group>"; };
 		2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_campaign.jpg; sourceTree = "<group>"; };
 		D16781F8A536C51EF97E6CBA /* LookSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookSignature.swift; sourceTree = "<group>"; };
+		3AFC01F23C4BE58816C73D67 /* LaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -499,10 +501,12 @@
 				EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */,
 				B8354830054679B8534BA10B /* CollectionsView.swift */,
 				55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */,
+				6179EBD36201DBA3960BCD66 /* Editor */,
 				14D131E42DD31D663F90B81B /* EditorScreen.swift */,
 				5AA55F19B38C01C558951683 /* ExportCompleteView.swift */,
 				DD8AEF2B3B897BD002287240 /* ExportSheet.swift */,
 				9688DBD03E8614DC1F6D9E91 /* HomeView.swift */,
+				3AFC01F23C4BE58816C73D67 /* LaunchView.swift */,
 				33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */,
 				389693E4BA9B199E03E6A812 /* LUTCompareView.swift */,
 				5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */,
@@ -510,7 +514,6 @@
 				5082DDECC065F7185E2AD705 /* MoreScreens.swift */,
 				9B6D5EADD2C822D5FC26F34B /* PaywallView.swift */,
 				C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */,
-				6179EBD36201DBA3960BCD66 /* Editor */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -1103,6 +1106,7 @@
 				F21E1E9B3E0D68AA4B703C78 /* HeroPhoto.swift in Sources */,
 				E116BD4DC9B99CF56F7D95A2 /* HomeView.swift in Sources */,
 				1BC3FBE19576B3A672A8C8B7 /* InputMeterView.swift in Sources */,
+				CC0609EE675EBE8F45B02D45 /* LaunchView.swift in Sources */,
 				9FB1F3CF2C6DC91096FFFDAE /* LevelIndicator.swift in Sources */,
 				7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */,
 				703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */,
