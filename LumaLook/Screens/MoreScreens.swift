@@ -1906,30 +1906,25 @@ struct CropFormatView: View {
 
             InlineSlider(title: "Zoom", value: $zoom, range: 100...300) { "\(Int($0))" }
 
-            HStack(spacing: 12) {
-                Text("Position")
-                    .font(.system(size: 17, weight: .semibold))
+            // A "Position" row used to sit here: left / centre / right buttons
+            // wired to nothing. Per-clip framing already lives in the editor
+            // (Crop and Motion), so the row is gone and the reset it carried
+            // sits under the slider it resets.
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { zoom = 100 }
+                LumaHaptics.shared.tap()
+            } label: {
+                Label("Reset zoom", systemImage: "arrow.counterclockwise")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
-                Spacer()
-                ForEach(["align.horizontal.left", "align.horizontal.center", "align.horizontal.right"], id: \.self) { icon in
-                    Button {} label: {
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 62, height: 50)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-                Button { zoom = 100 } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(LumaTheme.cardRaised))
-                }
-                .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(LumaTheme.surface, in: Capsule())
             }
+            .buttonStyle(.plain)
+            .disabled(zoom == 100)
+            .opacity(zoom == 100 ? 0.4 : 1)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .onAppear {
             format = app.editor.format

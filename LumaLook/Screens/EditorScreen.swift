@@ -418,9 +418,20 @@ private enum LDFormat {
         return String(format: "%02d:%02d", Int(t) / 60, Int(t) % 60)
     }
 
+    /// "24 fps", "29.97 fps": the rate the frame counter is counting in.
+    static func rate(_ r: Double) -> String {
+        abs(r - r.rounded()) < 0.01 ? "\(Int(r.rounded())) fps" : String(format: "%.2f fps", r)
+    }
+
+    /// MM:SS:FF at the project's own rate: frame numbers run 0…23 for 24 fps
+    /// footage and 0…59 for 60, not 0…29 for everything. The tiny epsilon
+    /// stops 0.9999… of a frame flooring to the previous one.
     static func timecode(_ s: Double, frameDuration: Double) -> String {
         let t = max(0, s)
-        let f = frameDuration > 0 ? Int((t - floor(t)) / frameDuration) % 30 : 0
+        let perSecond = frameDuration > 0 ? max(1, Int((1 / frameDuration).rounded())) : 30
+        let f = frameDuration > 0
+            ? min(perSecond - 1, Int((t - floor(t)) / frameDuration + 1e-6))
+            : 0
         return String(format: "%02d:%02d:%02d", Int(t) / 60, Int(t) % 60, f)
     }
 }
@@ -1949,6 +1960,14 @@ private struct EditorContent: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
+                if showFrames {
+                    // Frames are only meaningful with their rate beside them.
+                    Text(LDFormat.rate(editor.frameRate))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

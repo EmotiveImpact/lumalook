@@ -459,6 +459,8 @@ final class EditorState: ObservableObject {
         /// with the player item built from the same overlay specs.
         let overlaySourceExtents: [UUID: CGRect]
         let duration: Double
+        /// The project frame rate this composition was built at.
+        let frameRate: Double
     }
 
     private struct Snapshot {
@@ -2949,9 +2951,39 @@ final class EditorState: ObservableObject {
     }
 
 
-    /// Frame duration matching the export video composition (1/30). Used by
+    /// The project frame rate, published by each rebuild from the first video
+    /// clip (photo-only projects stay at 30). Drives the preview composition,
     /// the frame-nudge transport and the MM:SS:FF timecode readout.
-    var frameDuration: Double { 1.0 / 30.0 }
+    @Published private(set) var frameRate: Double = 30
+
+    /// One frame at the project rate, in seconds.
+    var frameDuration: Double { 1.0 / frameRate }
+
+    /// Snaps a track's nominal rate to the standard rate it was shot at
+    /// (23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60). Capped at 60: a
+    /// 240 fps slow-motion clip should not turn the preview into a 240 fps
+    /// composition. Missing or nonsense rates fall back to 30.
+    static func standardFrameRate(_ nominal: Float) -> Double {
+        let rate = Double(nominal)
+        guard rate.isFinite, rate >= 1 else { return 30 }
+        let standards: [Double] = [24000.0 / 1001, 24, 25, 30000.0 / 1001, 30,
+                                   48, 50, 60000.0 / 1001, 60]
+        if rate > 60.5 { return 60 }
+        if let match = standards.min(by: { abs($0 - rate) < abs($1 - rate) }),
+           abs(match - rate) < 0.6 {
+            return match
+        }
+        return min(60, max(1, rate.rounded()))
+    }
+
+    /// Exact frame duration for a rate, using the 1001 timescales for the
+    /// NTSC rates so 23.976 / 29.97 / 59.94 never drift.
+    static func frameDurationTime(for rate: Double) -> CMTime {
+        for base in [24.0, 30.0, 60.0] where abs(rate - base * 1000 / 1001) < 0.001 {
+            return CMTime(value: 1001, timescale: CMTimeScale(base * 1000))
+        }
+        return CMTime(value: 1, timescale: CMTimeScale(max(1, rate.rounded())))
+    }
 
     /// Frame-exact nudge: pauses, steps the current item by ±N frames (no seek
     /// tolerance games), and re-syncs the published clock.
@@ -3034,6 +3066,7 @@ final class EditorState: ObservableObject {
         item.audioTimePitchAlgorithm = .spectral
         lastBuiltTracks = (built.clipAudioTrack, built.musicAudioTracks, built.overlayAudioTracks)
         overlaySourceExtents = built.overlaySourceExtents
+        if frameRate != built.frameRate { frameRate = built.frameRate }
 
         let player = self.player ?? AVPlayer()
         player.replaceCurrentItem(with: item)
@@ -3127,6 +3160,9 @@ final class EditorState: ObservableObject {
 
         var cursor = CMTime.zero
         var metas: [FrameMeta] = []
+        /// Taken from the first video clip, the usual NLE convention, so 24 fps
+        /// footage previews, steps and reads its timecode at 24, not 30.
+        var projectRate: Double?
 
         for clip in clips {
             // Photo clip (T7): the still renders through the compositor's
@@ -3175,6 +3211,9 @@ final class EditorState: ObservableObject {
             guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else { continue }
             let sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
             let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
+            if projectRate == nil, let nominal = try? await sourceVideo.load(.nominalFrameRate) {
+                projectRate = Self.standardFrameRate(nominal)
+            }
 
             let timescale = CMTimeScale(600)
             let range = CMTimeRange(
@@ -3505,7 +3544,7 @@ final class EditorState: ObservableObject {
         let videoComposition = AVMutableVideoComposition()
         videoComposition.customVideoCompositorClass = LumaVideoCompositor.self
         videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = Self.frameDurationTime(for: projectRate ?? 30)
         let adjustmentSpans = adjustmentLayers
             .filter { $0.duration > 0.05 && $0.timelineOffset < cursor.seconds }
             .map { AdjustmentSpan(start: max(0, $0.timelineOffset),
@@ -3572,7 +3611,8 @@ final class EditorState: ObservableObject {
                              overlayAudioTracks: overlayAudioTracks,
                              overlaySourceExtents: Dictionary(uniqueKeysWithValues:
                                 overlaySpecs.map { ($0.id, $0.sourceExtent) }),
-                             duration: duration)
+                             duration: duration,
+                             frameRate: projectRate)
     }
 
     /// Segments the timeline into `LumaCompositionInstruction`s. Boundaries

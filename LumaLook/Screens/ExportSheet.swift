@@ -210,6 +210,9 @@ struct ExportSpecSheet: View {
                     optionRow("Frame rate", options: Self.frameRates,
                               label: { "\($0)" }, isOn: { spec.fps == $0 },
                               enabled: { _ in true }) { spec.fps = $0 }
+                    if let match = sourceRateMismatch {
+                        sourceRateNote(match)
+                    }
                     // Low / Medium / High are words, not values — so they are
                     // set as words. The tier is a real file-length ceiling.
                     optionRow("Bitrate", options: ExportSpec.Bitrate.allCases,
@@ -616,6 +619,42 @@ struct ExportSpecSheet: View {
     /// The exporter's own preflight throws on thermal/disk; surfacing the same
     /// two conditions here means the user is warned before the long render,
     /// not after it dies.
+    /// The editor project's own rate, when it differs from the chosen export
+    /// rate. Exporting 24 fps footage at 30 repeats frames, which is exactly
+    /// the judder a cinematic look should not ship with. Nil when they agree,
+    /// in the grade flow, or when the source rate is not one we offer (50).
+    private var sourceRateMismatch: Int? {
+        guard gradeCubeTitle == nil, !app.editor.isEmpty else { return nil }
+        let source = app.editor.frameRate
+        guard let nearest = Self.frameRates.min(by: {
+                  abs(Double($0) - source) < abs(Double($1) - source) }),
+              abs(Double(nearest) - source) < 0.6,
+              nearest != spec.fps else { return nil }
+        return nearest
+    }
+
+    private func sourceRateNote(_ match: Int) -> some View {
+        HStack(spacing: 10) {
+            Text("Your footage is \(match) fps. Exporting at \(spec.fps) changes how it moves.")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.55))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                spec.fps = match
+                LumaHaptics.shared.tap()
+            } label: {
+                Text("Match")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 30)
+                    .background(LumaTheme.surfaceStrong, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var preflightWarning: String? {
         if ProcessInfo.processInfo.thermalState == .critical {
             return "Your iPhone is too hot to export safely. Let it cool down for a minute."
