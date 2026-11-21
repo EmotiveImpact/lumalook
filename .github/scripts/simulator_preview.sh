@@ -53,12 +53,12 @@ xcrun simctl privacy "$UDID" grant all "$BUNDLE_ID" || true
 xcrun simctl addmedia "$UDID" "$MEDIA"/*.jpg || true
 xcrun simctl spawn "$UDID" defaults write "$BUNDLE_ID" hasSeenOnboarding -bool YES || true
 
-# True unless launchd positively lists no LumaLook process; a failed query
-# is not taken as a crash.
+# 0 when launchd lists LumaLook, 1 when it positively doesn't (a crash), and
+# 2 when the process list couldn't be read, so the screen is unverified.
 running() {
   local list
-  list=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null) || return 0
-  [ -z "$list" ] && return 0
+  list=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null) || return 2
+  [ -z "$list" ] && return 2
   grep -q "UIKitApplication:$BUNDLE_ID" <<< "$list"
 }
 
@@ -73,6 +73,7 @@ launch() {
 }
 
 FAILED=""
+UNVERIFIED=""
 CAPTURED=0
 # shot <name> <seconds> [SIMCTL_CHILD_...=value ...]
 shot() {
@@ -82,10 +83,17 @@ shot() {
     FAILED="$FAILED $name"
     return
   fi
-  if ! running; then
-    echo "::warning::LumaLook had stopped by the time the $name screen was captured, so it probably crashed. See logs/$name.err.log."
-    FAILED="$FAILED $name"
-  fi
+  running
+  case $? in
+    1)
+      echo "::warning::LumaLook had stopped by the time the $name screen was captured, so it probably crashed. See logs/$name.err.log."
+      FAILED="$FAILED $name"
+      ;;
+    2)
+      echo "Could not read the simulator's process list for $name; check its screenshot."
+      UNVERIFIED="$UNVERIFIED $name"
+      ;;
+  esac
   xcrun simctl io "$UDID" screenshot --type=png "$OUT/screens/$name.png" > /dev/null 2>&1 \
     && CAPTURED=$((CAPTURED + 1))
   echo "Captured $name"
@@ -133,6 +141,7 @@ cp ~/Library/Logs/DiagnosticReports/LumaLook* "$OUT/logs/" 2>/dev/null || true
   echo "Simulator: $DEVICE ($RUNTIME)"
   echo "Screens captured: $CAPTURED"
   if [ -n "$FAILED" ]; then echo "Screens with problems:$FAILED"; fi
+  if [ -n "$UNVERIFIED" ]; then echo "Screens not checked for a crash:$UNVERIFIED"; fi
 } | tee "$OUT/summary.txt"
 
 if [ "$CAPTURED" -eq 0 ]; then

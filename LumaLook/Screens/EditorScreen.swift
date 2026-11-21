@@ -2030,13 +2030,14 @@ private struct EditorContent: View {
                 if editor.isRebuilding {
                     ProgressView().controlSize(.mini).tint(LumaTheme.textMuted)
                 }
-                // Glyphs stay small; each touch area is ~44 pt square.
+                // Glyphs stay small; each touch area is 36 x 44 pt, and at
+                // 10 pt spacing neighbouring areas meet without overlapping.
                 Button { magnetOn.toggle(); LumaHaptics.shared.tap() } label: {
                     Image(systemName: magnetOn ? "magnet.fill" : "magnet")
                         .font(.system(size: 13, weight: .light))
                         .foregroundStyle(magnetOn ? Color.white : LumaTheme.textMuted)
                         .frame(width: 26, height: 30)
-                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
+                        .contentShape(HitSlop(horizontal: 5, vertical: 7))
                 }
                 .buttonStyle(.lumaPress)
                 .accessibilityLabel(magnetOn ? "Snapping on" : "Snapping off")
@@ -2044,7 +2045,7 @@ private struct EditorContent: View {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 13, weight: .light))
                         .frame(width: 26, height: 30)
-                        .contentShape(HitSlop(horizontal: 8, vertical: 7))
+                        .contentShape(HitSlop(horizontal: 5, vertical: 7))
                 }
                 .buttonStyle(.lumaPress).disabled(editor.isEmpty)
                 .accessibilityLabel("Full screen preview")
