@@ -100,6 +100,7 @@ shot 00-launch 5 "${P}ROUTE=launch"
 # Any LUMA_ROUTE value skips onboarding, so "none" gives the plain tab.
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
 shot 02-home 6 "${P}ROUTE=none" "${P}TAB=Home"
+shot 02b-home-first-run 6 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEEMPTY=1"
 shot 03-store 6 "${P}ROUTE=none" "${P}TAB=Store"
 shot 04-projects 5 "${P}ROUTE=none" "${P}TAB=Projects"
 shot 05-looks 6 "${P}ROUTE=none" "${P}TAB=Looks"
