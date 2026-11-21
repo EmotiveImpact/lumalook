@@ -24,8 +24,26 @@ final class CameraController: NSObject, ObservableObject {
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
 
-    /// C3 — the active capture format (resolution / fps / codec), persisted.
+    /// C3 — the capture format the user ASKED for (resolution / fps / codec),
+    /// persisted. The format picker shows this.
     @Published var spec = CameraSpec.load()
+    /// What the sensor is actually delivering. A camera that cannot do the
+    /// request (4K on the front camera, 60 fps at a size that tops out at 30)
+    /// falls back, and the HUD and the recording follow the fallback: the
+    /// writer used to record the REQUESTED size, upscaling a 1080 feed to 4K
+    /// while the chip claimed 4K.
+    @Published private(set) var activeSpec = CameraSpec.load()
+    /// Highest frame rate the current camera offers at each resolution; a
+    /// resolution it cannot shoot is absent. Drives which format options the
+    /// picker enables.
+    @Published private(set) var maxFrameRates: [CameraSpec.Resolution: Double] = [:]
+    /// sessionQueue writes, mediaQueue reads at record start.
+    private let deliveredLock = NSLock()
+    private var _deliveredSpec = CameraSpec.load()
+    private var deliveredSpec: CameraSpec {
+        get { deliveredLock.lock(); defer { deliveredLock.unlock() }; return _deliveredSpec }
+        set { deliveredLock.lock(); _deliveredSpec = newValue; deliveredLock.unlock() }
+    }
     /// C8/C9 — viewfinder assists (preview-only; never recorded).
     @Published var peakingOn = false
     @Published var zebrasOn = false
@@ -239,6 +257,9 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self, let device = self.activeVideoDevice else {
                 print("[LUMA] CAMSPEC stored=\(newSpec.rawValue) (no device — sim)")
+                // No sensor to fall back from: what was asked is what runs.
+                self?.deliveredSpec = newSpec
+                DispatchQueue.main.async { self?.activeSpec = newSpec }
                 return
             }
             self.session.beginConfiguration()
@@ -261,6 +282,7 @@ final class CameraController: NSObject, ObservableObject {
         }
         guard !candidates.isEmpty else {
             print("[LUMA] CAMSPEC \(spec.rawValue) — no matching format, keeping preset")
+            publishDeliveredFormat(requested: spec, on: device)
             return
         }
         let wanted = Double(spec.fps)
@@ -281,6 +303,43 @@ final class CameraController: NSObject, ObservableObject {
             print("[LUMA] CAMSPEC applied \(spec.rawValue) fps=\(Int(actualFPS))")
         } catch {
             print("[LUMA] CAMSPEC lock failed: \(error)")
+        }
+        publishDeliveredFormat(requested: spec, on: device)
+    }
+
+    /// sessionQueue only. Reads back what the device is ACTUALLY set to after
+    /// `applyFormat` (which may have fallen back) and publishes it, plus the
+    /// camera's per-resolution frame-rate ceilings for the picker.
+    private func publishDeliveredFormat(requested: CameraSpec, on device: AVCaptureDevice) {
+        let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        let shortSide = Int(min(dims.width, dims.height))
+        // Never claim more than the sensor delivers: pick the largest
+        // resolution that fits inside the delivered short side.
+        let resolution = CameraSpec.Resolution.allCases
+            .filter { $0.portrait.w <= shortSide }
+            .max { $0.portrait.w < $1.portrait.w } ?? .hd720
+        let frame = device.activeVideoMinFrameDuration
+        let deliveredFPS = frame.isValid && frame.seconds > 0
+            ? Int((1 / frame.seconds).rounded()) : requested.fps
+        var delivered = requested
+        delivered.resolution = resolution
+        delivered.fps = deliveredFPS
+        deliveredSpec = delivered
+
+        var ceilings: [CameraSpec.Resolution: Double] = [:]
+        for res in CameraSpec.Resolution.allCases {
+            let w = Int32(res.portrait.h), h = Int32(res.portrait.w)   // landscape sensor
+            let rates = device.formats
+                .filter {
+                    let d = CMVideoFormatDescriptionGetDimensions($0.formatDescription)
+                    return d.width == w && d.height == h
+                }
+                .flatMap { $0.videoSupportedFrameRateRanges.map(\.maxFrameRate) }
+            if let best = rates.max() { ceilings[res] = best }
+        }
+        DispatchQueue.main.async {
+            self.activeSpec = delivered
+            self.maxFrameRates = ceilings
         }
     }
 
@@ -348,7 +407,8 @@ final class CameraController: NSObject, ObservableObject {
                 print("[LUMA] EXPOSURE manual iso=\(iso.map { String(Int($0)) } ?? "keep") angle=\(Int(targetAngle)) (no device — sim)")
                 return
             }
-            let fps = Double(self.spec.fps)
+            // The shutter angle is relative to the rate actually running.
+            let fps = Double(max(1, self.deliveredSpec.fps))
             let seconds = (targetAngle / 360.0) / fps
             let duration = CMTime(seconds: seconds, preferredTimescale: 1_000_000)
             let clampedDuration = CMTimeClampToRange(
@@ -726,15 +786,18 @@ final class CameraController: NSObject, ObservableObject {
             return
         }
 
-        // C3/C4: geometry + codec follow the user's spec, captured once per
-        // take so a mid-take spec change can never tear frames.
-        let dims = spec.resolution.portrait
+        // C3/C4: geometry + codec follow what the sensor is DELIVERING (the
+        // user's spec after any fallback), captured once per take so a
+        // mid-take change can never tear frames. Recording the requested size
+        // instead upscaled a 1080 feed whenever 4K was unavailable.
+        let take = deliveredSpec
+        let dims = take.resolution.portrait
         // C4: landscape takes swap the spec's portrait geometry.
         recordSize = recordLandscape
             ? CGSize(width: dims.h, height: dims.w)
             : CGSize(width: dims.w, height: dims.h)
         let videoSettings: [String: Any] = [
-            AVVideoCodecKey: spec.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
+            AVVideoCodecKey: take.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
             AVVideoWidthKey: Int(recordSize.width),
             AVVideoHeightKey: Int(recordSize.height)
         ]

@@ -12,7 +12,7 @@ import Photos
 //
 // FEATURE INVENTORY — verified line by line against the previous shipping view.
 //
-//   ✓ Capture-format chip (live off camera.spec, never lies)
+//   ✓ Capture-format chip (live off camera.activeSpec, the delivered format, never lies)
 //   ✓ Resolution / frame rate / codec selection  (drawer panel, not a sheet)
 //   ✓ Look filmstrip — every tile is the REAL grade of the live frame
 //   ✓ Look source badge on the tile — LUT / Log / Saved          (carried)
@@ -247,7 +247,7 @@ struct CameraLiveLookView: View {
                     panel = panel == .format ? .none : .format
                     LumaHaptics.shared.tap()
                 } label: {
-                    CaptureFormatChip(spec: camera.spec)
+                    CaptureFormatChip(spec: camera.activeSpec)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
@@ -283,10 +283,10 @@ struct CameraLiveLookView: View {
                 // The permitted colour exception: armed means armed.
                 RecordTally()
                 TimelineView(.periodic(from: recordStart ?? Date(),
-                                       by: 1.0 / Double(camera.spec.fps))) { context in
+                                       by: 1.0 / Double(max(1, camera.activeSpec.fps)))) { context in
                     Text(Timecode.string(
                         seconds: context.date.timeIntervalSince(recordStart ?? context.date),
-                        fps: Double(camera.spec.fps)))
+                        fps: Double(max(1, camera.activeSpec.fps))))
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white)
@@ -913,17 +913,28 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
+            // Options this camera cannot shoot are dimmed rather than offered
+            // and then quietly swapped for something else. Selection shows what
+            // is actually running.
             formatRow("Resolution", options: CameraSpec.Resolution.allCases,
-                      label: { $0.rawValue }, isOn: { camera.spec.resolution == $0 }) { r in
+                      label: { $0.rawValue }, isOn: { camera.activeSpec.resolution == $0 },
+                      enabled: { resolutionAvailable($0) }) { r in
                 var s = camera.spec; s.resolution = r; camera.setSpec(s)
             }
             formatRow("Frame rate", options: CameraSpec.fpsOptions,
-                      label: { "\($0)" }, isOn: { camera.spec.fps == $0 }) { f in
+                      label: { "\($0)" }, isOn: { camera.activeSpec.fps == $0 },
+                      enabled: { fpsAvailable($0) }) { f in
                 var s = camera.spec; s.fps = f; camera.setSpec(s)
             }
             formatRow("Codec", options: CameraSpec.Codec.allCases,
-                      label: { $0.rawValue }, isOn: { camera.spec.codec == $0 }) { c in
+                      label: { $0.rawValue }, isOn: { camera.activeSpec.codec == $0 }) { c in
                 var s = camera.spec; s.codec = c; camera.setSpec(s)
+            }
+            if let note = formatFallbackNote {
+                Text(note)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .disabled(camera.isRecording || camera.isPreparingRecording)
@@ -932,9 +943,29 @@ struct CameraLiveLookView: View {
         .transition(.opacity)
     }
 
+    /// Unknown capabilities (simulator, camera not configured yet) enable
+    /// everything rather than greying out the whole panel.
+    private func resolutionAvailable(_ resolution: CameraSpec.Resolution) -> Bool {
+        camera.maxFrameRates.isEmpty || camera.maxFrameRates[resolution] != nil
+    }
+
+    private func fpsAvailable(_ fps: Int) -> Bool {
+        guard let ceiling = camera.maxFrameRates[camera.activeSpec.resolution] else { return true }
+        return Double(fps) <= ceiling + 0.5
+    }
+
+    /// Says so when the camera is running something other than what was
+    /// picked (4K on the front camera, 60 at a size that tops out at 30).
+    private var formatFallbackNote: String? {
+        let asked = camera.spec, running = camera.activeSpec
+        guard asked.resolution != running.resolution || asked.fps != running.fps else { return nil }
+        return "This camera can't shoot \(asked.resolution.rawValue) at \(asked.fps) fps, so it's recording \(running.resolution.rawValue) at \(running.fps) fps."
+    }
+
     private func formatRow<T: Hashable>(_ title: String, options: [T],
                                         label: @escaping (T) -> String,
                                         isOn: @escaping (T) -> Bool,
+                                        enabled: @escaping (T) -> Bool = { _ in true },
                                         pick: @escaping (T) -> Void) -> some View {
         HStack(spacing: 10) {
             Text(title)
@@ -963,6 +994,8 @@ struct CameraLiveLookView: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.lumaPress)
+                .disabled(!enabled(option))
+                .opacity(enabled(option) ? 1 : 0.35)
             }
             Spacer(minLength: 0)
         }
@@ -1133,7 +1166,7 @@ struct CameraLiveLookView: View {
 
     /// Shutter speed implied by an angle at the current frame rate.
     private func shutterLabel(_ angle: Double) -> String {
-        "1/\(Int((360.0 / max(angle, 1)) * Double(camera.spec.fps)))"
+        "1/\(Int((360.0 / max(angle, 1)) * Double(camera.activeSpec.fps)))"
     }
 
     /// True when the camera — not the user — is choosing this parameter. The
