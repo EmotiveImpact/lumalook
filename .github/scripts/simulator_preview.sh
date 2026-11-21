@@ -53,8 +53,13 @@ xcrun simctl privacy "$UDID" grant all "$BUNDLE_ID" || true
 xcrun simctl addmedia "$UDID" "$MEDIA"/*.jpg || true
 xcrun simctl spawn "$UDID" defaults write "$BUNDLE_ID" hasSeenOnboarding -bool YES || true
 
+# True unless launchd positively lists no LumaLook process; a failed query
+# is not taken as a crash.
 running() {
-  xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BUNDLE_ID"
+  local list
+  list=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null) || return 0
+  [ -z "$list" ] && return 0
+  grep -q "UIKitApplication:$BUNDLE_ID" <<< "$list"
 }
 
 # launch <name> <seconds> [SIMCTL_CHILD_...=value ...]

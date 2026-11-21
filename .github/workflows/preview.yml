@@ -144,13 +144,15 @@ jobs:
             emit "$jpg"
           done
           VIDEO="$OUT/lumalook-preview.mp4"
+          ls -l "$OUT" || true
           if [ -f "$VIDEO" ]; then
             SMALL="$RUNNER_TEMP/small/lumalook-preview.mp4"
             if [ "$(stat -f %z "$VIDEO")" -le 4000000 ]; then
               cp "$VIDEO" "$SMALL"
             else
-              avconvert --source "$VIDEO" --output "$SMALL" --preset Preset1280x720 > /dev/null 2>&1 || true
+              avconvert --source "$VIDEO" --output "$SMALL" --preset Preset1280x720 || true
             fi
+            ls -l "$SMALL" 2>/dev/null || true
             if [ -f "$SMALL" ] && [ "$(stat -f %z "$SMALL")" -le 6000000 ]; then
               emit "$SMALL"
             fi
