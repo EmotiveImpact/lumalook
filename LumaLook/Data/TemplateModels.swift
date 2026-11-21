@@ -39,10 +39,24 @@ struct VideoTemplate: Codable, Identifiable, Equatable {
     var lookName: String? = nil
     var canvasMode: String? = nil           // CanvasBackgroundMode rawValue
     var audioReactive: String? = nil        // AudioReactiveStyle rawValue
+    /// Beats per minute the slots are cut to. Optional (synthesised Codable
+    /// decodes it with decodeIfPresent), so older templates.json files load.
+    var bpm: Int? = nil
+    /// True when every cut lands on a beat: Home's "Cut to the beat" rail
+    /// shows only these. Optional for the same reason as `bpm`.
+    var beatCut: Bool? = nil
+    /// Bundled poster photo, a `HeroPhoto` rawValue such as "hero_party".
+    var poster: String? = nil
 
     /// Nominal runtime before the applier clamps slots to real asset lengths, so
     /// the grid can show "≈4.8s" without touching the photo library.
     var totalDuration: Double { slots.reduce(0) { $0 + $1.duration } }
+
+    /// How many clips the template is built for (one per slot).
+    var clipCount: Int { slots.count }
+
+    /// Cut to the beat: only templates flagged as such (a missing flag is false).
+    var isBeatCut: Bool { beatCut ?? false }
 
     init(id: String,
          name: String,
@@ -52,7 +66,10 @@ struct VideoTemplate: Codable, Identifiable, Equatable {
          slots: [TemplateSlot],
          lookName: String? = nil,
          canvasMode: String? = nil,
-         audioReactive: String? = nil) {
+         audioReactive: String? = nil,
+         bpm: Int? = nil,
+         beatCut: Bool? = nil,
+         poster: String? = nil) {
         self.id = id
         self.name = name
         self.blurb = blurb
@@ -62,6 +79,9 @@ struct VideoTemplate: Codable, Identifiable, Equatable {
         self.lookName = lookName
         self.canvasMode = canvasMode
         self.audioReactive = audioReactive
+        self.bpm = bpm
+        self.beatCut = beatCut
+        self.poster = poster
     }
 }
 
@@ -132,7 +152,11 @@ enum TemplateLibrary {
             aspect: "9:16",
             slots: run(8, duration: 0.5, transition: "slideLeft", transitionDuration: 0.12),
             lookName: "AG60 · London Rain",
-            audioReactive: "pulse"
+            audioReactive: "pulse",
+            // Half-second slots are one beat each at 120 BPM.
+            bpm: 120,
+            beatCut: true,
+            poster: "hero_rain"
         ),
         VideoTemplate(
             id: "story-intro",
@@ -160,8 +184,68 @@ enum TemplateLibrary {
                 TemplateSlot(duration: 2.0, kenBurns: "zoomOut")
             ],
             lookName: "KD4 · Clean Neutral"
+        ),
+
+        // Cut to the beat (Home rail). Every slot holds a whole number of
+        // beats at the template's tempo, so each cut lands on a beat, with a
+        // flash on the drops. Free looks only, like every bundled template.
+        VideoTemplate(
+            id: "night-out-recap",
+            name: "Night out recap",
+            blurb: "Six clips on a 112 BPM beat, with a flash on the drops.",
+            icon: "music.note",
+            aspect: "9:16",
+            slots: onBeat([4, 4, 6, 4, 4, 6], bpm: 112, flashAfter: [1, 4]),
+            lookName: "KD2 · Golden Hour",
+            audioReactive: "pulse",
+            bpm: 112,
+            beatCut: true,
+            poster: "hero_party"
+        ),
+        VideoTemplate(
+            id: "front-row",
+            name: "Front row",
+            blurb: "Five clips at 128 BPM for gig and festival footage.",
+            icon: "music.mic",
+            aspect: "9:16",
+            slots: onBeat([4, 6, 4, 6, 6], bpm: 128, flashAfter: [2]),
+            lookName: "KD52 · Cine Negative",
+            audioReactive: "glow",
+            bpm: 128,
+            beatCut: true,
+            poster: "hero_gig"
+        ),
+        VideoTemplate(
+            id: "city-walk",
+            name: "City walk",
+            blurb: "Four easy clips at 96 BPM. Hard cuts, no tricks.",
+            icon: "figure.walk",
+            aspect: "9:16",
+            slots: onBeat([4, 4, 4, 4], bpm: 96),
+            lookName: "KD4 · Clean Neutral",
+            bpm: 96,
+            beatCut: true,
+            poster: "hero_bridge"
         )
     ]
+
+    /// Slots cut on the beat. Each entry is how many beats that clip holds at
+    /// `bpm`, so every cut lands on a beat of the track. Cuts are hard
+    /// ("none") except after the slot indices in `flashAfter`; the last slot
+    /// has no outgoing transition.
+    private static func onBeat(_ beats: [Int], bpm: Int, flashAfter: Set<Int> = []) -> [TemplateSlot] {
+        let beat = 60.0 / Double(max(bpm, 1))
+        var slots: [TemplateSlot] = []
+        for index in 0..<beats.count {
+            let isLast = index == beats.count - 1
+            let flash = !isLast && flashAfter.contains(index)
+            let transition: String? = isLast ? nil : (flash ? "flash" : "none")
+            slots.append(TemplateSlot(duration: Double(beats[index]) * beat,
+                                      transitionAfter: transition,
+                                      transitionDuration: flash ? 0.12 : nil))
+        }
+        return slots
+    }
 
     /// N identical slots where only the last one has no outgoing transition —
     /// a trailing transition would dissolve into nothing.

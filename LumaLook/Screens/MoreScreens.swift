@@ -1510,16 +1510,98 @@ struct ProjectLibraryView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 0) {
-                hero
-                    .frame(height: 196)
-                drawer
+            LumaTheme.background.ignoresSafeArea()
+            if app.store.projects.isEmpty {
+                emptyState
+            } else {
+                VStack(spacing: 0) {
+                    hero
+                        .frame(height: 196)
+                    drawer
+                }
             }
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: Empty state (Night Lab)
+
+    /// No projects yet: a face in frame (cropped around the subject with
+    /// `HomeGradedPhoto`, so a wide box no longer lands on the top of a
+    /// head), a light + bold title, one line and the one main action.
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HomeGradedPhoto(photo: .campaign, lookName: "CN93 · Luxury Campaign", maxDimension: 1100)
+                .frame(maxWidth: .infinity)
+                .frame(height: 320)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Projects")
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(LumaTheme.textMuted)
+                LumaHeadline(light: "No projects", heavy: "yet", size: 32)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 6)
+                Text("Every edit saves here as you work.")
+                    .font(.luma(size: 14))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.top, 6)
+                newVideoButton
+                    .padding(.top, 20)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 22)
+            Spacer(minLength: 0)
+            if !isRoot { emptyBackRow }
+        }
+    }
+
+    /// Same door as Home's New video: Select clips for a new edit.
+    private var newVideoButton: some View {
+        Button {
+            app.openSelectClips(.edit)
+            LumaHaptics.shared.tap()
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "film")
+                    .font(.system(size: 17, weight: .medium))
+                Text("New video")
+                    .font(.luma(size: 16, weight: .semibold))
+                    .kerning(-0.3)
+            }
+            .foregroundStyle(LumaTheme.onSignal)
+            .padding(.horizontal, 22)
+            .frame(height: 52)
+            .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("New video")
+    }
+
+    private var emptyBackRow: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
     }
 
     // MARK: Hero — the most recent edit's own first frame
@@ -1556,15 +1638,11 @@ struct ProjectLibraryView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 10)
-            if app.store.projects.isEmpty {
-                emptyBody
-            } else {
-                ProjectList(store: app.store)
-            }
+            ProjectList(store: app.store)
             instructionBar
         }
         .frame(maxWidth: .infinity)
-        .background(Color.black)
+        .background(LumaTheme.background)
     }
 
     /// The hero's name lives here, under the picture, never over it.
@@ -1595,20 +1673,6 @@ struct ProjectLibraryView: View {
                     .lineLimit(1)
             }
         }
-    }
-
-    private var emptyBody: some View {
-        VStack(spacing: 8) {
-            Text("No projects yet")
-                .font(.luma(size: 17, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
-            Text("Start one and every trim, grade and export lands back here.")
-                .font(.luma(size: 13))
-                .foregroundStyle(.white.opacity(0.55))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 34)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Instruction bar
