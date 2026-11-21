@@ -634,6 +634,7 @@ struct EditorTimelineView: View {
             }
         }
         .onAppear {
+            app.library.settleOrder()
             // Continuity: seed the timeline with the Apply-a-Look clip.
             if editor.isEmpty, let url = app.selectedVideoURL {
                 Task { await editor.addClip(from: url) }
