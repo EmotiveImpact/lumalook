@@ -452,6 +452,9 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let audioReactive: AudioReactiveSpec?
     /// Project-level frame/border, composited last. `FramePreset` rawValue.
     let framePreset: String
+    /// Export-only film-rebate edge strip, burned after the frame. Set by
+    /// VideoExporter on the export's own instructions; nil in the preview.
+    var edgeStrip: EdgeStripSpec? = nil
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -944,6 +947,9 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         // Last, deliberately: a wipe or veil must never run across the border.
         if let preset = FramePreset(rawValue: instruction.framePreset), preset != .none {
             graded = FrameRenderer.apply(preset, to: graded, rect: renderRect)
+        }
+        if let strip = instruction.edgeStrip {
+            graded = EdgeStripRenderer.apply(strip, to: graded, rect: renderRect, seconds: seconds)
         }
 
         // --- Render into the pool buffer and hand it back -------------------

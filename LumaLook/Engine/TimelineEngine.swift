@@ -1408,6 +1408,98 @@ final class EditorState: ObservableObject {
         rebuild()
     }
 
+    /// Sets a lane's beat markers directly. Tracks from the generated music
+    /// library know their grid exactly, so nothing needs detecting.
+    func setBeatMarkers(trackID: UUID, _ beats: [Double]) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == trackID }) else { return }
+        audioTracks[i].beatMarkers = beats.sorted()
+    }
+
+    /// A lane's beat grid in timeline seconds, keeping every `everyBeats`-th
+    /// beat counted from the lane's first beat (so 4 lands on bar lines for a
+    /// generated track). Looping lanes repeat the grid on every pass.
+    func timelineBeatGrid(trackID: UUID, everyBeats: Int = 1) -> [Double] {
+        guard let track = audioTracks.first(where: { $0.id == trackID }) else { return [] }
+        let every = max(1, everyBeats)
+        let picked = track.beatMarkers.sorted().enumerated()
+            .filter { $0.offset % every == 0 }
+            .map { $0.element }
+            .filter { $0 >= track.trimStart - 0.0005 && $0 <= track.trimEnd + 0.0005 }
+        guard !picked.isEmpty, track.timelineDuration > 0.05 else { return [] }
+        let horizon = totalDuration + 60
+        var grid: [Double] = []
+        var pass = 0.0
+        repeat {
+            for beat in picked {
+                let t = beat - track.trimStart + track.timelineOffset + pass * track.timelineDuration
+                if t >= 0 && t <= horizon { grid.append(t) }
+            }
+            pass += 1
+        } while track.isLooping && track.timelineOffset + pass * track.timelineDuration < horizon
+        return grid.sorted()
+    }
+
+    /// Cut to the beat (editor mock 6): moves every cut between clips onto
+    /// the lane's beat grid (every `everyBeats` beats), trimming or extending
+    /// each clip's out point to the nearest reachable beat, and lands the
+    /// end of the edit on a beat too. A single clip is split on the grid
+    /// instead. Detects beats first when the lane has none. One undo.
+    /// Returns false when nothing moved (no beats, or already on the beat).
+    @discardableResult
+    func cutToBeat(trackID: UUID, everyBeats: Int = 1) async -> Bool {
+        if let lane = audioTracks.first(where: { $0.id == trackID }), lane.beatMarkers.isEmpty {
+            if let known = BeatDetector.knownGrid(for: lane.url) {
+                setBeatMarkers(trackID: trackID, known.beats)
+            } else {
+                await detectBeats(trackID: trackID)
+            }
+        }
+        let grid = timelineBeatGrid(trackID: trackID, everyBeats: everyBeats)
+        guard !grid.isEmpty, !clips.isEmpty else { return false }
+
+        if clips.count == 1 {
+            let cuts = grid.filter { $0 > 0.4 && $0 < totalDuration - 0.4 }
+            guard !cuts.isEmpty else { return false }
+            pushUndoSnapshot()
+            var lastCut = -1.0
+            for t in cuts where t - lastCut >= 0.4 {
+                if performSplit(at: t) { lastCut = t }
+            }
+            rebuild()
+            return lastCut >= 0
+        }
+
+        // Plan every new out point first, so an edit that is already on the
+        // beat costs no undo step.
+        var newTrimEnds: [Double] = []
+        var cursor = 0.0
+        var changed = false
+        for clip in clips {
+            let speed = max(0.01, clip.speed)
+            let naturalEnd = cursor + clip.timelineDuration
+            let latestEnd = cursor + max(0, clip.assetDuration - clip.trimStart) / speed
+            let earliestEnd = cursor + 0.3
+            let reachable = grid.filter { $0 >= earliestEnd && $0 <= latestEnd + 0.0005 }
+            var trimEnd = clip.trimEnd
+            if let target = reachable.min(by: { abs($0 - naturalEnd) < abs($1 - naturalEnd) }) {
+                trimEnd = min(clip.assetDuration, clip.trimStart + (target - cursor) * speed)
+            }
+            if abs(trimEnd - clip.trimEnd) > 0.0005 { changed = true }
+            newTrimEnds.append(trimEnd)
+            cursor += max(0, (trimEnd - clip.trimStart) / speed)
+        }
+        guard changed else { return false }
+        pushUndoSnapshot()
+        for i in clips.indices where i < newTrimEnds.count {
+            if abs(newTrimEnds[i] - clips[i].trimEnd) > 0.0005 {
+                clips[i].trimEnd = newTrimEnds[i]
+                refreshFilmstrip(clipID: clips[i].id)
+            }
+        }
+        rebuild()
+        return true
+    }
+
     /// Default freeze-frame hold duration (seconds).
     static let freezeDuration = 2.0
 

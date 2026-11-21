@@ -3443,75 +3443,14 @@ private struct EditorContent: View {
 
 // MARK: - Sound library (with audition)
 
-/// The bundled library, inline. The audition button is carried over from the
-/// old Sound Library sheet: pausing the timeline first means the preview and
-/// the composition never talk over each other.
+/// The music library, inline: generated tracks by mood with beat previews,
+/// the pads and the bundled sounds (MusicLibraryView.swift). Auditions pause
+/// the timeline first, so the preview and the edit never talk over each other.
 private struct LDSoundLibrary: View {
     @ObservedObject var editor: EditorState
-    @StateObject private var preview = AudioPreviewPlayer()
-    @State private var auditioning: String?
-    @State private var category = "sfx"
-
-    private var entries: [BundledAudioEntry] { BundledAudioLibrary.entries(category: category) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                LDChip(title: "Sound effects", selected: category == "sfx") { category = "sfx" }
-                LDChip(title: "Music", selected: category == "music") { category = "music" }
-            }
-            ForEach(entries) { entry in
-                HStack(spacing: 10) {
-                    Button {
-                        if auditioning == entry.id {
-                            preview.stop(); auditioning = nil
-                        } else if let url = BundledAudioLibrary.url(for: entry) {
-                            // Two players over one pair of ears is noise.
-                            if editor.isPlaying { editor.togglePlayback() }
-                            preview.play(url); auditioning = entry.id
-                        }
-                    } label: {
-                        Image(systemName: auditioning == entry.id ? "stop.fill" : "play.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(auditioning == entry.id ? Color.black : Color.white)
-                            .frame(width: 28, height: 28)
-                            .background(auditioning == entry.id ? AnyShapeStyle(Color.white)
-                                                               : AnyShapeStyle(LumaTheme.surfaceStrong),
-                                        in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.lumaPress)
-
-                    Text(entry.title)
-                        .font(.luma(size: 14, weight: .medium)).foregroundStyle(.white).lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text(LDFormat.secs(entry.duration))
-                        .font(.luma(size: 12.5, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.55))
-                    Button {
-                        guard let url = BundledAudioLibrary.url(for: entry) else { return }
-                        guard let imported = editor.importMusicFile(from: url) else { return }
-                        LumaHaptics.shared.tap()
-                        Task {
-                            await editor.addAudioTrack(importedURL: imported, title: entry.title,
-                                                       kind: entry.category == "sfx" ? .sfx : .music)
-                        }
-                    } label: {
-                        Text("Add")
-                            .font(.luma(size: 13, weight: .semibold))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 13).padding(.vertical, 6)
-                            .background(Color.white, in: Capsule())
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.lumaPress)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-        }
-        .onDisappear { preview.stop(); auditioning = nil }
+        MusicLibraryList(editor: editor)
     }
 }
 
@@ -5488,6 +5427,10 @@ private struct LDOverlayPanel: View {
 
 // MARK: - Music / audio lane panel
 
+/// The selected audio lane (editor mock 6): a card with the track's name,
+/// source, BPM and length, its waveform with the beat grid and the in and
+/// out points, then Cut to the beat every 1, 2, 4 or 8 beats. Level, fade,
+/// envelope, effects and lane settings sit under the chips below.
 private struct LDMusicPanel: View {
     @ObservedObject var editor: EditorState
     let trackID: UUID?
@@ -5495,51 +5438,216 @@ private struct LDMusicPanel: View {
 
     private enum Section: String, CaseIterable {
         case level = "Level", fade = "Fade", envelope = "Envelope"
-        case effects = "Effects", beats = "Beats", lane = "Lane"
+        case effects = "Effects", lane = "Lane"
     }
 
     @State private var section: Section = .level
+    @State private var cutting = false
+    @State private var cutNote: String?
+    @AppStorage("lumalook.beatStride") private var beatStride = 2
 
     private var track: EditorState.MusicTrack? {
         guard let trackID else { return editor.audioTracks.first }
         return editor.audioTracks.first { $0.id == trackID }
     }
 
+    private var busy: Bool { cutting || editor.isDetectingBeats }
+
     var body: some View {
         if let track {
             VStack(alignment: .leading, spacing: 16) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Section.allCases, id: \.self) { s in
-                            LDChip(title: s.rawValue, selected: section == s) { section = s }
-                        }
-                    }
-                    .padding(.trailing, 24)
-                }
-                .lumaEdgeFade(leading: 0, trailing: 16)
-
+                LDMusicCard(track: track, bpm: Self.bpm(of: track))
+                LDBeatStrip(track: track, everyBeats: beatStride)
+                    .frame(height: 46)
+                cutRow(track)
+                if let cutNote { LDNote(cutNote) }
+                sectionChips
                 switch section {
                 case .level:    level(track)
                 case .fade:     fade(track)
                 case .envelope: LDEnvelopeEditor(editor: editor, track: track)
                 case .effects:  LDAudioEffects(editor: editor, track: track)
-                case .beats:    beats(track)
                 case .lane:     lane(track)
                 }
             }
+            .task(id: track.id) { seedKnownGrid() }
         } else {
             LDNote("No audio lanes yet. Add music, an effect or a voiceover.")
         }
     }
 
+    private var sectionChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Section.allCases, id: \.self) { s in
+                    LDChip(title: s.rawValue, selected: section == s) { section = s }
+                }
+            }
+            .padding(.trailing, 24)
+        }
+        .lumaEdgeFade(leading: 0, trailing: 16)
+    }
+
+    /// Generated tracks know their grid, so their dots show straight away
+    /// (lane beat markers are not saved with the project).
+    private func seedKnownGrid() {
+        guard let track, track.beatMarkers.isEmpty,
+              let known = BeatDetector.knownGrid(for: track.url) else { return }
+        editor.setBeatMarkers(trackID: track.id, known.beats)
+    }
+
+    /// The exact BPM of a generated track, or one read off the beats found.
+    private static func bpm(of track: EditorState.MusicTrack) -> Double? {
+        if let known = BeatDetector.knownGrid(for: track.url), known.bpm > 0 { return known.bpm }
+        let beats = track.beatMarkers.sorted()
+        guard beats.count >= 4 else { return nil }
+        let gaps = zip(beats.dropFirst(), beats).map { $0 - $1 }.sorted()
+        let median = gaps[gaps.count / 2]
+        guard median > 0.05 else { return nil }
+        var bpm = 60 / median
+        while bpm < 70 { bpm *= 2 }
+        while bpm > 190 { bpm /= 2 }
+        return bpm
+    }
+
+    // MARK: Cut to the beat
+
+    private func strideLabel(_ n: Int) -> String {
+        n == 1 ? "Every beat" : "Every \(n) beats"
+    }
+
+    private func cutRow(_ track: EditorState.MusicTrack) -> some View {
+        HStack(spacing: 8) {
+            Button { cut(track) } label: {
+                HStack(spacing: 8) {
+                    if busy {
+                        ProgressView().controlSize(.mini).tint(LumaTheme.onSignal)
+                    } else {
+                        Image(systemName: "scissors").font(.system(size: 13, weight: .semibold))
+                    }
+                    Text(busy ? "Finding the beat…" : "Cut to the beat")
+                        .font(.luma(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(LumaTheme.onSignal)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.lumaPress)
+            .disabled(busy || editor.clips.isEmpty)
+            .opacity(editor.clips.isEmpty ? 0.4 : 1)
+
+            strideMenu(track)
+        }
+    }
+
+    private func strideMenu(_ track: EditorState.MusicTrack) -> some View {
+        Menu {
+            ForEach([1, 2, 4, 8], id: \.self) { n in
+                Button {
+                    beatStride = n
+                    cutNote = nil
+                } label: {
+                    if n == beatStride {
+                        Label(strideLabel(n), systemImage: "checkmark")
+                    } else {
+                        Text(strideLabel(n))
+                    }
+                }
+            }
+            Divider()
+            Button { splitOnEveryBeat(track) } label: {
+                Label("Split on every beat", systemImage: "scissors")
+            }
+            if track.beatMarkers.isEmpty {
+                Button { findBeats(track) } label: {
+                    Label("Show the beats", systemImage: "metronome")
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(strideLabel(beatStride))
+                    .font(.luma(size: 13.5, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textMuted)
+            }
+            .foregroundStyle(Color.white.opacity(0.9))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .disabled(busy)
+    }
+
+    private func cut(_ track: EditorState.MusicTrack) {
+        guard !busy else { return }
+        LumaHaptics.shared.tap()
+        cutting = true
+        cutNote = nil
+        let id = track.id
+        let every = beatStride
+        Task {
+            let moved = await editor.cutToBeat(trackID: id, everyBeats: every)
+            cutting = false
+            let found = !(editor.audioTracks.first { $0.id == id }?.beatMarkers.isEmpty ?? true)
+            if !found {
+                cutNote = "No beat found in this track."
+            } else if !moved {
+                cutNote = "Your cuts already sit on the beat."
+            }
+        }
+    }
+
+    private func splitOnEveryBeat(_ track: EditorState.MusicTrack) {
+        guard !busy else { return }
+        LumaHaptics.shared.tap()
+        cutting = true
+        cutNote = nil
+        let id = track.id
+        Task {
+            if let known = BeatDetector.knownGrid(for: track.url),
+               editor.audioTracks.first(where: { $0.id == id })?.beatMarkers.isEmpty ?? false {
+                editor.setBeatMarkers(trackID: id, known.beats)
+            }
+            await editor.autoCutToBeats(trackID: id)
+            cutting = false
+        }
+    }
+
+    private func findBeats(_ track: EditorState.MusicTrack) {
+        guard !busy else { return }
+        let id = track.id
+        Task {
+            await editor.detectBeats(trackID: id)
+            if editor.audioTracks.first(where: { $0.id == id })?.beatMarkers.isEmpty ?? true {
+                cutNote = "No beat found in this track."
+            }
+        }
+    }
+
+    // MARK: Sections
+
     @ViewBuilder
     private func level(_ track: EditorState.MusicTrack) -> some View {
-        LDCaption(track.title, value: LDFormat.secs(track.timelineDuration))
-        LDWaveform(samples: track.waveform).frame(height: 34)
-        LDSlider(label: "Volume",
+        LDSlider(label: "Music",
                  value: Binding(get: { track.volume },
                                 set: { editor.setMusicVolume(id: track.id, $0) }),
                  range: 0...100, readout: { "\(Int($0))%" })
+        if editor.clips.contains(where: { $0.hasAudio && !$0.isImage }) {
+            LDCommitSlider(label: "Clip sound",
+                           initial: clipSoundLevel,
+                           range: 0...100,
+                           readout: { "\(Int($0))%" }) { value in
+                for clip in editor.clips where clip.hasAudio && !clip.isImage {
+                    editor.setClipVolume(id: clip.id, value)
+                }
+            }
+        }
         HStack(spacing: 8) {
             LDChip(title: track.isMuted ? "Unmute" : "Mute", selected: track.isMuted) {
                 editor.setMusicMuted(id: track.id, !track.isMuted)
@@ -5555,6 +5663,13 @@ private struct LDMusicPanel: View {
         LDAction(title: "Remove this lane", icon: "trash") {
             editor.removeAudioTrack(id: track.id)
         }
+    }
+
+    /// The clips' own sound, averaged over the clips that have any.
+    private var clipSoundLevel: Double {
+        let voiced = editor.clips.filter { $0.hasAudio && !$0.isImage }
+        guard !voiced.isEmpty else { return 100 }
+        return voiced.map(\.volume).reduce(0, +) / Double(voiced.count)
     }
 
     @ViewBuilder
@@ -5588,23 +5703,6 @@ private struct LDMusicPanel: View {
     }
 
     @ViewBuilder
-    private func beats(_ track: EditorState.MusicTrack) -> some View {
-        LDAction(title: editor.isDetectingBeats ? "Detecting…" : "Detect beats",
-                 icon: "metronome", busy: editor.isDetectingBeats) {
-            Task { await editor.detectBeats(trackID: track.id) }
-        }
-        LDAction(title: "Auto-cut clips to the beat", icon: "scissors",
-                 enabled: !track.beatMarkers.isEmpty) {
-            Task { await editor.autoCutToBeats(trackID: track.id) }
-        }
-        if track.beatMarkers.isEmpty {
-            LDNote("No beats detected yet.")
-        } else {
-            LDCaption("Beats on the lane", value: "\(track.beatMarkers.count)")
-        }
-    }
-
-    @ViewBuilder
     private func lane(_ track: EditorState.MusicTrack) -> some View {
         LDCaption("Lane kind")
         HStack(spacing: 8) {
@@ -5622,6 +5720,139 @@ private struct LDMusicPanel: View {
                                 set: { editor.setMusicOffset(id: track.id, $0) }),
                  range: 0...max(0.1, editor.totalDuration - 0.2),
                  readout: { LDFormat.secs($0) })
+    }
+}
+
+/// The lane's track card: artwork in the track's colour, its name, where it
+/// came from, BPM and length on the timeline.
+private struct LDMusicCard: View {
+    let track: EditorState.MusicTrack
+    let bpm: Double?
+
+    private var generated: GeneratedTrack? { MusicBeatGrid.track(for: track.url) }
+
+    private var source: String {
+        if generated != nil { return "LumaLook library" }
+        if BundledAudioLibrary.all.contains(where: { $0.title == track.title }) { return "Sound library" }
+        switch track.kind {
+        case .voice: return "Voiceover"
+        case .extracted: return "From a clip"
+        default: return "From Files"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            artwork
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track.title)
+                    .font(.luma(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                details
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var artwork: some View {
+        let tint = generated?.colour ?? track.kind.tint
+        return RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(LinearGradient(colors: [tint, tint.opacity(0.35)],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 40, height: 40)
+            .overlay {
+                Image(systemName: track.kind.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+            }
+    }
+
+    private var details: some View {
+        HStack(spacing: 6) {
+            Text(source)
+                .font(.luma(size: 12))
+                .lineLimit(1)
+            if let bpm {
+                Text("·").foregroundStyle(.white.opacity(0.25))
+                Text("\(Int(bpm.rounded())) BPM")
+                    .font(.luma(size: 12, weight: .medium, design: .monospaced))
+                    .lineLimit(1)
+            }
+            Text("·").foregroundStyle(.white.opacity(0.25))
+            Text(LDFormat.clock(track.timelineDuration))
+                .font(.luma(size: 12, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+        }
+        .foregroundStyle(.white.opacity(0.55))
+    }
+}
+
+/// The whole file as RMS bars with the part on the timeline lit, a dot on
+/// every beat (yellow on the beats Cut to the beat will use) and the in and
+/// out points as thin yellow handles.
+private struct LDBeatStrip: View {
+    let track: EditorState.MusicTrack
+    let everyBeats: Int
+
+    var body: some View {
+        Canvas { ctx, size in
+            let total = max(0.05, track.assetDuration)
+            let waveHeight = max(4, size.height - 12)
+            let inX = CGFloat(track.trimStart / total) * size.width
+            let outX = CGFloat(track.trimEnd / total) * size.width
+            drawBars(ctx, size: size, waveHeight: waveHeight, inX: inX, outX: outX)
+            drawBeats(ctx, size: size, total: total)
+            for x in [inX, outX] {
+                let clamped = min(max(0, x - 1), max(0, size.width - 2))
+                let handle = CGRect(x: clamped, y: 0, width: 2, height: waveHeight)
+                ctx.fill(Path(roundedRect: handle, cornerRadius: 1), with: .color(LumaTheme.signal))
+            }
+        }
+    }
+
+    private func drawBars(_ ctx: GraphicsContext, size: CGSize, waveHeight: CGFloat,
+                          inX: CGFloat, outX: CGFloat) {
+        let samples = track.waveform
+        let count = max(1, Int(size.width / 3))
+        for i in 0..<count {
+            let x = CGFloat(i) * 3 + 0.7
+            var level: CGFloat = 0.08
+            if !samples.isEmpty {
+                let idx = min(samples.count - 1, Int(Double(i) / Double(count) * Double(samples.count)))
+                level = CGFloat(max(0.06, min(1, samples[idx])))
+            }
+            let h = level * waveHeight
+            let bar = CGRect(x: x, y: (waveHeight - h) / 2, width: 1.6, height: h)
+            let lit = x >= inX && x <= outX
+            ctx.fill(Path(roundedRect: bar, cornerRadius: 0.8),
+                     with: .color(Color.white.opacity(lit ? 0.78 : 0.2)))
+        }
+    }
+
+    private func drawBeats(_ ctx: GraphicsContext, size: CGSize, total: Double) {
+        let beats = track.beatMarkers
+        guard !beats.isEmpty else { return }
+        let every = max(1, everyBeats)
+        // Pixels between neighbouring beats: keep dots apart when the file
+        // is long, so the grid reads as a grid and not a line.
+        let spacing = size.width / CGFloat(max(1, beats.count))
+        let strongRadius = min(2.2, max(0.9, spacing * CGFloat(every) * 0.3))
+        let y = size.height - 4
+        for (k, beat) in beats.enumerated() {
+            let strong = k % every == 0
+            if !strong && spacing < 4 { continue }
+            let x = CGFloat(beat / total) * size.width
+            let inside = beat >= track.trimStart - 0.0005 && beat <= track.trimEnd + 0.0005
+            let r: CGFloat = strong ? strongRadius : 1
+            let colour: Color = strong && inside
+                ? LumaTheme.signal
+                : Color.white.opacity(inside ? 0.4 : 0.16)
+            ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                     with: .color(colour))
+        }
     }
 }
 
