@@ -91,6 +91,7 @@
 		696C5A655EC29A85E4009B3F /* FS_MS9.cube in Resources */ = {isa = PBXBuildFile; fileRef = A2837177CDFDD3D8EDEA351B /* FS_MS9.cube */; };
 		69ED995FA51B0BCC607C1E63 /* FS_PT400N.cube in Resources */ = {isa = PBXBuildFile; fileRef = 4663C3D90BD5F02587298D57 /* FS_PT400N.cube */; };
 		6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 585AC072642EB31074E401C7 /* LumaLook.storekit */; };
+		BBACF9D433FD4220DBDCC5EB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F1D75D2F67BF5422E24050C /* PrivacyInfo.xcprivacy */; };
 		6B685BEDD082FFFB8DBA9AF8 /* ExportCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA55F19B38C01C558951683 /* ExportCompleteView.swift */; };
 		6BD7CE28B0092F917E17628E /* NavigationFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2BB36C6210131CF4A36B1 /* NavigationFeel.swift */; };
 		6C90EB412D90607F0AB2A85A /* FS_EC100G.cube in Resources */ = {isa = PBXBuildFile; fileRef = 396331E331CF8435E978C3C7 /* FS_EC100G.cube */; };
@@ -305,6 +306,7 @@
 		57D85C68EA6204E1F8006C6F /* PipPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipPresets.swift; sourceTree = "<group>"; };
 		58041F9DF844CCC7D4DF60B8 /* FS_PT160N.cube */ = {isa = PBXFileReference; path = FS_PT160N.cube; sourceTree = "<group>"; };
 		585AC072642EB31074E401C7 /* LumaLook.storekit */ = {isa = PBXFileReference; path = LumaLook.storekit; sourceTree = "<group>"; };
+		7F1D75D2F67BF5422E24050C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoudnessAnalyzer.swift; sourceTree = "<group>"; };
 		5AA55F19B38C01C558951683 /* ExportCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportCompleteView.swift; sourceTree = "<group>"; };
 		5ADC4D5FD1DA92C804CBCD37 /* LUTImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LUTImportSheet.swift; sourceTree = "<group>"; };
@@ -720,6 +722,7 @@
 				5C594D043EBDE22175C914E7 /* Assets.xcassets */,
 				DCFFB79AE65C889172E26DA4 /* Info.plist */,
 				585AC072642EB31074E401C7 /* LumaLook.storekit */,
+				7F1D75D2F67BF5422E24050C /* PrivacyInfo.xcprivacy */,
 				41DAC1C8B04ED078777B1180 /* App */,
 				F23EDB45957AA36465FB8BF0 /* Data */,
 				8CD83DEF83E5437F197B1EBB /* Design */,
@@ -965,6 +968,7 @@
 				C7392F147775DB67C0EBB061 /* FS_XP200.cube in Resources */,
 				6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */,
 				6A76A91E6A5D1BD81CF75E7D /* LumaLook.storekit in Resources */,
+				BBACF9D433FD4220DBDCC5EB /* PrivacyInfo.xcprivacy in Resources */,
 				DC69E381B6E5A584649B509D /* Teal_Orange_17.cube in Resources */,
 				A0B7124BF5E47341AAAA3F2C /* Warm_Cinematic_17.cube in Resources */,
 				6D256DE46137863C52EA8993 /* click.m4a in Resources */,
