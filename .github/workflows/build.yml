@@ -41,7 +41,7 @@ jobs:
       TEAM_ID: FC88M2P4F9
       ARCHIVE: ${{ github.workspace }}/build/LumaLook.xcarchive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Xcode
         run: |

@@ -38,7 +38,13 @@ final class LookThumbs: ObservableObject {
                                     jobs: [Job]) -> String {
         var hasher = Hasher()
         hasher.combine(isFallback)
-        hasher.combine(frame.extent)
+        // CGRect is only Hashable from iOS 18; hash its parts so iOS 17
+        // devices never reach a conformance they don't have.
+        let extent = frame.extent
+        hasher.combine(extent.origin.x)
+        hasher.combine(extent.origin.y)
+        hasher.combine(extent.size.width)
+        hasher.combine(extent.size.height)
 
         let sampleBounds = CGRect(x: 0, y: 0, width: 8, height: 8)
         let normalized = frame
