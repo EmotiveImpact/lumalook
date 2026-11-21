@@ -124,7 +124,15 @@ struct CameraLiveLookView: View {
 
             VStack(spacing: 0) {
                 topMatte
-                Spacer(minLength: 0)
+                // Without a live picture, the permission or status message
+                // sits in the clear space above the drawer, so the drawer can
+                // never cover Open Settings on a short iPhone.
+                if showsLivePicture {
+                    Spacer(minLength: 0)
+                } else {
+                    fallbackMessage
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
                 drawer
             }
 
@@ -363,10 +371,12 @@ struct CameraLiveLookView: View {
     // Letterboxed to the 9:16 capture aspect. What you frame is what is
     // written — and everything that is not the picture lives on the mattes.
 
+    private var showsLivePicture: Bool { camera.isRunning && !camera.cameraUnavailable }
+
     private var viewfinder: some View {
         ZStack {
             Group {
-                if camera.isRunning && !camera.cameraUnavailable {
+                if showsLivePicture {
                     FilteredCameraPreview(
                         camera: camera,
                         onTapUnit: { unit, viewPoint in
@@ -390,7 +400,6 @@ struct CameraLiveLookView: View {
                     ZStack {
                         HeroImage(photo: .golden)
                         Color.black.opacity(0.45)
-                        fallbackMessage
                     }
                 }
             }

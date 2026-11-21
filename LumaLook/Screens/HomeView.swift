@@ -110,6 +110,11 @@ struct HomeView: View {
                 app.path.append(.editor)
             }
             NewWorkTile(icon: "photo", title: "New photo", detail: "Grade a still") {
+                // A new still starts from an empty picker, so Next cannot
+                // carry on with the last clip that was graded.
+                app.selectedVideoURL = nil
+                app.selectedImage = nil
+                app.batchItems = []
                 app.path.append(.selectClip)
             }
         }
@@ -123,6 +128,11 @@ struct HomeView: View {
             return false
         }) {
             app.select(look: look)
+        }
+        // Grading may have been switched off (the camera's Off tile sets
+        // strength to zero); trying a look on should show the look.
+        if app.settings.intensity == 0 {
+            app.settings.intensity = LookSettings().intensity
         }
         app.path.append(.selectClip)
         LumaHaptics.shared.tap()
