@@ -112,6 +112,11 @@ struct StoredOverlay: Codable {
     var shapeStrokeHex: String? = nil
     var shapeStrokeWidth: Double? = nil
     var shapeRotation: Double? = nil
+    /// Captions: word timings (relative to the layer), CaptionStyle raw
+    /// value, and "kept for the SRT only". Optional-at-end; nil = none.
+    var captionWords: [CaptionWord]? = nil
+    var captionStyle: String? = nil
+    var captionHidden: Bool? = nil
 }
 
 /// Background-music track attached to a project.

@@ -200,3 +200,310 @@ enum TextRasterizer {
         ].joined(separator: "|")
     }
 }
+
+// MARK: - Captions (karaoke)
+
+/// A laid-out caption: TextKit 1 objects built and used on one thread only
+/// (the compositor's render queue, or the main actor while the timeline
+/// builds), never shared, so TextKit's threading rule is kept.
+private struct CaptionTextStack {
+    let storage: NSTextStorage
+    let layoutManager: NSLayoutManager
+    let container: NSTextContainer
+    let tokens: [NSRange]
+    let canvas: CGSize
+}
+
+extension TextRasterizer {
+    private static let captionLock = NSLock()
+    private static var captionCache: [String: CIImage] = [:]
+    private static var captionSizes: [String: CGSize] = [:]
+    /// Caption rasters are about 1314 px wide; 24 of them is roughly 50 MB at
+    /// worst, and a playing line only needs one raster per word.
+    private static let captionCacheLimit = 24
+
+    /// Whitespace-separated words of `text`, as UTF-16 ranges. The karaoke
+    /// highlight counts words exactly as they are drawn, so an edited line
+    /// lights the words the viewer can see.
+    static func captionTokens(_ text: String) -> [NSRange] {
+        let ns = text as NSString
+        var out: [NSRange] = []
+        var start = -1
+        for i in 0..<ns.length {
+            if isCaptionSpace(ns.character(at: i)) {
+                if start >= 0 {
+                    out.append(NSRange(location: start, length: i - start))
+                    start = -1
+                }
+            } else if start < 0 {
+                start = i
+            }
+        }
+        if start >= 0 { out.append(NSRange(location: start, length: ns.length - start)) }
+        return out
+    }
+
+    /// The raster extent every frame of this caption line will have. Layout
+    /// only, no pixels, so the timeline build can measure every line cheaply.
+    static func captionExtent(_ text: String, style: CaptionStyle) -> CGRect? {
+        let key = style.rawValue + "|" + text
+        captionLock.lock()
+        if let size = captionSizes[key] {
+            captionLock.unlock()
+            return CGRect(origin: .zero, size: size)
+        }
+        captionLock.unlock()
+
+        guard let stack = captionStack(text, style: style, state: CaptionWordState()) else { return nil }
+        captionLock.lock()
+        if captionSizes.count >= 256 { captionSizes.removeAll() }
+        captionSizes[key] = stack.canvas
+        captionLock.unlock()
+        return CGRect(origin: .zero, size: stack.canvas)
+    }
+
+    /// This caption line's raster at `localTime` seconds into its layer, or nil
+    /// when the spec is not a styled caption (the caller then draws plain text).
+    static func captionFrame(_ text: String, spec: OverlaySpec, localTime: Double) -> CIImage? {
+        guard let raw = spec.captionStyle, let style = CaptionStyle(rawValue: raw) else { return nil }
+        let state = TextAnimator.captionState(style: style,
+                                              words: spec.captionWords,
+                                              tokenCount: captionTokens(text).count,
+                                              localTime: localTime,
+                                              duration: spec.end - spec.start)
+        return captionImage(text, style: style, state: state)
+    }
+
+    /// Rasterises a caption line in one word state. The canvas depends only on
+    /// (text, style), never on the state, so the highlight can move from word
+    /// to word without the layer changing size. Settled states are cached;
+    /// the few in-between frames of a pop are not.
+    static func captionImage(_ text: String, style: CaptionStyle, state: CaptionWordState) -> CIImage? {
+        guard !text.isEmpty else { return nil }
+        let settled = state.popStep >= TextAnimator.captionPopSteps
+        let key = [style.rawValue, "\(state.active)", "\(state.visible)", "\(state.popStep)", text]
+            .joined(separator: "|")
+        if settled {
+            captionLock.lock()
+            if let cached = captionCache[key] {
+                captionLock.unlock()
+                return cached
+            }
+            captionLock.unlock()
+        }
+
+        guard let rendered = renderCaption(text, style: style, state: state) else { return nil }
+
+        if settled {
+            captionLock.lock()
+            if captionCache.count >= captionCacheLimit { captionCache.removeAll() }
+            captionCache[key] = rendered
+            captionLock.unlock()
+        }
+        return rendered
+    }
+
+    // MARK: Caption layout
+
+    private static func isCaptionSpace(_ unit: unichar) -> Bool {
+        unit == 32 || unit == 9 || unit == 10 || unit == 13 || unit == 0xA0 || unit == 0x2028
+    }
+
+    private static func captionStack(_ text: String, style: CaptionStyle,
+                                     state: CaptionWordState) -> CaptionTextStack? {
+        let tokens = captionTokens(text)
+        guard !tokens.isEmpty else { return nil }
+        let storage = NSTextStorage(attributedString: captionAttributed(text, style: style,
+                                                                        tokens: tokens, state: state))
+        let layoutManager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: CaptionMetrics.wrapWidth, height: 100_000))
+        container.lineFragmentPadding = 0
+        layoutManager.addTextContainer(container)
+        storage.addLayoutManager(layoutManager)
+        layoutManager.ensureLayout(for: container)
+        let used = layoutManager.usedRect(for: container)
+        guard used.height >= 1 else { return nil }
+        let height = min((ceil(used.height) + CaptionMetrics.padding * 2).rounded(.up), maxCanvas)
+        return CaptionTextStack(storage: storage, layoutManager: layoutManager, container: container,
+                                tokens: tokens,
+                                canvas: CGSize(width: CaptionMetrics.canvasWidth, height: height))
+    }
+
+    /// Attributes that change only colour, shadow and outline per word, never
+    /// metrics: every state of a line lays out identically.
+    private static func captionAttributed(_ text: String, style: CaptionStyle,
+                                          tokens: [NSRange], state: CaptionWordState) -> NSAttributedString {
+        let size = CaptionMetrics.pointSize
+        let font = UIFont(name: style.fontName, size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: .heavy)
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byWordWrapping
+        // Tight leading, like the Night Lab mock (line-height 1.1).
+        paragraph.lineHeightMultiple = 0.92
+
+        var attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white,
+            .paragraphStyle: paragraph,
+            .kern: -0.02 * size,
+        ]
+        if style.hasShadow {
+            let shadow = NSShadow()
+            shadow.shadowColor = UIColor.black.withAlphaComponent(0.6)
+            // Zero offset on purpose: a raw flipped CGContext would push an
+            // offset shadow the wrong way. A soft glow reads the same anyway.
+            shadow.shadowOffset = .zero
+            shadow.shadowBlurRadius = size * 0.12
+            attrs[.shadow] = shadow
+        }
+        if style.isOutlined {
+            attrs[.strokeColor] = UIColor.black
+            // Negative = stroke AND fill, as a percentage of the point size.
+            attrs[.strokeWidth] = -9.0
+        }
+
+        let out = NSMutableAttributedString(string: text, attributes: attrs)
+        let signal = color(from: CaptionMetrics.signalHex) ?? UIColor.yellow
+        let onSignal = color(from: CaptionMetrics.onSignalHex) ?? UIColor.black
+        for (i, range) in tokens.enumerated() {
+            if i >= state.visible {
+                // Not spoken yet: keeps its place in the layout, draws nothing.
+                out.addAttribute(.foregroundColor, value: UIColor.clear, range: range)
+                if style.isOutlined { out.addAttribute(.strokeColor, value: UIColor.clear, range: range) }
+                out.removeAttribute(.shadow, range: range)
+            } else if i == state.active {
+                switch style.highlight {
+                case .colour:
+                    out.addAttribute(.foregroundColor, value: signal, range: range)
+                case .box:
+                    out.addAttribute(.foregroundColor, value: onSignal, range: range)
+                    out.removeAttribute(.shadow, range: range)
+                case .none:
+                    break
+                }
+            }
+        }
+        return out
+    }
+
+    // MARK: Caption drawing
+
+    private static func renderCaption(_ text: String, style: CaptionStyle,
+                                      state: CaptionWordState) -> CIImage? {
+        guard let stack = captionStack(text, style: style, state: state) else { return nil }
+        let canvas = stack.canvas
+        let pixelWidth = Int(canvas.width)
+        let pixelHeight = Int(canvas.height)
+        guard pixelWidth > 0, pixelHeight > 0 else { return nil }
+
+        guard let ctx = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        // Same flip as `render`: TextKit draws in UIKit's top-left space.
+        ctx.translateBy(x: 0, y: canvas.height)
+        ctx.scaleBy(x: 1, y: -1)
+        UIGraphicsPushContext(ctx)
+
+        let origin = CGPoint(x: CaptionMetrics.padding, y: CaptionMetrics.padding)
+        let layoutManager = stack.layoutManager
+        let allGlyphs = layoutManager.glyphRange(for: stack.container)
+
+        if style.hasLineBoxes {
+            drawCaptionLineBoxes(stack, origin: origin, in: ctx)
+        }
+
+        let hasActive = state.active >= 0 && state.active < stack.tokens.count && state.active < state.visible
+        if style.highlight == .box, hasActive {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: stack.tokens[state.active],
+                                                  actualCharacterRange: nil)
+            let word = layoutManager.boundingRect(forGlyphRange: glyphs, in: stack.container)
+                .offsetBy(dx: origin.x, dy: origin.y)
+            let size = CaptionMetrics.pointSize
+            let box = word.insetBy(dx: -size * 0.12, dy: size * 0.03)
+            let path = UIBezierPath(roundedRect: box, cornerRadius: size * 0.16)
+            let fill = color(from: CaptionMetrics.signalHex) ?? UIColor.yellow
+            ctx.setFillColor(fill.cgColor)
+            ctx.addPath(path.cgPath)
+            ctx.fillPath()
+        }
+
+        let popping = style.popsIn && hasActive && state.popStep < TextAnimator.captionPopSteps
+        if popping {
+            let word = layoutManager.glyphRange(forCharacterRange: stack.tokens[state.active],
+                                                actualCharacterRange: nil)
+            // Everything but the popping word, at rest.
+            let beforeLength = max(0, word.location - allGlyphs.location)
+            if beforeLength > 0 {
+                layoutManager.drawGlyphs(forGlyphRange: NSRange(location: allGlyphs.location, length: beforeLength),
+                                         at: origin)
+            }
+            let afterStart = NSMaxRange(word)
+            let afterLength = max(0, NSMaxRange(allGlyphs) - afterStart)
+            if afterLength > 0 {
+                layoutManager.drawGlyphs(forGlyphRange: NSRange(location: afterStart, length: afterLength),
+                                         at: origin)
+            }
+            // The popping word, scaled about its own centre (never above 1,
+            // so it stays inside the canvas) and faded in.
+            let p = Double(state.popStep) / Double(TextAnimator.captionPopSteps)
+            let scale = CGFloat(TextAnimator.captionPopScale(p))
+            let rect = layoutManager.boundingRect(forGlyphRange: word, in: stack.container)
+                .offsetBy(dx: origin.x, dy: origin.y)
+            ctx.saveGState()
+            ctx.setAlpha(CGFloat(min(1, 0.3 + p)))
+            ctx.translateBy(x: rect.midX, y: rect.midY)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -rect.midX, y: -rect.midY)
+            layoutManager.drawGlyphs(forGlyphRange: word, at: origin)
+            ctx.restoreGState()
+        } else {
+            layoutManager.drawGlyphs(forGlyphRange: allGlyphs, at: origin)
+        }
+
+        UIGraphicsPopContext()
+        guard let cgImage = ctx.makeImage() else { return nil }
+        return CIImage(cgImage: cgImage)
+    }
+
+    /// Boxed: one dark rounded box per line, hugging that line's words. All
+    /// boxes go into one path and fill once, so where two lines' boxes touch
+    /// the overlap is not darkened twice.
+    private static func drawCaptionLineBoxes(_ stack: CaptionTextStack, origin: CGPoint, in ctx: CGContext) {
+        let layoutManager = stack.layoutManager
+        let ns = stack.storage.string as NSString
+        let allGlyphs = layoutManager.glyphRange(for: stack.container)
+        var lines: [CGRect] = []
+        layoutManager.enumerateLineFragments(forGlyphRange: allGlyphs) { _, _, container, glyphRange, _ in
+            var chars = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            while chars.length > 0, TextRasterizer.isCaptionSpace(ns.character(at: NSMaxRange(chars) - 1)) {
+                chars.length -= 1
+            }
+            while chars.length > 0, TextRasterizer.isCaptionSpace(ns.character(at: chars.location)) {
+                chars.location += 1
+                chars.length -= 1
+            }
+            guard chars.length > 0 else { return }
+            let glyphs = layoutManager.glyphRange(forCharacterRange: chars, actualCharacterRange: nil)
+            lines.append(layoutManager.boundingRect(forGlyphRange: glyphs, in: container))
+        }
+        guard !lines.isEmpty else { return }
+        let size = CaptionMetrics.pointSize
+        let path = UIBezierPath()
+        for line in lines {
+            let box = line.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -size * 0.2, dy: 0)
+            path.append(UIBezierPath(roundedRect: box, cornerRadius: size * 0.18))
+        }
+        ctx.setFillColor(UIColor.black.withAlphaComponent(0.78).cgColor)
+        ctx.addPath(path.cgPath)
+        ctx.fillPath()
+    }
+}

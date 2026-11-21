@@ -419,6 +419,13 @@ final class EditorState: ObservableObject {
         var loopsMedia: Bool = false
         /// Non-placement effect stack (blend/chroma/mask/adjust/border).
         var effects: OverlayEffects = OverlayEffects()
+        /// Captions: word timings RELATIVE to this layer's start, so the
+        /// renderer can light the word being spoken. Empty = spread evenly.
+        var captionWords: [CaptionWord] = []
+        /// Captions: CaptionStyle rawValue. nil = drawn as a plain text layer.
+        var captionStyle: String? = nil
+        /// Captions: kept for the SRT but left out of the picture.
+        var captionHidden: Bool = false
 
         var timelineEnd: Double { timelineOffset + duration }
     }
@@ -721,7 +728,10 @@ final class EditorState: ObservableObject {
                               shapeFillHex: $0.shapeFillHex,
                               shapeStrokeHex: $0.shapeStrokeHex,
                               shapeStrokeWidth: $0.shapeStrokeWidth == 0 ? nil : $0.shapeStrokeWidth,
-                              shapeRotation: $0.shapeRotation == 0 ? nil : $0.shapeRotation)
+                              shapeRotation: $0.shapeRotation == 0 ? nil : $0.shapeRotation,
+                              captionWords: $0.captionWords.isEmpty ? nil : $0.captionWords,
+                              captionStyle: $0.captionStyle,
+                              captionHidden: $0.captionHidden ? true : nil)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -855,6 +865,9 @@ final class EditorState: ObservableObject {
             item.effects = stored.effects ?? OverlayEffects()
             item.kind = stored.kind
             item.loopsMedia = stored.loopsMedia ?? false
+            item.captionWords = stored.captionWords ?? []
+            item.captionStyle = stored.captionStyle
+            item.captionHidden = stored.captionHidden ?? false
             return item
         }
         rebuild(keepPosition: false)
@@ -2166,6 +2179,11 @@ final class EditorState: ObservableObject {
             item.center = CGPoint(x: 0.5, y: 0.82)
             item.sizeFraction = 0.8
             item.kind = "caption"
+            // Captions v3: big karaoke style by default, with the line's words.
+            item.captionStyle = CaptionStyle.karaoke.rawValue
+            item.captionWords = CaptionTiming.relative(seg.words, lineStart: offset, duration: duration)
+            item.center = CGPoint(x: 0.5, y: CaptionPosition.lower.centerY)
+            item.sizeFraction = CaptionSize.medium.sizeFraction(aspect: format.aspect)
             item.lane = firstFreeLane(at: offset, duration: duration)
             overlays.append(item)
         }
@@ -2199,6 +2217,144 @@ final class EditorState: ObservableObject {
             .sorted { $0.timelineOffset < $1.timelineOffset }
             .map { CaptionSegment(text: $0.text ?? "", start: $0.timelineOffset, duration: $0.duration) }
         return CaptionEngine.srt(from: segs)
+    }
+
+    // MARK: Captions (styles, line editing, burn-in)
+
+    /// Caption layers in timeline order.
+    var captionLines: [OverlayItem] {
+        overlays
+            .filter { $0.kind == "caption" && $0.text != nil }
+            .sorted { $0.timelineOffset < $1.timelineOffset }
+    }
+
+    /// Replaces every caption line with a fresh transcript, styled and placed
+    /// together. One undo step. Returns the number of lines laid in.
+    @discardableResult
+    func replaceCaptions(_ segments: [CaptionSegment], style: CaptionStyle,
+                         position: CaptionPosition, size: CaptionSize,
+                         hidden: Bool = false) -> Int {
+        let usable = segments.filter { $0.duration > 0.05 && $0.start < totalDuration }
+        guard !usable.isEmpty else { return 0 }
+        pushUndoSnapshot()
+        overlays.removeAll { $0.kind == "caption" }
+        var added = 0
+        for seg in usable {
+            let offset = min(max(0, seg.start), max(0, totalDuration - 0.1))
+            let duration = min(seg.duration, totalDuration - offset)
+            guard duration > 0.05 else { continue }
+            var item = OverlayItem(id: UUID(), url: URL(fileURLWithPath: "/dev/null"),
+                                   isImage: true, timelineOffset: offset,
+                                   duration: duration, title: "Caption")
+            item.text = seg.text
+            item.textStyle = .subtitle
+            item.textColorHex = "#FFFFFF"
+            item.center = CGPoint(x: 0.5, y: position.centerY)
+            item.sizeFraction = size.sizeFraction(aspect: format.aspect)
+            item.kind = "caption"
+            item.captionStyle = style.rawValue
+            item.captionWords = CaptionTiming.relative(seg.words, lineStart: offset, duration: duration)
+            item.captionHidden = hidden
+            item.lane = firstFreeLane(at: offset, duration: duration)
+            overlays.append(item)
+            added += 1
+        }
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return added
+    }
+
+    /// Restyles every caption line. Rebuilds: a style changes the layout.
+    func setCaptionStyle(_ style: CaptionStyle) {
+        guard overlays.contains(where: { $0.kind == "caption" && $0.captionStyle != style.rawValue })
+        else { return }
+        pushUndoSnapshot()
+        for i in overlays.indices where overlays[i].kind == "caption" {
+            overlays[i].captionStyle = style.rawValue
+        }
+        rebuild()
+    }
+
+    /// Moves and/or resizes every caption line together. Live, like the
+    /// overlay size and position setters: no rebuild.
+    func setCaptionPlacement(position: CaptionPosition? = nil, size: CaptionSize? = nil) {
+        let indices = overlays.indices.filter { overlays[$0].kind == "caption" }
+        guard !indices.isEmpty, position != nil || size != nil else { return }
+        pushUndoSnapshot()
+        for i in indices {
+            if let position { overlays[i].center = CGPoint(x: 0.5, y: position.centerY) }
+            if let size { overlays[i].sizeFraction = size.sizeFraction(aspect: format.aspect) }
+        }
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Burns captions into the picture, or keeps them for the SRT only.
+    func setCaptionsHidden(_ hidden: Bool) {
+        guard overlays.contains(where: { $0.kind == "caption" && $0.captionHidden != hidden }) else { return }
+        pushUndoSnapshot()
+        for i in overlays.indices where overlays[i].kind == "caption" {
+            overlays[i].captionHidden = hidden
+        }
+        rebuild()
+    }
+
+    /// Edits one caption line's words and timing (one undo step). The line
+    /// stays between its neighbours. Word timings follow the edit: a new
+    /// duration rescales them, a new word count hands the line to the
+    /// renderer's even spread.
+    func updateCaptionLine(id: UUID, text: String, start: Double, duration: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].kind == "caption", let oldText = overlays[i].text else { return }
+        let item = overlays[i]
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newText = trimmed.isEmpty ? oldText : trimmed
+
+        let others = overlays.filter { $0.kind == "caption" && $0.id != id }
+        let previousEnd = others.filter { $0.timelineOffset <= item.timelineOffset }
+            .map(\.timelineEnd).max() ?? 0
+        let nextStart = others.filter { $0.timelineOffset > item.timelineOffset }
+            .map(\.timelineOffset).min() ?? totalDuration
+        let low = max(0, min(previousEnd, item.timelineOffset))
+        let high = min(totalDuration, max(nextStart, item.timelineEnd))
+        guard high - low >= 0.3 else { return }
+        let newStart = min(max(low, start), high - 0.3)
+        let newEnd = min(max(newStart + 0.3, start + duration), high)
+        let newDuration = newEnd - newStart
+
+        let textChanged = newText != oldText
+        guard textChanged
+                || abs(newStart - item.timelineOffset) > 0.001
+                || abs(newDuration - item.duration) > 0.001 else { return }
+        pushUndoSnapshot()
+
+        var words = item.captionWords
+        if textChanged {
+            let ns = newText as NSString
+            let tokens = TextRasterizer.captionTokens(newText).map { ns.substring(with: $0) }
+            if tokens.count == words.count {
+                words = zip(words, tokens).map { CaptionWord(text: $1, start: $0.start, duration: $0.duration) }
+            } else {
+                words = []
+            }
+        }
+        if abs(newDuration - item.duration) > 0.001 {
+            words = CaptionTiming.rescale(words, from: item.duration, to: newDuration)
+        }
+        overlays[i].text = newText
+        overlays[i].timelineOffset = newStart
+        overlays[i].duration = newDuration
+        overlays[i].captionWords = words
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+    }
+
+    /// Removes every caption line (one undo step).
+    func removeAllCaptions() {
+        guard overlays.contains(where: { $0.kind == "caption" }) else { return }
+        pushUndoSnapshot()
+        overlays.removeAll { $0.kind == "caption" }
+        rebuild()
     }
 
     /// F3 — sets the animated-text preset (with undo).
@@ -3374,6 +3530,15 @@ final class EditorState: ObservableObject {
                                                 start: start, end: start + playable,
                                                 shape: shape,
                                                 lane: overlay.lane))
+                continue
+            }
+            // Styled captions: their own fixed-width layout and word timings
+            // (a caption hidden from the picture adds no spec at all).
+            if overlay.text != nil, overlay.captionStyle != nil {
+                if let captionSpec = CaptionLayout.overlaySpec(for: overlay, start: start,
+                                                               end: start + playable) {
+                    overlaySpecs.append(captionSpec)
+                }
                 continue
             }
             if let text = overlay.text {

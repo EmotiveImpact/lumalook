@@ -2732,25 +2732,11 @@ private struct EditorContent: View {
 
     // MARK: Captions
 
+    /// Karaoke auto captions: generate, style, place and edit lines
+    /// (Screens/Editor/CaptionsPanel.swift).
     @ViewBuilder
     private var captionsPanel: some View {
-        LDCaption("Captions")
-        LDAction(title: isCaptioning ? "Transcribing…" : "Transcribe speech",
-                 icon: "captions.bubble", busy: isCaptioning) {
-            isCaptioning = true
-            Task {
-                let n = await editor.generateCaptions()
-                isCaptioning = false
-                app.importToast = n == 0
-                    ? "No speech found — check Settings › Privacy › Speech Recognition"
-                    : "Added \(n) captions"
-            }
-        }
-        LDAction(title: "Copy SRT", icon: "doc.on.doc") {
-            UIPasteboard.general.string = editor.captionsSRT()
-            app.importToast = "SRT copied"
-        }
-        LDNote("Captions land as text overlays you can restyle like any other.")
+        CaptionsPanel(editor: editor, isCaptioning: $isCaptioning)
     }
 
     // MARK: Audio add
