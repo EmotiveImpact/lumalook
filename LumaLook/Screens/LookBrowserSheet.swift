@@ -1134,12 +1134,7 @@ struct LookTile: View {
                     // image overflows and its invisible remainder steals taps
                     // from the neighbouring tile. Confine hit-testing.
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.white, lineWidth: 2)
-                        }
-                    }
+                    .pickedRing(selected, cornerRadius: 12)
                     .overlay(alignment: .topLeading) {
                         if let badge {
                             Text(badge)
@@ -1286,8 +1281,8 @@ struct LookPosterTile: View {
                     .clipShape(shape)
                     // scaledToFill overflows: confine touches to the tile.
                     .contentShape(shape)
-                    .overlay(shape.strokeBorder(selected ? look.signature : LumaTheme.hairline,
-                                                lineWidth: selected ? 2 : 1))
+                    .overlay(shape.strokeBorder(LumaTheme.hairline, lineWidth: 1).opacity(selected ? 0 : 1))
+                    .pickedRing(selected, cornerRadius: 16)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
             }
             .buttonStyle(.lumaPress)

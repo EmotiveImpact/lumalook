@@ -63,8 +63,9 @@ import AVKit
 //      prompt (you are literally choosing a pixel).
 //   2. Monochrome chrome. Black, near-black, white, grey. No accent anywhere.
 //      All colour on this screen comes from the footage and the looks.
-//   3. Stroke means selection and nothing else — one thin white ring on the
-//      selected look. Everything else separates by surface value.
+//   3. Stroke means selection and nothing else: the light yellow picked ring
+//      (`pickedRing`) on the applied look. Everything else separates by
+//      surface value.
 //   4. The tile IS the preview — every tile is the real grade, including the
 //      Skin First presets and the ORIGINAL tile.
 //   5. Two-axis browsing — the current category centred, neighbours faded
@@ -753,7 +754,7 @@ struct ApplyLookView: View {
 
     /// One shared tile geometry, so a look, a preset and the original all read
     /// as the same object at the same size.
-    private func tileFrame<Content: View>(selected: Bool, ring: Color = .white,
+    private func tileFrame<Content: View>(selected: Bool,
                                           @ViewBuilder content: () -> Content) -> some View {
         content()
             .frame(width: Self.tile, height: Self.tile)
@@ -762,12 +763,7 @@ struct ApplyLookView: View {
             // fill a square tile overflows well past its bounds and eats its
             // neighbours' taps without this.
             .contentShape(RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous))
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous)
-                        .strokeBorder(ring, lineWidth: 2)
-                }
-            }
+            .pickedRing(selected, cornerRadius: Self.tileRadius)
     }
 
     private func tileCaption(_ text: String, selected: Bool) -> some View {
@@ -828,7 +824,7 @@ struct ApplyLookView: View {
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 7) {
-                tileFrame(selected: selected, ring: look.signature) {
+                tileFrame(selected: selected) {
                     Group {
                         if let cg = thumbs.images[look.thumbKey] {
                             Image(decorative: cg, scale: 1)

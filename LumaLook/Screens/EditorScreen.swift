@@ -2476,12 +2476,7 @@ private struct EditorContent: View {
                             .overlay(alignment: .bottomTrailing) {
                                 if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                             }
-                            .overlay {
-                                if isLookActive(look, clipID: clipID) {
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .strokeBorder(Color.white, lineWidth: 2)
-                                }
-                            }
+                            .pickedRing(isLookActive(look, clipID: clipID), cornerRadius: 9)
                             Text(look.name)
                                 .font(.luma(size: 11, weight: .medium))
                                 .foregroundStyle(isLookActive(look, clipID: clipID)
@@ -2561,12 +2556,7 @@ private struct EditorContent: View {
                 .frame(width: 68, height: 68)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay {
-                    if active {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Color.white, lineWidth: 2)
-                    }
-                }
+                .pickedRing(active, cornerRadius: 9)
                 Text("None").font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(active ? Color.white : .white.opacity(0.55))
                     .frame(width: 68)

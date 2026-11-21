@@ -748,12 +748,7 @@ struct CameraLiveLookView: View {
         .overlay(alignment: .bottomTrailing) {
             if storeService.isLocked(look) { LookLockGlyph(compact: true) }
         }
-        .overlay {
-            if app.isCurrent(look) {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(look.signature, lineWidth: 2)
-            }
-        }
+        .pickedRing(app.isCurrent(look), cornerRadius: 9)
     }
 
     private func sourceBadge(_ look: LibraryLook) -> String? {
@@ -795,12 +790,7 @@ struct CameraLiveLookView: View {
                         .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(active ? 0.95 : 0.45))
                 }
-                .overlay {
-                    if active {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(.white, lineWidth: 2)
-                    }
-                }
+                .pickedRing(active, cornerRadius: 9)
                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.lumaPress)
