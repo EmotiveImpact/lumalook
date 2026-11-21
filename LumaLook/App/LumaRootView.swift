@@ -181,15 +181,6 @@ struct LumaRootView: View {
         case .audio: AudioView()
         case .settings: SettingsSubscriptionView()
         case .collections: CollectionsView()
-        // The Design Lab has done its job: these designs ARE the app now, so
-        // every entry points at the real screen. Keeping separate preview
-        // copies would only let them drift out of sync with what ships.
-        case .ldGrade: ApplyLookView()
-        case .ldLibrary: SavedLooksView()
-        case .ldCamera: CameraLiveLookView()
-        case .ldEditor: EditorTimelineView()
-        case .ldStore: FilterStoreView()
-        case .ldExport: LDExportDemoView()
         }
     }
 }

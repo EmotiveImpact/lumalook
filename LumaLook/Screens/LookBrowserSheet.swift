@@ -107,7 +107,7 @@ extension LookLibraryStore {
 //   6. Mono is for NUMBERS ONLY. Counts and strengths keep the instrument
 //      voice; names, categories, headings, badges and buttons are the system
 //      face in sentence case.
-//   7. Prefer a live value over a glyph (see `valueTool` in LDCameraDemoView).
+//   7. Prefer a live value over a glyph (see the camera drawer's value tools).
 //
 // WHAT COMPACT MODE STILL OWES THE HALF-SHEET
 // The same view is hosted at ~340 pt (grade / camera), ~620 pt (editor) and

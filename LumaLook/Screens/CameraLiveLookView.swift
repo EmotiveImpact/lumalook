@@ -6,7 +6,7 @@ import Photos
 // =============================================================================
 // CameraLiveLookView — the shipping camera, in the approved design language.
 //
-// Promoted from the design-lab preview (LDCameraDemoView) with full feature
+// Promoted from the retired Design Lab preview with full feature
 // parity against the previous full-bleed build. Nothing was dropped for the
 // look; the carry-across items are marked (carried) below.
 //

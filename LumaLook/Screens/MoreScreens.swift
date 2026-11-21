@@ -2197,8 +2197,8 @@ struct AudioView: View {
 /// here, so the language shows up as everything else: monochrome chrome, a
 /// plain Title-Case header, sentence-case rows, and mono reserved strictly for
 /// the numbers — the LUT count, the bytes on disk, the export resolution and
-/// the version. Every legally-required row and the Design Lab section stay
-/// exactly where they were.
+/// the version. Every legally-required row stays exactly where it was. The
+/// subscription card leads: it is the one thing on this screen that earns.
 struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
     @EnvironmentObject private var app: AppModel
@@ -2348,31 +2348,6 @@ struct SettingsSubscriptionView: View {
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
         List {
-            // Design previews shipped for review, not for customers. First in
-            // the list on purpose: a preview buried under About is a preview
-            // nobody opens.
-            Section("Design Lab") {
-                settingsRow(icon: "sparkles", title: "Grade Room") {
-                    app.path.append(.ldGrade)
-                }
-                settingsRow(icon: "square.grid.2x2", title: "Look Library") {
-                    app.path.append(.ldLibrary)
-                }
-                settingsRow(icon: "camera", title: "Camera") {
-                    app.path.append(.ldCamera)
-                }
-                settingsRow(icon: "timeline.selection", title: "Video Editor") {
-                    app.path.append(.ldEditor)
-                }
-                settingsRow(icon: "bag", title: "Look Store") {
-                    app.path.append(.ldStore)
-                }
-                settingsRow(icon: "square.and.arrow.up", title: "Export") {
-                    app.path.append(.ldExport)
-                }
-            }
-            .listRowBackground(LumaTheme.card)
-
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)
