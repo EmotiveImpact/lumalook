@@ -37,6 +37,7 @@
 		1EE1835791BA9C9AE4AD4A33 /* FS_FP3000N.cube in Resources */ = {isa = PBXBuildFile; fileRef = FC1FD13AE1DFC615E09C20D2 /* FS_FP3000N.cube */; };
 		1F1DCBF631D25B753DCC6401 /* EditorChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */; };
 		214E58347DBD7F44941B4FDC /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 1C6DF81224A4A023BADD016C /* Pow */; };
+		6FDB50AC5B712FB10BCEE004 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 4221DD8BA6F276C6280AC7E6 /* RevenueCat */; };
 		22149D2B572771131F02C893 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61E2463280B4012F21305D /* MockData.swift */; };
 		25121F74107C54C8878E9161 /* TemplateLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F870BB157E948E4AD6D2B5 /* TemplateLibraryView.swift */; };
 		25D91202BA6C2E9F0CDD6D9C /* FS_SP400.cube in Resources */ = {isa = PBXBuildFile; fileRef = 55A66FB773AEE510A8E14555 /* FS_SP400.cube */; };
@@ -453,6 +454,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				214E58347DBD7F44941B4FDC /* Pow in Frameworks */,
+				6FDB50AC5B712FB10BCEE004 /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -813,6 +815,7 @@
 			name = LumaLook;
 			packageProductDependencies = (
 				1C6DF81224A4A023BADD016C /* Pow */,
+				4221DD8BA6F276C6280AC7E6 /* RevenueCat */,
 			);
 			productName = LumaLook;
 			productReference = 4D68EDF7DD7DB6080A0C060B /* LumaLook.app */;
@@ -844,6 +847,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				6A66C1AA0791AEEBFC5252FF /* XCRemoteSwiftPackageReference "Pow" */,
+				EA3F18B0672AB8C2A3474F56 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7722BAD628CD6CBF5934B2A4 /* Products */;
@@ -1307,6 +1311,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		EA3F18B0672AB8C2A3474F56 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.102.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1314,6 +1326,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6A66C1AA0791AEEBFC5252FF /* XCRemoteSwiftPackageReference "Pow" */;
 			productName = Pow;
+		};
+		4221DD8BA6F276C6280AC7E6 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EA3F18B0672AB8C2A3474F56 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

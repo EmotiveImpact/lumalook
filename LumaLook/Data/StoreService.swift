@@ -1,5 +1,28 @@
 import Foundation
 import StoreKit
+import RevenueCat
+
+/// RevenueCat setup. Purchases, restores and entitlements go through
+/// RevenueCat once `apiKey` holds the project's public Apple key ("appl_…").
+/// Public SDK keys are designed to ship inside the app, so it lives here.
+///
+/// While the key is empty the app talks to StoreKit directly, exactly as it
+/// did before RevenueCat, so builds keep working before the dashboard exists.
+/// Prices and trial eligibility always come straight from StoreKit.
+enum RevenueCatConfig {
+    static let apiKey = ""
+    /// The entitlement every Pro product (yearly, monthly, lifetime) grants.
+    static let proEntitlement = "pro"
+
+    static var isEnabled: Bool {
+        #if DEBUG
+        // Local runs against LumaLook.storekit skip RevenueCat, whose servers
+        // can't validate transactions from a StoreKit configuration file.
+        if ProcessInfo.processInfo.environment["LUMA_STOREKIT_DIRECT"] == "1" { return false }
+        #endif
+        return !apiKey.isEmpty
+    }
+}
 
 /// StoreKit 2 storefront (C5). Pricing set 2026-07: Pro $49.99/yr with a
 /// 7-day free trial, $9.99/mo, $119.99 lifetime, look packs $2.99–4.99.
@@ -14,8 +37,9 @@ final class StoreService: ObservableObject {
         static let proYearly = "com.emotiveimpact.lumalook.pro.yearly"
         static let proMonthly = "com.emotiveimpact.lumalook.pro.monthly"
         static let proLifetime = "com.emotiveimpact.lumalook.pro.lifetime"
+        static let packPrefix = "com.emotiveimpact.lumalook.pack."
         static func pack(_ packID: String) -> String {
-            "com.emotiveimpact.lumalook.pack.\(packID)"
+            packPrefix + packID
         }
     }
 
@@ -52,7 +76,17 @@ final class StoreService: ObservableObject {
             isPro = true
         }
         #endif
-        updatesTask = Task { await listenForTransactions() }
+        if RevenueCatConfig.isEnabled {
+            if !Purchases.isConfigured {
+                Purchases.logLevel = .warn
+                Purchases.configure(withAPIKey: RevenueCatConfig.apiKey)
+            }
+            // RevenueCat finishes transactions itself; a second listener
+            // finishing them too would fight it.
+            updatesTask = Task { await listenForCustomerInfo() }
+        } else {
+            updatesTask = Task { await listenForTransactions() }
+        }
         Task {
             await loadProducts()
             await refreshEntitlements()
@@ -68,7 +102,10 @@ final class StoreService: ObservableObject {
     func loadProducts() async {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
-        let packIDs = PackCatalog.packs.filter { !$0.isFree }.map { ProductID.pack($0.id) }
+        // The film archives come with Pro and are never sold on their own.
+        let packIDs = PackCatalog.packs
+            .filter { !$0.isFree && !$0.isProIncluded }
+            .map { ProductID.pack($0.id) }
         let ids = [ProductID.proYearly, ProductID.proMonthly, ProductID.proLifetime] + packIDs
         do {
             let products = try await Product.products(for: ids)
@@ -94,9 +131,16 @@ final class StoreService: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" { return }
         #endif
+        if RevenueCatConfig.isEnabled {
+            // A failed fetch (offline) keeps what we last knew; RevenueCat
+            // also serves its cached copy when it can't reach its servers.
+            if let info = try? await Purchases.shared.customerInfo() { apply(info) }
+            return
+        }
         var pro = false
         var packs: Set<String> = []
-        for await result in Transaction.currentEntitlements {
+        // Qualified: RevenueCat also declares a (retired) `Transaction`.
+        for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
             switch transaction.productID {
@@ -111,6 +155,25 @@ final class StoreService: ObservableObject {
         }
         isPro = pro
         ownedPackIDs = packs
+    }
+
+    /// What this person owns, as RevenueCat sees it. The "pro" entitlement is
+    /// the intended source, but the product IDs count too, so a dashboard
+    /// that hasn't attached a product to the entitlement yet can never lock
+    /// out someone who paid.
+    private func apply(_ info: CustomerInfo) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_PRO"] == "1" { return }
+        #endif
+        let owned = Set(info.nonSubscriptions.map(\.productIdentifier))
+        let subscribed = !info.activeSubscriptions
+            .isDisjoint(with: [ProductID.proYearly, ProductID.proMonthly])
+        isPro = info.entitlements[RevenueCatConfig.proEntitlement]?.isActive == true
+            || subscribed
+            || owned.contains(ProductID.proLifetime)
+        ownedPackIDs = Set(owned
+            .filter { $0.hasPrefix(ProductID.packPrefix) }
+            .map { String($0.dropFirst(ProductID.packPrefix.count)) })
     }
 
     /// A pack is usable if it's free, individually owned, or the user is
@@ -169,6 +232,24 @@ final class StoreService: ObservableObject {
         guard !purchaseInFlight else { return false }
         purchaseInFlight = true
         defer { purchaseInFlight = false }
+        if RevenueCatConfig.isEnabled {
+            do {
+                let result = try await Purchases.shared.purchase(
+                    product: StoreProduct(sk2Product: product))
+                guard !result.userCancelled else { return false }
+                apply(result.customerInfo)
+                return true
+            } catch ErrorCode.purchaseCancelledError {
+                return false   // a cancel is silent
+            } catch ErrorCode.paymentPendingError {
+                // Ask to Buy: silent, as on the StoreKit path. The unlock
+                // arrives through customerInfoStream once a parent approves.
+                return false
+            } catch {
+                lastError = error.localizedDescription
+                return false
+            }
+        }
         do {
             let result = try await product.purchase()
             switch result {
@@ -192,6 +273,14 @@ final class StoreService: ObservableObject {
     }
 
     func restorePurchases() async {
+        if RevenueCatConfig.isEnabled {
+            do {
+                apply(try await Purchases.shared.restorePurchases())
+            } catch {
+                lastError = error.localizedDescription
+            }
+            return
+        }
         do {
             try await AppStore.sync()
         } catch {
@@ -203,10 +292,18 @@ final class StoreService: ObservableObject {
     // MARK: Transaction updates
 
     private func listenForTransactions() async {
-        for await result in Transaction.updates {
+        for await result in StoreKit.Transaction.updates {
             guard case .verified(let transaction) = result else { continue }
             await transaction.finish()
             await refreshEntitlements()
+        }
+    }
+
+    /// RevenueCat pushes a fresh CustomerInfo on launch, after purchases and
+    /// renewals, and when a refund or expiry lands.
+    private func listenForCustomerInfo() async {
+        for await info in Purchases.shared.customerInfoStream {
+            apply(info)
         }
     }
 }
