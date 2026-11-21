@@ -281,7 +281,7 @@ enum LookSwatch {
     static let referenceFrame: CIImage = {
         // Coast over golden: the golden hero is a single clipped hue, the
         // coast frame spans blue → magenta → green → neutral → black.
-        guard let photo = HeroPhoto.coast.ciImage ?? HeroPhoto.golden.ciImage else {
+        guard let photo = HeroPhoto.bridge.ciImage ?? HeroPhoto.golden.ciImage else {
             return CIImage(color: CIColor(red: 0.1, green: 0.1, blue: 0.13))
                 .cropped(to: CGRect(x: 0, y: 0, width: 440, height: 300))
         }

@@ -78,7 +78,7 @@ struct FrameGuidesOverlay: View {
                             .frame(width: safe.width, height: safe.height)
                             .position(x: safe.midX, y: safe.midY)
                         Text("SAFE")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(.luma(size: 9, weight: .bold, design: .monospaced))
                             .tracking(1.2)
                             .foregroundStyle(LumaTheme.teal.opacity(0.9))
                             .position(x: safe.midX, y: safe.minY + 10)

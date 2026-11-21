@@ -31,11 +31,27 @@ struct PaywallView: View {
         storeService.proLifetime?.displayPrice ?? StoreService.LockedPricing.lifetime
     }
 
+    /// The look the cover portrait wears.
+    private static let coverLook = "CN93 · Luxury Campaign"
+
     var body: some View {
-        ZStack {
-            LumaTheme.background.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 22) {
+        ZStack(alignment: .top) {
+            LumaTheme.ink.ignoresSafeArea()
+            // A graded portrait behind the top of the sheet, fading into ink.
+            GradedHeroImage(photo: .campaign, lookName: Self.coverLook)
+                .frame(height: 430)
+                .overlay {
+                    LinearGradient(stops: [
+                        .init(color: LumaTheme.ink.opacity(0.15), location: 0),
+                        .init(color: LumaTheme.ink.opacity(0), location: 0.3),
+                        .init(color: LumaTheme.ink.opacity(0.75), location: 0.72),
+                        .init(color: LumaTheme.ink, location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                }
+                .ignoresSafeArea(edges: .top)
+                .accessibilityHidden(true)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
                     hero
                     featureList
                     planPicker
@@ -46,19 +62,26 @@ struct PaywallView: View {
                 .padding(.bottom, 28)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
+        .overlay(alignment: .top) {
+            HStack {
+                LookChip(name: Self.coverLook,
+                         colour: LookSignature.colour(forLookNamed: Self.coverLook), size: 12)
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Close")
             }
-            .buttonStyle(.lumaPress)
-            .padding(.trailing, 18)
-            .padding(.top, 10)
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
         }
         .onChange(of: storeService.isPro) { _, pro in
             if pro { dismiss() }
@@ -72,44 +95,26 @@ struct PaywallView: View {
         }
     }
 
+    /// Kicker and headline, sitting low on the cover portrait.
     private var hero: some View {
-        VStack(spacing: 14) {
-            HeroImage(photo: .golden, radius: 20)
-                .frame(height: 190)
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("LumaLook Pro")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(.white)
-                        Text("Every look. Every pack. Every tool.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background {
-                        LinearGradient(colors: [.black.opacity(0.65), .clear],
-                                       startPoint: .bottom, endPoint: .top)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("LumaLook Pro")
+                .font(.luma(size: 14, weight: .semibold))
+                .foregroundStyle(LumaTheme.signal)
+            LumaHeadline(light: "Every look.", heavy: "Every pack.", size: 34)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 250)
     }
 
     private var featureList: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            PaywallFeatureRow(icon: "camera.filters", title: "All Looks & Packs",
-                              detail: "All \(PackCatalog.totalLookCount) pack looks and every signature look, plus every future pack.")
-            PaywallFeatureRow(icon: "square.stack.3d.up", title: "LUT Stacking",
-                              detail: "Conversion and creative slots with per-slot strength.")
-            PaywallFeatureRow(icon: "square.and.arrow.up.on.square", title: "Batch Export",
-                              detail: "Grade once, export up to ten clips in one pass.")
-            PaywallFeatureRow(icon: "cube.transparent", title: "Export Grades as .cube",
-                              detail: "Take your grade to any NLE or camera app.")
+        VStack(alignment: .leading, spacing: 12) {
+            PaywallFeatureRow(text: "All \(PackCatalog.totalLookCount) looks and every new pack")
+            PaywallFeatureRow(text: "Stack looks with per-slot strength")
+            PaywallFeatureRow(text: "Batch export up to 10 clips")
+            PaywallFeatureRow(text: "Take your grade anywhere as .cube")
         }
-        .padding(18)
-        .lumaCard()
     }
 
     private var selectedProduct: Product? {
@@ -201,23 +206,23 @@ struct PaywallView: View {
         } label: {
             HStack {
                 if storeService.purchaseInFlight {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(LumaTheme.onSignal)
                 } else {
                     Text(callToAction)
-                        .font(.headline)
+                        .font(.luma(size: 16, weight: .semibold))
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(LumaTheme.onSignal)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
-            .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 15))
+            .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.lumaPress)
         .disabled(storeService.purchaseInFlight || selectedProduct == nil)
         .overlay(alignment: .bottom) {
             if let note = renewalNote {
                 Text(note)
-                    .font(.caption)
+                    .font(.luma(.caption))
                     .foregroundStyle(LumaTheme.textSecondary)
                     .offset(y: 22)
             }
@@ -236,31 +241,26 @@ struct PaywallView: View {
             Button("Terms") { LumaLegal.open(LumaLegal.terms) }
             Button("Privacy") { LumaLegal.open(LumaLegal.privacy) }
         }
-        .font(.footnote)
-        .foregroundStyle(LumaTheme.textSecondary)
+        .font(.luma(.footnote))
+        .foregroundStyle(LumaTheme.textMuted)
+        .frame(maxWidth: .infinity)
         .padding(.top, 6)
     }
 }
 
 private struct PaywallFeatureRow: View {
-    let icon: String
-    let title: String
-    let detail: String
+    let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(LumaTheme.accentBright)
-                .frame(width: 26)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(LumaTheme.textSecondary)
-            }
+        HStack(spacing: 11) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(LumaTheme.signal)
+                .frame(width: 18)
+            Text(text)
+                .font(.luma(size: 15))
+                .foregroundStyle(LumaTheme.textPrimary.opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -275,41 +275,39 @@ private struct PaywallPlanRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21))
-                    .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .font(.luma(size: 16, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textPrimary)
                     Text(price)
-                        .font(.footnote)
+                        .font(.luma(size: 13))
+                        .monospacedDigit()
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
+                        .font(.luma(size: 12, weight: .semibold))
+                        .foregroundStyle(selected ? LumaTheme.onSignal : LumaTheme.textSecondary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
-                        .background(selected ? LumaTheme.accent : LumaTheme.surface,
-                                    in: Capsule())
+                        .background(selected ? LumaTheme.signal : LumaTheme.raised, in: Capsule())
                 }
+                Circle()
+                    .strokeBorder(selected ? LumaTheme.signal : LumaTheme.border, lineWidth: selected ? 6 : 1.5)
+                    .frame(width: 20, height: 20)
             }
-            .padding(15)
-            .background(selected ? LumaTheme.cardRaised : LumaTheme.card,
-                        in: RoundedRectangle(cornerRadius: 15))
-            // MEANINGFUL: the chosen plan. Unselected plans step down in value
-            // instead of wearing a competing outline.
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: 15)
-                        .stroke(LumaTheme.accentBright, lineWidth: 1.5)
-                }
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(selected ? LumaTheme.signal.opacity(0.06) : LumaTheme.panel,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.hairline,
+                              lineWidth: selected ? 1.5 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -389,13 +387,13 @@ struct LockedLookSheet: View {
                 .accessibilityHidden(true)
 
             Text(lock.lookName)
-                .font(.system(size: 22, weight: .bold))
+                .font(.luma(size: 22, weight: .bold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.top, 16)
 
             Text(message)
-                .font(.system(size: 14))
+                .font(.luma(size: 14))
                 .foregroundStyle(.white.opacity(0.62))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -424,7 +422,7 @@ struct LockedLookSheet: View {
                                                      : "Restore Purchases")
                         }
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.luma(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .frame(height: 30)
                 }
@@ -474,7 +472,7 @@ struct LockedLookSheet: View {
                     ProgressView().tint(.black)
                 } else {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.luma(size: 16, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -490,7 +488,7 @@ struct LockedLookSheet: View {
     private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.luma(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
@@ -549,64 +547,111 @@ struct OnboardingView: View {
 
     private struct Page {
         let photo: HeroPhoto
-        let icon: String
-        let title: String
+        let look: String
+        let light: String
+        let heavy: String
         let detail: String
     }
 
     private let pages: [Page] = [
-        Page(photo: .golden, icon: "camera.aperture",
-             title: "Shoot with Live Looks",
-             detail: "Preview cinematic grades through the viewfinder and record them baked in."),
-        Page(photo: .neon, icon: "cube.transparent",
-             title: "Grade Anything",
-             detail: "Apply looks and .cube LUTs to photos and video, stack conversion and creative slots, and compare before and after."),
-        Page(photo: .night, icon: "film.stack",
-             title: "Edit It Together",
-             detail: "Multi-track timeline with music, overlays, transitions and per-clip looks — then export in up to 4K."),
+        Page(photo: .golden, look: "KD2 · Golden Hour",
+             light: "Shoot it", heavy: "graded.",
+             detail: "Live looks in the viewfinder, baked into every clip and photo you take."),
+        Page(photo: .neon, look: "Neon Nights",
+             light: "Grade", heavy: "anything.",
+             detail: "Looks and .cube LUTs on photos and video. Stack them, then compare before and after."),
+        Page(photo: .gig, look: "BW32 · Documentary Grit",
+             light: "Edit it", heavy: "together.",
+             detail: "A multi-track timeline with music, captions, transitions and a look per clip, exported in up to 4K."),
     ]
 
+    private var current: Page { pages[min(max(page, 0), pages.count - 1)] }
+
     var body: some View {
-        ZStack {
-            LumaTheme.background.ignoresSafeArea()
-            VStack(spacing: 0) {
-                TabView(selection: $page) {
-                    ForEach(pages.indices, id: \.self) { index in
-                        onboardingPage(pages[index])
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .always))
+        ZStack(alignment: .bottom) {
+            LumaTheme.ink.ignoresSafeArea()
 
-                VStack(spacing: 12) {
-                    Button {
-                        if page < pages.count - 1 {
-                            withAnimation { page += 1 }
-                        } else {
-                            showPaywall = true
-                        }
-                    } label: {
-                        Text(page < pages.count - 1 ? "Continue" : "Try LumaLook Pro")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(LumaTheme.accent, in: RoundedRectangle(cornerRadius: 15))
-                    }
-                    .buttonStyle(.lumaPress)
-
-                    Button {
-                        finish()
-                    } label: {
-                        Text(page < pages.count - 1 ? "Skip" : "Continue with Free")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(LumaTheme.textSecondary)
-                            .frame(height: 34)
-                    }
+            TabView(selection: $page) {
+                ForEach(pages.indices, id: \.self) { index in
+                    GradedHeroImage(photo: pages[index].photo, lookName: pages[index].look)
+                        .ignoresSafeArea()
+                        .tag(index)
                 }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 18)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea()
+
+            LinearGradient(stops: [
+                .init(color: LumaTheme.ink.opacity(0), location: 0.35),
+                .init(color: LumaTheme.ink.opacity(0.8), location: 0.62),
+                .init(color: LumaTheme.ink, location: 0.86),
+            ], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 6) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(index == page ? LumaTheme.signal : Color.white.opacity(0.25))
+                            .frame(width: index == page ? 20 : 6, height: 6)
+                    }
+                }
+                .padding(.bottom, 18)
+                .accessibilityHidden(true)
+
+                LumaHeadline(light: current.light, heavy: current.heavy, size: 40)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id(page)
+                    .transition(.opacity)
+                Text(current.detail)
+                    .font(.luma(size: 16))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+                    .padding(.bottom, 26)
+                    .id("detail\(page)")
+                    .transition(.opacity)
+
+                Button {
+                    if page < pages.count - 1 {
+                        withAnimation { page += 1 }
+                    } else {
+                        showPaywall = true
+                    }
+                } label: {
+                    let last = page == pages.count - 1
+                    Text(last ? "Try LumaLook Pro" : (page == 0 ? "Get started" : "Continue"))
+                        .font(.luma(size: 16, weight: .semibold))
+                        .foregroundStyle(last ? LumaTheme.onSignal : LumaTheme.onLight)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(last ? LumaTheme.signal : LumaTheme.textPrimary,
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+
+                Button {
+                    finish()
+                } label: {
+                    Text(page < pages.count - 1 ? "Skip" : "Continue with Free")
+                        .font(.luma(size: 15, weight: .medium))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .padding(.top, 4)
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 10)
+            .animation(.easeOut(duration: 0.25), value: page)
+        }
+        .overlay(alignment: .topLeading) {
+            LookChip(name: "Live · " + LookSignature.title(in: current.look),
+                     colour: LookSignature.colour(forLookNamed: current.look), size: 12)
+                .padding(.leading, 18)
+                .padding(.top, 8)
+                .animation(.easeOut(duration: 0.25), value: page)
         }
         .sheet(isPresented: $showPaywall, onDismiss: { finish() }) {
             PaywallView()
@@ -614,36 +659,6 @@ struct OnboardingView: View {
         .onChange(of: storeService.isPro) { _, pro in
             if pro { finish() }
         }
-    }
-
-    private func onboardingPage(_ page: Page) -> some View {
-        VStack(spacing: 24) {
-            HeroImage(photo: page.photo, radius: 24)
-                .frame(maxHeight: .infinity)
-                .overlay(alignment: .bottomLeading) {
-                    Image(systemName: page.icon)
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(14)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .padding(16)
-                }
-            VStack(spacing: 9) {
-                Text(page.title)
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                Text(page.detail)
-                    .font(.body)
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 8)
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 18)
-        .padding(.bottom, 40)
     }
 
     private func finish() {

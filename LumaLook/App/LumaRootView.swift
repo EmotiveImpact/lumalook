@@ -56,7 +56,7 @@ struct LumaRootView: View {
             ZStack(alignment: .top) {
                 if let toast = app.importToast {
                     Text(toast)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.luma(.subheadline, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 11)

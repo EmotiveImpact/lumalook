@@ -54,13 +54,13 @@ private struct LDToolItem: View {
                     .font(.system(size: 18, weight: .regular))
                     .frame(height: 21)
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .lineLimit(1)
                     // Floor at ~10 pt; every current label fits 64 pt at 11.
                     .minimumScaleFactor(0.9)
-                    .foregroundStyle(.white.opacity(active ? 0.7 : 0.5))
+                    .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textSecondary)
             }
-            .foregroundStyle(active ? Color.white : .white.opacity(0.62))
+            .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textPrimary.opacity(0.85))
             .frame(width: 64, height: 46)
             .contentShape(Rectangle())
         }
@@ -83,13 +83,13 @@ private struct LDValueTool: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(active ? .white : .white.opacity(0.82))
                     .lineLimit(1)
                     // Floor at ~13 pt so a long value still reads.
                     .minimumScaleFactor(0.85)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(active ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -112,7 +112,7 @@ private struct LDChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                .font(.luma(size: 13, weight: selected ? .semibold : .medium))
                 .foregroundStyle(selected ? Color.white : LumaTheme.textSecondary)
                 .lineLimit(1)
                 .padding(.horizontal, 13)
@@ -146,7 +146,7 @@ private struct LDAction: View {
                 } else {
                     Image(systemName: icon).font(.system(size: 13, weight: .light))
                 }
-                Text(title).font(.system(size: 14, weight: .medium))
+                Text(title).font(.luma(size: 14, weight: .medium))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color.white.opacity(0.9))
@@ -175,7 +175,7 @@ private struct LDActionMenu<Content: View>: View {
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: icon).font(.system(size: 13, weight: .light))
-                Text(title).font(.system(size: 14, weight: .medium))
+                Text(title).font(.luma(size: 14, weight: .medium))
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(LumaTheme.textMuted)
@@ -202,11 +202,11 @@ private struct LDSlider: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(label)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.luma(size: 12.5, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                 Spacer(minLength: 4)
                 Text(readout(value))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 13, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.9))
             }
@@ -277,12 +277,12 @@ private struct LDCaption: View {
     var body: some View {
         HStack(spacing: 7) {
             Text(text)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.luma(size: 12.5, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
                 .lineLimit(1)
             if let value {
                 Text(value)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 13, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.88))
                     .lineLimit(1)
@@ -298,7 +298,7 @@ private struct LDNote: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(.luma(size: 13))
             .foregroundStyle(.white.opacity(0.55))
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -367,7 +367,7 @@ private struct LDInstructionBar: View {
             .buttonStyle(.plain)
             Spacer(minLength: 6)
             Text(sentence)
-                .font(.system(size: 14, weight: .medium))
+                .font(.luma(size: 14, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.78))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -1730,7 +1730,7 @@ private struct EditorContent: View {
                 timelineSection
                 if let exportError {
                     Text(exportError)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.luma(size: 12.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                         .lineLimit(2)
                         .padding(.horizontal, 20)
@@ -1769,64 +1769,108 @@ private struct EditorContent: View {
     // MARK: Top bar — monochrome, Export is a plain word
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
+        ZStack {
+            HStack(spacing: 4) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
 
+                Button { editor.undo() } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(editor.canUndo ? LumaTheme.textSecondary : LumaTheme.textMuted.opacity(0.6))
+                        .frame(width: 32, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress).disabled(!editor.canUndo)
+                .accessibilityLabel("Undo")
+
+                Button { editor.redo() } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(editor.canRedo ? LumaTheme.textSecondary : LumaTheme.textMuted.opacity(0.6))
+                        .frame(width: 32, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress).disabled(!editor.canRedo)
+                .accessibilityLabel("Redo")
+
+                Spacer(minLength: 4)
+
+                Button(action: onExport) {
+                    Text("Export")
+                        .font(.luma(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.onLight)
+                        .padding(.horizontal, 16)
+                        .frame(height: 36)
+                        .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+                .opacity(editor.isEmpty ? 0.35 : 1)
+                // Looked disabled but still opened the export sheet on an empty
+                // timeline, erroring only after the user picked a spec.
+                .disabled(editor.isEmpty)
+            }
+
+            // Title and the edit at a glance, centred like the mock.
             Menu {
                 Button("New Project") { editor.startNewProject(); tool = .none }
                 Button("Open Project Library") { onOpenProjects() }
             } label: {
-                HStack(spacing: 5) {
-                    Text(editor.projectTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                VStack(spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(editor.projectTitle)
+                            .font(.luma(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(LumaTheme.textMuted)
+                    }
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    Text(editSummary)
+                        .font(.luma(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(LumaTheme.textMuted)
                         .lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
                 }
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: 150)
             }
-
-            Spacer(minLength: 4)
-
-            Button { editor.undo() } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundStyle(editor.canUndo ? Color.white : LumaTheme.textMuted)
-                    .frame(width: 30, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress).disabled(!editor.canUndo)
-
-            Button { editor.redo() } label: {
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundStyle(editor.canRedo ? Color.white : LumaTheme.textMuted)
-                    .frame(width: 30, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress).disabled(!editor.canRedo)
-
-            Button(action: onExport) {
-                Text("Export")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 15).padding(.vertical, 8)
-                    .background(Color.white, in: Capsule())
-            }
-            .buttonStyle(.lumaPress)
-            .opacity(editor.isEmpty ? 0.35 : 1)
-            // Looked disabled but still opened the export sheet on an empty
-            // timeline, erroring only after the user picked a spec.
-            .disabled(editor.isEmpty)
         }
         .padding(.horizontal, 12)
+    }
+
+    /// "4 clips · 0:12" under the title.
+    private var editSummary: String {
+        let count = editor.clips.count
+        guard count > 0 else { return "Empty edit" }
+        let total = max(0, editor.totalDuration)
+        let length = String(format: "%d:%02d", Int(total) / 60, Int(total) % 60)
+        return "\(count) \(count == 1 ? "clip" : "clips") · \(length)"
+    }
+
+    /// The grade under the playhead: the clip's own look if it has one, else
+    /// the look on the whole edit. Shown as the look chip on the preview.
+    private var lookAtPlayhead: (name: String, colour: Color)? {
+        guard !editor.isEmpty else { return nil }
+        let starts = editor.clipStartTimes
+        let t = editor.currentTime
+        let clip = editor.clips.first { c in
+            guard let start = starts[c.id] else { return false }
+            return t >= start && t < start + c.timelineDuration
+        } ?? editor.clips.last
+        if let grade = clip?.grade {
+            let name = grade.baseLookName.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { return (name, LookSignature.colour(forLookNamed: name)) }
+            if grade.lutID != nil { return ("LUT", LookSignature.neutral) }
+        }
+        guard app.settings.intensity > 0 else { return nil }
+        if let lut = app.selectedLUT { return (lut.displayName, LookSignature.colour(name: lut.displayName)) }
+        return (app.selectedLook.name, app.selectedLook.signature)
     }
 
     // MARK: Preview — the image is the interface. Never covered.
@@ -1860,6 +1904,17 @@ private struct EditorContent: View {
                     .allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .topLeading) {
+            if audioFocus == nil, let look = lookAtPlayhead {
+                LookChip(name: look.name, colour: look.colour, size: 11)
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .animation(.easeOut(duration: 0.18), value: look.name)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .animation(.easeInOut(duration: 0.22), value: audioFocusKey)
@@ -1909,7 +1964,7 @@ private struct EditorContent: View {
             VStack(spacing: 16) {
                 if isLoadingClip {
                     ProgressView().tint(.white)
-                    Text("Loading clip…").font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                    Text("Loading clip…").font(.luma(size: 14, weight: .medium)).foregroundStyle(.white)
                 } else {
                     LDCaption("Nothing on the timeline yet")
                     HStack(spacing: 10) {
@@ -1932,7 +1987,7 @@ private struct EditorContent: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 18, weight: .light))
-                Text(title).font(.system(size: 12, weight: .medium))
+                Text(title).font(.luma(size: 12, weight: .medium))
             }
             .foregroundStyle(.white)
             .frame(width: 84, height: 74)
@@ -1958,7 +2013,7 @@ private struct EditorContent: View {
         // Frames are only meaningful with their rate beside them.
         let rate = showFrames ? LDFormat.rate(editor.frameRate) : nil
         let playhead = Text(current)
-            .font(.system(size: 14, weight: .medium, design: .monospaced))
+            .font(.luma(size: 14, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(.white.opacity(0.95))
         return ViewThatFits(in: .horizontal) {
@@ -1966,15 +2021,15 @@ private struct EditorContent: View {
             HStack(spacing: 5) {
                 playhead
                 Text("/")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.28))
                 Text(total)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 14, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
                 if let rate {
                     Text(rate)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.35))
                 }
             }
@@ -1985,7 +2040,7 @@ private struct EditorContent: View {
             VStack(alignment: .leading, spacing: 1) {
                 playhead
                 Text(rate.map { "\(total) · \($0)" } ?? total)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 10, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.45))
             }
@@ -2060,7 +2115,7 @@ private struct EditorContent: View {
                         Image(systemName: "plus.magnifyingglass")
                             .font(.system(size: 11, weight: .regular))
                         Text("\(Int((timelineZoom / 50 * 100).rounded()))%")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .font(.luma(size: 13, weight: .medium, design: .monospaced))
                             .monospacedDigit()
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
@@ -2428,7 +2483,7 @@ private struct EditorContent: View {
                                 }
                             }
                             Text(look.name)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.luma(size: 11, weight: .medium))
                                 .foregroundStyle(isLookActive(look, clipID: clipID)
                                                  ? Color.white : .white.opacity(0.55))
                                 .lineLimit(1).frame(width: 68)
@@ -2466,7 +2521,7 @@ private struct EditorContent: View {
                 .frame(width: 68, height: 68)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                Text("All looks").font(.system(size: 11, weight: .medium))
+                Text("All looks").font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1).frame(width: 68)
             }
@@ -2512,7 +2567,7 @@ private struct EditorContent: View {
                             .strokeBorder(Color.white, lineWidth: 2)
                     }
                 }
-                Text("None").font(.system(size: 11, weight: .medium))
+                Text("None").font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(active ? Color.white : .white.opacity(0.55))
                     .frame(width: 68)
             }
@@ -2550,7 +2605,7 @@ private struct EditorContent: View {
                 } label: {
                     VStack(spacing: 7) {
                         Image(systemName: kind.icon).font(.system(size: 18, weight: .light))
-                        Text(kind.label).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
+                        Text(kind.label).font(.luma(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
                     }
                     .foregroundStyle(Color.white.opacity(0.85))
                     .frame(maxWidth: .infinity).frame(height: 66)
@@ -2586,7 +2641,7 @@ private struct EditorContent: View {
                             .overlay(alignment: .bottomTrailing) {
                                 if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                             }
-                            Text(look.name).font(.system(size: 11, weight: .medium))
+                            Text(look.name).font(.luma(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.55)).lineLimit(1).frame(width: 62)
                         }
                     }
@@ -2614,10 +2669,10 @@ private struct EditorContent: View {
         ForEach(editor.adjustmentLayers) { layer in
             HStack(spacing: 10) {
                 Text(layer.grade.baseLookName.isEmpty ? "LUT" : layer.grade.baseLookName)
-                    .font(.system(size: 13.5, weight: .medium)).foregroundStyle(.white)
+                    .font(.luma(size: 13.5, weight: .medium)).foregroundStyle(.white)
                 Spacer()
                 Text(LDFormat.secs(layer.duration))
-                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 12.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.55))
                 Button { editor.removeAdjustmentLayer(id: layer.id) } label: {
@@ -2661,15 +2716,15 @@ private struct EditorContent: View {
                         .frame(width: 34, height: 34)
                         .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(template.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        Text(template.name).font(.luma(size: 15, weight: .semibold)).foregroundStyle(.white)
                         HStack(spacing: 6) {
                             Text(template.aspect)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(.luma(size: 12, weight: .medium, design: .monospaced))
                             Text("·").foregroundStyle(.white.opacity(0.25))
-                            Text("\(template.slots.count) shots").font(.system(size: 12))
+                            Text("\(template.slots.count) shots").font(.luma(size: 12))
                             Text("·").foregroundStyle(.white.opacity(0.25))
                             Text(LDFormat.secs(template.totalDuration))
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(.luma(size: 12, weight: .medium, design: .monospaced))
                         }
                         .foregroundStyle(.white.opacity(0.55))
                     }
@@ -2901,10 +2956,10 @@ private struct LDSoundLibrary: View {
                     .buttonStyle(.lumaPress)
 
                     Text(entry.title)
-                        .font(.system(size: 14, weight: .medium)).foregroundStyle(.white).lineLimit(1)
+                        .font(.luma(size: 14, weight: .medium)).foregroundStyle(.white).lineLimit(1)
                     Spacer(minLength: 6)
                     Text(LDFormat.secs(entry.duration))
-                        .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 12.5, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(0.55))
                     Button {
@@ -2917,7 +2972,7 @@ private struct LDSoundLibrary: View {
                         }
                     } label: {
                         Text("Add")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 13).padding(.vertical, 6)
                             .background(Color.white, in: Capsule())
@@ -2950,7 +3005,7 @@ private struct LDSpeedPanel: View {
                         editor.setClipSpeed(speed); LumaHaptics.shared.tap()
                     } label: {
                         Text(String(format: "%g×", speed))
-                            .font(.system(size: 15, weight: .medium, design: .monospaced))
+                            .font(.luma(size: 15, weight: .medium, design: .monospaced))
                             .foregroundStyle(on ? Color.white : .white.opacity(0.7))
                             .frame(maxWidth: .infinity).frame(height: 38)
                             .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -2978,7 +3033,7 @@ private struct LDSpeedPanel: View {
                             VStack(spacing: 6) {
                                 LDRampCurve(ramp: ramp)
                                     .frame(width: 62, height: 30)
-                                Text(ramp.label).font(.system(size: 11, weight: .medium))
+                                Text(ramp.label).font(.luma(size: 11, weight: .medium))
                                     .foregroundStyle(on ? Color.white : .white.opacity(0.55))
                                     .lineLimit(1).frame(width: 62)
                             }
@@ -3135,7 +3190,7 @@ private struct LDTransitionPanel: View {
                                 VStack(spacing: 6) {
                                     Image(systemName: style.icon)
                                         .font(.system(size: 15, weight: .light))
-                                    Text(style.label).font(.system(size: 11, weight: .medium))
+                                    Text(style.label).font(.luma(size: 11, weight: .medium))
                                         .lineLimit(1).minimumScaleFactor(0.85)
                                 }
                                 .foregroundStyle(on ? Color.white : LumaTheme.textSecondary)
@@ -3281,7 +3336,7 @@ private struct LDStickerPanel: View {
                                 if ok { LumaHaptics.shared.tap() }
                             }
                         } label: {
-                            Text(emoji).font(.system(size: 25))
+                            Text(emoji).font(.luma(size: 25))
                                 .frame(maxWidth: .infinity).frame(height: 44)
                                 .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -3345,7 +3400,7 @@ private struct LDEffectsPanel: View {
         Button(action: action) {
             VStack(spacing: 7) {
                 Image(systemName: icon).font(.system(size: 17, weight: .light))
-                Text(title).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
+                Text(title).font(.luma(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
             }
             .foregroundStyle(Color.white.opacity(0.85))
             .frame(maxWidth: .infinity).frame(height: 62)
@@ -3360,10 +3415,10 @@ private struct LDEffectsPanel: View {
                      remove: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(.white)
+                Text(title).font(.luma(size: 13.5, weight: .medium)).foregroundStyle(.white)
                 Spacer()
                 Text("at \(LDFormat.secs(offset))")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.5))
                 Button(action: remove) {
                     Image(systemName: "trash").font(.system(size: 12, weight: .light))
@@ -3617,7 +3672,7 @@ private struct LDOverlayPanel: View {
     private func text(_ item: EditorState.OverlayItem, _ id: UUID) -> some View {
         LDCaption("Content")
         TextField("", text: $draftText, axis: .vertical)
-            .font(.system(size: 14))
+            .font(.luma(size: 14))
             .foregroundStyle(.white)
             .tint(.white)
             .lineLimit(1...3)
@@ -3672,7 +3727,7 @@ private struct LDOverlayPanel: View {
         } label: {
             HStack {
                 Text(item.textFontName ?? "Preset font")
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                    .font(.luma(size: 14, weight: .medium)).foregroundStyle(.white)
                 Spacer()
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(LumaTheme.textMuted)
@@ -3720,7 +3775,7 @@ private struct LDOverlayPanel: View {
                 } label: {
                     VStack(spacing: 7) {
                         Image(systemName: preset.icon).font(.system(size: 16, weight: .light))
-                        Text(preset.name).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
+                        Text(preset.name).font(.luma(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.85)
                     }
                     .foregroundStyle(Color.white.opacity(0.85))
                     .frame(maxWidth: .infinity).frame(height: 62)
@@ -4151,7 +4206,7 @@ private struct LDAudioEffects: View {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.mini).tint(.white)
                     Text("Baking effects…")
-                        .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
+                        .font(.luma(size: 13)).foregroundStyle(.white.opacity(0.6))
                 }
             }
 
@@ -4501,7 +4556,7 @@ private struct FullscreenPreview: View {
                 .tint(.white)
                 Text(LDFormat.clock(editor.totalDuration))
             }
-            .font(.system(size: 13, weight: .medium, design: .monospaced))
+            .font(.luma(size: 13, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(.white)
             .padding(.horizontal, 18)

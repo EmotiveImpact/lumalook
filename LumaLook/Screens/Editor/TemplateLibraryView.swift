@@ -15,7 +15,7 @@ struct TemplateLibraryView: View {
         LumaScreen(title: "Templates") {
             if editor.clips.isEmpty {
                 Text("Add a clip first — a template shapes the footage you already have.")
-                    .font(.system(size: 13))
+                    .font(.luma(size: 13))
                     .foregroundStyle(LumaTheme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -38,10 +38,10 @@ struct TemplateLibraryView: View {
                             }
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(t.name)
-                                    .font(.system(size: 16, weight: .bold))
+                                    .font(.luma(size: 16, weight: .bold))
                                     .foregroundStyle(.white)
                                 Text(t.blurb)
-                                    .font(.system(size: 12))
+                                    .font(.luma(size: 12))
                                     .foregroundStyle(LumaTheme.textSecondary)
                                     .lineLimit(2)
                                 TechReadout("\(t.aspect) · \(t.slots.count) SHOTS · \(String(format: "%.1f", t.totalDuration))S",
@@ -62,7 +62,7 @@ struct TemplateLibraryView: View {
             }
 
             Text("Templates re-cut the clips you already have — slots cycle if you have more clips than shots. Undo restores your edit in one step.")
-                .font(.system(size: 12))
+                .font(.luma(size: 12))
                 .foregroundStyle(LumaTheme.textMuted)
                 .padding(.top, 4)
         }

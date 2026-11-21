@@ -357,7 +357,7 @@ struct TechnicalReadout: View {
             let dot = Text(" \u{2022} ").foregroundStyle(tint.opacity(0.45))
             return acc + dot + value
         }
-        .font(.system(size: size, weight: .semibold, design: .monospaced))
+        .font(.luma(size: size, weight: .semibold, design: .monospaced))
         .tracking(size * 0.09)
         .monospacedDigit()
         .lineLimit(1)
@@ -480,7 +480,7 @@ struct LumaHoldButtonStyle: ButtonStyle {
                         .fill(LumaTheme.tileIndigo)
                         .frame(height: 260)
                         .overlay(Text("CANVAS — stays interactive")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(LumaTheme.textSecondary))
                     SolidCTA(title: "Adjust panel", icon: "slider.horizontal.3") {
                         showPanel = true
@@ -524,7 +524,7 @@ struct LumaHoldButtonStyle: ButtonStyle {
                         .fill(index % 2 == 0 ? LumaTheme.tilePurple : LumaTheme.tileTeal)
                         .frame(width: 84, height: 56)
                         .overlay(Text("\(index)")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .font(.luma(size: 13, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white))
                 }
             }
@@ -549,7 +549,7 @@ struct LumaHoldButtonStyle: ButtonStyle {
                             .strokeBorder(LumaTheme.accent, lineWidth: 1.5))
                         .frame(height: expanded ? 220 : 84)
                         .overlay(Text(expanded ? "EXPANDED" : "COLLAPSED")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .font(.luma(size: 12, weight: .bold, design: .monospaced))
                             .tracking(1.4)
                             .foregroundStyle(LumaTheme.accentBright))
                     SolidCTA(title: expanded ? "Collapse" : "Expand") {
@@ -602,7 +602,7 @@ struct LumaHoldButtonStyle: ButtonStyle {
                         onHoldEnd: { lastEvent = "hold ended" }
                     ))
                     Text("Tap for one event, hold 0.6 s for another")
-                        .font(.system(size: 13))
+                        .font(.luma(size: 13))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
             }

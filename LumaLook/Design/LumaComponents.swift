@@ -21,35 +21,46 @@ extension ButtonStyle where Self == LumaPressStyle {
 
 // MARK: - Card depth
 
-/// Cards separate from the canvas by ELEVATION, not by an outline.
-///
-/// Before: `LumaTheme.surface` + a 1px `strokeBorder` gradient. On a #0A0D14
-/// canvas every card, row, chip and tile ended up ringed in grey — dozens of
-/// competing lines per screen, which is what made the UI read as a wireframe.
-/// After: a slightly lighter fill (`LumaTheme.card`) plus a soft downward
-/// shadow. The eye reads the value step as "this is closer to me" the same way
-/// it reads a real surface, and the screen goes quiet because nothing is
-/// outlined. Raised cards (a card on a card) get one more value step instead of
-/// a heavier line.
+/// Night Lab panels: one value step above the canvas plus a hairline border,
+/// the structure you can feel in a well-made software product. No drop
+/// shadow on ink; shadows are kept for things that float over footage.
 struct LumaCardChrome: ViewModifier {
-    var cornerRadius: CGFloat = 16
+    var cornerRadius: CGFloat = 14
     /// Set when this card sits on top of another card and needs one more step.
     var raised: Bool = false
-    /// Cards inside an already-shadowed container skip the shadow so the
-    /// shadows don't stack into a grey haze.
+    /// Kept for source compatibility; panels on ink no longer cast shadows.
     var shadow: Bool = true
 
     func body(content: Content) -> some View {
         content
             .background(raised ? LumaTheme.cardRaised : LumaTheme.card,
-                        in: RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: shadow ? LumaTheme.cardShadow : .clear, radius: 10, y: 4)
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(LumaTheme.hairline, lineWidth: 1)
+            )
     }
 }
 
 extension View {
-    func lumaCard(cornerRadius: CGFloat = 16, raised: Bool = false, shadow: Bool = true) -> some View {
+    func lumaCard(cornerRadius: CGFloat = 14, raised: Bool = false, shadow: Bool = true) -> some View {
         modifier(LumaCardChrome(cornerRadius: cornerRadius, raised: raised, shadow: shadow))
+    }
+
+    /// A hairline-bordered panel in any shape colour (default: panel).
+    func lumaPanel(_ fill: Color = LumaTheme.card, cornerRadius: CGFloat = 14) -> some View {
+        background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+    }
+
+    /// Glass pill over footage: dark translucent fill, blur, faint rim.
+    func lumaGlass(cornerRadius: CGFloat = 999) -> some View {
+        background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(Color(hex: 0x0C0C0E, opacity: 0.45), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.09), lineWidth: 1))
+            .environment(\.colorScheme, .dark)
     }
 }
 
@@ -128,7 +139,7 @@ struct LumaScreen<Content: View>: View {
                 .padding(.bottom, 12)
                 .background {
                     ZStack(alignment: .bottom) {
-                        Rectangle().fill(.ultraThinMaterial)
+                        Rectangle().fill(LumaTheme.ink.opacity(0.94))
                         Hairline()
                     }
                     .ignoresSafeArea(edges: .top)
@@ -153,8 +164,9 @@ struct LumaHeader: View {
             // Title Case, system-nav-bar weight — caps-tracked titles read
             // as web branding; Apple reads as headline.
             Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
+                .font(.luma(size: 17, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(LumaTheme.textPrimary)
             HStack {
                 if showBack {
                     Button(action: backAction) {
@@ -170,7 +182,7 @@ struct LumaHeader: View {
                 if let trailingText {
                     Button { trailingAction?() } label: {
                         Text(trailingText)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.luma(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.lumaPress)
@@ -192,28 +204,46 @@ struct LumaHeader: View {
 
 // MARK: - Wordmark
 
+/// The Lumalook mark: a signal-yellow frame square and the lower-case name,
+/// set tight in Inter Bold.
 struct LumaWordmark: View {
-    var size: CGFloat = 40
+    var size: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: 0) {
-            Text("LUMA")
-                .foregroundStyle(.white)
-            Text("LOOK")
-                .foregroundStyle(LumaTheme.wordmarkViolet)
+        HStack(spacing: size * 0.32) {
+            LumaMark(size: size * 0.66)
+            Text("lumalook")
+                .font(.luma(size: size, weight: .bold))
+                .tracking(-0.05 * size)
+                .foregroundStyle(LumaTheme.textPrimary)
         }
-        .font(.system(size: size, weight: .semibold))
-        .tracking(size * 0.22)
+    }
+}
+
+/// The square brand mark on its own (a frame inside a frame).
+struct LumaMark: View {
+    var size: CGFloat = 13
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+            .fill(LumaTheme.signal)
+            .overlay(
+                RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
+                    .fill(LumaTheme.ink)
+                    .padding(size * 0.21)
+            )
+            .frame(width: size, height: size)
     }
 }
 
 // MARK: - Buttons
 
+/// The one main action on a screen: signal yellow, ink text.
 struct SolidCTA: View {
     let title: String
     var icon: String? = nil
-    var height: CGFloat = 58
-    var fill: Color = LumaTheme.accent
+    var height: CGFloat = 52
+    var fill: Color = LumaTheme.signal
     var action: () -> Void
     @State private var fired = 0
 
@@ -222,31 +252,46 @@ struct SolidCTA: View {
             fired += 1
             action()
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.system(size: 15, weight: .semibold))
                 }
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(.luma(size: 16, weight: .semibold))
+                    .tracking(-0.2)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(fill == LumaTheme.signal ? LumaTheme.onSignal : LumaTheme.textPrimary)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(
-                LinearGradient(colors: [fill.opacity(1.0), fill.opacity(0.82)],
-                               startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: 16)
-            )
-            // The glow carries the elevation; a drawn rim on top of a filled
-            // accent button just reads as another line.
-            .shadow(color: fill.opacity(0.35), radius: 16, y: 6)
+            .background(fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
         .sensoryFeedback(.impact(weight: .light), trigger: fired)
     }
 }
 
+/// White button: the secondary action that still wants to be found.
+struct WhiteCTA: View {
+    let title: String
+    var height: CGFloat = 52
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.luma(size: 16, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(LumaTheme.onLight)
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.lumaPress)
+    }
+}
+
+/// Quiet secondary action: a raised panel with a hairline.
 struct GhostCTA: View {
     let title: String
     var action: () -> Void
@@ -254,13 +299,12 @@ struct GhostCTA: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
+                .font(.luma(size: 16, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(LumaTheme.textPrimary)
                 .frame(maxWidth: .infinity)
-                .frame(height: 58)
-                // Filled, not outlined: the secondary action is a lighter
-                // surface next to the accent-filled primary.
-                .background(LumaTheme.cardRaised, in: RoundedRectangle(cornerRadius: 16))
+                .frame(height: 52)
+                .lumaPanel(LumaTheme.cardRaised, cornerRadius: 12)
         }
         .buttonStyle(.lumaPress)
     }
@@ -268,26 +312,27 @@ struct GhostCTA: View {
 
 // MARK: - Chips & segments
 
+/// Filter pill. Selected is a white pill with ink text; unselected is a
+/// hairline outline with grey text.
 struct Chip: View {
     let title: String
     var selected: Bool = false
 
     var body: some View {
         Text(title)
-            .font(.system(size: 15, weight: selected ? .semibold : .regular))
-            .foregroundStyle(selected ? .white : LumaTheme.textSecondary)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            // Selected = accent fill. Unselected = a subtle surface fill.
-            // Neither is outlined — the value difference already separates them.
-            .background(Capsule().fill(selected ? AnyShapeStyle(LumaTheme.accent)
-                                                : AnyShapeStyle(LumaTheme.chip)))
+            .font(.luma(size: 14, weight: selected ? .semibold : .medium))
+            .tracking(-0.1)
+            .foregroundStyle(selected ? LumaTheme.onLight : LumaTheme.textSecondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(selected ? LumaTheme.textPrimary : Color.clear))
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : LumaTheme.hairline, lineWidth: 1))
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
-/// Equal-width capsule segments (VIDEO / PHOTOS, IMPORTED / FAVORITES / RECENTS).
-/// The selected capsule physically slides between options.
+/// Segmented control in a hairline panel. The selected segment is one step
+/// lighter with a stronger rim, and slides between options.
 struct SegmentPills: View {
     let options: [String]
     @Binding var selection: String
@@ -295,7 +340,7 @@ struct SegmentPills: View {
     @Namespace private var ns
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             ForEach(options, id: \.self) { option in
                 Button {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
@@ -303,23 +348,27 @@ struct SegmentPills: View {
                     }
                 } label: {
                     Text(option)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(selection == option ? .white : LumaTheme.textSecondary)
+                        .font(.luma(size: 14, weight: selection == option ? .semibold : .medium))
+                        .tracking(-0.1)
+                        .foregroundStyle(selection == option ? LumaTheme.textPrimary : LumaTheme.textMuted)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(height: 34)
                         .background {
                             if selection == option {
-                                Capsule()
-                                    .fill(LumaTheme.accent)
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(LumaTheme.control)
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(LumaTheme.border, lineWidth: 1))
                                     .matchedGeometryEffect(id: "segment.pill", in: ns)
-                            } else {
-                                Capsule().fill(LumaTheme.chip)
                             }
                         }
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(3)
+        .lumaPanel(LumaTheme.card, cornerRadius: 11)
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
@@ -343,13 +392,13 @@ struct InlineSlider: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 96, alignment: .leading)
             Slider(value: $value, in: range)
-                .tint(LumaTheme.accent)
+                .tint(LumaTheme.textPrimary)
             Text(display?(value) ?? "\(Int(value))")
-                .font(.system(size: 17, weight: .bold))
+                .font(.luma(size: 17, weight: .bold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.2), value: Int(value))
@@ -376,7 +425,7 @@ struct FlatTool: View {
                     .font(.system(size: 19, weight: .medium))
                     .symbolVariant(selected ? .fill : .none)
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.luma(size: 13))
             }
             .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
             .frame(maxWidth: .infinity)
@@ -399,9 +448,10 @@ struct ToolTile: View {
             VStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card))
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LumaTheme.hairline, lineWidth: 1))
                     .frame(height: 62)
                     .overlay(Image(systemName: icon)
-                        .font(.system(size: 21, weight: .medium))
+                        .font(.luma(size: 21, weight: .medium))
                         .foregroundStyle(selected ? LumaTheme.accentBright : .white))
                     // MEANINGFUL stroke: the selection ring. Unselected tiles
                     // carry no outline at all — they are just a lighter surface.
@@ -412,13 +462,13 @@ struct ToolTile: View {
                         }
                     }
                 Text(title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .font(.luma(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.luma(size: 12))
                         .foregroundStyle(selected ? LumaTheme.accentBright : LumaTheme.textMuted)
                         .padding(.top, -4)
                 }
@@ -432,23 +482,24 @@ struct ToolTile: View {
 
 // MARK: - Section header
 
+/// Linear-style section label: a short title in white, the action in grey.
 struct SectionHeader: View {
     let title: String
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack {
-            Text(title.uppercased())
-                .font(.footnote.weight(.semibold))
-                .tracking(0.6)
-                .foregroundStyle(LumaTheme.textSecondary)
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.luma(size: 15, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(LumaTheme.textPrimary)
             Spacer()
             if let actionTitle {
                 Button { action?() } label: {
                     Text(actionTitle)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(LumaTheme.accentBright)
+                        .font(.luma(size: 13, weight: .medium))
+                        .foregroundStyle(LumaTheme.textMuted)
                 }
                 .buttonStyle(.lumaPress)
             }
@@ -466,59 +517,111 @@ struct Hairline: View {
 
 // MARK: - Tab bar
 
+/// Four tabs (Home, Looks, Projects, You) around a floating shutter that
+/// opens the camera. Solid ink with a hairline on top; the active tab is
+/// white, the rest grey.
 struct LumaTabBar: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
+    @State private var shutterTaps = 0
+
+    private let leading: [LumaTab] = [.home, .looks]
+    private let trailing: [LumaTab] = [.projects, .profile]
 
     var body: some View {
-        HStack {
-            ForEach(LumaTab.allCases, id: \.self) { tab in
-                Button {
-                    app.path = []
-                    app.tab = tab
-                } label: {
-                    VStack(spacing: 5) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 21, weight: .regular))
-                            .frame(height: 26)   // glyph heights differ; labels share a baseline
-                            .symbolVariant(app.tab == tab ? .fill : .none)
-                            .symbolEffect(.bounce.up.byLayer, options: .speed(1.4), value: app.tab == tab)
-                            // Entitlement badge: Pro members see it on their
-                            // profile without opening Settings.
-                            .overlay(alignment: .topTrailing) {
-                                if tab == .profile && storeService.isPro {
-                                    Text("Pro")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .foregroundStyle(.black)
-                                        .fixedSize()
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1.5)
-                                        .background(.white, in: Capsule())
-                                        .offset(x: 17, y: -6)
-                                }
-                            }
-                        Text(tab.rawValue)
-                            .font(.system(size: 12, weight: app.tab == tab ? .semibold : .regular))
-                    }
-                    // The one sanctioned accent in the whole app: #7A68EE
-                    // (LumaTheme.accent). accentBright is #A38EFF and was the
-                    // wrong violet.
-                    .foregroundStyle(app.tab == tab ? LumaTheme.accent : LumaTheme.textMuted)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
+        HStack(spacing: 0) {
+            ForEach(leading, id: \.self) { tabButton($0) }
+            // Room for the shutter. Height is pinned: an unsized Color is
+            // greedy, and inside the bottom safe-area inset it stretched the
+            // whole bar up the screen.
+            Color.clear.frame(width: 84, height: 1)
+            ForEach(trailing, id: \.self) { tabButton($0) }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
-        // Solid near-black bar (reference mock) — content fades out above it
-        // instead of tinting through it.
+        .padding(.horizontal, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
         .background {
-            LumaTheme.bar.ignoresSafeArea(edges: .bottom)
+            ZStack(alignment: .top) {
+                LumaTheme.bar
+                Hairline()
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .overlay(alignment: .top) {
+            Button {
+                shutterTaps += 1
+                app.path = [.camera]
+            } label: {
+                LumaShutterGlyph(size: 62)
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Open camera")
+            .offset(y: -24)
+            .sensoryFeedback(.impact(weight: .medium), trigger: shutterTaps)
         }
         .sensoryFeedback(.selection, trigger: app.tab)
+    }
+
+    private func isOn(_ tab: LumaTab) -> Bool {
+        app.tab == tab || (tab == .looks && app.tab == .store)
+    }
+
+    private func tabButton(_ tab: LumaTab) -> some View {
+        Button {
+            app.path = []
+            app.tab = tab
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 20, weight: .regular))
+                    .frame(height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        if tab == .profile && storeService.isPro {
+                            Text("Pro")
+                                .font(.luma(size: 8, weight: .bold))
+                                .foregroundStyle(LumaTheme.onSignal)
+                                .fixedSize()
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(LumaTheme.signal, in: Capsule())
+                                .offset(x: 14, y: -4)
+                        }
+                    }
+                Text(tab.title)
+                    .font(.luma(size: 11, weight: .medium))
+            }
+            .foregroundStyle(isOn(tab) ? LumaTheme.textPrimary : LumaTheme.textMuted)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+    }
+}
+
+/// White ring, ink gap, signal-yellow centre: the shutter used in the tab bar
+/// and on the photo camera. Pass `label` for a roll counter ("24").
+struct LumaShutterGlyph: View {
+    var size: CGFloat = 62
+    var label: String? = nil
+    var fill: Color = LumaTheme.signal
+
+    var body: some View {
+        ZStack {
+            Circle().fill(LumaTheme.ink)
+            Circle().strokeBorder(LumaTheme.textPrimary, lineWidth: size * 0.048)
+            Circle()
+                .fill(fill)
+                .padding(size * 0.13)
+            if let label {
+                Text(label)
+                    .font(.luma(size: size * 0.28, weight: .bold))
+                    .tracking(-0.04 * size * 0.28)
+                    .foregroundStyle(LumaTheme.onSignal)
+            }
+        }
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
     }
 }
 
@@ -541,7 +644,7 @@ struct ExportOverlay: View {
                         .rotationEffect(.degrees(-90))
                         .animation(.easeInOut, value: progress)
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.luma(size: 24, weight: .bold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                         .animation(.snappy(duration: 0.2), value: Int(progress * 100))
@@ -550,12 +653,12 @@ struct ExportOverlay: View {
                 .frame(width: 110, height: 110)
 
                 Text("Exporting your video…")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.luma(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
 
                 Button("Cancel", action: cancel)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
+                    .font(.luma(size: 15, weight: .medium))
+                    .foregroundStyle(LumaTheme.textSecondary)
                     .buttonStyle(.lumaPress)
             }
             .padding(36)
@@ -568,17 +671,16 @@ struct ExportOverlay: View {
 extension Text {
     func pill(border: Bool = false) -> some View {
         self
-            .font(.system(size: 15, weight: .semibold))
+            .font(.luma(size: 15, weight: .semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+            .lumaGlass(cornerRadius: 12)
             // Only the "called out" variant draws a rim — that one means
             // something. The plain pill relies on its fill.
             .overlay {
                 if border {
-                    RoundedRectangle(cornerRadius: 12).strokeBorder(LumaTheme.accentBright)
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(LumaTheme.signal)
                 }
             }
     }
@@ -602,22 +704,22 @@ struct LumaEmptyState: View {
                 .font(.system(size: 34))
                 .foregroundStyle(LumaTheme.textMuted)
             Text(title)
-                .font(.headline)
+                .font(.luma(.headline))
                 .foregroundStyle(LumaTheme.textSecondary)
             if let message {
                 Text(message)
-                    .font(.subheadline)
+                    .font(.luma(.subheadline))
                     .foregroundStyle(LumaTheme.textMuted)
                     .multilineTextAlignment(.center)
             }
             if let actionTitle, let action {
                 Button(action: action) {
                     Text(actionTitle)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 22)
+                        .font(.luma(size: 16, weight: .semibold))
+                        .foregroundStyle(LumaTheme.onSignal)
+                        .padding(.horizontal, 20)
                         .padding(.vertical, 11)
-                        .background(LumaTheme.accent, in: Capsule())
+                        .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
                 .padding(.top, 8)

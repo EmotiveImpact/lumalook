@@ -105,7 +105,7 @@ private struct MiniAudioBar: View {
                 Image(systemName: track.kind.icon)
                     .font(.system(size: 8, weight: .semibold))
                 Text(track.title)
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(.luma(size: 9.5, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundStyle(.white.opacity(0.85))

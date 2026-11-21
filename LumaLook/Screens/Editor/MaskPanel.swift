@@ -18,10 +18,10 @@ struct MaskPanel: View {
                 Image(systemName: "circle.dashed.inset.filled")
                     .font(.system(size: 15, weight: .semibold))
                 Text("Spot Tool")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.luma(size: 16, weight: .semibold))
                 Spacer()
                 Button("Done", action: onClose)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(LumaTheme.accentBright)
             }
             .foregroundStyle(.white)
@@ -35,8 +35,8 @@ struct MaskPanel: View {
                         LumaHaptics.shared.tap()
                     } label: {
                         Text(shape.label)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                            .font(.luma(.footnote, weight: .semibold))
+                            .foregroundStyle(on ? LumaTheme.onSignal : LumaTheme.textSecondary)
                             .padding(.horizontal, 14).padding(.vertical, 8)
                             .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
                     }
@@ -67,8 +67,8 @@ struct MaskPanel: View {
                             LumaHaptics.shared.tap()
                         } label: {
                             Label(fx.label, systemImage: fx.icon)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(on ? .white : LumaTheme.textSecondary)
+                                .font(.luma(.footnote, weight: .semibold))
+                                .foregroundStyle(on ? LumaTheme.onSignal : LumaTheme.textSecondary)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
                                 .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
                         }
@@ -83,7 +83,7 @@ struct MaskPanel: View {
                         .labelsHidden()
                         .tint(LumaTheme.accent)
                     Text("Invert")
-                        .font(.system(size: 12))
+                        .font(.luma(size: 12))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
 
@@ -115,7 +115,7 @@ struct MaskPanel: View {
                 }
             } else {
                 Text("Pick a shape to blur, pixelate or block out part of this clip.")
-                    .font(.system(size: 12))
+                    .font(.luma(size: 12))
                     .foregroundStyle(LumaTheme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

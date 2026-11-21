@@ -181,7 +181,7 @@ struct SceneThumb: View {
             .overlay(alignment: .bottomTrailing) {
                 if let duration {
                     Text(duration)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
@@ -195,7 +195,7 @@ struct SceneThumb: View {
                         .fill(LumaTheme.accent)
                         .frame(width: 30, height: 30)
                         .overlay(Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.luma(size: 13, weight: .bold))
                             .foregroundStyle(.white))
                         .padding(7)
                 }

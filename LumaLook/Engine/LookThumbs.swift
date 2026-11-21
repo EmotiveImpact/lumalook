@@ -22,6 +22,29 @@ final class LookThumbs: ObservableObject {
     /// band, so twelve different grades read as twelve different tiles.
     static let fallbackFrame: CIImage = LookSwatch.referenceFrame
 
+    /// A portrait for the Looks tab's poster tiles: every look shown on a
+    /// face, without the calibration band the strip swatch carries.
+    static let portraitFrame: CIImage = {
+        // A close portrait with skin and foliage, so warm, cool and green
+        // shifts all read. Cropped 4:5 around the face to match the tiles.
+        let sample = HeroPhoto.golden
+        guard let photo = sample.ciImage else { return fallbackFrame }
+        let full = photo.extent
+        let width = min(full.width, full.height * 0.8)
+        let height = width / 0.8
+        // Core Image counts y from the bottom; HeroPhoto.focus counts from the top.
+        let centreX = full.minX + full.width * sample.focus.x
+        let centreY = full.minY + full.height * (1 - sample.focus.y)
+        let x = min(max(full.minX, centreX - width / 2), full.maxX - width)
+        let y = min(max(full.minY, centreY - height / 2), full.maxY - height)
+        let cropped = photo.cropped(to: CGRect(x: x, y: y, width: width, height: height))
+        let longest = max(cropped.extent.width, cropped.extent.height)
+        let scale = longest > 900 ? 900 / longest : 1
+        let scaled = cropped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return scaled.transformed(by: CGAffineTransform(
+            translationX: -scaled.extent.minX, y: -scaled.extent.minY))
+    }()
+
     /// One render job per library look, resolved on the main actor so the
     /// detached render loop never touches the repository.
     private struct Job {
@@ -85,7 +108,8 @@ final class LookThumbs: ObservableObject {
     /// pipeline: builtIn → recipe, lut → cube, saved → recipe + the user's
     /// saved settings + optional cube. `fileURL` resolves a LUT's cube path
     /// (pass `lutRepository.fileURL(for:)`).
-    func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL) {
+    func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL,
+                maxDimension: CGFloat = 220) {
         let frame = source ?? Self.fallbackFrame
         var fullStrength = LookSettings()
         fullStrength.intensity = 100
@@ -131,7 +155,7 @@ final class LookThumbs: ObservableObject {
                     guard let parsed = try? pipeline.loadLUT(at: url) else { continue }
                     state.lut = parsed
                 }
-                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: 220),
+                if let cg = pipeline.gradedStill(frame, state: state, maxDimension: maxDimension),
                    !Task.isCancelled {
                     await MainActor.run {
                         guard self?.lastStamp == stamp else { return }

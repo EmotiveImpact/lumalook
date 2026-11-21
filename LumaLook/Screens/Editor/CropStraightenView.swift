@@ -35,7 +35,7 @@ struct CropStraightenView: View {
                 Button("Cancel", action: onCancel)
                     .foregroundStyle(LumaTheme.textSecondary)
                 Spacer()
-                Text("Crop & Straighten").font(.system(size: 16, weight: .semibold))
+                Text("Crop & Straighten").font(.luma(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
                 Button("Apply") { onApply(crop, straighten) }
@@ -62,10 +62,10 @@ struct CropStraightenView: View {
             // Straighten slider with a live degree readout.
             VStack(spacing: 6) {
                 HStack {
-                    Text("Straighten").font(.system(size: 14, weight: .medium))
+                    Text("Straighten").font(.luma(size: 14, weight: .medium))
                         .foregroundStyle(LumaTheme.textSecondary)
                     Spacer()
-                    Text("\(Int(straighten))°").font(.system(size: 14).monospacedDigit())
+                    Text("\(Int(straighten))°").font(.luma(size: 14).monospacedDigit())
                         .foregroundStyle(.white)
                 }
                 Slider(value: $straighten, in: -15...15, step: 1)

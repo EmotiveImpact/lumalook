@@ -21,13 +21,13 @@ struct AudioEnvelopeEditor: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("Volume envelope").font(.system(size: 16, weight: .semibold))
+                Text("Volume envelope").font(.luma(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
                 Button("Clear") { commit([]) }
-                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textSecondary)
                 Button("Done", action: onClose)
-                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.accentBright)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
             }
 
             GeometryReader { geo in
@@ -61,7 +61,7 @@ struct AudioEnvelopeEditor: View {
             .frame(height: 220)
 
             Text("Tap to add a point · drag to shape")
-                .font(.caption).foregroundStyle(LumaTheme.textMuted)
+                .font(.luma(.caption)).foregroundStyle(LumaTheme.textMuted)
         }
         .padding(20)
         .background(LumaTheme.background)

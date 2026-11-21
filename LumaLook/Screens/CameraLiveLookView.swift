@@ -78,6 +78,15 @@ struct CameraLiveLookView: View {
     @State private var panel: Panel = .none
     @State private var activeProParam: ProParameter = .shutter
 
+    /// What the main ruler is driving. Tapping a readout cell re-targets it.
+    private enum RulerTarget: Equatable { case look, lens, shutter, iso }
+    @State private var rulerTarget: RulerTarget = .lens
+    /// Photo takes a graded still; Video records with the look baked in.
+    private enum CaptureMode: String, CaseIterable { case photo = "Photo", video = "Video" }
+    @State private var captureMode: CaptureMode = .video
+    /// The 120 ms white blink when a still is taken.
+    @State private var shutterFlash = false
+
     @State private var liveThumbSource: CIImage?
     @State private var showGrid = false
     @State private var showLevel = false
@@ -103,13 +112,27 @@ struct CameraLiveLookView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            LumaTheme.ink.ignoresSafeArea()
+
+            // Night Lab: the picture runs full width from the top edge, and
+            // the controls sit over its lower part on an ink gradient, so the
+            // frame stays as large as the phone allows.
+            viewfinder
+                .frame(maxWidth: .infinity)
+                .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 0) {
                 topMatte
-                viewfinder
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Without a live picture, the permission or status message
+                // sits in the clear space above the drawer, so the drawer can
+                // never cover Open Settings on a short iPhone.
+                if showsLivePicture {
+                    Spacer(minLength: 0)
+                } else {
+                    fallbackMessage
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
                 drawer
             }
 
@@ -237,83 +260,91 @@ struct CameraLiveLookView: View {
     // BLACK, above the picture, not a scrim laid over the user's frame.
 
     private var topMatte: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                matteButton(system: "xmark") { dismiss() }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Close camera")
 
-                // Live from the ACTIVE spec — the HUD never lies. Tap to
-                // change resolution / fps / codec.
+                // Live from the ACTIVE spec, so the HUD never lies. Tap to
+                // change resolution, frame rate and codec.
                 Button {
                     panel = panel == .format ? .none : .format
                     LumaHaptics.shared.tap()
                 } label: {
                     CaptureFormatChip(spec: camera.activeSpec)
-                        .contentShape(Rectangle())
+                        .lumaGlassPill()
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.lumaPress)
                 .disabled(camera.isRecording || camera.isPreparingRecording)
-                .opacity(camera.isRecording || camera.isPreparingRecording ? 0.45 : 1)
                 .accessibilityHint(camera.isRecording || camera.isPreparingRecording
                                    ? "Stop recording to change the capture format"
                                    : "Change resolution, frame rate, and codec")
 
                 Spacer(minLength: 0)
 
-                // The one number that must never leave the top line: what the
-                // lens is actually doing. The tool row scrolls; this does not.
+                if camera.isRecording {
+                    HStack(spacing: 6) {
+                        RecordTally()
+                        TimelineView(.periodic(from: recordStart ?? Date(),
+                                               by: 1.0 / Double(max(1, camera.activeSpec.fps)))) { context in
+                            Text(Timecode.string(
+                                seconds: context.date.timeIntervalSince(recordStart ?? context.date),
+                                fps: Double(max(1, camera.activeSpec.fps))))
+                                .font(.luma(size: 12, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .lumaGlassPill()
+                    .transition(.opacity)
+                }
+
+                // What the lens is doing never leaves the top line.
                 Text(String(format: "%.1f×", camera.zoomFactor))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 12, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.white)
+                    .lumaGlassPill()
             }
 
-            // The status line — recording, mic, captions. On the matte, so a
-            // take never gets a red pill stamped across the subject's face.
             statusLine
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 2)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .animation(.easeOut(duration: 0.18), value: camera.isRecording)
     }
 
+    /// Captions and the live mic meter, in a pill over the picture.
     @ViewBuilder
     private var statusLine: some View {
         HStack(spacing: 10) {
             if camera.isRecording {
-                // The permitted colour exception: armed means armed.
-                RecordTally()
-                TimelineView(.periodic(from: recordStart ?? Date(),
-                                       by: 1.0 / Double(max(1, camera.activeSpec.fps)))) { context in
-                    Text(Timecode.string(
-                        seconds: context.date.timeIntervalSince(recordStart ?? context.date),
-                        fps: Double(max(1, camera.activeSpec.fps))))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                }
-                // The real meter, desaturated: the segment count still reads
-                // level and clipping, without a teal bar on a mono line.
                 InputMeterView(level: camera.audioLevel)
                     .grayscale(1)
+                    .lumaGlassPill()
             } else if let statusCaption {
                 Text(statusCaption)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(.luma(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
+                    .lumaGlassPill()
                     .id(statusCaption)
                     .transition(.opacity)
-            } else {
-                // With nothing happening the line still earns its space: it
-                // states the exposure the camera has settled on.
-                Text(idleStatusLine)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.34))
-                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .frame(height: 18)
+        .frame(minHeight: 28)
         .animation(.easeOut(duration: 0.18), value: statusCaption)
     }
 
@@ -340,10 +371,12 @@ struct CameraLiveLookView: View {
     // Letterboxed to the 9:16 capture aspect. What you frame is what is
     // written — and everything that is not the picture lives on the mattes.
 
+    private var showsLivePicture: Bool { camera.isRunning && !camera.cameraUnavailable }
+
     private var viewfinder: some View {
         ZStack {
             Group {
-                if camera.isRunning && !camera.cameraUnavailable {
+                if showsLivePicture {
                     FilteredCameraPreview(
                         camera: camera,
                         onTapUnit: { unit, viewPoint in
@@ -367,7 +400,6 @@ struct CameraLiveLookView: View {
                     ZStack {
                         HeroImage(photo: .golden)
                         Color.black.opacity(0.45)
-                        fallbackMessage
                     }
                 }
             }
@@ -394,7 +426,7 @@ struct CameraLiveLookView: View {
             .overlay(alignment: .top) {
                 if camera.aeafLocked {
                     Text("AE/AF locked")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -405,6 +437,13 @@ struct CameraLiveLookView: View {
                 }
             }
             .animation(.easeOut(duration: 0.18), value: camera.aeafLocked)
+            .overlay {
+                if shutterFlash {
+                    Color.white.opacity(0.8)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
         }
         .aspectRatio(9.0 / 16.0, contentMode: .fit)
         // A hairline is the one stroke allowed over live video: it is what
@@ -431,21 +470,21 @@ struct CameraLiveLookView: View {
                 .foregroundStyle(.white.opacity(0.8))
             if camera.permissionDenied {
                 Text("Camera access is off")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.75))
             } else if camera.cameraUnavailable {
                 Text("No camera on this device")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Run LumaLook on an iPhone to shoot with live looks.")
-                    .font(.system(size: 12))
+                    .font(.luma(size: 12))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.5))
             } else {
@@ -464,20 +503,34 @@ struct CameraLiveLookView: View {
         VStack(spacing: 0) {
             if scopeMode != nil { scopeStrip.padding(.bottom, 12) }
             lookReadout.padding(.bottom, 10)
-            filmstrip.padding(.bottom, 10)
-            intensityRow.padding(.bottom, 12)
-            toolRow.padding(.bottom, panel == .none ? 12 : 10)
+            filmstrip.padding(.bottom, 12)
 
             switch panel {
-            case .pro:    proPanel.padding(.bottom, 12)
-            case .format: formatPanel.padding(.bottom, 12)
-            case .none:   EmptyView()
+            case .pro:
+                proPanel.padding(.bottom, 10)
+            case .format:
+                formatPanel.padding(.bottom, 10)
+            case .none:
+                readoutRow.padding(.bottom, 2)
+                mainRuler.padding(.bottom, 4)
             }
 
+            toolRow.padding(.bottom, 6)
+            modeSwitch.padding(.bottom, 12)
             captureRow
         }
+        .padding(.top, 40)
         .frame(maxWidth: .infinity)
-        .background(Color.black)
+        // An ink gradient rather than a black slab: the lower picture still
+        // reads through the top of the drawer, as on the approved mock.
+        .background {
+            LinearGradient(stops: [
+                .init(color: LumaTheme.ink.opacity(0), location: 0),
+                .init(color: LumaTheme.ink.opacity(0.82), location: 0.16),
+                .init(color: LumaTheme.ink, location: 0.42),
+            ], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     // MARK: Scope — off the picture, onto the drawer
@@ -501,11 +554,11 @@ struct CameraLiveLookView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(scopeName(scopeMode))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.luma(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
                 Text("Reading the graded frame")
-                    .font(.system(size: 11))
+                    .font(.luma(size: 11))
                     .foregroundStyle(.white.opacity(0.35))
                     .lineLimit(2)
                 Button {
@@ -513,7 +566,7 @@ struct CameraLiveLookView: View {
                     LumaHaptics.shared.tap()
                 } label: {
                     Text("Next scope")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.luma(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                         .contentShape(Rectangle())
                 }
@@ -545,24 +598,30 @@ struct CameraLiveLookView: View {
     /// thumbnail rendering stays cheap.
     private var stripLooks: [LibraryLook] { app.library.stripLooks() }
 
-    /// The one name surface — the tiles carry no captions at 56pt.
+    /// The current look's signature colour (imports are matched by name).
+    private var currentSignature: Color {
+        if let lut = app.selectedLUT { return LookSignature.colour(name: lut.displayName) }
+        return app.selectedLook.signature
+    }
+
+    /// The one name surface: the look chip in its signature colour, the
+    /// strength beside it, and the way into the full library.
     private var lookReadout: some View {
         let name = app.selectedLUT?.displayName ?? app.selectedLook.name
         let strength = Int(app.settings.intensity.rounded())
-        return HStack {
+        return HStack(spacing: 10) {
             Button {
                 showLookBrowser = true
                 LumaHaptics.shared.tap()
             } label: {
-                HStack(spacing: 6) {
-                    Text(name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(strength == 0 ? 0.5 : 0.95))
-                        .lineLimit(1)
+                HStack(spacing: 8) {
+                    LookChip(name: name,
+                             colour: strength == 0 ? LumaTheme.textMuted : currentSignature,
+                             size: 13)
                     Text(strength == 0 ? "Off" : "\(strength)%")
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 13, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(LumaTheme.textSecondary)
                 }
                 .contentShape(Rectangle())
             }
@@ -572,14 +631,18 @@ struct CameraLiveLookView: View {
                 showLookBrowser = true
                 LumaHaptics.shared.tap()
             } label: {
-                Text("All looks")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .contentShape(Rectangle())
+                HStack(spacing: 3) {
+                    Text("All looks")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(LumaTheme.textSecondary)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
     }
 
     /// Every tile is the actual grade of the live frame. The selected one wears
@@ -649,7 +712,7 @@ struct CameraLiveLookView: View {
             // competes with the grade it sits on.
             if let badge = sourceBadge(look) {
                 Text(badge)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.luma(size: 9, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1.5)
@@ -663,7 +726,7 @@ struct CameraLiveLookView: View {
         .overlay {
             if app.isCurrent(look) {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(.white, lineWidth: 2)
+                    .strokeBorder(look.signature, lineWidth: 2)
             }
         }
     }
@@ -704,7 +767,7 @@ struct CameraLiveLookView: View {
                 .frame(width: 56, height: 56)
                 .overlay {
                     Text("Off")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.luma(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(active ? 0.95 : 0.45))
                 }
                 .overlay {
@@ -718,22 +781,116 @@ struct CameraLiveLookView: View {
         .buttonStyle(.lumaPress)
     }
 
-    /// Intensity is a shooting decision, so it is on the drawer rather than two
-    /// taps deep inside a browser sheet.
-    private var intensityRow: some View {
-        HStack(spacing: 12) {
-            Text("Strength")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
-            Slider(value: $app.settings.intensity, in: 0...100)
-                .tint(.white.opacity(0.85))
-            Text("\(Int(app.settings.intensity.rounded()))%")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 42, alignment: .trailing)
+    // MARK: Readouts and ruler
+    //
+    // Four live values. Tap one to put it on the ruler; the active one turns
+    // signal yellow. Look strength is a shooting decision, so it lives here
+    // rather than two taps deep inside a sheet.
+
+    private var readoutRow: some View {
+        let strength = Int(app.settings.intensity.rounded())
+        return HStack(spacing: 6) {
+            ReadoutCell(label: "Look", value: strength == 0 ? "Off" : "\(strength)%",
+                        active: rulerTarget == .look) { retarget(.look) }
+            ReadoutCell(label: "Lens", value: "\(Self.millimetres(camera.zoomFactor)) mm",
+                        active: rulerTarget == .lens) { retarget(.lens) }
+            ReadoutCell(label: "Shutter", value: readout(for: .shutter), dimmed: isAuto(.shutter),
+                        active: rulerTarget == .shutter) { retarget(.shutter) }
+            ReadoutCell(label: "ISO", value: readout(for: .iso), dimmed: isAuto(.iso),
+                        active: rulerTarget == .iso) { retarget(.iso) }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 12)
+    }
+
+    private func retarget(_ target: RulerTarget) {
+        rulerTarget = target
+        LumaHaptics.shared.tap()
+    }
+
+    private var mainRuler: some View {
+        LumaRuler(stops: rulerStops, index: rulerIndex,
+                  needle: rulerTarget == .look ? currentSignature : LumaTheme.signal) { index in
+            applyRuler(index)
+        }
+        .id(rulerTarget)
+        .transition(.opacity)
+    }
+
+    private static let strengthStops: [Double] = stride(from: 0.0, through: 100.0, by: 10.0).map { $0 }
+    private static let lensStops: [CGFloat] = [0.5, 1, 1.5, 2, 3, 5]
+
+    /// 35 mm-equivalent focal length for a display zoom, from the familiar
+    /// iPhone marks (0.5× 13 mm, 1× 24 mm, 2× 48 mm, 3× 77 mm, 5× 120 mm).
+    static func millimetres(_ zoom: CGFloat) -> Int {
+        let marks: [(CGFloat, CGFloat)] = [(0.5, 13), (1, 24), (2, 48), (3, 77), (5, 120)]
+        guard zoom > marks[0].0 else { return Int(marks[0].1) }
+        for (a, b) in zip(marks, marks.dropFirst()) where zoom <= b.0 {
+            let t = (zoom - a.0) / (b.0 - a.0)
+            return Int((a.1 + t * (b.1 - a.1)).rounded())
+        }
+        return Int((zoom / 5 * 120).rounded())
+    }
+
+    private var rulerStops: [String] {
+        switch rulerTarget {
+        case .look:    return Self.strengthStops.map { "\(Int($0))" }
+        case .lens:    return Self.lensStops.map { "\(Self.millimetres($0))" }
+        case .shutter: return dialTicks(for: .shutter)
+        case .iso:     return dialTicks(for: .iso)
+        }
+    }
+
+    private var rulerIndex: Int {
+        switch rulerTarget {
+        case .look:
+            let value = app.settings.intensity
+            return Self.strengthStops.indices.min {
+                abs(Self.strengthStops[$0] - value) < abs(Self.strengthStops[$1] - value)
+            } ?? 0
+        case .lens:
+            let zoom = camera.zoomFactor
+            return Self.lensStops.indices.min {
+                abs(Self.lensStops[$0] - zoom) < abs(Self.lensStops[$1] - zoom)
+            } ?? 1
+        case .shutter: return dialIndex(for: .shutter)
+        case .iso:     return dialIndex(for: .iso)
+        }
+    }
+
+    private func applyRuler(_ index: Int) {
+        switch rulerTarget {
+        case .look:
+            guard Self.strengthStops.indices.contains(index) else { return }
+            app.settings.intensity = Self.strengthStops[index]
+        case .lens:
+            guard Self.lensStops.indices.contains(index) else { return }
+            camera.setDisplayZoom(Self.lensStops[index])
+        case .shutter: applyDial(index, to: .shutter)
+        case .iso:     applyDial(index, to: .iso)
+        }
+    }
+
+    /// Photo or Video. Locked while a take is rolling.
+    private var modeSwitch: some View {
+        HStack(spacing: 28) {
+            ForEach(CaptureMode.allCases, id: \.self) { mode in
+                Button {
+                    captureMode = mode
+                    LumaHaptics.shared.tap()
+                } label: {
+                    Text(mode.rawValue)
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(captureMode == mode ? LumaTheme.signal : LumaTheme.textMuted)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityAddTraits(captureMode == mode ? .isSelected : [])
+            }
+        }
+        .disabled(camera.isRecording || camera.isPreparingRecording)
+        .opacity(camera.isRecording || camera.isPreparingRecording ? 0.45 : 1)
+        .animation(.easeOut(duration: 0.18), value: captureMode)
     }
 
     // MARK: Tool row — icon over label, unboxed, the last item deliberately clipped
@@ -744,17 +901,8 @@ struct CameraLiveLookView: View {
                 // Exposure tools show their VALUE, not a glyph. A thermometer
                 // does not tell you the white balance is 5600K; "5600K" does.
                 // The number is the better icon, and it is live.
-                valueTool(String(format: "%.1f×", camera.zoomFactor), "Zoom",
-                          on: camera.zoomFactor != 1) {
-                    camera.cycleZoom()
-                    LumaHaptics.shared.tap()
-                }
-                valueTool(readout(for: .iso), "ISO", on: camera.manualExposure) {
-                    openPro(.iso)
-                }
-                valueTool(readout(for: .shutter), "Shutter", on: camera.manualExposure) {
-                    openPro(.shutter)
-                }
+                // Lens, shutter and ISO live on the readout row above; the
+                // rest of the exposure triangle opens the pro panel.
                 valueTool(readout(for: .ev), "Exposure", on: camera.evBias != 0) {
                     openPro(.ev)
                 }
@@ -770,12 +918,6 @@ struct CameraLiveLookView: View {
                 tool("slider.horizontal.3", "Pro", on: panel == .pro) {
                     if panel == .pro { panel = .none }
                     else { openPro(camera.manualExposure ? .iso : .shutter) }
-                }
-                tool("arrow.triangle.2.circlepath", "Flip",
-                     on: camera.cameraPosition == .front,
-                     enabled: !camera.isRecording) {
-                    camera.flipCamera()
-                    LumaHaptics.shared.tap()
                 }
                 tool("rectangle.dashed", frameGuide == .off ? "Guides" : frameGuide.label,
                      on: frameGuide != .off) {
@@ -832,13 +974,13 @@ struct CameraLiveLookView: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value)
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(on ? .white : .white.opacity(0.82))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -856,7 +998,7 @@ struct CameraLiveLookView: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(height: 20)
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
                     .lineLimit(1)
             }
@@ -910,7 +1052,7 @@ struct CameraLiveLookView: View {
         VStack(alignment: .leading, spacing: 10) {
             if camera.isRecording || camera.isPreparingRecording {
                 Text("Stop recording to change format.")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
             // Options this camera cannot shoot are dimmed rather than offered
@@ -932,7 +1074,7 @@ struct CameraLiveLookView: View {
             }
             if let note = formatFallbackNote {
                 Text(note)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -969,7 +1111,7 @@ struct CameraLiveLookView: View {
                                         pick: @escaping (T) -> Void) -> some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.luma(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.45))
                 .frame(width: 84, alignment: .leading)
             ForEach(options, id: \.self) { option in
@@ -981,7 +1123,7 @@ struct CameraLiveLookView: View {
                     // but selection is the ring, and everything else is a
                     // bare word.
                     Text(label(option))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.luma(size: 12, weight: .medium, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(isOn(option) ? 0.95 : 0.42))
                         .padding(.horizontal, 12)
@@ -1007,8 +1149,28 @@ struct CameraLiveLookView: View {
     /// footage, shoot a graded still) sit on the outside so the row never grows
     /// a fourth control creeping toward the middle.
     private var captureRow: some View {
-        ZStack {
-            CameraShutterButton(isRecording: camera.isRecording) {
+        HStack(spacing: 0) {
+            Button { app.path = [.selectClip] } label: {
+                Image(systemName: "photo.on.rectangle")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .frame(width: 46, height: 46)
+                    .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(LumaTheme.border, lineWidth: 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Open your clips")
+
+            Spacer(minLength: 0)
+
+            CameraShutterButton(isRecording: camera.isRecording,
+                                photoMode: captureMode == .photo) {
+                if captureMode == .photo {
+                    captureStill()
+                    return
+                }
                 // Stopping a take is never gated; only starting one with a
                 // locked look on the viewfinder asks first.
                 if !camera.isRecording, !camera.isPreparingRecording,
@@ -1018,13 +1180,27 @@ struct CameraLiveLookView: View {
                 }
                 camera.toggleRecording()
             }
-            HStack {
-                matteButton(system: "photo.on.rectangle") { app.path = [.selectClip] }
-                Spacer()
-                matteButton(system: "camera") { captureStill() }
+
+            Spacer(minLength: 0)
+
+            Button {
+                camera.flipCamera()
+                LumaHaptics.shared.tap()
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .frame(width: 46, height: 46)
+                    .background(LumaTheme.raised, in: Circle())
+                    .overlay(Circle().strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .contentShape(Circle())
             }
+            .buttonStyle(.lumaPress)
+            .disabled(camera.isRecording)
+            .opacity(camera.isRecording ? 0.35 : 1)
+            .accessibilityLabel("Flip camera")
         }
-        .padding(.horizontal, 34)
+        .padding(.horizontal, 30)
         .padding(.bottom, 6)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
         .sensoryFeedback(.success, trigger: stillSavedFlash)
@@ -1106,6 +1282,8 @@ struct CameraLiveLookView: View {
             lookLock = lock
             return
         }
+        shutterFlash = true
+        withAnimation(.easeOut(duration: 0.12).delay(0.06)) { shutterFlash = false }
         if camera.canCaptureFullRes {
             camera.captureFullResStill { cg in
                 guard let cg else {
@@ -1288,11 +1466,11 @@ private struct CameraProReadout: View {
             VStack(spacing: 3) {
                 HStack(spacing: 3) {
                     Text(parameter.rawValue)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.luma(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(active ? 0.8 : 0.4))
                     if auto {
                         Text("auto")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.luma(size: 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.35))
                     }
                 }
@@ -1300,7 +1478,7 @@ private struct CameraProReadout: View {
                 .minimumScaleFactor(0.8)
 
                 Text(value)
-                    .font(.system(size: 15, weight: active ? .bold : .medium, design: .monospaced))
+                    .font(.luma(size: 15, weight: active ? .bold : .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(active ? 1 : (auto ? 0.42 : 0.62)))
                     .lineLimit(1)
@@ -1339,7 +1517,7 @@ private struct CameraRulerDial: View {
                             .fill(.white.opacity(current ? 0.95 : 0.20))
                             .frame(width: current ? 2 : 1, height: current ? 15 : 9)
                         Text(ticks[i])
-                            .font(.system(size: current ? 12 : 10,
+                            .font(.luma(size: current ? 12 : 10,
                                           weight: current ? .bold : .regular,
                                           design: .monospaced))
                             .monospacedDigit()
@@ -1377,10 +1555,11 @@ private struct CameraRulerDial: View {
     }
 }
 
-/// White ring, red core. Red is the ONE colour this screen allows itself:
-/// armed is a state you must never have to read.
+/// White ring. Video mode has a red core that squares off while rolling;
+/// photo mode has a white core.
 private struct CameraShutterButton: View {
     let isRecording: Bool
+    var photoMode: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -1388,15 +1567,17 @@ private struct CameraShutterButton: View {
             ZStack {
                 Circle()
                     .stroke(.white, lineWidth: 3)
-                    .frame(width: 68, height: 68)
-                RoundedRectangle(cornerRadius: isRecording ? 7 : 28)
-                    .fill(LumaTheme.recordRed)
+                    .frame(width: 70, height: 70)
+                RoundedRectangle(cornerRadius: isRecording ? 8 : 28)
+                    .fill(photoMode ? Color.white : LumaTheme.recordRed)
                     .frame(width: isRecording ? 28 : 56, height: isRecording ? 28 : 56)
             }
             .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isRecording)
+            .animation(.easeOut(duration: 0.18), value: photoMode)
             .contentShape(Circle())
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(photoMode ? "Take photo" : (isRecording ? "Stop recording" : "Record"))
     }
 }
 
@@ -1449,7 +1630,7 @@ private struct CameraHandOffCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Text("Clip saved · look baked in")
-                .font(.system(size: 12, weight: .medium))
+                .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
 
             HStack(spacing: 0) {
@@ -1475,7 +1656,7 @@ private struct CameraHandOffCard: View {
     private func handButton(_ title: String, solid: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(solid ? .black : .white.opacity(0.72))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)

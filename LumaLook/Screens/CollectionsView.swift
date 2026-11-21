@@ -122,7 +122,7 @@ struct CollectionsView: View {
         HStack(spacing: 10) {
             BackArrow()
             Text("Collections")
-                .font(.system(size: 17, weight: .bold))
+                .font(.luma(size: 17, weight: .bold))
                 .foregroundStyle(.white)
             Spacer()
             if !groups.isEmpty {
@@ -136,7 +136,7 @@ struct CollectionsView: View {
                     // the List itself supplies while reordering.
                     Label(editMode == .active ? "Done" : "Reorder",
                           systemImage: editMode == .active ? "checkmark" : "arrow.up.arrow.down")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.luma(size: 13, weight: .semibold))
                         .foregroundStyle(editMode == .active ? LumaTheme.accentBright : .white)
                         .padding(.horizontal, 12)
                         .frame(height: 34)
@@ -154,8 +154,8 @@ struct CollectionsView: View {
                 LumaHaptics.shared.tap()
             } label: {
                 Label("New", systemImage: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.luma(size: 13, weight: .semibold))
+                    .foregroundStyle(LumaTheme.onSignal)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(LumaTheme.accent, in: Capsule())
@@ -226,7 +226,7 @@ struct CollectionsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(collection.name)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.luma(size: 14, weight: .bold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                             if collection.pinnedToCamera == true {
@@ -236,7 +236,7 @@ struct CollectionsView: View {
                             }
                         }
                         Text(stats(for: group))
-                            .font(.system(size: 11))
+                            .font(.luma(size: 11))
                             .foregroundStyle(LumaTheme.textSecondary)
                             .lineLimit(1)
                     }
@@ -384,7 +384,7 @@ struct CollectionsView: View {
             Hairline()
             if group.looks.isEmpty {
                 Text("Drag a look from the strip below, or long-press one and choose Add to Collection.")
-                    .font(.system(size: 11))
+                    .font(.luma(size: 11))
                     .foregroundStyle(LumaTheme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -403,7 +403,7 @@ struct CollectionsView: View {
         VStack(spacing: 4) {
             thumb(look, side: 48, radius: 10)
             Text(look.name)
-                .font(.system(size: 9))
+                .font(.luma(size: 9))
                 .foregroundStyle(LumaTheme.textMuted)
                 .lineLimit(1)
                 .frame(width: 52)
@@ -443,7 +443,7 @@ struct CollectionsView: View {
         VStack(spacing: 5) {
             thumb(look, side: 64, radius: 12)
             Text(look.name)
-                .font(.system(size: 10))
+                .font(.luma(size: 10))
                 .foregroundStyle(LumaTheme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 68)
@@ -500,10 +500,10 @@ struct CollectionsView: View {
                 .font(.system(size: 34))
                 .foregroundStyle(LumaTheme.textMuted)
             Text("No Collections Yet")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.luma(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
             Text("Group the looks you shoot with, then pin one collection to the camera filmstrip.")
-                .font(.system(size: 13))
+                .font(.luma(size: 13))
                 .foregroundStyle(LumaTheme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 44)
@@ -532,9 +532,9 @@ struct CollectionsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: collection == nil ? "pin"
                                     : isPinned ? "pin.slash" : "pin.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                     Text(footerTitle(for: collection, isPinned: isPinned))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.luma(size: 14, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }

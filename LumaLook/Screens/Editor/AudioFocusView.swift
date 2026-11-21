@@ -19,11 +19,11 @@ struct AudioFocusView: View {
                 .background(Self.plate(cornerRadius: 11))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
             }

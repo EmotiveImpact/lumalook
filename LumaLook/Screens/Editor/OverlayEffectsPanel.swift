@@ -39,7 +39,7 @@ struct OverlayEffectsPanel: View {
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: preset.icon).font(.system(size: 17))
-                                Text(preset.name).font(.system(size: 9)).lineLimit(1)
+                                Text(preset.name).font(.luma(size: 9)).lineLimit(1)
                             }
                             .foregroundStyle(.white)
                             .frame(width: 62, height: 52)
@@ -59,7 +59,7 @@ struct OverlayEffectsPanel: View {
                             LumaHaptics.shared.tap()
                         } label: {
                             Label(s.label, systemImage: s.icon)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.luma(size: 12, weight: .semibold))
                                 .foregroundStyle(section == s ? .black : .white)
                                 .padding(.horizontal, 11).padding(.vertical, 7)
                                 .background(section == s ? AnyShapeStyle(LumaTheme.accentBright)
@@ -108,8 +108,8 @@ struct OverlayEffectsPanel: View {
                         LumaHaptics.shared.tap()
                     } label: {
                         Text(mode.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(fx.blendMode == mode ? .white : LumaTheme.textSecondary)
+                            .font(.luma(size: 12, weight: .semibold))
+                            .foregroundStyle(fx.blendMode == mode ? LumaTheme.onSignal : LumaTheme.textSecondary)
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(fx.blendMode == mode ? LumaTheme.accent : LumaTheme.surface,
                                         in: Capsule())
@@ -131,12 +131,12 @@ struct OverlayEffectsPanel: View {
                     editor.setOverlayChroma(id: overlayID, on ? ChromaKeySettings() : nil)
                     LumaHaptics.shared.tap()
                 }))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.luma(size: 14, weight: .semibold))
                 .tint(LumaTheme.accentBright)
 
             if let chroma {
                 HStack(spacing: 10) {
-                    Text("Key").font(.footnote).foregroundStyle(LumaTheme.textSecondary)
+                    Text("Key").font(.luma(.footnote)).foregroundStyle(LumaTheme.textSecondary)
                     ForEach(["#00FF00", "#0000FF", "#00FFFF", "#FF00FF"], id: \.self) { hex in
                         Button {
                             var c = chroma; c.colorHex = hex
@@ -182,7 +182,7 @@ struct OverlayEffectsPanel: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: icon).font(.system(size: 16))
-                            Text(label).font(.system(size: 10))
+                            Text(label).font(.luma(size: 10))
                         }
                         .foregroundStyle(on ? .black : .white)
                         .frame(width: 56, height: 48)
@@ -202,7 +202,7 @@ struct OverlayEffectsPanel: View {
                 Toggle("Invert", isOn: Binding(
                     get: { mask.invert },
                     set: { var m = mask; m.invert = $0; editor.setOverlayMask(id: overlayID, m) }))
-                    .font(.system(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+                    .font(.luma(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
             }
         }
     }
@@ -227,7 +227,7 @@ struct OverlayEffectsPanel: View {
             ), range: -100...100) { String(format: "%.1f", $0 / 100) }
             if !adjust.isIdentity {
                 Button("Reset") { editor.setOverlayAdjustments(id: overlayID, nil) }
-                    .font(.footnote.weight(.semibold)).foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textSecondary)
             }
         }
     }
@@ -240,10 +240,10 @@ struct OverlayEffectsPanel: View {
                     editor.setOverlayBorder(id: overlayID, on ? OverlayBorderSettings() : nil)
                     LumaHaptics.shared.tap()
                 }))
-                .font(.system(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+                .font(.luma(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
             if let border {
                 HStack(spacing: 10) {
-                    Text("Colour").font(.footnote).foregroundStyle(LumaTheme.textSecondary)
+                    Text("Colour").font(.luma(.footnote)).foregroundStyle(LumaTheme.textSecondary)
                     ForEach(["#FFFFFF", "#000000", "#FFD60A", "#FF375F", "#0A84FF"], id: \.self) { hex in
                         Button {
                             var b = border; b.colorHex = hex
