@@ -17,7 +17,9 @@ name: Preview
 on:
   push:
     branches: [master]
+    paths-ignore: ['website/**']
   pull_request:
+    paths-ignore: ['website/**']
   workflow_dispatch:
 
 concurrency:
