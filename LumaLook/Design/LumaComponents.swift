@@ -623,7 +623,10 @@ struct LumaTabBar: View {
             }
             .buttonStyle(.lumaPress)
             .accessibilityLabel("Open camera")
-            .offset(y: -24)
+            // Centred exactly where the camera's record button sits, so the
+            // camera opens with its button under the thumb that just tapped
+            // (both measure from the bottom safe area).
+            .offset(y: -16)
             .sensoryFeedback(.impact(weight: .medium), trigger: shutterTaps)
         }
         .sensoryFeedback(.selection, trigger: app.tab)
