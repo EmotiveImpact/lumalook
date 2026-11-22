@@ -114,9 +114,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .hero { position: relative; isolation: isolate; padding: 8px max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); }
 .frame { --fr: 28px; position: relative; isolation: isolate; overflow: hidden; border-radius: var(--fr); clip-path: inset(0 round var(--fr)); height: calc(100svh - 60px - 18px); min-height: 640px; max-height: 1000px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0 24px 96px; background: var(--ink); }
 .frame-bg img { position: absolute; inset: 0; z-index: -4; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
-/* the curved frame dissolves into the page: a long fade that is page black well before the bottom, so there is no bottom edge */
+/* the curved frame shows as much of the photo as version B, then fades to page black at the very bottom so there is no bottom edge */
 .frame::before { content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none; background:
-  linear-gradient(180deg, rgba(8, 9, 10, .38) 0%, rgba(8, 9, 10, 0) 18%, rgba(8, 9, 10, 0) 28%, rgba(8, 9, 10, .6) 46%, rgba(8, 9, 10, .9) 62%, var(--ink) 78%),
+  linear-gradient(180deg, rgba(8, 9, 10, .38) 0%, rgba(8, 9, 10, 0) 18%, rgba(8, 9, 10, 0) 46%, rgba(8, 9, 10, .62) 70%, rgba(8, 9, 10, .94) 92%, var(--ink) 100%),
   radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(8, 9, 10, .55) 100%); }
 
 /* light leak: a warm streak that crosses the frame as it develops, then rests */
@@ -139,6 +139,11 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .hero .sub { margin: 12px 0 0; font-size: clamp(1.3rem, 2.4vw, 1.75rem); font-weight: 500; letter-spacing: -.03em; color: var(--tx); line-height: 1.2; text-wrap: balance; }
 .hero .sub em { font-style: normal; color: var(--signal); }
 .hero .cta { margin-top: 28px; }
+/* Apple's official App Store badge: the artwork is unmodified and never animated, with clear space of a quarter of its height */
+.store-badge { display: inline-flex; flex: none; margin: 0 3px; border-radius: 9px; }
+.store-badge img { height: 54px; width: auto; }
+/* the button beside it matches the badge: same height, same width */
+.hero .cta .btn-glass { height: 54px; width: 162px; padding: 0; }
 .hero .fine { color: rgba(255, 255, 255, .58); }
 
 .badge { display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, .07); text-decoration: none; font-size: 13.5px; color: var(--tx2); max-width: 100%; }
@@ -179,7 +184,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
   .leak::after { background: linear-gradient(97deg, transparent 47.7%, rgba(255, 244, 214, .85) 48.05%, transparent 48.4%); }
   .frame-meta { left: 16px; right: 16px; bottom: 16px; grid-template-columns: 1fr 1fr; font-size: 12px; }
   .frame-meta .scroll, .frame-meta .look > span { display: none; }
-  .hero .cta .btn { flex: 1 1 100%; }
+  .store-badge img { height: 50px; }
+  .hero .cta .btn-glass { height: 50px; width: 150px; flex: none; font-size: 15.5px; }
+  .hero .fine { text-wrap: balance; }
 }
 
 /* statement */
