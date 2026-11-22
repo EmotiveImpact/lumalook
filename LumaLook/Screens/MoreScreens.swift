@@ -26,7 +26,10 @@ final class PackThumbs: ObservableObject {
         // by `previewPhoto` — the catalog hand-assigns the same hero to several
         // packs, which made adjacent rows render the identical sunset and read
         // as one stock photo repeated.
-        let jobs: [(String, PackLook, CIImage)] = packs.compactMap { pack in
+        // New packs lead every rail and grid, so they render first; with
+        // eleven covers at 720 px the last one can take a few seconds.
+        let ordered = packs.filter(\.isNew) + packs.filter { !$0.isNew }
+        let jobs: [(String, PackLook, CIImage)] = ordered.compactMap { pack in
             guard let look = pack.looks.first else { return nil }
             let frame = source ?? PackThumbs.previewPhoto(for: pack).ciImage
                 ?? LookThumbs.fallbackFrame
@@ -760,6 +763,13 @@ struct FilterPackDetailView: View {
 
     /// One face per row, each look on the photo that suits it, spread so
     /// neighbouring rows never show the same person.
+    private func rowPhoto(for look: PackLook) -> HeroPhoto {
+        let photos = rowPhotos
+        guard let index = pack.looks.firstIndex(where: { $0.code == look.code }),
+              index < photos.count else { return heroPhoto }
+        return photos[index]
+    }
+
     private var rowPhotos: [HeroPhoto] {
         LookPhotos.spread(names: pack.looks.map(\.name), keys: pack.looks.map(\.code))
     }
@@ -962,10 +972,16 @@ struct FilterPackDetailView: View {
                     Image(decorative: cg, scale: 1)
                         .resizable()
                         .scaledToFill()
+                        .transition(.opacity)
                 } else {
-                    LumaTheme.raised
+                    // The person shows straight away; the grade fades in
+                    // over them once it is ready (a slow phone can take a
+                    // moment for five looks), so a row is never an empty box.
+                    HeroImage(photo: rowPhoto(for: look), radius: 0)
+                        .opacity(0.7)
                 }
             }
+            .animation(.easeOut(duration: 0.2), value: previews[look.code] != nil)
             .clipShape(shape)
             // clipShape clips pixels, not touches: confine the face.
             .contentShape(shape)

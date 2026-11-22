@@ -24,12 +24,12 @@ enum RevenueCatConfig {
     }
 }
 
-/// StoreKit 2 storefront (C5). Pricing set 2026-07: Pro $49.99/yr with a
-/// 7-day free trial, $9.99/mo, $119.99 lifetime, look packs $2.99–4.99.
-/// Deliberately no WEEKLY tier — the LUT niche is mid-backlash against weekly
-/// subs, and monthly converts the impulse buyer without the stigma. The ladder
-/// is self-anchoring: twelve months of monthly equals the lifetime price, and
-/// the annual lands at five, so the discount needs no explaining.
+/// StoreKit 2 storefront (C5). Pricing approved 21 Nov 2026: Pro $34.99/yr
+/// with a 7-day free trial, $5.99/mo, $79.99 lifetime (every pack, now and
+/// future), look packs $2.99 or $3.99. Deliberately no weekly tier: the LUT
+/// niche is mid-backlash against weekly subs, and monthly converts the
+/// impulse buyer without the stigma. The annual costs about six months of
+/// monthly, and lifetime about a year of it, so the ladder explains itself.
 @MainActor
 final class StoreService: ObservableObject {
 
@@ -47,9 +47,9 @@ final class StoreService: ObservableObject {
     /// products load (offline, review, fresh install). Real Product values
     /// replace these the moment StoreKit answers.
     enum LockedPricing {
-        static let yearly = "$49.99"
-        static let monthly = "$9.99"
-        static let lifetime = "$119.99"
+        static let yearly = "$34.99"
+        static let monthly = "$5.99"
+        static let lifetime = "$79.99"
         static let trialDays = 7
     }
 

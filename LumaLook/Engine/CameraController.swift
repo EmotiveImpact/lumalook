@@ -1674,7 +1674,11 @@ struct CameraHistogram: Equatable {
     var blue: [Float]
 
     static func compute(_ image: CGImage) async -> CameraHistogram? {
-        await Task.detached(priority: .utility) {
+        // userInitiated, not utility: on a busy device (or the CI simulator
+        // grading the seeded frame at 30 Hz) utility work can starve for
+        // seconds and the pill sits empty. The sample is 64 px wide, so it
+        // costs about a millisecond.
+        await Task.detached(priority: .userInitiated) {
             analyse(image)
         }.value
     }
