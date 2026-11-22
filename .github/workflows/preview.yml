@@ -17,7 +17,9 @@ name: Preview
 on:
   push:
     branches: [master]
+    paths-ignore: ['website/**', 'vercel.json']
   pull_request:
+    paths-ignore: ['website/**', 'vercel.json']
   workflow_dispatch:
 
 concurrency:
