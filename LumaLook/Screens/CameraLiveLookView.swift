@@ -76,6 +76,9 @@ struct CameraLiveLookView: View {
     /// drawer is a single object, not a stack of trays.
     private enum Panel: Equatable { case none, pro, format }
     @State private var panel: Panel = .none
+    /// The filmstrip tile the user last tapped, so the strip never scrolls
+    /// after a tile that is already in front of them.
+    @State private var tappedStripID: String?
     @State private var activeProParam: ProParameter = .shutter
 
     /// What the main ruler is driving. Tapping a readout cell re-targets it.
@@ -169,7 +172,10 @@ struct CameraLiveLookView: View {
             app.useFreeLookInGrade(storeService)
             flash("Now on \(LookSignature.title(in: app.selectedLook.name)). Ready when you are")
         }
-        .onAppear { start() }
+        .onAppear {
+            app.library.settleOrder()
+            start()
+        }
         .onDisappear { camera.stopSession() }
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil
@@ -653,44 +659,63 @@ struct CameraLiveLookView: View {
     /// Every tile is the actual grade of the live frame. The selected one wears
     /// the only stroke in the drawer.
     private var filmstrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                offTile
-                ForEach(stripLooks) { look in
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    offTile
+                    ForEach(stripLooks) { look in
+                        Button {
+                            // Selection derives from ONE source of truth
+                            // (app.isCurrent) so a LUT and a built-in can never
+                            // highlight at the same time.
+                            tappedStripID = look.id
+                            app.select(look: look)
+                            LumaHaptics.shared.tap()
+                        } label: {
+                            lookTile(look)
+                        }
+                        .buttonStyle(.lumaPress)
+                        .id(look.id)
+                    }
                     Button {
-                        // Selection derives from ONE source of truth
-                        // (app.isCurrent) so a LUT and a built-in can never
-                        // highlight at the same time.
-                        app.select(look: look)
+                        showLookBrowser = true
                         LumaHaptics.shared.tap()
                     } label: {
-                        lookTile(look)
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(LumaTheme.surfaceStrong)
+                            .frame(width: 56, height: 56)
+                            .overlay {
+                                Image(systemName: "square.grid.3x3")
+                                    .font(.system(size: 17, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     }
                     .buttonStyle(.lumaPress)
                 }
-                Button {
-                    showLookBrowser = true
-                    LumaHaptics.shared.tap()
-                } label: {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(LumaTheme.surfaceStrong)
-                        .frame(width: 56, height: 56)
-                        .overlay {
-                            Image(systemName: "square.grid.3x3")
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-                .buttonStyle(.lumaPress)
+                .padding(.horizontal, 18)
             }
-            .padding(.horizontal, 18)
+            // The ramp width matches the content inset, so at rest the fade sits
+            // entirely over the gutter and no tile is dimmed for no reason.
+            .lumaEdgeFade(leading: 18, trailing: 18)
+            .sensoryFeedback(.selection, trigger: app.selectedLook.id)
+            .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+            // A look picked in All looks keeps its place in the strip, so fetch
+            // it into view. A tile the user tapped is already under their thumb.
+            .onChange(of: currentStripID) { _, new in
+                guard let new else { return }
+                if let tapped = tappedStripID,
+                   let look = stripLooks.first(where: { $0.id == tapped }),
+                   app.isCurrent(look) { return }
+                tappedStripID = nil
+                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(new, anchor: .center) }
+            }
         }
-        // The ramp width matches the content inset, so at rest the fade sits
-        // entirely over the gutter and no tile is dimmed for no reason.
-        .lumaEdgeFade(leading: 18, trailing: 18)
-        .sensoryFeedback(.selection, trigger: app.selectedLook.id)
-        .sensoryFeedback(.selection, trigger: app.selectedLUT?.id)
+    }
+
+    /// Strip id of the look that is applied now, if the strip holds it.
+    private var currentStripID: String? {
+        stripLooks.first(where: { app.isCurrent($0) })?.id
     }
 
     /// One filmstrip tile. Before a live frame exists the tile still previews
