@@ -241,9 +241,14 @@ struct CameraLiveLookView: View {
         .lumaToolSheet(isPresented: $showLookBrowser, style: .panel) {
             LookBrowserSheet(context: .camera, intensity: $app.settings.intensity)
         }
-        // No auto-start after a purchase: a camera that begins recording on
-        // its own as a sheet slides away would catch the floor.
-        .lockedLookSheet($lookLock) { flash("Look unlocked. Ready when you are") }
+        // No auto-start after a purchase or a swap: a camera that begins
+        // recording on its own as a sheet slides away would catch the floor.
+        .lockedLookSheet($lookLock, context: .camera) {
+            flash("Look unlocked. Ready when you are")
+        } onUseFreeLook: {
+            app.useFreeLookInGrade(storeService)
+            flash("Now on \(LookSignature.title(in: app.selectedLook.name)). Ready when you are")
+        }
         .onAppear {
             app.library.settleOrder()
             start()

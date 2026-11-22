@@ -726,6 +726,15 @@ struct EditorTimelineView: View {
             } else {
                 showExportSheet = true
             }
+        } onUseFreeLook: {
+            // Every locked look in the project moves to its closest free
+            // look at once (one undo step), so the export goes straight on.
+            app.useFreeLooksInProject(storeService)
+            if let next = app.lockedLookInProject(storeService) {
+                lookLock = next
+            } else {
+                showExportSheet = true
+            }
         }
         .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
             ExportSpecSheet(durationSeconds: editor.totalDuration,
