@@ -1608,7 +1608,10 @@ struct CameraLiveLookView: View {
             .accessibilityLabel("Flip camera")
         }
         .padding(.horizontal, 30)
-        .padding(.bottom, 6)
+        // Puts the record button's centre exactly where the tab bar's yellow
+        // shutter sits, so the camera opens with its button under the thumb
+        // that just tapped (both measure from the bottom safe area).
+        .padding(.bottom, 14)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
         .sensoryFeedback(.success, trigger: stillSavedFlash)
     }
