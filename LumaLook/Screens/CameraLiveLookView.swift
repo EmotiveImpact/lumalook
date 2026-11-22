@@ -114,7 +114,6 @@ struct CameraLiveLookView: View {
     @State private var apertureIndex = 2
     /// The live histogram pill, on by default; tap hides it to a small glyph.
     @AppStorage("lumalook.camera.histogram") private var showHistogram = true
-    @State private var histogram: CameraHistogram?
     /// Roll mode: an optional roll of 36 that the shutter counts down.
     /// Persists across launches, off by default.
     @AppStorage("lumalook.camera.rollOn") private var rollOn = false
@@ -356,17 +355,11 @@ struct CameraLiveLookView: View {
         }
     }
 
-    /// ~4 Hz histogram for the pill, from a 64 px sample of the graded
-    /// preview off the main thread, so it never costs the viewfinder a frame.
+    /// The controller samples a ~4 Hz histogram from a 64 px copy of the
+    /// graded preview on its own queue while the pill shows, so it never
+    /// costs the viewfinder a frame.
     private func runHistogramLoop() async {
-        guard showHistogram else { histogram = nil; return }
-        while !Task.isCancelled {
-            if let frame = camera.previewImage {
-                let next = await CameraHistogram.compute(frame)
-                if !Task.isCancelled, let next { histogram = next }
-            }
-            try? await Task.sleep(nanoseconds: 250_000_000)
-        }
+        camera.histogramOn = showHistogram
     }
 
     // MARK: - Top matte
@@ -546,7 +539,7 @@ struct CameraLiveLookView: View {
                 showHistogram = false
                 LumaHaptics.shared.tap()
             } label: {
-                CameraHistogramPill(histogram: histogram)
+                CameraHistogramPill(histogram: camera.histogram)
                     .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             .buttonStyle(.lumaPress)

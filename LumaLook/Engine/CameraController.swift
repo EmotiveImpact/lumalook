@@ -21,6 +21,13 @@ final class CameraController: NSObject, ObservableObject {
     /// The finished recording, kept for the hand-off card (Grade / Edit).
     @Published var lastRecordingURL: URL?
     @Published var previewImage: CGImage?
+    /// The histogram pill's data, sampled from the graded preview about four
+    /// times a second while `histogramOn`.
+    @Published private(set) var histogram: CameraHistogram?
+    /// Set by the camera screen while its histogram pill shows.
+    var histogramOn = false
+    /// Frames since the last histogram sample (preview queue only).
+    private var histogramTick = 0
 
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
@@ -1348,8 +1355,21 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         if zebrasOn { preview = ZebraRenderer.apply(to: preview) }
         if peakingOn { preview = FocusPeakingRenderer.apply(to: preview) }
         guard let cg = pipeline.context.createCGImage(preview, from: preview.extent) else { return }
+        // Sampled here, on the preview's own queue, rather than in a Swift
+        // task: on a busy phone (or the CI simulator) the shared task pool
+        // can be tied up grading look thumbnails for seconds, which left the
+        // pill empty. A 64 px sample costs about a millisecond.
+        var sampled: CameraHistogram? = nil
+        if histogramOn {
+            histogramTick += 1
+            if histogramTick >= 8 {
+                histogramTick = 0
+                sampled = CameraHistogram.analyse(cg)
+            }
+        }
         DispatchQueue.main.async { [weak self] in
             self?.previewImage = cg
+            if let sampled { self?.histogram = sampled }
         }
     }
 }
@@ -1672,16 +1692,6 @@ struct CameraHistogram: Equatable {
     var red: [Float]
     var green: [Float]
     var blue: [Float]
-
-    static func compute(_ image: CGImage) async -> CameraHistogram? {
-        // userInitiated, not utility: on a busy device (or the CI simulator
-        // grading the seeded frame at 30 Hz) utility work can starve for
-        // seconds and the pill sits empty. The sample is 64 px wide, so it
-        // costs about a millisecond.
-        await Task.detached(priority: .userInitiated) {
-            analyse(image)
-        }.value
-    }
 
     static func analyse(_ image: CGImage) -> CameraHistogram? {
         guard image.width > 0, image.height > 0,
