@@ -322,9 +322,16 @@ final class StoreService: ObservableObject {
 struct LookLock: Identifiable, Equatable {
     let lookName: String
     let pack: LookPack?
+    /// Set for a pack look the camera is trying on before its pack is owned
+    /// (`AppModel.packPreview`): owning this pack is what unlocks it. After
+    /// Dark comes only with Pro, so `pack` is nil there while this is set.
+    var previewPackID: String? = nil
+    /// The free look the "shoot with" choice swaps in for a pack preview.
+    var freeLookName: String? = nil
     var id: String { lookName }
 
     static func == (a: LookLock, b: LookLock) -> Bool {
         a.lookName == b.lookName && a.pack?.id == b.pack?.id
+            && a.previewPackID == b.previewPackID
     }
 }

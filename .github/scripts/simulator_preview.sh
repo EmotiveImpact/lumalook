@@ -128,6 +128,14 @@ shot 10g-editor-transition 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}S
 shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
 shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
+# Camera A: pull-up Pro, the looks sheet, the thumb fan, sideways, the ask at
+# record for a paid look tried on free, and the swipe between favourites.
+shot 11c-camera-pro 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMPRO=shutter"
+shot 11d-camera-looks 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_BROWSER=1"
+shot 11e-camera-fan 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMFAN=1"
+shot 11f-camera-landscape 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMLOOK=pack:after-dark:AD2"
+shot 11g-camera-locked 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1"
+shot 11h-camera-swipe 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMSWIPE=1"
 shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
 # A film archive, now sold on its own as well as with Pro.
 shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"

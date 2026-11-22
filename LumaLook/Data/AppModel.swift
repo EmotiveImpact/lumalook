@@ -229,13 +229,31 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var selectedLook: LookPreset = MockData.defaultLook {
-        didSet { syncLookState() }
+        didSet {
+            // Any real pick ends a pack try-on (see `packPreview`).
+            if packPreview != nil { packPreview = nil }
+            syncLookState()
+        }
     }
     @Published var selectedLUT: LUTFile? {
         didSet {
+            if packPreview != nil { packPreview = nil }
             syncLookState()
             applyRememberedStrength()
         }
+    }
+    /// A pack look the camera is trying on before its pack is in the
+    /// library: it grades the live picture from the pack's own recipe or
+    /// film file, without installing anything. Paid packs preview free and
+    /// `lockedLookInGrade` asks only when a file leaves the app. Any real
+    /// pick (`selectedLook` / `selectedLUT`) ends it.
+    @Published private(set) var packPreview: PackLookPreview? {
+        didSet { if packPreview != oldValue { syncLookState() } }
+    }
+
+    /// Starts trying on a pack look (`CameraLooks` decides when).
+    func startPackPreview(_ preview: PackLookPreview) {
+        packPreview = preview
     }
     /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
     /// value (so restoring 62% doesn't immediately re-save 62%).
@@ -529,7 +547,17 @@ final class AppModel: ObservableObject {
     private func syncLookState() {
         lookState.recipe = selectedLook.recipe
         lookState.settings = settings
-        if let lut = selectedLUT {
+        if let preview = packPreview, let look = preview.look {
+            // A pack try-on wears exactly what installing the pack would
+            // give: its film file, or its recipe without the spatial passes
+            // a baked cube cannot carry (`PackInstaller.cubeText`).
+            if let url = preview.cubeURL {
+                lookState.lut = try? LookPipeline.shared.loadLUT(at: url)
+            } else {
+                lookState.recipe = PackLookPreview.cubeRecipe(look.recipe)
+                lookState.lut = nil
+            }
+        } else if let lut = selectedLUT {
             lookState.lut = try? LookPipeline.shared.loadLUT(at: lutRepository.fileURL(for: lut))
         } else {
             lookState.lut = nil
@@ -541,8 +569,9 @@ final class AppModel: ObservableObject {
         }
         lookState.conversionOpacity = conversionOpacity / 100.0
         lookState.conversionProfile = conversionProfile
-        lookState.lutOpacity = creativeOpacity / 100.0
-        lookState.lutBlend = creativeBlend
+        // A try-on has no remembered LUT strength of its own: full, normal.
+        lookState.lutOpacity = packPreview == nil ? creativeOpacity / 100.0 : 1
+        lookState.lutBlend = packPreview == nil ? creativeBlend : .normal
         refreshPausedFrame()
     }
 
@@ -748,7 +777,16 @@ final class AppModel: ObservableObject {
     /// files the user already owns, so only a recipe grade can be locked.
     func lockedLookInGrade(_ store: StoreService) -> LookLock? {
         // Strength 0 is the Original/OFF tile: the look renders nothing.
-        guard selectedLUT == nil, settings.intensity > 0 else { return nil }
+        guard settings.intensity > 0 else { return nil }
+        // A pack look being tried on is free to frame with, and asks here.
+        if let preview = packPreview, let pack = preview.pack, let look = preview.look {
+            guard !store.ownsPack(pack.id) else { return nil }
+            return LookLock(lookName: look.name,
+                            pack: pack.isProIncluded ? nil : pack,
+                            previewPackID: pack.id,
+                            freeLookName: preview.freeAlternative?.name)
+        }
+        guard selectedLUT == nil else { return nil }
         return store.lock(forBuiltIn: selectedLook)
     }
 
@@ -771,6 +809,14 @@ final class AppModel: ObservableObject {
     /// stay as they were, so only the base look changes.
     func useFreeLookInGrade(_ store: StoreService) {
         guard lockedLookInGrade(store) != nil else { return }
+        if let preview = packPreview {
+            if let free = preview.freeAlternative {
+                wear(free, store: store)
+            } else {
+                selectedLook = MockData.defaultLook
+            }
+            return
+        }
         selectedLook = MockData.freeAlternative(to: selectedLook)
     }
 
