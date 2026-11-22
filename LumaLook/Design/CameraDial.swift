@@ -1217,7 +1217,9 @@ struct CamHint: View {
     }
 }
 
-/// One line of the how-to card, behind its signal dot.
+/// One line of the how-to card, behind its signal dot. The lab sets these
+/// on a 17.55 pt line (13 pt at 1.35), which is 1.8 more than the type's
+/// own line: that much goes between the lines and around each item.
 private struct CamHintLine: View {
     let text: String
 
@@ -1231,10 +1233,12 @@ private struct CamHintLine: View {
             Text(text)
                 .font(.luma(size: 13, weight: .regular))
                 .foregroundStyle(Color(hex: 0xD9DADE))
-                .lineSpacing(1.5)
+                .lineSpacing(1.8)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.top, 0.5)
+        .padding(.bottom, 1.3)
     }
 }
 

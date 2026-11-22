@@ -1104,11 +1104,13 @@ struct CameraLockCard: View {
             Text("Trying looks is always free. To \(verb) with this one you need \(need).")
                 .font(.luma(size: 13, weight: .regular))
                 .foregroundStyle(Color(hex: 0xC9CBD0))
-                .lineSpacing(3)
+                // The lab's 18.85 pt line (13 pt at 1.45), 6 under the
+                // title and 12 over the first button, measured on its render.
+                .lineSpacing(3.1)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-                .padding(.bottom, 12)
+                .padding(.top, 6.8)
+                .padding(.bottom, 14)
             VStack(spacing: 8) {
                 if let pack = lock.pack {
                     choice("Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
@@ -1134,7 +1136,6 @@ struct CameraLockCard: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.top, 8)
             .disabled(storeService.purchaseInFlight)
         }
         .padding(18)

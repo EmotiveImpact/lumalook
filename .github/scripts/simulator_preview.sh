@@ -142,7 +142,7 @@ shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden
 # Camera A: pull-up Pro, the looks sheet, the thumb fan, sideways, the ask at
 # record for a paid look tried on free, and the swipe between favourites.
 shot 11c-camera-pro 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMPRO=lens"
-shot 11d-camera-looks 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_BROWSER=1"
+shot 11d-camera-looks 14 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_BROWSER=1"
 shot 11e-camera-fan 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMFAN=1"
 shot 11f-camera-landscape 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMLOOK=pack:after-dark:AD2"
 shot 11g-camera-locked 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1"
