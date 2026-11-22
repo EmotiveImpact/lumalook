@@ -269,7 +269,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 }
 
 /* look ticker */
-.ticker { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; padding: 18px 0; -webkit-mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+.ticker { position: relative; overflow: hidden; padding: 18px 0; -webkit-mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
 .ticker-track { display: flex; gap: 10px; width: max-content; animation: tick 70s linear infinite; }
 .ticker:hover .ticker-track { animation-play-state: paused; }
 @keyframes tick { to { transform: translateX(-50%); } }
@@ -280,10 +280,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 
 /* ---------- sections ---------- */
 .sec { position: relative; padding: 120px 0; overflow-x: clip; }
-.sec + .sec, .statement + .sec { border-top: 1px solid var(--line); }
 .kicker { margin: 0 0 22px; display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 550; color: var(--tx); letter-spacing: -.01em; }
 .kicker span { color: var(--tx3); font-variant-numeric: tabular-nums; font-weight: 500; }
-.kicker::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line2), transparent); }
 .kicker.y { color: var(--signal); }
 h2.lh { font-size: var(--step-h2); }
 .lede { margin: 20px 0 0; color: var(--tx2); font-size: var(--step-lede); max-width: 58ch; text-wrap: pretty; }
@@ -425,7 +423,7 @@ h2.lh { font-size: var(--step-h2); }
 @media (max-width: 860px) { .faq { grid-template-columns: minmax(0, 1fr); } }
 
 /* closing band */
-.closing { position: relative; overflow: hidden; isolation: isolate; padding: 150px 0 140px; text-align: center; border-top: 1px solid var(--line); }
+.closing { position: relative; overflow: hidden; isolation: isolate; padding: 150px 0 140px; text-align: center; }
 .closing .bg { position: absolute; inset: 0; z-index: -2; }
 .closing .bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; opacity: .55; }
 .closing::after { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 50% 55%, rgba(8, 9, 10, .35), rgba(8, 9, 10, .92) 70%), linear-gradient(var(--ink), transparent 30%, transparent 70%, var(--ink)); }
@@ -434,20 +432,20 @@ h2.lh { font-size: var(--step-h2); }
 .closing .cta { margin-top: 34px; }
 
 /* footer */
-.foot { border-top: 1px solid var(--line); padding: 56px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--tx3); font-size: 14px; }
+.foot { padding: 56px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--tx3); font-size: 14px; }
 .foot-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 32px; }
 .foot h4 { margin: 0 0 14px; color: var(--tx); font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
 .foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .foot a { color: var(--tx2); text-decoration: none; }
 .foot a:hover { color: var(--tx); }
 .foot .tag { margin: 14px 0 0; max-width: 30ch; }
-.foot-base { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: space-between; font-size: 12.5px; line-height: 1.6; }
+.foot-base { margin-top: 48px; padding-top: 22px; display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: space-between; font-size: 12.5px; line-height: 1.6; }
 .foot-base p { margin: 0; max-width: 78ch; }
 .foot-base a { color: var(--tx3); text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 2px; }
 @media (max-width: 760px) { .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .foot-grid > :first-child { grid-column: 1 / -1; } }
 
 /* ---------- document pages: privacy, terms, support ---------- */
-.doc-hero { padding: 80px 0 40px; border-bottom: 1px solid var(--line); }
+.doc-hero { padding: 80px 0 40px; }
 .doc-hero h1 { font-size: clamp(2.4rem, 6vw, 4rem); }
 .doc-hero p { margin: 18px 0 0; color: var(--tx2); font-size: var(--step-lede); max-width: 60ch; }
 .doc-hero .meta { margin-top: 22px; font-size: 13.5px; color: var(--tx3); }
