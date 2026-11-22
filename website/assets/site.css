@@ -141,7 +141,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .hero .cta { margin-top: 28px; }
 /* Apple's official App Store badge: the artwork is unmodified and never animated, with clear space of a quarter of its height */
 .store-badge { display: inline-flex; flex: none; margin: 0 3px; border-radius: 9px; }
-.store-badge img { height: 50px; width: auto; }
+.store-badge img { height: 54px; width: auto; }
+/* the button beside it matches the badge: same height, same width */
+.hero .cta .btn-glass { height: 54px; width: 162px; padding: 0; }
 .hero .fine { color: rgba(255, 255, 255, .58); }
 
 .badge { display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, .07); text-decoration: none; font-size: 13.5px; color: var(--tx2); max-width: 100%; }
@@ -182,7 +184,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
   .leak::after { background: linear-gradient(97deg, transparent 47.7%, rgba(255, 244, 214, .85) 48.05%, transparent 48.4%); }
   .frame-meta { left: 16px; right: 16px; bottom: 16px; grid-template-columns: 1fr 1fr; font-size: 12px; }
   .frame-meta .scroll, .frame-meta .look > span { display: none; }
-  .hero .cta .btn { flex: 1 1 150px; padding: 0 14px; }
+  .store-badge img { height: 50px; }
+  .hero .cta .btn-glass { height: 50px; width: 150px; flex: none; font-size: 15.5px; }
   .hero .fine { text-wrap: balance; }
 }
 
