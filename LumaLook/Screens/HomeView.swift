@@ -1305,7 +1305,7 @@ private struct ViewfinderReel: View {
                 .id("\(safeIndex)-\(pick ?? "")")
                 .transition(.opacity)
                 .allowsHitTesting(false)
-                strip(on: look.photo)
+                strip
                     .padding(.top, 16)
             }
             .padding(.bottom, pillRoom + 16)
@@ -1331,11 +1331,16 @@ private struct ViewfinderReel: View {
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
     }
 
-    private func strip(on photo: HeroPhoto) -> some View {
+    /// The strip's swatches all grade one close face, so each look reads on
+    /// the same skin and the strip renders once rather than on every turn of
+    /// the reel. Tapping one regrades the picture above.
+    private static let swatchPhoto: HeroPhoto = .golden
+
+    private var strip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(stripLooks, id: \.preset.name) { entry in
-                    tile(entry, on: photo)
+                    tile(entry)
                 }
             }
             .padding(.horizontal, 16)
@@ -1343,11 +1348,11 @@ private struct ViewfinderReel: View {
         }
     }
 
-    private func tile(_ entry: TonightsLook, on photo: HeroPhoto) -> some View {
+    private func tile(_ entry: TonightsLook) -> some View {
         let isOn = (pick ?? base?.preset.name) == entry.preset.name
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return Button { choose(entry) } label: {
-            HomeGradedPhoto(photo: photo, lookName: entry.preset.name, maxDimension: 240)
+            HomeGradedPhoto(photo: Self.swatchPhoto, lookName: entry.preset.name, maxDimension: 240)
                 .frame(width: 64, height: 80)
                 .overlay {
                     LinearGradient(colors: [.clear, .black.opacity(0.72)],
