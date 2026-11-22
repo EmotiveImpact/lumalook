@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // =============================================================================
 // Camera Lab, option A ("one camera that grows"): the camera's own parts,
@@ -33,9 +34,68 @@ extension View {
                             opacity: Double = 0.5) -> some View {
         background {
             ZStack {
-                shape.fill(.ultraThinMaterial)
+                CamBackdrop().clipShape(shape).allowsHitTesting(false)
                 shape.fill(tint.opacity(opacity))
             }
+        }
+    }
+}
+
+/// The picture blurred behind the camera's glass, and nothing else. The
+/// system's material also lifts what is behind it towards grey; the lab's
+/// glass is the blur alone under its own dark tint, so over a dark picture it
+/// stays dark. This keeps the material's blur and its saturation and drops
+/// the rest. Should the system ever build its material another way, this
+/// simply stays the material.
+struct CamBackdrop: UIViewRepresentable {
+    func makeUIView(context: Context) -> CamBackdropView {
+        let view = CamBackdropView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: CamBackdropView, context: Context) {
+        view.strip()
+    }
+}
+
+final class CamBackdropView: UIVisualEffectView {
+    private static let kept: Set<String> = ["gaussianBlur", "colorSaturate"]
+    #if DEBUG
+    private static var logged = false
+    #endif
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        strip()
+        DispatchQueue.main.async { [weak self] in self?.strip() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        strip()
+    }
+
+    /// Leaves the backdrop its blur and saturation, and hides the tint the
+    /// material lays over it.
+    func strip() {
+        let backdrop = layer.sublayers?.first
+        let filters = backdrop?.filters ?? []
+        let names = filters.map { String(describing: $0) }
+        #if DEBUG
+        if !Self.logged, window != nil {
+            Self.logged = true
+            let parts = subviews.map { String(describing: type(of: $0)) }.joined(separator: ",")
+            print("[LUMA] GLASS filters=\(names.joined(separator: ",")) subviews=\(parts)")
+        }
+        #endif
+        // Only when the blur is there to keep: otherwise it stays the material.
+        guard let backdrop, names.contains("gaussianBlur") else { return }
+        if names.contains(where: { !Self.kept.contains($0) }) {
+            backdrop.filters = zip(filters, names).filter { Self.kept.contains($0.1) }.map { $0.0 }
+        }
+        for view in subviews.dropFirst() where view !== contentView && !view.isHidden {
+            view.isHidden = true
         }
     }
 }
@@ -45,7 +105,7 @@ extension View {
 /// The lab's line icons, each on a 24 pt grid.
 enum CamIcon {
     case photo, video, slomo, portrait, flip, close, up, down, pro, format, guides
-    case scope, zebras, peaking, grid, level, auto, lock, search, plus, rotate
+    case scope, zebras, peaking, grid, level, auto, lock, search, plus, rotate, help
 
     static func paths(_ icon: CamIcon) -> (solid: Path, dashed: Path, dash: [CGFloat]) {
         var solid = Path()
@@ -229,6 +289,15 @@ enum CamIcon {
             p.addLine(to: CGPoint(x: 20.5, y: 10))
             p.addLine(to: CGPoint(x: 17.5, y: 10))
             return []
+        case .help:
+            p.addEllipse(in: CGRect(x: 3.5, y: 3.5, width: 17, height: 17))
+            p.move(to: CGPoint(x: 9.6, y: 9.4))
+            p.addCurve(to: CGPoint(x: 12.362, y: 7.92), control1: CGPoint(x: 10.059, y: 8.32), control2: CGPoint(x: 11.208, y: 7.704))
+            p.addCurve(to: CGPoint(x: 14.4, y: 10.3), control1: CGPoint(x: 13.516, y: 8.136), control2: CGPoint(x: 14.364, y: 9.127))
+            p.addCurve(to: CGPoint(x: 12, y: 13.9), control1: CGPoint(x: 14.4, y: 12), control2: CGPoint(x: 12, y: 12.3))
+            p.move(to: CGPoint(x: 12, y: 17.2))
+            p.addLine(to: CGPoint(x: 12, y: 17.21))
+            return []
         }
     }
 }
@@ -263,10 +332,13 @@ struct CamGlyph: View {
 /// that wraps the shutter (a circle of radius 44 round the shutter's centre,
 /// which sits 26 pt below the plate's top edge).
 struct CamPlateShape: Shape {
+    /// The shutter's centre, down from the plate's top edge (30 sideways).
+    var cy: CGFloat = 26
+
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
         let cx = w / 2
-        let cy: CGFloat = 26, r: CGFloat = 44, shoulder: CGFloat = 16, corner: CGFloat = 22
+        let r: CGFloat = 44, shoulder: CGFloat = 16, corner: CGFloat = 22
         let dy = shoulder - cy
         let dx = sqrt(max(r * r - dy * dy, 0))
         var path = Path()
@@ -296,6 +368,8 @@ struct CamPlateShape: Shape {
 /// from the bottom left.
 struct CamPlate: View {
     let glow: Color
+    /// The shutter's centre, down from the plate's top edge.
+    var notch: CGFloat = 26
 
     var body: some View {
         GeometryReader { geo in
@@ -310,7 +384,7 @@ struct CamPlate: View {
                     .position(x: w * 0.2, y: h * 0.95)
             }
             .frame(width: w, height: h)
-            .clipShape(CamPlateShape())
+            .clipShape(CamPlateShape(cy: notch))
         }
         .animation(.easeOut(duration: 0.3), value: glow)
     }
@@ -490,12 +564,14 @@ struct CamHistogramGlyph: View {
         .map { $0 / 26 }
 
     /// The live bins, each averaged with its neighbours, so 48 thin bins
-    /// draw as one curve at this size.
+    /// draw as one curve at this size (heights on a square-root scale).
     private static func smoothed(_ bins: [Float]?) -> [Float]? {
         guard let bins, bins.count > 2 else { return nil }
         let last = bins.count - 1
         return bins.indices.map { i in
-            (bins[max(i - 1, 0)] + bins[i] * 2 + bins[min(i + 1, last)]) / 4
+            // Square-root heights: a frame that is mostly shadow (one tall
+            // spike) still shows the rest of its tones as a curve.
+            ((bins[max(i - 1, 0)] + bins[i] * 2 + bins[min(i + 1, last)]) / 4).squareRoot()
         }
     }
 
@@ -543,7 +619,7 @@ struct CamChip: View {
                     if active {
                         Capsule().fill(CamLab.sig)
                     } else {
-                        Capsule().fill(.ultraThinMaterial)
+                        CamBackdrop().clipShape(Capsule()).allowsHitTesting(false)
                         Capsule().fill(Color(hex: 0x0C0D0F).opacity(0.4))
                     }
                 }
@@ -994,7 +1070,7 @@ struct CamFan: View {
                         if isHot {
                             Circle().fill(CamLab.sig)
                         } else {
-                            Circle().fill(.ultraThinMaterial)
+                            CamBackdrop().clipShape(Circle()).allowsHitTesting(false)
                             Circle().fill(Color(hex: 0x16171B).opacity(0.82))
                         }
                     }
@@ -1094,6 +1170,71 @@ struct CamToast: View {
             .padding(.vertical, 8)
             .camGlass(RoundedRectangle(cornerRadius: 16), tint: Color(hex: 0x0C0D0F), opacity: 0.8)
             .allowsHitTesting(false)
+    }
+}
+
+/// The lab's how-to card: a signal badge and a title, one line per gesture
+/// with a signal dot, and "Got it". Tap it anywhere to put it away.
+struct CamHint: View {
+    let title: String
+    let lines: [String]
+    let onDone: () -> Void
+
+    var body: some View {
+        Button(action: onDone) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("?")
+                        .font(.luma(size: 12, weight: .heavy))
+                        .foregroundStyle(CamLab.ink)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(CamLab.sig, in: Capsule())
+                    Text(title)
+                        .font(.luma(size: 14, weight: .bold))
+                        .foregroundStyle(CamLab.text)
+                }
+                .padding(.bottom, 8)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(lines, id: \.self) { line in
+                        CamHintLine(text: line)
+                    }
+                }
+                Text("Got it")
+                    .font(.luma(size: 12.5, weight: .bold))
+                    .foregroundStyle(CamLab.sig)
+                    .padding(.top, 10)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .camGlass(RoundedRectangle(cornerRadius: 20), tint: Color(hex: 0x0C0D0F), opacity: 0.86)
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.45), radius: 20, y: 18)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Closes this card")
+    }
+}
+
+/// One line of the how-to card, behind its signal dot.
+private struct CamHintLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(CamLab.sig)
+                .frame(width: 5, height: 5)
+                .padding(.top, 6.5)
+                .padding(.leading, 3)
+            Text(text)
+                .font(.luma(size: 13, weight: .regular))
+                .foregroundStyle(Color(hex: 0xD9DADE))
+                .lineSpacing(1.5)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

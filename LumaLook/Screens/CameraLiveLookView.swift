@@ -54,7 +54,7 @@ import Photos
 //     saved-to-Photos caption and the hand-off card (Retake / Grade / Edit)
 //   ✓ Last shot on the plate; permission and no-camera fallbacks
 //   ✓ DEBUG seeds: CAMFRAME, CAMASSIST, CAMPRO, CAMMODE, CAMROLL, CAMFOCUS,
-//     BROWSER, CAMLOOK, CAMLOCK, CAMLAND, CAMFAN, CAMSWIPE
+//     BROWSER, CAMLOOK, CAMLOCK, CAMLAND, CAMFAN, CAMSWIPE, CAMHINT
 //
 //   DEVICE QA only: the sensor writes, recording, and turning the phone
 //   (the simulator has no gravity, so LUMA_SEED_CAMLAND forces sideways).
@@ -153,6 +153,12 @@ struct CameraLiveLookView: View {
     @State private var forcedClockwise = false
     /// The ruler under the sideways readouts.
     @State private var landscapeDropOpen = false
+
+    // MARK: How-to
+    /// The how-to card: once on the first visit, and from "?" after that.
+    @State private var showHint = false
+    @State private var hintToken = 0
+    @AppStorage("lumalook.camera.hintSeen") private var hintSeen = false
 
     private static let space = "camera"
     /// The lab's ease for sheets and the picture: quick out, soft landing.
@@ -255,6 +261,7 @@ struct CameraLiveLookView: View {
             if recording {
                 formatOpen = false
                 cancelTouch()
+                if showHint { hideHint() }
             }
         }
         .onChange(of: app.settings) { _, _ in syncCameraLook() }
@@ -305,6 +312,9 @@ struct CameraLiveLookView: View {
                     .transition(.opacity.combined(with: .offset(y: 30)))
             }
             overlays(size: size)
+            if showHint {
+                hintCard(size: size, top: top)
+            }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .coordinateSpace(name: Self.space)
@@ -421,7 +431,17 @@ struct CameraLiveLookView: View {
         if env["LUMA_SEED_CAMSWIPE"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { seedSwipe() }
         }
+        // The how-to card, held open.
+        if env["LUMA_SEED_CAMHINT"] == "1" {
+            presentHint(for: nil)
+        }
         #endif
+        // The first visit explains itself once (never in the preview's shots).
+        if !hintSeen && !showsAllModesForPreview {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                if !hintSeen { presentHint(for: 7) }
+            }
+        }
         if showLookBrowser { refreshRawFrame() }
     }
 
@@ -778,6 +798,11 @@ struct CameraLiveLookView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
                     openFanIfHeld(token: token)
                 }
+            } else if isLandscapeLayout, showsLivePicture, !showLookBrowser {
+                // Sideways there is no fan: a hold locks focus and exposure.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    lockIfHeld(token: token)
+                }
             }
         }
         guard var state = touch else { return }
@@ -804,6 +829,13 @@ struct CameraLiveLookView: View {
         case .pending: tapPicture(at: value.location)
         default: break
         }
+    }
+
+    /// Sideways: the finger is still down where it landed, so lock there.
+    private func lockIfHeld(token: Int) {
+        guard let state = touch, state.token == token, state.mode == .pending else { return }
+        touch?.mode = .ignored
+        lockFocus(at: state.start)
     }
 
     /// Drops whatever the finger was doing (a pinch began, a take started).
@@ -1087,6 +1119,7 @@ struct CameraLiveLookView: View {
             closeButton
             formatChip
             Spacer(minLength: 0)
+            helpButton
             histogramButton
         }
     }
@@ -1154,6 +1187,68 @@ struct CameraLiveLookView: View {
     private static func clock(_ interval: TimeInterval) -> String {
         let seconds = max(0, Int(interval))
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// "?": how the camera works, on a card over the picture.
+    private var helpButton: some View {
+        Button {
+            if showHint { hideHint() } else { presentHint(for: 9) }
+        } label: {
+            CamGlyph(icon: .help, size: 18)
+                .foregroundStyle(showHint ? CamLab.sig : CamLab.text)
+                .frame(width: 34, height: 34)
+                .camGlass(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("How to use the camera")
+    }
+
+    private static let hintLines = [
+        "Swipe across the picture to step through your favourite looks",
+        "Tap the look name for every look in the app, by pack. Long-press one to add it to your swipe",
+        "Drag the dial to zoom. Tap a chip and the dial sets that instead",
+        "Pull the plate up, or tap Pro, for every pro control",
+        "Press and hold anywhere for quick tools",
+        "Turn your phone sideways to film",
+        "Tap the shutter to record or take a photo. The switch on the right of the plate changes mode, and flip turns the camera round."
+    ]
+
+    /// The how-to card: 188 pt under the safe area upright (250 on the lab's
+    /// canvas); in the middle, turned with the controls, sideways.
+    @ViewBuilder
+    private func hintCard(size: CGSize, top: CGFloat) -> some View {
+        let card = CamHint(title: "How the camera works", lines: Self.hintLines) { hideHint() }
+        if isLandscapeLayout {
+            card
+                .frame(width: min(474, max(size.height - 240, 0)))
+                .rotationEffect(.degrees(controlTurn))
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity)
+        } else {
+            card
+                .frame(width: max(size.width - 32, 0))
+                .offset(x: 16, y: top + 188)
+                .transition(.opacity)
+        }
+    }
+
+    /// Shows the card, for `seconds` (nil holds it until it is tapped).
+    private func presentHint(for seconds: TimeInterval?) {
+        hintToken += 1
+        let token = hintToken
+        hintSeen = true
+        withAnimation(.easeOut(duration: 0.2)) { showHint = true }
+        guard let seconds else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            guard token == hintToken else { return }
+            hideHint()
+        }
+    }
+
+    private func hideHint() {
+        hintToken += 1
+        withAnimation(.easeOut(duration: 0.3)) { showHint = false }
     }
 
     /// The live histogram. Tap it for the scope.
@@ -1368,6 +1463,8 @@ struct CameraLiveLookView: View {
     private var lensTarget: DialTarget { captureMode == .portrait ? .aperture : .lens }
     private var chipTargets: [DialTarget] { [lensTarget, .shutter, .iso, .ev, .wb, .focus] }
     private var proTargets: [DialTarget] { [lensTarget, .iso, .shutter, .wb, .ev, .focus] }
+    /// Sideways the lab reads lens, shutter, ISO, white balance, exposure, focus.
+    private var landscapeTargets: [DialTarget] { [lensTarget, .shutter, .iso, .wb, .ev, .focus] }
 
     /// The chips, the arc and the value on it.
     @ViewBuilder
@@ -1445,26 +1542,40 @@ struct CameraLiveLookView: View {
 
     private func plate(size: CGSize) -> some View {
         let w = size.width
+        let sideways = isLandscapeLayout
+        // Sideways the lab seats the shutter 4 pt nearer the edge, with the
+        // last shot at the top of the plate and flip at the bottom. The mode
+        // moves into the format card.
+        let rise = sideways ? CamLab.shutterRise - 4 : CamLab.shutterRise
+        let topEnd = landscapeClockwise ? 26 : max(w - 70, 0)
+        let bottomEnd = landscapeClockwise ? max(w - 70, 0) : 26
         return ZStack(alignment: .topLeading) {
-            CamPlate(glow: app.cameraWornLook.signature)
+            CamPlate(glow: app.cameraWornLook.signature, notch: CamLab.plateHeight - rise)
                 .frame(width: w, height: CamLab.plateHeight)
                 .contentShape(Rectangle())
                 .gesture(platePull)
                 .accessibilityHidden(true)
-            lastShotButton
-                .offset(x: 22, y: 15)
-            flipButton
-                .offset(x: 80, y: 15)
-            modeSwitch
-                .frame(width: max(w - 18, 0), alignment: .trailing)
-                .offset(y: 15)
+            if sideways {
+                lastShotButton(side: 44)
+                    .offset(x: topEnd, y: 38)
+                flipButton(side: 44)
+                    .offset(x: bottomEnd, y: 38)
+            } else {
+                lastShotButton(side: 46)
+                    .offset(x: 22, y: 15)
+                flipButton(side: 46)
+                    .offset(x: 80, y: 15)
+                modeSwitch
+                    .frame(width: max(w - 18, 0), alignment: .trailing)
+                    .offset(y: 15)
+            }
             CamShutter(isRecording: camera.isRecording,
                        photoMode: captureMode.takesStills,
                        rollCount: captureMode.takesStills && rollOn ? rollLeft : nil) {
                 shutterPressed()
             }
             .rotationEffect(.degrees(controlTurn))
-            .offset(x: w / 2 - 35, y: CamLab.plateHeight - CamLab.shutterRise - 35)
+            .offset(x: w / 2 - 35, y: CamLab.plateHeight - rise - 35)
         }
         .frame(width: w, height: CamLab.plateHeight, alignment: .topLeading)
         .offset(y: size.height - CamLab.plateHeight)
@@ -1482,7 +1593,7 @@ struct CameraLiveLookView: View {
     }
 
     /// The newest shot; a plain tile until there is one.
-    private var lastShotButton: some View {
+    private func lastShotButton(side: CGFloat) -> some View {
         Button {
             openLastShot()
         } label: {
@@ -1492,13 +1603,13 @@ struct CameraLiveLookView: View {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 46, height: 46)
+                        .frame(width: side, height: side)
                 } else {
                     CamGlyph(icon: .photo, size: 20)
                         .foregroundStyle(CamLab.grey)
                 }
             }
-            .frame(width: 46, height: 46)
+            .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: 13))
             .overlay(RoundedRectangle(cornerRadius: 13)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1.5))
@@ -1510,7 +1621,7 @@ struct CameraLiveLookView: View {
         .accessibilityLabel("Last shot")
     }
 
-    private var flipButton: some View {
+    private func flipButton(side: CGFloat) -> some View {
         Button {
             guard !camera.isRecording else {
                 flash("Stop recording first")
@@ -1523,7 +1634,7 @@ struct CameraLiveLookView: View {
             CamGlyph(icon: .flip, size: 20)
                 .foregroundStyle(CamLab.text)
                 .rotationEffect(.degrees(controlTurn))
-                .frame(width: 46, height: 46)
+                .frame(width: side, height: side)
                 .background(CamLab.raised, in: Circle())
                 .contentShape(Circle())
         }
@@ -1540,19 +1651,24 @@ struct CameraLiveLookView: View {
                     enabled: modeAvailable(mode))
         }
         return CamModeSwitch(modes: modes, selected: captureMode.rawValue, turn: controlTurn) { picked in
-            guard let mode = CaptureMode(rawValue: picked.id), mode != captureMode else { return }
-            if recordingBusy {
-                flash("Stop recording first")
-                return
-            }
-            guard modeAvailable(mode) else {
-                flash(mode == .slowMo ? "This camera has no slo-mo" : "This camera has no depth for Portrait")
-                return
-            }
-            captureMode = mode
-            LumaHaptics.shared.tap()
+            guard let mode = CaptureMode(rawValue: picked.id) else { return }
+            pickMode(mode)
         }
         .opacity(recordingBusy ? 0.5 : 1)
+    }
+
+    private func pickMode(_ mode: CaptureMode) {
+        guard mode != captureMode else { return }
+        if recordingBusy {
+            flash("Stop recording first")
+            return
+        }
+        guard modeAvailable(mode) else {
+            flash(mode == .slowMo ? "This camera has no slo-mo" : "This camera has no depth for Portrait")
+            return
+        }
+        captureMode = mode
+        LumaHaptics.shared.tap()
     }
 
     private func modeAvailable(_ mode: CaptureMode) -> Bool {
@@ -1631,7 +1747,7 @@ struct CameraLiveLookView: View {
         .frame(width: w, height: 476, alignment: .topLeading)
         .background {
             ZStack {
-                shape.fill(.ultraThinMaterial)
+                CamBackdrop().clipShape(shape).allowsHitTesting(false)
                 shape.fill(Color(hex: 0x0C0D0F).opacity(0.84))
             }
         }
@@ -1721,6 +1837,19 @@ struct CameraLiveLookView: View {
                 .padding(.top, 2)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 10)
+            if isLandscapeLayout {
+                // Sideways the plate has no mode switch (as the lab draws
+                // it), so the mode is picked here.
+                formatGroup("MODE") {
+                    ForEach(CaptureMode.allCases, id: \.self) { mode in
+                        CamOption(title: mode.rawValue, on: captureMode == mode,
+                                  enabled: modeAvailable(mode) && !recordingBusy) {
+                            pickMode(mode)
+                        }
+                    }
+                }
+                .padding(.bottom, 10)
+            }
             if captureMode.takesStills {
                 photoFormatRows
             } else {
@@ -1735,7 +1864,7 @@ struct CameraLiveLookView: View {
                     .fill(Color.black.opacity(0.4))
                     .blur(radius: 20)
                     .offset(y: 18)
-                RoundedRectangle(cornerRadius: 22).fill(.ultraThinMaterial)
+                CamBackdrop().clipShape(RoundedRectangle(cornerRadius: 22)).allowsHitTesting(false)
                 RoundedRectangle(cornerRadius: 22).fill(Color(hex: 0x0E0F12).opacity(0.78))
             }
         }
@@ -2053,9 +2182,9 @@ struct CameraLiveLookView: View {
         }
         if formatOpen {
             let cardX = layout.islandLeading ? layout.islandInset + 50
-                                             : layout.long - layout.islandInset - 314
+                                             : layout.long - layout.islandInset - 372
             formatCard
-                .frame(width: 264, alignment: .leading)
+                .frame(width: 322, alignment: .leading)
                 .offset(x: cardX, y: 56)
                 .transition(.opacity)
         }
@@ -2097,14 +2226,14 @@ struct CameraLiveLookView: View {
         HStack(spacing: 8) {
             closeButton
             formatChip
-            histogramButton
+            helpButton
         }
     }
 
     /// The readouts along the top. Tap one and its ruler drops under them.
     private var landscapeStrip: some View {
         HStack(alignment: .top, spacing: 0) {
-            ForEach(Array(proTargets.enumerated()), id: \.element) { index, target in
+            ForEach(Array(landscapeTargets.enumerated()), id: \.element) { index, target in
                 if index > 0 { Spacer(minLength: 2) }
                 CamReadout(name: target.short, value: dialValue(for: target),
                            auto: isAutoTarget(target),
@@ -2162,7 +2291,6 @@ struct CameraLiveLookView: View {
             landscapeTool(.grid, "Grid", on: showGrid) { toggleGrid() }
             landscapeTool(.level, "Level", on: showLevel) { toggleLevel() }
             landscapeTool(.scope, "Scope", on: scopeMode != nil) { cycleScope() }
-            landscapeTool(.lock, "AE/AF lock", on: camera.aeafLocked) { toggleAEAF() }
             landscapeTool(.format, "Format", on: formatOpen) { toggleFormat() }
         }
         .padding(4)

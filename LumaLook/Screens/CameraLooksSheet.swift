@@ -984,7 +984,7 @@ struct CameraLooksSheet: View {
         let status: String
         if app.isLockedForCamera(worn, store: storeService) {
             status = "try free"
-        } else if home?.tag == .free {
+        } else if home?.tag == .free || isFreeLook(worn) {
             status = "free"
         } else {
             status = "unlocked"
@@ -993,6 +993,17 @@ struct CameraLooksSheet: View {
         if let title = home?.title { parts.append(title) }
         parts.append(status)
         return parts.joined(separator: " · ")
+    }
+
+    /// Free to everyone, as opposed to bought or covered by Pro.
+    private func isFreeLook(_ look: CameraLook) -> Bool {
+        switch look {
+        case .library(let libraryLook):
+            if case .builtIn(let preset) = libraryLook.source { return !preset.isPremium }
+            return false
+        case .pack(let packID, _):
+            return PackCatalog.pack(id: packID)?.isFree ?? false
+        }
     }
 
     // MARK: Actions
