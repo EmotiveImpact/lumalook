@@ -94,6 +94,10 @@ final class CameraController: NSObject, ObservableObject {
     /// Which way the phone is tilted: connection angle 0 vs 180 (sign of
     /// gravity.x). Exact mapping flagged for device QA — one flip if inverted.
     private var landscapeAngle: CGFloat = 0
+    /// Which way the phone is turned while `isLandscape`: true when it was
+    /// turned clockwise (its right edge down). The sideways camera layout
+    /// turns its controls the other way so they read upright.
+    @Published private(set) var landscapeClockwise = false
     private let orientationMotion = CMMotionManager()
 
     private func startOrientationTracking() {
@@ -103,8 +107,48 @@ final class CameraController: NSObject, ObservableObject {
             guard let self, let g = data?.gravity else { return }
             // Sideways when gravity pulls mostly along the device's x axis.
             let landscape = abs(g.x) > abs(g.y) * 1.2
-            if landscape { self.landscapeAngle = g.x > 0 ? 0 : 180 }
+            if landscape {
+                self.landscapeAngle = g.x > 0 ? 0 : 180
+                let clockwise = g.x > 0
+                if clockwise != self.landscapeClockwise { self.landscapeClockwise = clockwise }
+            }
             if landscape != self.isLandscape { self.isLandscape = landscape }
+        }
+    }
+
+    /// Callers waiting for the next frame BEFORE any look, for the camera's
+    /// look tiles (the viewfinder frame is already graded). mediaQueue only.
+    private var rawFrameRequests: [(CGImage?) -> Void] = []
+    private var rawFrameMaxSide: CGFloat = 480
+    /// The connection angle of the current sideways take, so the viewfinder
+    /// can turn its frames back upright. mediaQueue only.
+    private var takeLandscapeAngle: CGFloat = 0
+
+    /// The next camera frame without the look, scaled to `maxSide`, on the
+    /// main queue. Rendered once, so no pixel buffer is held on to.
+    func requestRawFrame(maxSide: CGFloat = 480, completion: @escaping (CGImage?) -> Void) {
+        mediaQueue.async { [weak self] in
+            guard let self else { return }
+            self.rawFrameMaxSide = maxSide
+            self.rawFrameRequests.append(completion)
+        }
+    }
+
+    /// mediaQueue. Answers waiting raw-frame requests from `source`.
+    private func answerRawFrameRequests(_ source: CIImage) {
+        guard !rawFrameRequests.isEmpty else { return }
+        let requests = rawFrameRequests
+        rawFrameRequests.removeAll()
+        var frame = source.transformed(by: CGAffineTransform(
+            translationX: -source.extent.minX, y: -source.extent.minY))
+        let longest = max(frame.extent.width, frame.extent.height)
+        if longest > rawFrameMaxSide, longest > 0 {
+            let scale = rawFrameMaxSide / longest
+            frame = frame.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        }
+        let cg = pipeline.context.createCGImage(frame, from: frame.extent)
+        DispatchQueue.main.async {
+            for request in requests { request(cg) }
         }
     }
 
@@ -158,12 +202,24 @@ final class CameraController: NSObject, ObservableObject {
     private func startStubIfSeeded() -> Bool {
         guard let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
               let source = CIImage(contentsOf: URL(fileURLWithPath: path)) else { return false }
-        let upright = source.transformed(by: CGAffineTransform(
-            translationX: -source.extent.minX, y: -source.extent.minY))
+        // Cropped to the 9:16 a phone's sensor delivers upright, so the
+        // screenshots show the picture as it fills a real phone.
+        var frame = source.extent
+        if frame.width / frame.height > 9.0 / 16.0 {
+            let width = frame.height * 9 / 16
+            frame = CGRect(x: frame.midX - width / 2, y: frame.minY, width: width, height: frame.height)
+        } else {
+            let height = frame.width * 16 / 9
+            frame = CGRect(x: frame.minX, y: frame.midY - height / 2, width: frame.width, height: height)
+        }
+        let cropped = source.cropped(to: frame)
+        let upright = cropped.transformed(by: CGAffineTransform(
+            translationX: -cropped.extent.minX, y: -cropped.extent.minY))
         let timer = DispatchSource.makeTimerSource(queue: mediaQueue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(33))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
+            self.answerRawFrameRequests(upright)
             let graded: CIImage
             if let lookState {
                 graded = self.pipeline.apply(state: lookState, to: upright, includeSplit: false)
@@ -1030,15 +1086,17 @@ final class CameraController: NSObject, ObservableObject {
         // and let beginWriter size the file to match. Mid-take rotation
         // deliberately does NOT re-orient (standard camera behaviour).
         let landscape = isLandscape
+        let sidewaysAngle = landscapeAngle
         sessionQueue.async { [weak self] in
             guard let self else { return }
             if let connection = self.videoOutput.connection(with: .video) {
-                let angle: CGFloat = landscape ? self.landscapeAngle : 90
+                let angle: CGFloat = landscape ? sidewaysAngle : 90
                 if connection.isVideoRotationAngleSupported(angle) {
                     connection.videoRotationAngle = angle
                 }
             }
             self.mediaQueue.async {
+                self.takeLandscapeAngle = sidewaysAngle
                 guard self.activeRecordingID == requestID else { return }
                 self.recordLandscape = landscape
                 self.beginWriter(requestID: requestID)
@@ -1284,6 +1342,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let source = CIImage(cvPixelBuffer: pixelBuffer)
+        // A sideways take's frames arrive wider than tall; the looks' tiles
+        // and the swipe's still get them turned upright, as the viewfinder
+        // shows them.
+        answerRawFrameRequests(source.extent.width > source.extent.height
+            ? source.oriented(takeLandscapeAngle == 180 ? .left : .right)
+            : source)
         let graded: CIImage
         if let lookState {
             graded = pipeline.apply(state: lookState, to: source, includeSplit: false)
@@ -1301,6 +1365,16 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         if rate > 60 {
             previewTick += 1
             if previewTick % max(1, rate / 30) != 0 { return }
+        }
+        // A sideways take turns the connection, so its frames arrive wider
+        // than tall. The viewfinder is fixed to the phone, so turn them back:
+        // the picture stays where it was and keeps filling the screen.
+        // (Angle mapping flagged for device QA, as for the take itself.)
+        if source.extent.width > source.extent.height {
+            let turned = graded.oriented(takeLandscapeAngle == 180 ? .left : .right)
+            publishPreview(turned.transformed(by: CGAffineTransform(
+                translationX: -turned.extent.minX, y: -turned.extent.minY)))
+            return
         }
         publishPreview(graded)
     }

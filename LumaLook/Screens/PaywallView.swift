@@ -414,23 +414,45 @@ struct LockedLookSheet: View {
     @State private var restoreFoundNothing = false
     @State private var errorMessage: String?
 
-    private var preset: LookPreset? { MockData.looks.first { $0.name == lock.lookName } }
+    private var preset: LookPreset? {
+        guard lock.previewPackID == nil else { return nil }
+        return MockData.looks.first { $0.name == lock.lookName }
+    }
     /// The free look the third choice swaps in.
     private var freeLook: LookPreset? {
         preset.map(MockData.freeAlternative(to:)).flatMap { $0.isPremium ? nil : $0 }
     }
+    /// The free look's name and swatch: a built-in for a built-in look, or
+    /// the free look the camera picked for a pack it is trying on.
+    private var freeChoice: (name: String, colours: [Color])? {
+        if lock.previewPackID != nil {
+            guard let name = lock.freeLookName else { return nil }
+            return (name, Self.swatch(forName: name))
+        }
+        guard let freeLook else { return nil }
+        return (freeLook.name, Self.swatch(for: freeLook))
+    }
     private var isUnlocked: Bool {
+        if let packID = lock.previewPackID { return storeService.ownsPack(packID) }
         guard let preset else { return true }
         return storeService.lock(forBuiltIn: preset) == nil
     }
     private var packProduct: Product? {
         lock.pack.flatMap { storeService.packProducts[$0.id] }
     }
-    private var swatch: [Color] { Self.swatch(for: preset) }
+    private var swatch: [Color] {
+        lock.previewPackID != nil ? Self.swatch(forName: lock.lookName) : Self.swatch(for: preset)
+    }
 
     private static func swatch(for look: LookPreset?) -> [Color] {
         let colours = look?.colours ?? []
         return colours.count >= 2 ? colours : [Color(white: 0.3), Color(white: 0.12)]
+    }
+
+    /// A pack look has no hand-picked colours: its signature colour, deepened.
+    private static func swatch(forName name: String) -> [Color] {
+        let colour = LookSignature.colour(name: name)
+        return [colour, colour.opacity(0.35)]
     }
 
     var body: some View {
@@ -450,8 +472,8 @@ struct LockedLookSheet: View {
                 } else {
                     primaryButton("Get Pro for every look") { showPaywall = true }
                 }
-                if offersFreeLook, let freeLook {
-                    freeLookButton(freeLook)
+                if offersFreeLook, let freeChoice {
+                    freeLookButton(name: freeChoice.name, colours: freeChoice.colours)
                 }
                 if context == .export {
                     Text("Your edit is saved either way")
@@ -584,7 +606,7 @@ struct LockedLookSheet: View {
 
     /// The free way out, on a quieter fill than the purchase buttons so it
     /// never competes with them, and naming the exact look it swaps in.
-    private func freeLookButton(_ look: LookPreset) -> some View {
+    private func freeLookButton(name: String, colours: [Color]) -> some View {
         Button {
             LumaHaptics.shared.tap()
             onUseFreeLook()
@@ -592,11 +614,11 @@ struct LockedLookSheet: View {
         } label: {
             HStack(spacing: 9) {
                 Circle()
-                    .fill(LinearGradient(colors: Self.swatch(for: look),
+                    .fill(LinearGradient(colors: colours,
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 14, height: 14)
                     .accessibilityHidden(true)
-                Text("\(context == .export ? "Export" : "Shoot") with \(look.name)")
+                Text("\(context == .export ? "Export" : "Shoot") with \(name)")
                     .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)

@@ -251,6 +251,8 @@
 		12603F97C2AC7AD4BA6ABD85 /* MusicCatalogue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3703D5225ED1B555905607FE /* MusicCatalogue.swift */; };
 		C008E6877980CC8CE5716134 /* EdgeStripRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F53129116AE3AE05A47B1F39 /* EdgeStripRenderer.swift */; };
 		9499CB13C195D4C8A2DD68A3 /* MusicLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBB92B2FCCF82A31F28E985 /* MusicLibraryView.swift */; };
+		F6BEA8492778A0AFF76E3365 /* CameraLooksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56302FDBFA481328896527FA /* CameraLooksSheet.swift */; };
+		48A8A1B5168CA060F3D2D2AF /* CameraDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8732E2D6F16B8C9747BED17E /* CameraDial.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -498,6 +500,8 @@
 		3703D5225ED1B555905607FE /* MusicCatalogue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCatalogue.swift; sourceTree = "<group>"; };
 		F53129116AE3AE05A47B1F39 /* EdgeStripRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeStripRenderer.swift; sourceTree = "<group>"; };
 		FCBB92B2FCCF82A31F28E985 /* MusicLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryView.swift; sourceTree = "<group>"; };
+		56302FDBFA481328896527FA /* CameraLooksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraLooksSheet.swift; sourceTree = "<group>"; };
+		8732E2D6F16B8C9747BED17E /* CameraDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDial.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -519,6 +523,7 @@
 				BE1C28E748C160529C0841DB /* ApplyLookView.swift */,
 				AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */,
 				EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */,
+				56302FDBFA481328896527FA /* CameraLooksSheet.swift */,
 				B8354830054679B8534BA10B /* CollectionsView.swift */,
 				55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */,
 				6179EBD36201DBA3960BCD66 /* Editor */,
@@ -742,6 +747,7 @@
 			isa = PBXGroup;
 			children = (
 				61A5624E7651D005E2DA05C1 /* CameraChrome.swift */,
+				8732E2D6F16B8C9747BED17E /* CameraDial.swift */,
 				D27A85329B7A53AC1DBE7FEE /* EditorChrome.swift */,
 				65C7041305E116D6DDDA5DBA /* FrameGuidesOverlay.swift */,
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
@@ -1111,8 +1117,10 @@
 				9B1BB5C9F74C62FEC57BC4A5 /* BeforeAfterView.swift in Sources */,
 				DA34F9E110A6CF1E3D09BDB4 /* BundledAudioLibrary.swift in Sources */,
 				0FB25F14B08EDBB870E03DCF /* CameraChrome.swift in Sources */,
+				48A8A1B5168CA060F3D2D2AF /* CameraDial.swift in Sources */,
 				0A0C5018790215C0A42DFA3B /* CameraController.swift in Sources */,
 				6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */,
+				F6BEA8492778A0AFF76E3365 /* CameraLooksSheet.swift in Sources */,
 				D0ACFEAC70D54C1D111626D2 /* CameraSpec.swift in Sources */,
 				174C00CAB30D17873FD2F9D2 /* CaptionEngine.swift in Sources */,
 				D8DF3BCB067AF4690548272E /* CaptionsPanel.swift in Sources */,
