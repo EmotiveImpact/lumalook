@@ -23,8 +23,10 @@ import AVKit
 //   ✓ ORIGINAL tile — tap latches the grade to 0 and tapping again restores the
 //     previous strength; press-and-hold peeks. It renders the real ungraded
 //     frame, so it is also the corner Compare tile, moved off the picture.
-//   ✓ Press-and-hold anywhere on the picture to peek the original (transient —
-//     the ONE thing still allowed to draw over the frame)
+//   ✓ Full-bleed picture with a diagonal Graded / Original wipe: drag across
+//     the picture to move it, double tap for the whole frame
+//     (GradeWipeStage.swift). Stills only; a playing video fills the stage.
+//   ✓ Press-and-hold anywhere on the picture to peek the original
 //   ✓ Compare tool → BeforeAfterView, the deep-compare surface
 //   ✓ LUT compare grid (LUTCompareView) — same grade, many LUTs, side by side
 //   ✓ Pinned Apply — always enabled, never a dead end (no media ⇢ the picker)
@@ -56,15 +58,15 @@ import AVKit
 //   ✓ LUMA_SEED_TOOL / LUMA_SEED_BROWSER headless seeding preserved
 //
 // THE LANGUAGE
-//   1. The image is the interface. Media uncovered at the top with a generous
-//      radius; every control lives in the drawer below it. The only things ever
-//      drawn on the frame are the two TRANSIENT states that must register with
-//      the picture: the hold-to-compare peek, and the eyedropper's target
-//      prompt (you are literally choosing a pixel).
+//   1. The image is the interface. Media full bleed at the top, edge to edge;
+//      every control lives in the drawer below it. Drawn on the frame: back
+//      and the look chip, the wipe that registers with the picture, and the
+//      transient states (the hold-to-compare peek, the eyedropper's prompt).
 //   2. Monochrome chrome. Black, near-black, white, grey. No accent anywhere.
 //      All colour on this screen comes from the footage and the looks.
-//   3. Stroke means selection and nothing else — one thin white ring on the
-//      selected look. Everything else separates by surface value.
+//   3. Stroke means selection and nothing else: the light yellow picked ring
+//      (`pickedRing`) on the applied look. Everything else separates by
+//      surface value.
 //   4. The tile IS the preview — every tile is the real grade, including the
 //      Skin First presets and the ORIGINAL tile.
 //   5. Two-axis browsing — the current category centred, neighbours faded
@@ -118,7 +120,7 @@ struct LookPreviewSurface: View {
 /// place it inside their own readout stack render exactly one visual language.
 struct EmptyMediaHint: View {
     var body: some View {
-        Label("Preview — pick a clip to grade live", systemImage: "film")
+        Label("Sample photo. Pick a clip to grade live", systemImage: "film")
             .font(.luma(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.85))
             .padding(.horizontal, 10)
@@ -229,8 +231,14 @@ struct ApplyLookView: View {
     @State private var holdingOriginal = false
     @State private var eyedropping = false
     @State private var stashedIntensity: Double?
+    /// Where the diagonal wipe crosses mid-height, as a fraction of the
+    /// picture's width. Graded on the left, original on the right.
+    @State private var wipe: CGFloat = 0.5
 
-    private static let tile: CGFloat = 78
+    /// Look tiles are portrait (4:5), like the mock: room for a face and the
+    /// look's code over it.
+    private static let tile: CGFloat = 70
+    private static let tileHeight: CGFloat = 88
     private static let tileRadius: CGFloat = 12
 
     // MARK: Categories — the second axis
@@ -366,12 +374,13 @@ struct ApplyLookView: View {
     // MARK: Body
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 media
                 drawer
             }
+            topBar
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -392,7 +401,10 @@ struct ApplyLookView: View {
             if activeTool == "Lens" { panel = .lens }
         }
         .onChange(of: panel) { _, new in showScope = (new == .scope) }
-        .onDisappear { app.saveGradeSession() }
+        .onDisappear {
+            peekOriginal(false)            // never leave the grade stuck at 0
+            app.saveGradeSession()
+        }
         .sheet(isPresented: $showLensPaywall) { PaywallView() }
         .sheet(isPresented: $showCompareGrid) { LUTCompareView() }
         .overlay(alignment: .bottom) { exportErrorToast }
@@ -406,7 +418,7 @@ struct ApplyLookView: View {
         .alert("Log LUT active", isPresented: $showLogExplainer) {
             Button("Got it", role: .cancel) {}
         } message: {
-            Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh — lower the strength, or shoot Log for the intended result.")
+            Text("This LUT was built for Log footage (flat, low-contrast source). On regular footage it can look harsh. Lower the strength, or shoot Log for the intended result.")
         }
         // The preview must stay visible above the sheet at all times, so the
         // grade-room browser opens at MEDIUM (canvas still live and undimmed)
@@ -449,81 +461,77 @@ struct ApplyLookView: View {
         }
     }
 
-    // MARK: Media — uncovered, cut to the picture, generous radius
+    // MARK: Media — full bleed, with the diagonal Graded / Original wipe
 
-    private var media: some View {
-        ZStack {
-            LookPreviewSurface(radius: 22, showsEmptyHint: false)
-            // ≥1.4 video keeps its frame-edge hairline. With the box cut to the
-            // source aspect there is normally nothing left to matte.
-            if app.player != nil, let aspect = videoAspect, aspect >= 1.4 {
-                LetterboxMattes(contentAspect: aspect)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        // clipShape clips PIXELS, not touches.
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        // Press-and-hold anywhere on the image to see the original — the
-        // industry-standard before/after peek. Attached BEFORE the aspect box
-        // so it lives on the picture, not on the void beside it.
-        .onLongPressGesture(minimumDuration: 0.18, maximumDistance: 60) {
-        } onPressingChanged: { pressing in
-            peekOriginal(pressing)
-        }
-        .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
-        .overlay(alignment: .top) { peekBadge }
-        .overlay { eyedropperLayer }
-        // The media box is cut to the source, so the rounded frame hugs the
-        // picture instead of framing a black box around it.
-        .aspectRatio(mediaAspect, contentMode: .fit)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.25), value: mediaAspect)
-        .animation(.easeOut(duration: 0.12), value: holdingOriginal)
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
+    /// The still on stage at full size (the sample photo until media is
+    /// picked); nil while a video plays.
+    private var stageStill: CIImage? {
+        guard app.player == nil else { return nil }
+        return app.selectedImage ?? StillCompare.hero
     }
 
-    /// The one transient state allowed to draw on the frame.
-    @ViewBuilder
-    private var peekBadge: some View {
-        if holdingOriginal {
-            Text("Original")
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.black.opacity(0.55), in: Capsule())
-                .padding(.top, 14)
-                .transition(.opacity)
+    private var currentLookName: String {
+        app.selectedLUT?.displayName ?? app.selectedLook.name
+    }
+
+    private var currentLookColour: Color {
+        app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+            ?? app.selectedLook.signature
+    }
+
+    /// Edge to edge and up under the status bar. Drag across the picture to
+    /// move the wipe, hold still to peek at the original, double tap to see
+    /// the whole frame. The stage owns the eyedropper too, because it knows
+    /// where the picture sits.
+    private var media: some View {
+        GradeWipeStage(aspect: mediaAspect,
+                       still: stageStill,
+                       focus: hasRealMedia ? .center : HeroPhoto.golden.focus,
+                       wipe: $wipe,
+                       eyedropping: $eyedropping,
+                       showsWipe: !holdingOriginal && app.settings.intensity > 0,
+                       code: LookCode.short(currentLookName),
+                       signature: currentLookColour,
+                       onHold: { pressing in peekOriginal(pressing) })
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(edges: .top)
+            .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
+            .animation(.easeOut(duration: 0.12), value: holdingOriginal)
+            .animation(.easeOut(duration: 0.15), value: eyedropping)
+    }
+
+    /// Back on the left, the applied look on the right, and the transient
+    /// "Original" badge between them while a peek is held.
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.black.opacity(0.45), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Back")
+
+            Spacer(minLength: 0)
+            if holdingOriginal {
+                Text("Original")
+                    .font(.luma(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lumaGlassPill()
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+            Spacer(minLength: 0)
+
+            LookChip(name: currentLookName, colour: currentLookColour, size: 12)
                 .allowsHitTesting(false)
         }
-    }
-
-    /// WB eyedropper: tap a neutral in the frame to balance to it. It has to be
-    /// on the picture — the gesture IS a pixel choice.
-    @ViewBuilder
-    private var eyedropperLayer: some View {
-        if eyedropping {
-            GeometryReader { geo in
-                ZStack(alignment: .top) {
-                    Color.white.opacity(0.001)
-                    Text("Tap something that should be neutral grey or white")
-                        .font(.luma(size: 13, weight: .medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(.black.opacity(0.6), in: Capsule())
-                        .padding(.top, 14)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { loc in
-                    let n = CGPoint(x: min(max(0, loc.x / geo.size.width), 1),
-                                    y: min(max(0, loc.y / geo.size.height), 1))
-                    Task { await app.whiteBalance(atNormalized: n) }
-                    eyedropping = false
-                }
-            }
-            .transition(.opacity)
-        }
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
     }
 
     /// Zeroes strength while held and restores it on release — one stash so a
@@ -616,7 +624,7 @@ struct ApplyLookView: View {
     private var statusLine: some View {
         HStack(spacing: 10) {
             if !hasRealMedia {
-                Text("Previewing the sample photo — pick a clip to grade your own")
+                Text("Sample photo. Pick a clip to grade your own")
                     .font(.luma(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
@@ -747,32 +755,27 @@ struct ApplyLookView: View {
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(new, anchor: .center) }
             }
             // Fixed so the drawer never jumps as categories change.
-            .frame(height: Self.tile + 26)
+            .frame(height: Self.tileHeight + 26)
         }
     }
 
     /// One shared tile geometry, so a look, a preset and the original all read
     /// as the same object at the same size.
-    private func tileFrame<Content: View>(selected: Bool, ring: Color = .white,
+    private func tileFrame<Content: View>(selected: Bool,
                                           @ViewBuilder content: () -> Content) -> some View {
         content()
-            .frame(width: Self.tile, height: Self.tile)
+            .frame(width: Self.tile, height: Self.tileHeight)
             .clipShape(RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous))
             // clipShape clips PIXELS, not touches: a landscape frame scaled to
             // fill a square tile overflows well past its bounds and eats its
             // neighbours' taps without this.
             .contentShape(RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous))
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: Self.tileRadius, style: .continuous)
-                        .strokeBorder(ring, lineWidth: 2)
-                }
-            }
+            .pickedRing(selected, cornerRadius: Self.tileRadius)
     }
 
     private func tileCaption(_ text: String, selected: Bool) -> some View {
         Text(text)
-            .font(.luma(size: 12, weight: selected ? .semibold : .medium))
+            .font(.luma(size: 11.5, weight: selected ? .semibold : .medium))
             .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
@@ -815,7 +818,7 @@ struct ApplyLookView: View {
         } onPressingChanged: { pressing in
             peekOriginal(pressing)
         }
-        .accessibilityLabel("Original — tap to bypass the look, hold to peek")
+        .accessibilityLabel("Original. Tap to bypass the look, hold to peek")
     }
 
     private func lookTile(_ look: LibraryLook) -> some View {
@@ -828,18 +831,15 @@ struct ApplyLookView: View {
             LumaHaptics.shared.tap()
         } label: {
             VStack(spacing: 7) {
-                tileFrame(selected: selected, ring: look.signature) {
-                    Group {
-                        if let cg = thumbs.images[look.thumbKey] {
-                            Image(decorative: cg, scale: 1)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            LumaTheme.surfaceStrong
-                        }
-                    }
+                tileFrame(selected: selected) {
+                    // Color.clear holds the tile's size, so the fill image
+                    // and the shade both sit inside it.
+                    Color.clear
+                        .overlay { lookThumb(look) }
+                        .overlay { tileShade }
                 }
-                .overlay(alignment: .bottomLeading) {
+                .overlay(alignment: .bottomLeading) { tileCode(look) }
+                .overlay(alignment: .topLeading) {
                     if let badge = sourceBadge(look) {
                         Text(badge)
                             .font(.luma(size: 9, weight: .semibold))
@@ -851,13 +851,46 @@ struct ApplyLookView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .overlay(alignment: .bottomTrailing) {
-                    if storeService.isLocked(look) { LookLockGlyph() }
+                .overlay(alignment: .topTrailing) {
+                    if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                 }
                 tileCaption(look.nameSplit.title, selected: selected)
             }
         }
         .buttonStyle(.lumaPress)
+    }
+
+    @ViewBuilder
+    private func lookThumb(_ look: LibraryLook) -> some View {
+        if let cg = thumbs.images[look.thumbKey] {
+            Image(decorative: cg, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            LumaTheme.surfaceStrong
+        }
+    }
+
+    /// Darkens the foot of a tile so its code reads on any frame.
+    private var tileShade: some View {
+        LinearGradient(colors: [.clear, .black.opacity(0.7)],
+                       startPoint: .center, endPoint: .bottom)
+            .allowsHitTesting(false)
+    }
+
+    /// The look's code, big, in its signature colour ("KD2", "Neon").
+    private func tileCode(_ look: LibraryLook) -> some View {
+        Text(LookCode.short(look))
+            .font(.luma(size: 16, weight: .heavy))
+            .kerning(-0.4)
+            .foregroundStyle(look.signature)
+            .lineLimit(1)
+            .minimumScaleFactor(0.55)
+            .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 5)
+            .frame(width: Self.tile, alignment: .leading)
+            .allowsHitTesting(false)
     }
 
     private func sourceBadge(_ look: LibraryLook) -> String? {
@@ -1458,7 +1491,7 @@ extension ApplyLookView {
                 }
                 .padding(.horizontal, 22)
             }
-            pickerHeading("Conversion LUT — applied first")
+            pickerHeading("Conversion LUT, applied first")
                 .padding(.top, 6)
             ScrollView {
                 VStack(spacing: 0) {
@@ -1548,9 +1581,9 @@ private struct GradeSlotRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 4)
-                // An empty slot has no strength to report — an em dash matches
-                // the empty track and the dimmed "None" title.
-                Text(isActive ? "\(Int(opacity.rounded()))%" : "—")
+                // An empty slot has no strength to report: "Off" matches the
+                // empty track and the dimmed "None" title.
+                Text(isActive ? "\(Int(opacity.rounded()))%" : "Off")
                     .font(.luma(size: 12, weight: .medium, design: .monospaced))
                     .contentTransition(.numericText())
                     .foregroundStyle(isActive ? .white.opacity(0.85) : .white.opacity(0.35))

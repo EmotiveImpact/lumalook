@@ -194,3 +194,60 @@ struct GradedThumb: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
+
+// MARK: - Grading off the task pool
+
+/// Runs CPU-heavy grades on a serial GCD queue instead of Swift's shared
+/// task pool. The pool has one thread per core, so a dozen grades started
+/// with `Task.detached` (Home's reel frames and swatches, the pack covers)
+/// filled it, and every other `await` in the app waited behind them: the
+/// editor opening on top of Home sat empty for seconds. On their own queue
+/// the grades take turns for the CPU like any other thread.
+///
+/// A job whose task is cancelled before its turn is skipped and returns
+/// nil, so a look tapped past, or Home covered by another screen, costs
+/// nothing.
+final class GradeQueue: @unchecked Sendable {
+    /// Home's photos: the reel and its swatch strip.
+    static let home = GradeQueue(label: "lumalook.grade.home", qos: .userInitiated)
+    /// Store and Looks pack covers.
+    static let packs = GradeQueue(label: "lumalook.grade.packs", qos: .userInitiated)
+    /// Below-the-fold tiles that can wait.
+    static let tiles = GradeQueue(label: "lumalook.grade.tiles", qos: .utility)
+
+    private let queue: DispatchQueue
+
+    init(label: String, qos: DispatchQoS) {
+        queue = DispatchQueue(label: label, qos: qos)
+    }
+
+    func run<T>(_ work: @escaping () -> T?) async -> T? {
+        let cancelled = GradeCancelFlag()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
+                queue.async {
+                    continuation.resume(returning: cancelled.isSet ? nil : work())
+                }
+            }
+        } onCancel: {
+            cancelled.set()
+        }
+    }
+}
+
+private final class GradeCancelFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+}

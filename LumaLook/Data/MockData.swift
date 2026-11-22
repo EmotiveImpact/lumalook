@@ -40,7 +40,7 @@ enum MockData {
               isPremium: true),
         .init(name: "BW32 · Documentary Grit", category: "B&W", systemImage: "doc.viewfinder",
               colours: [.gray, .black], gradeTint: Color(white: 0.45),
-              recipe: LookRecipe(temperature: 6700, contrast: 1.22, saturation: 0.7, vignette: 0.6),
+              recipe: LookRecipe(temperature: 6700, contrast: 1.22, saturation: 0, vignette: 0.6),
               isPremium: true),
         .init(name: "CN93 · Luxury Campaign", category: "Cine", systemImage: "crown",
               colours: [.black, LumaTheme.orange], gradeTint: Color(red: 0.9, green: 0.7, blue: 0.45),

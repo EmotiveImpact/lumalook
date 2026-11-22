@@ -24,17 +24,16 @@ enum RevenueCatConfig {
     }
 }
 
-/// StoreKit 2 storefront (C5). Pricing set 2026-11-21: Pro $34.99 a year
-/// with a 7-day free trial, $5.99 a month, $79.99 Lifetime; every paid pack
+/// StoreKit 2 storefront (C5). Pricing approved 21 Nov 2026: Pro $34.99 a
+/// year with a 7-day free trial, $5.99 a month, $79.99 Lifetime; paid packs
 /// $2.99 or $3.99 and yours to keep. Deliberately no WEEKLY tier: reviewers
 /// call weekly pricing a scam. The yearly plan costs about half of twelve
 /// months of monthly, and Lifetime a little over two years, so each step up
 /// reads as the better deal without a crossed-out price.
 ///
 /// Every Pro product (yearly, monthly, Lifetime) opens every pack, including
-/// packs released later. Packs are also sold one at a time, so "buy it, keep
-/// it" holds across the whole store and an owned pack stays owned if Pro
-/// lapses.
+/// packs released later. Every pack except After Dark is also sold one at a
+/// time, so an owned pack stays owned if Pro lapses.
 @MainActor
 final class StoreService: ObservableObject {
 
@@ -110,9 +109,10 @@ final class StoreService: ObservableObject {
     func loadProducts() async {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
-        // Every paid pack is sold on its own, the film archives included.
+        // Every paid pack is sold on its own, the film archives included;
+        // After Dark comes with Pro and has no product of its own.
         let packIDs = PackCatalog.packs
-            .filter { !$0.isFree }
+            .filter { !$0.isFree && !$0.isProIncluded }
             .map { ProductID.pack($0.id) }
         let ids = [ProductID.proYearly, ProductID.proMonthly, ProductID.proLifetime] + packIDs
         do {

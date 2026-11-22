@@ -103,6 +103,14 @@ struct ExportCompleteView: View {
         return url
     }
 
+    /// The captions file saved beside the export when they were not burned
+    /// in, under the same rule.
+    private var shareableCaptionsURL: URL? {
+        guard let url = app.exporter.lastCaptionsURL,
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -319,6 +327,23 @@ struct ExportCompleteView: View {
                         .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Share GIF")
+                }
+                // Captions left out of the picture travel as an .srt.
+                if let captions = shareableCaptionsURL {
+                    ShareLink(item: captions) {
+                        VStack(spacing: 5) {
+                            Image(systemName: "captions.bubble")
+                                .font(.system(size: 17)).frame(height: 20)
+                            Text("Captions")
+                                .font(.luma(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 74, height: 46)
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Share captions")
                 }
                 // Same source, new spec — straight back to the sheet the user
                 // came from rather than out to Home.

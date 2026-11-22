@@ -25,21 +25,26 @@ struct LookPack: Identifiable {
     let eraTag: String          // "inspired by 60s chrome"
     let photo: HeroPhoto
     let isFree: Bool
-    /// Shown until StoreKit answers with the real local price. Every paid
-    /// pack is sold on its own and is also part of Pro.
+    /// Shown until StoreKit answers with the real local price.
     let price: String
+    /// Comes with Pro and is not sold on its own (After Dark, the Night Lab
+    /// launch pack). Every other paid pack, the five film archives included,
+    /// is sold one at a time and is also part of Pro.
+    var isProIncluded: Bool = false
     let looks: [PackLook]
+    /// The newest release: its pack page and its cover say "New pack".
+    var isNew: Bool = false
 }
 
 enum PackCatalog {
     /// Launch catalog per the merchandising playbook: Negative free anchor,
-    /// Cine flagship, B&W, Originals, plus the five measured film archives
-    /// ($3.99 each, 15 to 22 looks apiece).
+    /// Cine flagship, B&W, Originals, the five measured film archives
+    /// ($3.99 each, 15 to 22 looks apiece) and After Dark, which comes with Pro.
     static let packs: [LookPack] = [
         LookPack(
             id: "negative-set-01",
             name: "Negative Set 01",
-            familyLine: "Everyday colour negative — soft contrast, honest skin, forgiving highlights.",
+            familyLine: "Everyday colour negative: soft contrast, honest skin, forgiving highlights.",
             eraTag: "Classic colour negative",
             photo: .golden,
             isFree: true,
@@ -50,7 +55,7 @@ enum PackCatalog {
                          recipe: LookRecipe(temperature: 5600, tint: 4, contrast: 1.06,
                                             saturation: 1.08, brightness: 0.02, vignette: 0.2, bloom: 0.2)),
                 PackLook(code: "KD4", name: "KD4 · Portrait Neutral",
-                         character: "Clean neutral base with a whisper of warmth — skin first.",
+                         character: "Clean neutral base with a whisper of warmth, skin first.",
                          recipe: LookRecipe(temperature: 6200, tint: 2, contrast: 1.03,
                                             saturation: 1.02, brightness: 0.01, vignette: 0.1, bloom: 0)),
                 PackLook(code: "KD52", name: "KD52 · Cine Negative",
@@ -58,7 +63,7 @@ enum PackCatalog {
                          recipe: LookRecipe(temperature: 6100, tint: -2, contrast: 1.12,
                                             saturation: 0.94, brightness: -0.01, vignette: 0.3, bloom: 0.12)),
                 PackLook(code: "FJ4", name: "FJ4 · Meadow Green",
-                         character: "Cooler greens, airy highlights — the summer-holiday stock.",
+                         character: "Cooler greens, airy highlights: the summer-holiday stock.",
                          recipe: LookRecipe(temperature: 6900, tint: -8, contrast: 1.05,
                                             saturation: 1.12, brightness: 0.02, vignette: 0.15, bloom: 0.15)),
                 PackLook(code: "AG20", name: "AG20 · Faded Album",
@@ -70,7 +75,7 @@ enum PackCatalog {
         LookPack(
             id: "film-stocks-01",
             name: "Film Stocks 01",
-            familyLine: "Measured emulations of real photographic film — negative, slide, mono, instant and cinema print.",
+            familyLine: "Measured emulations of real photographic film: negative, slide, mono, instant and cinema print.",
             eraTag: "Community-measured film data",
             photo: .bridge,
             isFree: true,
@@ -80,7 +85,7 @@ enum PackCatalog {
                          character: "The wedding stock: soft contrast, unbeatable skin.",
                          cubeFile: "FS_PT160.cube"),
                 PackLook(code: "EK100", name: "EK100 · Vivid Neg",
-                         character: "Finest-grain colour negative — punchy but honest.",
+                         character: "Finest-grain colour negative, punchy but honest.",
                          cubeFile: "FS_EK100.cube"),
                 PackLook(code: "SP200", name: "SP200 · Drugstore Neg",
                          character: "The 90s point-and-shoot look, greens forward.",
@@ -89,7 +94,7 @@ enum PackCatalog {
                          character: "Sun-baked European street colour.",
                          cubeFile: "FS_AV200.cube"),
                 PackLook(code: "KC64", name: "KC64 · Chrome 64",
-                         character: "The magazine slide of the 60s — dense reds, deep shadow.",
+                         character: "The magazine slide of the 60s: dense reds, deep shadow.",
                          cubeFile: "FS_KC64.cube"),
                 PackLook(code: "VV50", name: "VV50 · Vivid Slide",
                          character: "Landscape legend: saturated greens, electric skies.",
@@ -98,7 +103,7 @@ enum PackCatalog {
                          character: "Neutral professional chrome, faithful colour.",
                          cubeFile: "FS_PR100.cube"),
                 PackLook(code: "XP200", name: "XP200 · Cross Process",
-                         character: "Slide through negative chemistry — teal shadows, wild shifts.",
+                         character: "Slide through negative chemistry: teal shadows, wild shifts.",
                          cubeFile: "FS_XP200.cube"),
                 PackLook(code: "TX400", name: "TX400 · Reportage Mono",
                          character: "The photojournalist's black and white.",
@@ -107,13 +112,13 @@ enum PackCatalog {
                          character: "British documentary grain and glow.",
                          cubeFile: "FS_HP400.cube"),
                 PackLook(code: "IN669", name: "IN669 · Instant Warm",
-                         character: "Peel-apart instant film — creamy, nostalgic.",
+                         character: "Peel-apart instant film, creamy and nostalgic.",
                          cubeFile: "FS_IN669.cube"),
                 PackLook(code: "RS100", name: "RS100 · Redscale",
                          character: "Film shot through its own base: fire-orange everything.",
                          cubeFile: "FS_RS100.cube"),
                 PackLook(code: "CP2383", name: "CP2383 · Cinema Print",
-                         character: "The Hollywood release-print stock — teal shadows, warm faces.",
+                         character: "The Hollywood release-print stock: teal shadows, warm faces.",
                          cubeFile: "FS_CP2383.cube"),
                 PackLook(code: "CP3513", name: "CP3513 · Cinema Print II",
                          character: "The alternative print house: gentler, greener.",
@@ -123,7 +128,7 @@ enum PackCatalog {
         LookPack(
             id: "film-neg-archive",
             name: "Negative Archive",
-            familyLine: "Every colour negative in the measured collection — portrait pro stocks to drugstore rolls.",
+            familyLine: "Every colour negative in the measured collection, from portrait pro stocks to drugstore rolls.",
             eraTag: "Measured colour negative stocks",
             photo: .golden,
             isFree: false,
@@ -133,7 +138,7 @@ enum PackCatalog {
                          character: "Soft pastel palette, forgiving highlight roll-off.",
                          cubeFile: "FS_FN160.cube"),
                 PackLook(code: "FN400", name: "FN400 · Airy Neg 400",
-                         character: "The airy wedding look — minty shadows, glowing skin.",
+                         character: "The airy wedding look: minty shadows, glowing skin.",
                          cubeFile: "FS_FN400.cube"),
                 PackLook(code: "FN800", name: "FN800 · Evening Neg 800",
                          character: "Tungsten-friendly speed with velvet grain.",
@@ -160,13 +165,13 @@ enum PackCatalog {
                          character: "Party-flash colour with chunky grain.",
                          cubeFile: "FS_SP800.cube"),
                 PackLook(code: "SP1600", name: "SP1600 · Drugstore Neg 1600",
-                         character: "Club-night speed — grain like gravel, mood for days.",
+                         character: "Club-night speed: grain like gravel, mood for days.",
                          cubeFile: "FS_SP1600.cube"),
                 PackLook(code: "PT160V", name: "PT160V · Portrait Neg VC",
                          character: "The vivid-colour cut of the portrait classic.",
                          cubeFile: "FS_PT160V.cube"),
                 PackLook(code: "PT400N", name: "PT400N · Portrait Neg NC",
-                         character: "Neutral-colour 400 — the retoucher's favourite.",
+                         character: "Neutral-colour 400, the retoucher's favourite.",
                          cubeFile: "FS_PT400N.cube"),
                 PackLook(code: "PT400U", name: "PT400U · Portrait Neg UC",
                          character: "Ultra-colour 400: punchy but still kind to skin.",
@@ -192,7 +197,7 @@ enum PackCatalog {
             price: "$3.99",
             looks: [
                 PackLook(code: "AP100", name: "AP100 · Euro Slide 100",
-                         character: "Middle-European chrome — cool, precise, quiet.",
+                         character: "Middle-European chrome: cool, precise, quiet.",
                          cubeFile: "FS_AP100.cube"),
                 PackLook(code: "AS100", name: "AS100 · Soft Slide 100",
                          character: "The fashion slide: softest contrast in the chrome family.",
@@ -201,7 +206,7 @@ enum PackCatalog {
                          character: "Professional chrome with usable speed.",
                          cubeFile: "FS_PR400.cube"),
                 PackLook(code: "PR400X", name: "PR400X · Clean Slide 400X",
-                         character: "The last fast slide — saturated, modern.",
+                         character: "The last fast slide: saturated, modern.",
                          cubeFile: "FS_PR400X.cube"),
                 PackLook(code: "SN100", name: "SN100 · Consumer Slide 100",
                          character: "Everyday chrome, friendlier than the pro stocks.",
@@ -216,7 +221,7 @@ enum PackCatalog {
                          character: "The warm-balanced professional chrome.",
                          cubeFile: "FS_EC100G.cube"),
                 PackLook(code: "EC100V", name: "EC100V · Vivid Chrome 100",
-                         character: "VS = vivid saturation — the punchy chrome.",
+                         character: "VS = vivid saturation, the punchy chrome.",
                          cubeFile: "FS_EC100V.cube"),
                 PackLook(code: "EL200", name: "EL200 · Consumer Chrome 200",
                          character: "Amateur slide with honest colour.",
@@ -228,20 +233,20 @@ enum PackCatalog {
                          character: "The saturated cut of consumer chrome.",
                          cubeFile: "FS_EL100X.cube"),
                 PackLook(code: "KC25", name: "KC25 · Chrome 25",
-                         character: "The sharpest, slowest legend — museum colour.",
+                         character: "The sharpest, slowest legend, in museum colour.",
                          cubeFile: "FS_KC25.cube"),
                 PackLook(code: "KC200", name: "KC200 · Chrome 200",
                          character: "The fast cut of the legend, grain and all.",
                          cubeFile: "FS_KC200.cube"),
                 PackLook(code: "PC35", name: "PC35 · Instant Slide",
-                         character: "35mm instant slide — streaky, lo-fi, unrepeatable.",
+                         character: "35mm instant slide: streaky, lo-fi, unrepeatable.",
                          cubeFile: "FS_PC35.cube"),
             ]
         ),
         LookPack(
             id: "film-mono-archive",
             name: "Mono Archive",
-            familyLine: "Twenty-two black-and-white emulsions — press, tabular, infrared, ortho and instant monos.",
+            familyLine: "Twenty-two black-and-white emulsions: press, tabular, infrared, ortho and instant monos.",
             eraTag: "Measured monochrome stocks",
             photo: .rain,
             isFree: false,
@@ -278,7 +283,7 @@ enum PackCatalog {
                          character: "Slow, silvery, impossibly smooth.",
                          cubeFile: "FS_PF50.cube"),
                 PackLook(code: "XP2", name: "XP2 · Lab Mono 400",
-                         character: "Mono through colour chemistry — creamy latitude.",
+                         character: "Mono through colour chemistry, with creamy latitude.",
                          cubeFile: "FS_XP2.cube"),
                 PackLook(code: "BW400", name: "BW400 · Lab Mono CN",
                          character: "The minilab-friendly chromogenic mono.",
@@ -346,7 +351,7 @@ enum PackCatalog {
                          character: "Sun-soaked 600-speed integral.",
                          cubeFile: "FS_PX680W.cube"),
                 PackLook(code: "PX680C", name: "PX680C · Integral 600 Cold",
-                         character: "Fridge-stored 600 — cyan whispers.",
+                         character: "Fridge-stored 600 with cyan whispers.",
                          cubeFile: "FS_PX680C.cube"),
                 PackLook(code: "TZ0", name: "TZ0 · Expired Instant",
                          character: "Time-Zero long past its date: gold rot, dream haze.",
@@ -386,7 +391,7 @@ enum PackCatalog {
         LookPack(
             id: "film-mirrorless-sims",
             name: "Mirrorless Sims",
-            familyLine: "The fifteen in-camera profiles the mirrorless generation shoots — including Classic Chrome and every Acros filter.",
+            familyLine: "The fifteen in-camera profiles the mirrorless generation shoots, including Classic Chrome and every Acros filter.",
             eraTag: "Measured mirrorless profiles",
             photo: .skate,
             isFree: false,
@@ -414,13 +419,13 @@ enum PackCatalog {
                          character: "The revered digital mono.",
                          cubeFile: "FS_MS7.cube"),
                 PackLook(code: "MS8", name: "MS8 · Acros Red Sim",
-                         character: "Digital mono through a red filter — dark skies.",
+                         character: "Digital mono through a red filter, for dark skies.",
                          cubeFile: "FS_MS8.cube"),
                 PackLook(code: "MS9", name: "MS9 · Acros Yellow Sim",
                          character: "The classic yellow-filter mono.",
                          cubeFile: "FS_MS9.cube"),
                 PackLook(code: "MS10", name: "MS10 · Acros Green Sim",
-                         character: "Green-filter mono — kind to skin.",
+                         character: "Green-filter mono, kind to skin.",
                          cubeFile: "FS_MS10.cube"),
                 PackLook(code: "MS11", name: "MS11 · Mono Sim",
                          character: "The straight digital mono.",
@@ -453,11 +458,11 @@ enum PackCatalog {
                          recipe: LookRecipe(temperature: 5200, tint: -10, contrast: 1.18,
                                             saturation: 1.05, brightness: -0.02, vignette: 0.4, bloom: 0.2)),
                 PackLook(code: "CN93", name: "CN93 · Premiere Night",
-                         character: "Champagne highlights over velvet shadows — the red-carpet grade.",
+                         character: "Champagne highlights over velvet shadows: the red-carpet grade.",
                          recipe: LookRecipe(temperature: 5000, tint: 2, contrast: 1.14,
                                             saturation: 0.98, brightness: 0, vignette: 0.45, bloom: 0.35)),
                 PackLook(code: "CN71", name: "CN71 · Night Street",
-                         character: "Sodium-lamp warmth against blue night — city films after dark.",
+                         character: "Sodium-lamp warmth against blue night, like city films after dark.",
                          recipe: LookRecipe(temperature: 4600, tint: -6, contrast: 1.2,
                                             saturation: 1.1, brightness: -0.04, vignette: 0.5, bloom: 0.3)),
                 PackLook(code: "CN12", name: "CN12 · Bleach Bypass",
@@ -465,7 +470,7 @@ enum PackCatalog {
                          recipe: LookRecipe(temperature: 6300, tint: 0, contrast: 1.32,
                                             saturation: 0.55, brightness: -0.02, vignette: 0.4, bloom: 0.1)),
                 PackLook(code: "CN44", name: "CN44 · Anamorphic Dusk",
-                         character: "Indigo dusk with ember highlights — widescreen melancholy.",
+                         character: "Indigo dusk with ember highlights, widescreen melancholy.",
                          recipe: LookRecipe(temperature: 5100, tint: 10, contrast: 1.1,
                                             saturation: 1.02, brightness: -0.01, vignette: 0.35, bloom: 0.4)),
             ]
@@ -473,18 +478,18 @@ enum PackCatalog {
         LookPack(
             id: "bw-set-01",
             name: "B&W Set 01",
-            familyLine: "Monochrome with intent — street contrast to gallery softness.",
+            familyLine: "Monochrome with intent, from street contrast to gallery softness.",
             eraTag: "Inspired by classic panchromatic stocks",
             photo: .campaign,
             isFree: false,
             price: "$2.99",
             looks: [
                 PackLook(code: "BW32", name: "BW32 · Street Contrast",
-                         character: "Thick blacks, bright pavement — the documentarian's default.",
+                         character: "Thick blacks, bright pavement: the documentarian's default.",
                          recipe: LookRecipe(temperature: 6500, tint: 0, contrast: 1.28,
                                             saturation: 0, brightness: 0, vignette: 0.4, bloom: 0.1)),
                 PackLook(code: "BW4", name: "BW4 · Gallery Soft",
-                         character: "Long tonal ramp, delicate highlights — portraits on a wall.",
+                         character: "Long tonal ramp, delicate highlights, portraits on a wall.",
                          recipe: LookRecipe(temperature: 6500, tint: 0, contrast: 1.08,
                                             saturation: 0, brightness: 0.03, vignette: 0.2, bloom: 0.2)),
                 PackLook(code: "BW16", name: "BW16 · Push Process",
@@ -496,14 +501,14 @@ enum PackCatalog {
         LookPack(
             id: "originals-01",
             name: "Originals 01",
-            familyLine: "LumaLook signatures — moods, not stocks.",
+            familyLine: "LumaLook signatures: moods, not stocks.",
             eraTag: "Original LumaLook grades",
             photo: .neon,
             isFree: false,
             price: "$2.99",
             looks: [
                 PackLook(code: "LL1", name: "Neon Nights",
-                         character: "Magenta-soaked shadows, electric highlights — the city humming.",
+                         character: "Magenta-soaked shadows, electric highlights, the city humming.",
                          recipe: LookRecipe(temperature: 7200, tint: 18, contrast: 1.15,
                                             saturation: 1.25, brightness: -0.02, vignette: 0.4, bloom: 0.45)),
                 PackLook(code: "LL2", name: "Night Drive",
@@ -511,16 +516,199 @@ enum PackCatalog {
                          recipe: LookRecipe(temperature: 8200, tint: -4, contrast: 1.12,
                                             saturation: 0.95, brightness: -0.03, vignette: 0.45, bloom: 0.35)),
                 PackLook(code: "LL3", name: "Afrobeats Glow",
-                         character: "Sun-drenched saturation with golden skin — festival light.",
+                         character: "Sun-drenched saturation with golden skin, festival light.",
                          recipe: LookRecipe(temperature: 5300, tint: 8, contrast: 1.1,
                                             saturation: 1.3, brightness: 0.03, vignette: 0.25, bloom: 0.4)),
             ]
+        ),
+        // The Night Lab launch pack: five night looks, each tuned for the
+        // light it is named after (flash, neon, a dashboard, stage haze, wet
+        // streets). Comes with Pro, so it needs no StoreKit product of its
+        // own. Appended last so earlier catalog positions never shift.
+        LookPack(
+            id: "after-dark",
+            name: "After Dark",
+            familyLine: "Looks for flash, neon and packed rooms.",
+            eraTag: "Original LumaLook grades",
+            photo: .party,
+            isFree: false,
+            price: "PRO",
+            isProIncluded: true,
+            looks: [
+                PackLook(code: "AD1", name: "AD1 · Afrobeats Glow",
+                         character: "Flash, packed rooms",
+                         recipe: LookRecipe(temperature: 5400, tint: 10, contrast: 1.12,
+                                            saturation: 1.26, brightness: 0.03, vignette: 0.3, bloom: 0.4)),
+                PackLook(code: "AD2", name: "AD2 · Neon Nights",
+                         character: "Practical neon",
+                         recipe: LookRecipe(temperature: 7400, tint: 20, contrast: 1.16,
+                                            saturation: 1.3, brightness: -0.02, vignette: 0.45, bloom: 0.4)),
+                PackLook(code: "AD3", name: "AD3 · Night Drive",
+                         character: "Dashboard red",
+                         recipe: LookRecipe(temperature: 4700, tint: 12, contrast: 1.2,
+                                            saturation: 1.12, brightness: -0.04, vignette: 0.55, bloom: 0.3)),
+                PackLook(code: "AD4", name: "AD4 · Cine Negative",
+                         character: "Stage haze",
+                         recipe: LookRecipe(temperature: 5800, tint: 4, contrast: 0.96,
+                                            saturation: 0.88, brightness: 0.03, vignette: 0.3, bloom: 0.35)),
+                PackLook(code: "AD5", name: "AD5 · London Rain",
+                         character: "Wet streets",
+                         recipe: LookRecipe(temperature: 7600, tint: -6, contrast: 1.08,
+                                            saturation: 0.74, brightness: -0.02, vignette: 0.45, bloom: 0.15)),
+            ],
+            isNew: true
         ),
     ]
 
     static func pack(id: String) -> LookPack? { packs.first { $0.id == id } }
 
     static var totalLookCount: Int { packs.reduce(0) { $0 + $1.looks.count } }
+
+    /// The pack the Looks tab and Home lead with: the newest release.
+    static var spotlight: LookPack {
+        packs.first { $0.isNew } ?? packs[0]
+    }
+}
+
+// MARK: - Covers and faces
+
+extension LookPack {
+    /// The pack's cover: a bundled photo with people in it, chosen to suit
+    /// the pack, and different from both catalog neighbours so a list or a
+    /// rail of covers never shows the same face twice in a row.
+    var coverPhoto: HeroPhoto {
+        switch id {
+        case "negative-set-01": return .golden
+        case "film-stocks-01": return .bridge
+        case "film-neg-archive": return .campaign
+        case "film-slide-archive": return .skate
+        case "film-mono-archive": return .rain
+        case "film-instant-lab": return .gig
+        case "film-mirrorless-sims": return .bridge
+        case "cine-print-set-01": return .drive
+        case "bw-set-01": return .campaign
+        case "originals-01": return .neon
+        case "after-dark": return .party
+        default: return photo
+        }
+    }
+
+    /// The pack name as a light word and a heavy word: "After Dark" sets as
+    /// "After" and "Dark", "Film Stocks 01" as "Film Stocks" and "01".
+    var titleParts: (light: String, heavy: String) {
+        let words = name.split(separator: " ").map(String.init)
+        guard words.count > 1, let last = words.last else { return ("", name) }
+        return (words.dropLast().joined(separator: " "), last)
+    }
+
+    /// "New pack · 5 looks", or "Pack · 17 looks".
+    var packLine: String {
+        "\(isNew ? "New pack" : "Pack") · \(looks.count) looks"
+    }
+}
+
+extension PackLook {
+    /// "Afrobeats Glow" from "AD1 · Afrobeats Glow"; the whole name otherwise.
+    var title: String { LookSignature.title(in: name) }
+}
+
+extension HeroPhoto {
+    /// The photo cropped to `aspect` (width over height) around its subject
+    /// and scaled so its long side is at most `longest`, origin at zero. Tiles
+    /// and faces grade this, so a small square still shows the person.
+    func posterFrame(aspect: CGFloat, longest: CGFloat) -> CIImage? {
+        guard let photo = ciImage else { return nil }
+        let full = photo.extent
+        guard full.width > 1, full.height > 1, aspect > 0 else { return photo }
+        var width = full.width
+        var height = width / aspect
+        if height > full.height {
+            height = full.height
+            width = height * aspect
+        }
+        // Core Image counts y from the bottom; `focus` counts from the top.
+        let centreX = full.minX + full.width * focus.x
+        let centreY = full.minY + full.height * (1 - focus.y)
+        let x = min(max(full.minX, centreX - width / 2), full.maxX - width)
+        let y = min(max(full.minY, centreY - height / 2), full.maxY - height)
+        let cropped = photo.cropped(to: CGRect(x: x, y: y, width: width, height: height))
+        let long = max(width, height)
+        let scale = long > longest ? longest / long : 1
+        let scaled = cropped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return scaled.transformed(by: CGAffineTransform(
+            translationX: -scaled.extent.minX, y: -scaled.extent.minY))
+    }
+}
+
+/// Which bundled photo shows a look. Every look gets a person and a scene
+/// that suit it (neon on the neon portrait, rain on the London street), and a
+/// list of looks is spread so neighbouring tiles never repeat a photo.
+enum LookPhotos {
+    /// Name keywords, checked in order, so "Night Drive" wins over "night".
+    private static let keywords: [(String, HeroPhoto)] = [
+        ("night drive", .drive), ("drive", .drive), ("dashboard", .drive),
+        ("night street", .drive), ("sodium", .drive),
+        ("neon", .neon), ("cyber", .neon), ("electric", .neon), ("magenta", .neon),
+        ("afrobeats", .party), ("party", .party), ("flash", .party), ("club", .party),
+        ("festival", .party), ("glow", .party),
+        ("london", .rain), ("rain", .rain), ("wet", .rain), ("street", .rain),
+        ("mono", .rain), ("noir", .rain),
+        ("cine negative", .gig), ("stage", .gig), ("haze", .gig), ("print", .gig),
+        ("instant", .gig), ("integral", .gig),
+        ("luxury", .campaign), ("campaign", .campaign), ("premiere", .campaign),
+        ("gallery", .campaign), ("portrait", .campaign),
+        ("golden", .golden), ("gold", .golden), ("morning", .golden),
+        ("honey", .golden), ("warm", .golden), ("sun", .golden), ("faded", .golden),
+        ("teal", .skate), ("vivid", .skate), ("meadow", .skate), ("green", .skate),
+        ("slide", .skate), ("chrome", .skate), ("summer", .skate),
+        ("documentary", .bridge), ("grit", .bridge), ("neutral", .bridge),
+        ("clean", .bridge), ("hollywood", .bridge), ("orange", .bridge),
+    ]
+
+    /// The photo that suits a look by its name, if any keyword matches.
+    static func preferred(forName name: String) -> HeroPhoto? {
+        let lower = name.lowercased()
+        for (word, photo) in keywords where lower.contains(word) { return photo }
+        return nil
+    }
+
+    /// A stable photo for a key with no keyword match. `String.hashValue`
+    /// changes every launch, so this hashes the characters itself.
+    static func stable(forKey key: String) -> HeroPhoto {
+        let all = HeroPhoto.allCases
+        var total = 0
+        for scalar in key.unicodeScalars { total = (total &* 31 &+ Int(scalar.value)) & 0xFFFF }
+        return all[total % all.count]
+    }
+
+    /// One photo per item, in order. Each item gets its preferred photo
+    /// unless one of the previous `window` items already shows it; then the
+    /// next free photo in a stable rotation. A window of 2 keeps both the
+    /// left and the upper neighbour of a two-column grid different.
+    static func spread(names: [String], keys: [String], window: Int = 2) -> [HeroPhoto] {
+        let all = HeroPhoto.allCases
+        var out: [HeroPhoto] = []
+        out.reserveCapacity(names.count)
+        for index in names.indices {
+            let key = index < keys.count ? keys[index] : names[index]
+            let recent = out.suffix(max(0, window))
+            if let wanted = preferred(forName: names[index]), !recent.contains(wanted) {
+                out.append(wanted)
+                continue
+            }
+            let start = all.firstIndex(of: stable(forKey: key)) ?? 0
+            var pick = all[start]
+            for step in 0..<all.count {
+                let candidate = all[(start + step) % all.count]
+                if !recent.contains(candidate) {
+                    pick = candidate
+                    break
+                }
+            }
+            out.append(pick)
+        }
+        return out
+    }
 }
 
 // MARK: - Cube generation + install

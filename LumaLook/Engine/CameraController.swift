@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreImage
 import CoreMotion
+import ImageIO
 import Photos
 import SwiftUI
 
@@ -20,6 +21,14 @@ final class CameraController: NSObject, ObservableObject {
     /// The finished recording, kept for the hand-off card (Grade / Edit).
     @Published var lastRecordingURL: URL?
     @Published var previewImage: CGImage?
+    /// The histogram pill's data, sampled from the graded preview about four
+    /// times a second while `histogramOn`.
+    @Published private(set) var histogram: CameraHistogram?
+    /// Whether the histogram pill shows. On by default, like the pill, so
+    /// sampling never waits on the screen to switch it on.
+    var histogramOn = true
+    /// Frames since the last histogram sample (preview queue only).
+    private var histogramTick = 0
 
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
@@ -37,6 +46,34 @@ final class CameraController: NSObject, ObservableObject {
     /// resolution it cannot shoot is absent. Drives which format options the
     /// picker enables.
     @Published private(set) var maxFrameRates: [CameraSpec.Resolution: Double] = [:]
+
+    // MARK: Night Lab capture modes (slo-mo, photo format, portrait)
+
+    /// The fastest slow-motion rate this camera offers (120 or 240), nil when
+    /// it has no high-frame-rate format. Drives whether Slo-mo is offered.
+    @Published private(set) var slowMotionFPS: Int?
+    /// True while the sensor is running the slow-motion format.
+    @Published private(set) var isSlowMotion = false
+    /// True while a finished slow-motion take is being conformed to 30 fps.
+    @Published private(set) var isConformingSlowMo = false
+    /// HEIF / JPEG and the requested size, persisted.
+    @Published private(set) var photoSpec = PhotoCaptureSpec.load()
+    /// Photo sizes the current camera format can deliver (12 / 24 / 48 MP).
+    @Published private(set) var photoSizes: [PhotoCaptureSpec.Size] = []
+    /// The size stills are actually captured at (after any fallback).
+    @Published private(set) var activePhotoSize: PhotoCaptureSpec.Size?
+    /// Megapixels of what is actually captured, for an honest chip.
+    @Published private(set) var activePhotoMegapixels = PhotoCaptureSpec.load().size.rawValue
+    /// True when this camera can deliver depth with a still (Portrait).
+    @Published private(set) var depthSupported = false
+    /// sessionQueue only.
+    private var wantsSlowMotion = false
+    private var wantsDepth = false
+    private var requestedPhotoSize = PhotoCaptureSpec.load().size
+    /// mediaQueue only: preview throttle at high frame rates, and the
+    /// slow-down factor of the take being written (1 = real time).
+    private var previewTick = 0
+    private var recordSlowFactor: Double = 1
     /// sessionQueue writes, mediaQueue reads at record start.
     private let deliveredLock = NSLock()
     private var _deliveredSpec = CameraSpec.load()
@@ -85,7 +122,9 @@ final class CameraController: NSObject, ObservableObject {
     private let audioOutput = AVCaptureAudioDataOutput()
     /// C5 — real sensor-resolution stills (the old path saved the ~1MP preview).
     private let photoOutput = AVCapturePhotoOutput()
-    private var stillCompletion: ((CGImage?) -> Void)?   // sessionQueue set, delegate read
+    private var stillCompletion: ((CapturedStill?) -> Void)?   // sessionQueue set, delegate read
+    /// What the in-flight still was asked for (format, portrait aperture).
+    private var stillRequest: StillRequest?
     private let pipeline = LookPipeline.shared
     private var configured = false // sessionQueue only
 
@@ -211,7 +250,7 @@ final class CameraController: NSObject, ObservableObject {
         session.addInput(videoInput)
         activeVideoDevice = device
         activeVideoInput = videoInput
-        applyFormat(spec, on: device)
+        applyCurrentFormat(on: device)
         configureZoomBaseline(for: device)
 
         if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
@@ -244,6 +283,9 @@ final class CameraController: NSObject, ObservableObject {
 
         session.commitConfiguration()
         configured = true
+        // Photo sizes and depth depend on the output being connected, so
+        // they are read once the configuration above is committed.
+        refreshPhotoCapabilities(on: device)
     }
 
     // MARK: - C3: capture format (resolution / fps / codec)
@@ -263,8 +305,15 @@ final class CameraController: NSObject, ObservableObject {
                 return
             }
             self.session.beginConfiguration()
-            self.applyFormat(newSpec, on: device)
+            // Slo-mo keeps its own size and rate (only the codec follows);
+            // the rest of the new spec applies once it ends.
+            if self.wantsSlowMotion, self.isSlowMotionFormatActive(on: device) {
+                self.publishDeliveredFormat(requested: newSpec, on: device)
+            } else {
+                self.applyFormat(newSpec, on: device)
+            }
             self.session.commitConfiguration()
+            self.refreshPhotoCapabilities(on: device)
         }
     }
 
@@ -337,9 +386,197 @@ final class CameraController: NSObject, ObservableObject {
                 .flatMap { $0.videoSupportedFrameRateRanges.map(\.maxFrameRate) }
             if let best = rates.max() { ceilings[res] = best }
         }
+        let slowRate = slowMotionFormat(on: device).map { Int($0.rate.rounded()) }
         DispatchQueue.main.async {
             self.activeSpec = delivered
             self.maxFrameRates = ceilings
+            self.slowMotionFPS = slowRate
+        }
+    }
+
+    // MARK: - Slo-mo (high frame rate)
+
+    /// sessionQueue only. The spec's format, or the slow-motion format while
+    /// Slo-mo is on (falling back to the spec where the camera has none).
+    private func applyCurrentFormat(on device: AVCaptureDevice) {
+        if wantsSlowMotion, applySlowMotionFormat(on: device) {
+            DispatchQueue.main.async { self.isSlowMotion = true }
+            return
+        }
+        applyFormat(spec, on: device)
+        DispatchQueue.main.async { self.isSlowMotion = false }
+    }
+
+    /// Turns Slo-mo on or off. Blocked mid-take, like a format change.
+    func setSlowMotion(_ on: Bool) {
+        guard !isRecording, !isPreparingRecording else { return }
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.wantsSlowMotion = on
+            guard let device = self.activeVideoDevice else {
+                print("[LUMA] SLOMO \(on ? "on" : "off") (no device — sim)")
+                return
+            }
+            let display = self.zoomFactor
+            self.session.beginConfiguration()
+            self.applyCurrentFormat(on: device)
+            // A format change can reset the zoom; keep the lens you framed on.
+            self.applyDisplayZoom(display, on: device, ramped: false)
+            self.session.commitConfiguration()
+            self.refreshPhotoCapabilities(on: device)
+        }
+    }
+
+    /// The best high-frame-rate format: the highest rate (120 or 240), then
+    /// 1080p over 720p. Only 16:9 sizes the writer knows, so the grade and
+    /// the encoder keep up. nil when the camera has no rate above 100 fps.
+    private func slowMotionFormat(on device: AVCaptureDevice) -> (format: AVCaptureDevice.Format, rate: Double)? {
+        var best: (format: AVCaptureDevice.Format, rate: Double, score: Double)?
+        for format in device.formats {
+            let rate = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
+            guard rate >= 100 else { continue }
+            let d = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            let shortSide = min(d.width, d.height), longSide = max(d.width, d.height)
+            guard shortSide == 1080 || shortSide == 720 else { continue }
+            guard abs(Double(longSide) / Double(max(shortSide, 1)) - 16.0 / 9.0) < 0.05 else { continue }
+            let score = rate * 10 + (shortSide == 1080 ? 2 : 1)
+            if best == nil || score > (best?.score ?? 0) {
+                best = (format, rate, score)
+            }
+        }
+        guard let best else { return nil }
+        return (best.format, best.rate)
+    }
+
+    /// sessionQueue only. True while the device runs faster than 90 fps.
+    private func isSlowMotionFormatActive(on device: AVCaptureDevice) -> Bool {
+        let frame = device.activeVideoMinFrameDuration
+        return frame.isValid && frame.seconds > 0 && 1 / frame.seconds > 90
+    }
+
+    /// sessionQueue only. Switches the sensor to the slow-motion format.
+    /// Returns false when the camera has none (the caller falls back).
+    private func applySlowMotionFormat(on device: AVCaptureDevice) -> Bool {
+        guard let pick = slowMotionFormat(on: device) else { return false }
+        let fps = max(1, Int(pick.rate.rounded()))
+        do {
+            try device.lockForConfiguration()
+            device.activeFormat = pick.format
+            let duration = CMTime(value: 1, timescale: CMTimeScale(fps))
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+            device.unlockForConfiguration()
+            print("[LUMA] SLOMO applied fps=\(fps)")
+        } catch {
+            print("[LUMA] SLOMO lock failed: \(error)")
+            return false
+        }
+        publishDeliveredFormat(requested: spec, on: device)
+        return true
+    }
+
+    // MARK: - Photo format, size and depth
+
+    /// HEIF / JPEG and 12 / 24 / 48 MP. Applies the size to the photo output
+    /// straight away so the next still is taken at it.
+    func setPhotoSpec(_ newSpec: PhotoCaptureSpec) {
+        newSpec.save()
+        photoSpec = newSpec
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.requestedPhotoSize = newSpec.size
+            guard let device = self.activeVideoDevice else {
+                DispatchQueue.main.async { self.activePhotoMegapixels = newSpec.size.rawValue }
+                return
+            }
+            self.refreshPhotoCapabilities(on: device)
+        }
+    }
+
+    /// Portrait: asks the photo output for depth (and the portrait matte
+    /// where the camera has it) with every still. Off outside Portrait,
+    /// because depth delivery narrows the session.
+    func setDepthCapture(_ on: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.wantsDepth = on
+            guard let device = self.activeVideoDevice else { return }
+            self.refreshPhotoCapabilities(on: device)
+        }
+    }
+
+    /// sessionQueue only. Re-reads photo sizes and depth for the device in
+    /// its own configuration pass. Always called after a format or input
+    /// change is committed, so the photo output already sees the device.
+    private func refreshPhotoCapabilities(on device: AVCaptureDevice) {
+        session.beginConfiguration()
+        applyPhotoCapabilities(on: device)
+        session.commitConfiguration()
+    }
+
+    /// sessionQueue only. Sets the photo output's size from what the active
+    /// format supports, switches depth delivery to match Portrait, and
+    /// publishes what the camera can do.
+    private func applyPhotoCapabilities(on device: AVCaptureDevice) {
+        guard session.outputs.contains(photoOutput) else { return }
+
+        let depthAvailable = photoOutput.isDepthDataDeliverySupported
+        let wantDepthNow = wantsDepth && depthAvailable
+
+        // Depth off first when leaving Portrait (the matte before depth, as
+        // it needs depth), so the size below is set without it.
+        if !wantDepthNow {
+            if photoOutput.isPortraitEffectsMatteDeliveryEnabled {
+                photoOutput.isPortraitEffectsMatteDeliveryEnabled = false
+            }
+            if photoOutput.isDepthDataDeliveryEnabled {
+                photoOutput.isDepthDataDeliveryEnabled = false
+            }
+        }
+
+        // Size: the largest supported resolution at or under the request
+        // (or the smallest there is), never a value the format lacks.
+        // Portrait stays at 12 MP, where depth is offered.
+        let wanted = wantDepthNow ? PhotoCaptureSpec.Size.mp12 : requestedPhotoSize
+        let supported = device.activeFormat.supportedMaxPhotoDimensions
+        let ordered = supported.sorted {
+            Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height)
+        }
+        let target = wanted.pixelCount + wanted.pixelCount / 10
+        let pick = ordered.last(where: { Int64($0.width) * Int64($0.height) <= target }) ?? ordered.first
+        if let pick {
+            let current = photoOutput.maxPhotoDimensions
+            if current.width != pick.width || current.height != pick.height {
+                photoOutput.maxPhotoDimensions = pick
+            }
+        }
+        var sizes: [PhotoCaptureSpec.Size] = []
+        for d in ordered {
+            if let size = PhotoCaptureSpec.Size.matching(width: d.width, height: d.height),
+               !sizes.contains(size) {
+                sizes.append(size)
+            }
+        }
+        let delivered = photoOutput.maxPhotoDimensions
+        let activeSize = PhotoCaptureSpec.Size.matching(width: delivered.width, height: delivered.height)
+        let megapixels = max(1, Int((Double(Int64(delivered.width) * Int64(delivered.height)) / 1_000_000).rounded()))
+
+        // Depth on (then the matte) when entering Portrait.
+        if wantDepthNow {
+            if !photoOutput.isDepthDataDeliveryEnabled {
+                photoOutput.isDepthDataDeliveryEnabled = true
+            }
+            if photoOutput.isPortraitEffectsMatteDeliverySupported,
+               !photoOutput.isPortraitEffectsMatteDeliveryEnabled {
+                photoOutput.isPortraitEffectsMatteDeliveryEnabled = true
+            }
+        }
+        print("[LUMA] PHOTO size=\(delivered.width)x\(delivered.height) sizes=\(sizes.map(\.rawValue)) depth=\(depthAvailable)")
+        DispatchQueue.main.async {
+            self.photoSizes = sizes
+            self.activePhotoSize = activeSize
+            self.activePhotoMegapixels = megapixels
+            self.depthSupported = depthAvailable
         }
     }
 
@@ -349,10 +586,14 @@ final class CameraController: NSObject, ObservableObject {
     /// stub, where the caller falls back to grabbing the preview frame).
     var canCaptureFullRes: Bool { session.isRunning }
 
-    /// Captures a full-resolution photo, grades it through the SAME look
-    /// pipeline as the preview, and returns the finished CGImage (nil on
-    /// failure). Callback on main.
-    func captureFullResStill(_ completion: @escaping (CGImage?) -> Void) {
+    /// Captures a full-resolution photo at the chosen size, adds the portrait
+    /// blur when an aperture is given (and depth came back), grades it
+    /// through the SAME look pipeline as the preview and encodes it as HEIF
+    /// or JPEG. Callback on main; nil on failure.
+    func captureStill(portraitAperture: Double?, completion: @escaping (CapturedStill?) -> Void) {
+        // Orientation is committed at the press, like a take (C4).
+        let angle: CGFloat = isLandscape ? landscapeAngle : 90
+        let request = StillRequest(format: photoSpec.format, aperture: portraitAperture)
         sessionQueue.async { [weak self] in
             guard let self, self.session.isRunning,
                   self.session.outputs.contains(self.photoOutput) else {
@@ -369,11 +610,50 @@ final class CameraController: NSObject, ObservableObject {
                 return
             }
             self.stillCompletion = completion
+            self.stillRequest = request
+            if let connection = self.photoOutput.connection(with: .video),
+               connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
             let settings = AVCapturePhotoSettings()
-            settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
+            var dims = self.photoOutput.maxPhotoDimensions
+            // Portrait shoots at 12 MP at most: depth is not offered with
+            // the large sensor modes.
+            if request.aperture != nil, let device = self.activeVideoDevice {
+                let cap = PhotoCaptureSpec.Size.mp12.pixelCount + PhotoCaptureSpec.Size.mp12.pixelCount / 10
+                let outPixels = Int64(dims.width) * Int64(dims.height)
+                let smaller = device.activeFormat.supportedMaxPhotoDimensions
+                    .filter { Int64($0.width) * Int64($0.height) <= cap }
+                    .max { Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height) }
+                if outPixels > cap, let smaller { dims = smaller }
+            }
+            settings.maxPhotoDimensions = dims
             settings.photoQualityPrioritization = self.photoOutput.maxPhotoQualityPrioritization
+            // Depth only when the output has it switched on (Portrait), and
+            // the matte only alongside depth: either out of order throws.
+            if request.aperture != nil, self.photoOutput.isDepthDataDeliveryEnabled {
+                settings.isDepthDataDeliveryEnabled = true
+                if self.photoOutput.isPortraitEffectsMatteDeliveryEnabled {
+                    settings.isPortraitEffectsMatteDeliveryEnabled = true
+                }
+            }
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
+    }
+
+    /// The preview frame as a finished still in the chosen format: the
+    /// simulator path, and the fallback when a sensor capture fails.
+    func makeStill(fromPreview frame: CGImage) -> CapturedStill? {
+        makeStill(from: CIImage(cgImage: frame), format: photoSpec.format)
+    }
+
+    /// Encodes a graded still and a small thumbnail for the last-shot button.
+    private func makeStill(from image: CIImage, format: PhotoCaptureSpec.Format) -> CapturedStill? {
+        guard let encoded = StillEncoder.encode(image, format: format, context: pipeline.context) else {
+            return nil
+        }
+        let thumb = StillEncoder.thumbnail(of: image, longSide: 360, context: pipeline.context)
+        return CapturedStill(data: encoded.data, fileExtension: encoded.fileExtension, thumbnail: thumb)
     }
 
     // MARK: - C6: manual exposure (ISO / shutter angle / EV bias)
@@ -610,7 +890,7 @@ final class CameraController: NSObject, ObservableObject {
                 self.session.addInput(input)
                 self.activeVideoDevice = device
                 self.activeVideoInput = input
-                self.applyFormat(self.spec, on: device)
+                self.applyCurrentFormat(on: device)
                 self.configureZoomBaseline(for: device)
                 didSwitch = true
             } else if let current = self.activeVideoInput {
@@ -623,6 +903,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             self.session.commitConfiguration()
             guard didSwitch else { return }
+            self.refreshPhotoCapabilities(on: device)
             DispatchQueue.main.async {
                 self.cameraPosition = target
             }
@@ -806,11 +1087,19 @@ final class CameraController: NSObject, ObservableObject {
         recordSize = recordLandscape
             ? CGSize(width: dims.h, height: dims.w)
             : CGSize(width: dims.w, height: dims.h)
-        let videoSettings: [String: Any] = [
+        var videoSettings: [String: Any] = [
             AVVideoCodecKey: take.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
             AVVideoWidthKey: Int(recordSize.width),
             AVVideoHeightKey: Int(recordSize.height)
         ]
+        // Slo-mo: the take runs faster than any spec rate (120 / 240), so it
+        // is conformed to 30 fps when it finishes. Tell the encoder the rate.
+        recordSlowFactor = take.fps > 60 ? Double(take.fps) / 30.0 : 1
+        if recordSlowFactor > 1 {
+            videoSettings[AVVideoCompressionPropertiesKey] = [
+                AVVideoExpectedSourceFrameRateKey: take.fps
+            ]
+        }
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         video.expectsMediaDataInRealTime = true
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
@@ -882,20 +1171,38 @@ final class CameraController: NSObject, ObservableObject {
             cleanupWriter()
             return
         }
+        let slowFactor = recordSlowFactor
+        recordSlowFactor = 1
         writerVideo?.markAsFinished()
         writerAudio?.markAsFinished()
         writer.finishWriting { [weak self] in
             let succeeded = writer.status == .completed
             self?.cleanupWriter()
             guard succeeded else { return }
-            DispatchQueue.main.async { self?.lastRecordingURL = url }
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-                guard status == .authorized || status == .limited else { return }
-                PHPhotoLibrary.shared().performChanges {
-                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                } completionHandler: { success, _ in
-                    DispatchQueue.main.async { self?.lastSavedToPhotos = success }
-                }
+            guard slowFactor > 1 else {
+                self?.deliverRecording(url)
+                return
+            }
+            // Slo-mo: play the high-rate take back slowed, conformed to 30
+            // fps, so Photos, the grade room and the editor all see a slow
+            // clip. If conforming fails the real-time take is kept.
+            DispatchQueue.main.async { self?.isConformingSlowMo = true }
+            SlowMotionConformer.conform(url, factor: slowFactor) { slowed in
+                DispatchQueue.main.async { self?.isConformingSlowMo = false }
+                self?.deliverRecording(slowed ?? url)
+            }
+        }
+    }
+
+    /// Hands a finished take to the hand-off card and saves it to Photos.
+    private func deliverRecording(_ url: URL) {
+        DispatchQueue.main.async { self.lastRecordingURL = url }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { [weak self] status in
+            guard status == .authorized || status == .limited else { return }
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            } completionHandler: { success, _ in
+                DispatchQueue.main.async { self?.lastSavedToPhotos = success }
             }
         }
     }
@@ -987,6 +1294,14 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
 
         appendVideo(graded, sourceExtent: source.extent,
                     time: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // Slo-mo delivers 120 / 240 frames a second. Every one is recorded,
+        // but the viewfinder only needs about 30, so skip the rest (each
+        // preview is a full CGImage render).
+        let rate = deliveredSpec.fps
+        if rate > 60 {
+            previewTick += 1
+            if previewTick % max(1, rate / 30) != 0 { return }
+        }
         publishPreview(graded)
     }
 
@@ -1041,8 +1356,21 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         if zebrasOn { preview = ZebraRenderer.apply(to: preview) }
         if peakingOn { preview = FocusPeakingRenderer.apply(to: preview) }
         guard let cg = pipeline.context.createCGImage(preview, from: preview.extent) else { return }
+        // Sampled here, on the preview's own queue, rather than in a Swift
+        // task: on a busy phone (or the CI simulator) the shared task pool
+        // can be tied up grading look thumbnails for seconds, which left the
+        // pill empty. A 64 px sample costs about a millisecond.
+        var sampled: CameraHistogram? = nil
+        if histogramOn {
+            histogramTick += 1
+            if histogramTick >= 8 {
+                histogramTick = 0
+                sampled = CameraHistogram.analyse(cg)
+            }
+        }
         DispatchQueue.main.async { [weak self] in
             self?.previewImage = cg
+            if let sampled { self?.histogram = sampled }
         }
     }
 }
@@ -1054,7 +1382,9 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
         let completion = stillCompletion
+        let request = stillRequest
         stillCompletion = nil
+        stillRequest = nil
         guard error == nil,
               let data = photo.fileDataRepresentation(),
               let source = CIImage(data: data, options: [.applyOrientationProperty: true]) else {
@@ -1065,19 +1395,23 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
         // off the delegate queue (a 48MP grade is not free).
         mediaQueue.async { [weak self] in
             guard let self else { return }
-            let upright = source.transformed(by: CGAffineTransform(
+            var upright = source.transformed(by: CGAffineTransform(
                 translationX: -source.extent.minX, y: -source.extent.minY))
+            // Portrait: blur the background from the matte (or depth) before
+            // the look goes on, so the grade sees the finished picture.
+            if let aperture = request?.aperture {
+                upright = PortraitBlur.apply(to: upright, photo: photo, aperture: aperture)
+            }
             let graded: CIImage
             if let lookState {
                 graded = self.pipeline.apply(state: lookState, to: upright, includeSplit: false)
+                    .cropped(to: upright.extent)
             } else {
                 graded = upright
             }
-            let cg = self.pipeline.context.createCGImage(
-                graded, from: graded.extent,
-                format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-            print("[LUMA] STILL full-res \(cg.map { "\($0.width)x\($0.height)" } ?? "FAILED")")
-            DispatchQueue.main.async { completion?(cg) }
+            let still = self.makeStill(from: graded, format: request?.format ?? .heif)
+            print("[LUMA] STILL full-res \(Int(graded.extent.width))x\(Int(graded.extent.height)) \(still?.fileExtension ?? "FAILED")")
+            DispatchQueue.main.async { completion?(still) }
         }
     }
 }
@@ -1132,5 +1466,334 @@ struct FilteredCameraPreview: View {
                 Color.black
             }
         }
+    }
+}
+
+// MARK: - Stills: request, result, encoding
+
+/// What a still was asked for, held while the sensor capture is in flight.
+struct StillRequest {
+    let format: PhotoCaptureSpec.Format
+    /// f-number for Portrait's background blur; nil for a plain photo.
+    let aperture: Double?
+}
+
+/// A finished, graded still: the encoded file and a small thumbnail.
+struct CapturedStill {
+    let data: Data
+    /// "heic" or "jpg", matching `data`.
+    let fileExtension: String
+    let thumbnail: CGImage?
+}
+
+enum StillEncoder {
+    /// HEIF or JPEG data for a finished still. HEIF falls back to JPEG where
+    /// there is no HEVC encoder (the simulator).
+    static func encode(_ image: CIImage, format: PhotoCaptureSpec.Format,
+                       context: CIContext) -> (data: Data, fileExtension: String)? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        if format == .heif,
+           let data = context.heifRepresentation(of: image, format: .RGBA8, colorSpace: space, options: [:]) {
+            return (data, "heic")
+        }
+        let quality = CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String)
+        if let data = context.jpegRepresentation(of: image, colorSpace: space, options: [quality: 0.92]) {
+            return (data, "jpg")
+        }
+        return nil
+    }
+
+    /// A small render for the last-shot button.
+    static func thumbnail(of image: CIImage, longSide: CGFloat, context: CIContext) -> CGImage? {
+        let extent = image.extent
+        let longest = max(extent.width, extent.height)
+        guard longest > 0, extent.width.isFinite, extent.height.isFinite else { return nil }
+        let scale = min(1, longSide / longest)
+        let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return context.createCGImage(small, from: small.extent)
+    }
+}
+
+// MARK: - Portrait blur
+
+/// Background blur for Portrait stills. The subject comes from the portrait
+/// effects matte when the camera found a person, else from the depth map
+/// (nearest third kept sharp). The radius follows the f-number: f/1.4 is
+/// the strongest, f/16 barely there.
+enum PortraitBlur {
+    static func apply(to image: CIImage, photo: AVCapturePhoto, aperture: Double) -> CIImage {
+        let extent = image.extent
+        guard extent.width > 1, extent.height > 1,
+              let mask = backgroundMask(for: photo, fitting: extent) else { return image }
+        let shortSide = Double(min(extent.width, extent.height))
+        let radius = shortSide * 0.018 * (1.4 / max(aperture, 1.4))
+        guard radius >= 0.5 else { return image }
+        let blurred = image.clampedToExtent().applyingFilter("CIMaskedVariableBlur", parameters: [
+            "inputMask": mask.clampedToExtent(),
+            "inputRadius": radius,
+        ])
+        return blurred.cropped(to: extent)
+    }
+
+    /// White where the picture should blur (background), black on the
+    /// subject, upright and scaled to the photo.
+    private static func backgroundMask(for photo: AVCapturePhoto, fitting extent: CGRect) -> CIImage? {
+        var subject: CIImage?
+        if let matte = photo.portraitEffectsMatte {
+            subject = CIImage(cvPixelBuffer: matte.mattingImage)
+        } else if let depth = photo.depthData {
+            subject = subjectFromDepth(depth)
+        }
+        guard var mask = subject else { return nil }
+        // Depth and matte arrive in sensor orientation; the photo was made
+        // upright from its EXIF orientation, so turn the mask the same way.
+        mask = mask.oriented(exifOrientation(of: photo))
+        mask = mask.transformed(by: CGAffineTransform(translationX: -mask.extent.minX, y: -mask.extent.minY))
+        guard mask.extent.width > 0, mask.extent.height > 0 else { return nil }
+        mask = mask.transformed(by: CGAffineTransform(scaleX: extent.width / mask.extent.width,
+                                                      y: extent.height / mask.extent.height))
+        mask = mask.transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY))
+        // Invert (subject sharp, background blurred) using the first channel
+        // for all three, so a one-channel buffer reads the same either way.
+        let inverted = mask.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: -1, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: -1, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: -1, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 1, y: 1, z: 1, w: 1),
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+        ])
+        // Soften the edge so hair does not cut out hard.
+        let sigma = Double(min(extent.width, extent.height)) * 0.004
+        return inverted.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: extent)
+    }
+
+    /// Near things white, far things black, from a disparity map.
+    private static func subjectFromDepth(_ depthData: AVDepthData) -> CIImage? {
+        let disparity = depthData.depthDataType == kCVPixelFormatType_DisparityFloat32
+            ? depthData
+            : depthData.converting(toDepthDataType: kCVPixelFormatType_DisparityFloat32)
+        let map = disparity.depthDataMap
+        guard let range = disparityRange(map) else { return nil }
+        let span = max(range.max - range.min, 0.0001)
+        // n = (d - min) / span. Keep n above 0.65 sharp, blur fully below 0.4.
+        let gain = CGFloat(4 / span)
+        let bias = CGFloat(-(range.min / span + 0.4) * 4)
+        return CIImage(cvPixelBuffer: map).applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: bias, y: bias, z: bias, w: 1),
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+        ])
+    }
+
+    private static func disparityRange(_ buffer: CVPixelBuffer) -> (min: Float, max: Float)? {
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+        let width = CVPixelBufferGetWidth(buffer)
+        let height = CVPixelBufferGetHeight(buffer)
+        let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
+        var lo = Float.greatestFiniteMagnitude
+        var hi = -Float.greatestFiniteMagnitude
+        for y in 0..<height {
+            let row = base.advanced(by: y * rowBytes).assumingMemoryBound(to: Float.self)
+            for x in 0..<width {
+                let value = row[x]
+                if value.isFinite {
+                    lo = min(lo, value)
+                    hi = max(hi, value)
+                }
+            }
+        }
+        return hi > lo ? (lo, hi) : nil
+    }
+
+    private static func exifOrientation(of photo: AVCapturePhoto) -> CGImagePropertyOrientation {
+        let key = kCGImagePropertyOrientation as String
+        if let number = photo.metadata[key] as? NSNumber,
+           let orientation = CGImagePropertyOrientation(rawValue: number.uint32Value) {
+            return orientation
+        }
+        return .up
+    }
+}
+
+// MARK: - Slo-mo conform
+
+/// Turns a high-frame-rate take into a slow clip: the video track is
+/// stretched by rate / 30 with `scaleTimeRange`, so a 240 fps take plays at
+/// 30 fps, eight times slower. Audio is left out (slowed eight times it is
+/// only noise). Returns nil on failure; the caller keeps the original.
+enum SlowMotionConformer {
+    static func conform(_ url: URL, factor: Double, completion: @escaping (URL?) -> Void) {
+        Task {
+            let slowed = await makeSlow(url, factor: factor)
+            completion(slowed)
+        }
+    }
+
+    static func makeSlow(_ url: URL, factor: Double) async -> URL? {
+        guard factor > 1 else { return nil }
+        let asset = AVURLAsset(url: url)
+        guard let source = try? await asset.loadTracks(withMediaType: .video).first,
+              let duration = try? await asset.load(.duration),
+              duration.seconds > 0 else { return nil }
+        let transform = (try? await source.load(.preferredTransform)) ?? .identity
+
+        let composition = AVMutableComposition()
+        guard let track = composition.addMutableTrack(withMediaType: .video,
+                                                      preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            return nil
+        }
+        let range = CMTimeRange(start: .zero, duration: duration)
+        do {
+            try track.insertTimeRange(range, of: source, at: .zero)
+        } catch {
+            return nil
+        }
+        track.preferredTransform = transform
+        track.scaleTimeRange(range, toDuration: CMTimeMultiplyByFloat64(duration, multiplier: factor))
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LumaLook_SloMo_\(UUID().uuidString).mov")
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHEVCHighestQuality)
+                ?? AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            return nil
+        }
+        export.outputURL = output
+        export.outputFileType = .mov
+        await export.export()
+        guard export.status == .completed else {
+            print("[LUMA] SLOMO conform failed: \(export.error?.localizedDescription ?? "unknown")")
+            try? FileManager.default.removeItem(at: output)
+            return nil
+        }
+        print("[LUMA] SLOMO conformed x\(factor)")
+        try? FileManager.default.removeItem(at: url)
+        return output
+    }
+}
+
+// MARK: - Live histogram
+
+/// The camera's histogram pill: luminance plus the three channels, binned
+/// the same way as the RGB histogram in `Scopes`, from a tiny downscale of
+/// the graded preview so it costs nothing next to the frame rate.
+struct CameraHistogram: Equatable {
+    static let binCount = 48
+    /// Each array is `binCount` long, normalised so the tallest bin is 1.
+    var luma: [Float]
+    var red: [Float]
+    var green: [Float]
+    var blue: [Float]
+
+    static func analyse(_ image: CGImage) -> CameraHistogram? {
+        guard image.width > 0, image.height > 0,
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let width = 64
+        let height = max(1, Int((Double(width) * Double(image.height) / Double(image.width)).rounded()))
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(data: raw.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                return false
+            }
+            context.interpolationQuality = .low
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+
+        let bins = binCount
+        var l = [Float](repeating: 0, count: bins)
+        var r = [Float](repeating: 0, count: bins)
+        var g = [Float](repeating: 0, count: bins)
+        var b = [Float](repeating: 0, count: bins)
+        let top = Float(bins - 1)
+        for p in 0..<(width * height) {
+            let i = p * 4
+            let rv = Float(pixels[i]) / 255
+            let gv = Float(pixels[i + 1]) / 255
+            let bv = Float(pixels[i + 2]) / 255
+            let lv = 0.2126 * rv + 0.7152 * gv + 0.0722 * bv
+            r[min(bins - 1, Int(rv * top))] += 1
+            g[min(bins - 1, Int(gv * top))] += 1
+            b[min(bins - 1, Int(bv * top))] += 1
+            l[min(bins - 1, Int(lv * top))] += 1
+        }
+        return CameraHistogram(luma: normalised(smoothed(l)),
+                               red: normalised(smoothed(r)),
+                               green: normalised(smoothed(g)),
+                               blue: normalised(smoothed(b)))
+    }
+
+    /// Three-tap smoothing so a small sample reads as a curve.
+    private static func smoothed(_ values: [Float]) -> [Float] {
+        guard values.count > 2 else { return values }
+        var out = values
+        for i in values.indices {
+            let a = values[max(0, i - 1)], c = values[min(values.count - 1, i + 1)]
+            out[i] = (a + values[i] * 2 + c) / 4
+        }
+        return out
+    }
+
+    private static func normalised(_ values: [Float]) -> [Float] {
+        let peak = max(values.max() ?? 1, 1)
+        return values.map { $0 / peak }
+    }
+}
+
+// MARK: - Library thumbnail
+
+enum CameraLibraryThumb {
+    /// The newest photo or video in the library, small, for the last-shot
+    /// button. Only when access is already granted: the camera never asks.
+    static func latest(side: CGFloat) async -> UIImage? {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard status == .authorized || status == .limited else { return nil }
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 1
+        guard let asset = PHAsset.fetchAssets(with: options).firstObject else { return nil }
+        let request = PHImageRequestOptions()
+        // One callback, the finished image (no degraded first pass).
+        request.deliveryMode = .highQualityFormat
+        request.resizeMode = .fast
+        request.isNetworkAccessAllowed = true
+        let size = CGSize(width: side, height: side)
+        let gate = CameraResumeGate()
+        return await withCheckedContinuation { continuation in
+            PHImageManager.default().requestImage(for: asset, targetSize: size,
+                                                  contentMode: .aspectFill,
+                                                  options: request) { image, _ in
+                // Photos calls back once in this mode; the gate makes a
+                // second call harmless rather than a double resume.
+                guard gate.claim() else { return }
+                continuation.resume(returning: image)
+            }
+        }
+    }
+}
+
+/// Lets exactly one caller through.
+private final class CameraResumeGate {
+    private let lock = NSLock()
+    private var done = false
+
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if done { return false }
+        done = true
+        return true
     }
 }

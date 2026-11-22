@@ -1,91 +1,84 @@
 import SwiftUI
 import AVFoundation
 
-/// Browse + preview + add bundled royalty-free SFX and music beds (B3).
+/// The music library as a sheet: tracks LumaLook makes itself, the two pads
+/// and the bundled sounds. Same content as the editor's Audio panel.
 struct AudioLibrarySheet: View {
     @ObservedObject var editor: EditorState
     let onClose: () -> Void
 
-    @State private var category = "sfx"
-    @State private var previewID: String?
-    @StateObject private var preview = AudioPreviewPlayer()
-
-    private var entries: [BundledAudioEntry] { BundledAudioLibrary.entries(category: category) }
-
     var body: some View {
-        VStack(spacing: 14) {
-            HStack {
-                Text("Sound Library").font(.luma(size: 17, weight: .semibold)).foregroundStyle(.white)
-                Spacer()
-                Button("Done", action: onClose)
-                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
-            }
-
-            Picker("", selection: $category) {
-                Text("SFX").tag("sfx")
-                Text("Music").tag("music")
-            }
-            .pickerStyle(.segmented)
-
+        VStack(alignment: .leading, spacing: 14) {
+            header
             ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(entries) { entry in
-                        row(entry)
-                    }
-                }
+                MusicLibraryList(editor: editor, onUsed: onClose)
+                    .padding(.bottom, 24)
             }
         }
-        .padding(20)
-        .background(LumaTheme.background)
-        .onDisappear { preview.stop() }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .background(LumaTheme.ink.ignoresSafeArea())
     }
 
-    private func row(_ entry: BundledAudioEntry) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                if previewID == entry.id { preview.stop(); previewID = nil }
-                else if let url = BundledAudioLibrary.url(for: entry) {
-                    preview.play(url); previewID = entry.id
-                }
-            } label: {
-                Image(systemName: previewID == entry.id ? "stop.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 26)).foregroundStyle(LumaTheme.teal)
-            }
-            .buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title).font(.luma(size: 15, weight: .semibold)).foregroundStyle(.white)
-                Text(String(format: "%.1fs", entry.duration))
-                    .font(.luma(size: 12)).foregroundStyle(LumaTheme.textSecondary)
-            }
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text("Music")
+                .font(.luma(size: 20, weight: .light))
+                .foregroundStyle(LumaTheme.textPrimary)
+            Text("library")
+                .font(.luma(size: 20, weight: .bold))
+                .foregroundStyle(LumaTheme.textPrimary)
             Spacer()
-            Button {
-                guard let url = BundledAudioLibrary.url(for: entry) else { return }
-                LumaHaptics.shared.tap()
-                Task {
-                    if let imported = editor.importMusicFile(from: url) {
-                        await editor.addAudioTrack(importedURL: imported, title: entry.title,
-                                                   kind: entry.category == "sfx" ? .sfx : .music)
-                    }
-                }
-            } label: {
-                Text("Add").font(.luma(.footnote, weight: .bold)).foregroundStyle(LumaTheme.onSignal)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(LumaTheme.accent, in: Capsule())
+            Button(action: onClose) {
+                Text("Done")
+                    .font(.luma(size: 14, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(LumaTheme.control, in: Capsule())
             }
             .buttonStyle(.lumaPress)
         }
-        .padding(10)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
-/// Tiny AVAudioPlayer wrapper for previewing a bundled clip.
-final class AudioPreviewPlayer: ObservableObject {
+/// Small AVAudioPlayer wrapper for auditioning a track or a bundled clip.
+/// Publishes whether it is playing, so rows can show a playing state, and
+/// resets itself when the clip ends.
+final class AudioPreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
+    @Published private(set) var isPlaying = false
     private var player: AVAudioPlayer?
-    func play(_ url: URL) {
+
+    /// Plays `url` from `start` seconds (clamped to the clip).
+    func play(_ url: URL, from start: Double = 0) {
         stop()
-        player = try? AVAudioPlayer(contentsOf: url)
-        player?.play()
+        guard let next = try? AVAudioPlayer(contentsOf: url) else { return }
+        next.delegate = self
+        next.prepareToPlay()
+        if start > 0, next.duration > 0 {
+            next.currentTime = min(start, max(0, next.duration - 1))
+        }
+        player = next
+        isPlaying = next.play()
     }
-    func stop() { player?.stop(); player = nil }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        if isPlaying { isPlaying = false }
+    }
+
+    /// Position in the playing clip, in seconds (0 when idle).
+    var currentTime: Double { player?.currentTime ?? 0 }
+
+    /// Length of the loaded clip, in seconds (0 when idle).
+    var duration: Double { player?.duration ?? 0 }
+
+    func audioPlayerDidFinishPlaying(_ finished: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.player === finished else { return }
+            self.player = nil
+            self.isPlaying = false
+        }
+    }
 }

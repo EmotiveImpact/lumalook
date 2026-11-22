@@ -398,3 +398,206 @@ struct WipeHandle: View {
         }
     }
 }
+
+// MARK: - Night Lab camera parts (histogram, brackets, last shot, roll)
+
+/// Top-left photo signal ("HEIF · 24 MP"), the still counterpart of
+/// `CaptureFormatChip`. Tap opens the photo format panel.
+struct PhotoFormatChip: View {
+    let format: String
+    let megapixels: Int
+
+    var body: some View {
+        Text("\(format) · \(megapixels) MP")
+            .font(.luma(size: 12, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(.white.opacity(0.9))
+            .lineLimit(1)
+            .padding(.vertical, 5)
+    }
+}
+
+/// The small glass histogram at the top right: the three channels as soft
+/// translucent fills with the luminance curve drawn over them in white.
+struct CameraHistogramPill: View {
+    let histogram: CameraHistogram?
+
+    var body: some View {
+        Canvas { context, size in
+            guard let histogram else { return }
+            context.fill(Self.area(histogram.red, in: size),
+                         with: .color(Color(red: 1, green: 0.35, blue: 0.35).opacity(0.42)))
+            context.fill(Self.area(histogram.green, in: size),
+                         with: .color(Color(red: 0.35, green: 0.9, blue: 0.5).opacity(0.38)))
+            context.fill(Self.area(histogram.blue, in: size),
+                         with: .color(Color(red: 0.43, green: 0.59, blue: 1).opacity(0.40)))
+            context.stroke(Self.line(histogram.luma, in: size),
+                           with: .color(.white.opacity(0.85)), lineWidth: 1)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .frame(width: 84, height: 38)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(Color(hex: 0x0C0C0E).opacity(0.5),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(.white.opacity(0.09), lineWidth: 1))
+        .accessibilityLabel("Histogram")
+    }
+
+    /// A filled curve from the bins, closed along the bottom edge.
+    static func area(_ bins: [Float], in size: CGSize) -> Path {
+        var path = line(bins, in: size)
+        guard bins.count > 1 else { return path }
+        path.addLine(to: CGPoint(x: size.width, y: size.height))
+        path.addLine(to: CGPoint(x: 0, y: size.height))
+        path.closeSubpath()
+        return path
+    }
+
+    /// The top edge of the curve.
+    static func line(_ bins: [Float], in size: CGSize) -> Path {
+        var path = Path()
+        guard bins.count > 1 else { return path }
+        let step = size.width / CGFloat(bins.count - 1)
+        for (i, value) in bins.enumerated() {
+            let point = CGPoint(x: CGFloat(i) * step,
+                                y: size.height - CGFloat(min(max(value, 0), 1)) * size.height)
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        return path
+    }
+}
+
+/// Four corner brackets, the focus and exposure mark.
+struct CameraFocusBracketShape: Shape {
+    var arm: CGFloat = 16
+
+    func path(in rect: CGRect) -> Path {
+        let a = min(arm, rect.width / 2, rect.height / 2)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY + a))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.minX + a, y: rect.minY))
+
+        p.move(to: CGPoint(x: rect.maxX - a, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + a))
+
+        p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - a))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - a, y: rect.maxY))
+
+        p.move(to: CGPoint(x: rect.minX + a, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - a))
+        return p
+    }
+}
+
+/// The brackets as drawn on the picture, with a soft shadow so they read
+/// over bright footage. Never takes touches.
+struct CameraFocusBrackets: View {
+    var colour: Color = LumaTheme.signal
+    var lineWidth: CGFloat = 2
+    var arm: CGFloat = 16
+
+    var body: some View {
+        CameraFocusBracketShape(arm: arm)
+            .stroke(colour, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            .shadow(color: .black.opacity(0.45), radius: 3)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The last shot, by the shutter: the newest capture from this session (or
+/// the newest library item), or the gallery glyph when there is none.
+struct CameraLastShotButton: View {
+    let image: UIImage?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 46, height: 46)
+                        .clipped()
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                } else {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                        .frame(width: 46, height: 46)
+                        .background(LumaTheme.raised)
+                }
+            }
+            .frame(width: 46, height: 46)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(LumaTheme.border, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(image == nil ? "Open your clips" : "Open last shot")
+    }
+}
+
+/// End of a roll: one dialogue on ink, Develop as the main action.
+struct CameraRollDoneCard: View {
+    let frames: Int
+    let onNewRoll: () -> Void
+    let onDevelop: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("\(frames)")
+                .font(.luma(size: 30, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(LumaTheme.onSignal)
+                .frame(width: 64, height: 64)
+                .background(LumaTheme.signal, in: Circle())
+            VStack(spacing: 4) {
+                Text("Roll done")
+                    .font(.luma(size: 20, weight: .bold))
+                    .foregroundStyle(LumaTheme.textPrimary)
+                Text("All \(frames) frames are shot. Develop them, or load a new roll.")
+                    .font(.luma(size: 13))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button(action: onNewRoll) {
+                    Text("New roll")
+                        .font(.luma(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+                Button(action: onDevelop) {
+                    Text("Develop")
+                        .font(.luma(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.onSignal)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+            }
+        }
+        .padding(18)
+        .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(LumaTheme.border, lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.6), radius: 24, y: 8)
+    }
+}

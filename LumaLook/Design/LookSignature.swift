@@ -362,3 +362,40 @@ extension View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.09), lineWidth: 1))
     }
 }
+
+// MARK: - Picked ring
+
+extension LumaTheme {
+    /// The ring on the look you picked: a lighter tint of signal, so it reads on
+    /// dark and bright frames alike and never competes with the main action.
+    static let pickedRing = Color(hex: 0xFFE08A)
+}
+
+/// The ring a picked tile wears wherever a look can be picked (camera strip,
+/// grade room, All looks, the editor's look drawer). It stays on for as long as
+/// that look is applied, so you can always see what you chose.
+struct PickedRing: ViewModifier {
+    var isOn: Bool
+    var cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if isOn {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(LumaTheme.pickedRing, lineWidth: 2.5)
+                        .shadow(color: LumaTheme.signal.opacity(0.45), radius: 5)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: isOn)
+    }
+}
+
+extension View {
+    /// Rings a look tile in light yellow while `isOn`. See `PickedRing`.
+    func pickedRing(_ isOn: Bool, cornerRadius: CGFloat) -> some View {
+        modifier(PickedRing(isOn: isOn, cornerRadius: cornerRadius))
+    }
+}

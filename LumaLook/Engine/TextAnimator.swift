@@ -176,3 +176,69 @@ enum TextAnimator {
         x.isFinite ? x : fallback
     }
 }
+
+// MARK: - Caption word state (karaoke)
+
+/// Which words of a caption line are lit, shown and popping at one instant.
+/// A description, like `TextAnimationState`: `TextRasterizer.captionImage`
+/// turns it into pixels, and equal states share one cached raster.
+struct CaptionWordState: Equatable {
+    /// Index of the highlighted word (whitespace-separated token); -1 = none.
+    var active: Int = -1
+    /// How many words are on screen (Pop reveals them one by one).
+    var visible: Int = Int.max
+    /// Pop-in progress of the newest word, 0...`TextAnimator.captionPopSteps`.
+    /// Quantised so a pop is a handful of rasters, not one per frame.
+    var popStep: Int = 6
+}
+
+extension TextAnimator {
+    /// Pop-in is quantised into this many steps (the last one = settled).
+    static let captionPopSteps = 6
+    /// Seconds a newly spoken word takes to pop to full size.
+    static let captionPopDuration: Double = 0.18
+
+    /// The word state of a caption line `localTime` seconds into a layer of
+    /// `duration` seconds. Pure, like `state(...)`: preview and export land on
+    /// the same word at the same timestamp.
+    ///
+    /// `words` are the line's stored timings, relative to the layer start.
+    /// When they no longer match the words on screen (the text was edited, or
+    /// the line was typed) the line is shared out evenly instead.
+    static func captionState(style: CaptionStyle, words: [CaptionWord], tokenCount: Int,
+                             localTime: Double, duration: Double) -> CaptionWordState {
+        guard style.tracksWords, tokenCount > 0,
+              localTime.isFinite, duration.isFinite, duration > 0 else {
+            return CaptionWordState()
+        }
+        let timings = CaptionTiming.resolve(words, tokenCount: tokenCount, duration: duration)
+        guard !timings.isEmpty else { return CaptionWordState() }
+
+        let t = min(max(localTime, 0), duration)
+        var active = 0
+        // A hair of lead so the highlight lands with the syllable, not after it.
+        for (i, word) in timings.enumerated() where word.start <= t + 0.03 {
+            active = i
+        }
+        active = min(active, tokenCount - 1)
+
+        var out = CaptionWordState()
+        if style.highlight != .none { out.active = active }
+        if style.popsIn {
+            out.active = active
+            out.visible = active + 1
+            let since = max(0, t - timings[active].start)
+            let raw = Int((since / captionPopDuration * Double(captionPopSteps)).rounded(.down))
+            out.popStep = min(captionPopSteps, max(0, raw))
+        }
+        return out
+    }
+
+    /// Scale of a popping word at progress `p` (0...1): from 55% up to full
+    /// size, never past it, so the word can never spill out of its raster.
+    static func captionPopScale(_ p: Double) -> Double {
+        let t = min(max(p, 0), 1)
+        let eased = 1 - (1 - t) * (1 - t) * (1 - t)
+        return 0.55 + 0.45 * eased
+    }
+}

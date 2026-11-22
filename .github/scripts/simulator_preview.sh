@@ -102,19 +102,35 @@ shot() {
 # A freshly booted simulator is busy for a while; the first launch is slow.
 launch warmup 12 "${P}ROUTE=none" || true
 
+# The launch animation held at a mid-way frame (LaunchView.swift). Every
+# other screen sets a LUMA_ hook, which skips the launch layer.
+shot 00-launch 5 "${P}ROUTE=launch"
 # Any LUMA_ROUTE value skips onboarding, so "none" gives the plain tab.
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
-shot 02-home 6 "${P}ROUTE=none" "${P}TAB=Home"
+shot 02-home 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1"
+shot 02b-home-first-run 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEEMPTY=1" "${P}SEED_REELHOLD=1"
+shot 02c-home-picked 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEPICK=BW32"
 shot 03-store 6 "${P}ROUTE=none" "${P}TAB=Store"
 shot 04-projects 5 "${P}ROUTE=none" "${P}TAB=Projects"
-shot 05-looks 6 "${P}ROUTE=none" "${P}TAB=Looks"
+shot 05-looks 9 "${P}ROUTE=none" "${P}TAB=Looks"
+shot 05b-looks-packs 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=packs"
 shot 06-profile 5 "${P}ROUTE=none" "${P}TAB=Profile"
 shot 07-select-clip 5 "${P}ROUTE=selectClip"
 shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg"
 shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"
-shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_drive.jpg"
-shot 11-camera 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
-shot 12-filter-pack 6 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
+shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1"
+shot 10b-editor-clip 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=clip"
+shot 10c-editor-look 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=look"
+shot 10d-editor-more 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=more"
+shot 10e-editor-captions 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=captions"
+shot 10f-editor-speed 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_RAMP=hero" "${P}SEED_TOOLPANEL=speed"
+shot 10g-editor-transition 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=transition"
+shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
+shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
+shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
+shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
+# A film archive, now sold on its own as well as with Pro.
+shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
@@ -128,6 +144,7 @@ xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/lumalook-preview.
   > "$OUT/logs/recording.log" 2>&1 &
 RECORDER=$!
 sleep 3
+launch video-launch 4 "${P}ROUTE=launchLive" || true
 launch video-onboarding 8 "${P}SEED_ONBOARDING=1" || true
 launch video-home 5 "${P}ROUTE=none" "${P}TAB=Home" || true
 launch video-looks 4 "${P}ROUTE=none" "${P}TAB=Looks" || true
@@ -136,6 +153,11 @@ launch video-editor 9 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_rain.jpg" "
 launch video-camera 6 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" || true
 kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
+
+# The app's own log lines for the picked Home and the camera.
+for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/11-camera.out.log"; do
+  [ -f "$f" ] && { echo "== $(basename "$f")"; grep -a '\[LUMA\]' "$f" | tail -20; }
+done
 
 # Crash reports, if any screen took the app down.
 cp ~/Library/Logs/DiagnosticReports/LumaLook* "$OUT/logs/" 2>/dev/null || true

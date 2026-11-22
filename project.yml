@@ -37,6 +37,10 @@ targets:
         # destination for LUTs from Files/Mail/Safari.
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
+        # Dark from the first frame: the system launch screen draws on the
+        # dark background (black) instead of flashing white before the
+        # launch animation (Screens/LaunchView.swift) takes over.
+        UIUserInterfaceStyle: Dark
         # Night Lab type: Inter (SIL OFL 1.1), bundled in Resources/Fonts.
         UIAppFonts:
           - Inter-Regular.otf
