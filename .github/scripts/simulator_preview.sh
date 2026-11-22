@@ -124,6 +124,9 @@ shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
+# Home again, last, so no first-boot system banner covers it: the reel held
+# on Neon Nights, the same woman as the editor shots (the website uses it).
+shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
 
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.

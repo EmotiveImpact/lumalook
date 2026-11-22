@@ -1122,8 +1122,21 @@ struct TonightsLook {
         let options = self.options
         guard !options.isEmpty else { return [fallback] }
         let day = Calendar(identifier: .gregorian).ordinality(of: .day, in: .era, for: date) ?? 0
+        let start = previewStart(in: options) ?? day
         let n = max(1, min(count, options.count))
-        return (0..<n).map { options[(day + $0) % options.count] }
+        return (0..<n).map { options[(start + $0) % options.count] }
+    }
+
+    /// DEBUG: LUMA_SEED_REELHOLD=<look> ("Neon", "CN93" or a full name) starts
+    /// the reel on that look, so a screenshot can pick its person.
+    private static func previewStart(in options: [TonightsLook]) -> Int? {
+        #if DEBUG
+        guard let wanted = ProcessInfo.processInfo.environment["LUMA_SEED_REELHOLD"],
+              wanted != "1", !wanted.isEmpty else { return nil }
+        return options.firstIndex { $0.preset.name == wanted || $0.tileCode == wanted }
+        #else
+        return nil
+        #endif
     }
 
     /// Changes at midnight; the same all day on every screen.
@@ -1187,11 +1200,12 @@ private struct ViewfinderReel: View {
 
     private var isPaused: Bool { reduceMotion || pick != nil || Self.heldForPreview }
 
-    /// LUMA_SEED_REELHOLD=1 holds the reel on its first look, so a simulator
-    /// screenshot never lands mid-crossfade between two slides.
+    /// LUMA_SEED_REELHOLD holds the reel on its first look, so a simulator
+    /// screenshot never lands mid-crossfade between two slides. "1" keeps
+    /// today's first look; a look name or code starts on that look.
     private static let heldForPreview: Bool = {
         #if DEBUG
-        return ProcessInfo.processInfo.environment["LUMA_SEED_REELHOLD"] == "1"
+        return !(ProcessInfo.processInfo.environment["LUMA_SEED_REELHOLD"] ?? "").isEmpty
         #else
         return false
         #endif
