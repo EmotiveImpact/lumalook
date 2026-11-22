@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LumaLook: film looks true to every skin</title>
+<meta name="description" content="Shoot, grade and edit photos and video on iPhone with film looks tuned on deep skin first. Every look free to try, no watermark, packs yours to keep.">
+<meta name="theme-color" content="#08090a">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Get the LumaLook">
+<meta property="og:description" content="Film looks true to every skin. Shoot, grade and edit on iPhone. Every look free to try, no watermark, packs yours to keep.">
+<meta property="og:image" content="assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<script>document.documentElement.classList.add("js")</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-aperture" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.3 3.3 9 12.5M20.6 9.5H10.1M18.6 18.1 13.4 9M9.7 20.7 15 11.5M3.4 14.5h10.5M5.4 5.9l5.2 9.1"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 15h18M5 15v-3M8 15v-5M11 15v-3M14 15v-5M17 15v-3M20 15v-5"/><path d="M12 19.5l-1.5 1.5h3z"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2.8 20 7.4v9.2l-8 4.6-8-4.6V7.4z"/><path d="M4 7.4 12 12l8-4.6M12 12v9.2"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 2v20"/><path d="m8.5 12-2-1.6v3.2zM15.5 12l2-1.6v3.2z"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6.5 7 6.5 11.2A6.5 6.5 0 0 1 5.5 14.2C5.5 10 12 3 12 3Z"/><path d="M9 14.5a3 3 0 0 0 3 3"/></symbol>
+    <symbol id="i-timeline" viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="5" rx="1.2"/><rect x="11" y="6" width="10" height="5" rx="1.2"/><rect x="6" y="13" width="9" height="5" rx="1.2"/><path d="M13 3v18"/></symbol>
+    <symbol id="i-captions" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 11h4M13 11h4M7 15h7"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4.5-5.5"/><path d="M4 18h2M18 18h2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="mark" href="./" aria-label="LumaLook home"><i></i>lumalook</a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#skin">Skin-true</a>
+      <a href="#looks">Looks</a>
+      <a href="#pricing">Pricing</a>
+      <a href="support.html">Support</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-y btn-sm" href="#get" data-store>Get the app</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- Hero: a graded portrait in a rounded frame, like a frame on a contact sheet -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="frame">
+      <picture class="frame-bg">
+        <source media="(max-width: 760px)" srcset="assets/img/hero/hero-tall.webp" width="1200" height="1800">
+        <img src="assets/img/hero/hero-wide.webp" width="2400" height="1350" alt="A woman with deep brown skin and a full afro, in a black blazer against a red wall, graded with the app's CP3513 Cinema Print II look." fetchpriority="high">
+      </picture>
+      <div class="leak" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+      <div class="frame-copy">
+        <a class="badge glass" href="#looks"><b></b><span><strong>New pack:</strong> After Dark<span class="more">, five looks for flash and neon</span></span><span class="arrow" aria-hidden="true">&rarr;</span></a>
+        <h1 class="lh grad" id="hero-title"><span class="l">Get the</span> <span class="h">LumaLook.</span></h1>
+        <p class="sub">Film looks true to <em>every skin.</em></p>
+        <div class="cta">
+          <a class="btn btn-y btn-lg" href="#get" data-store><span data-store-label>Coming soon to the App Store</span></a>
+          <a class="btn btn-glass btn-lg" href="#how">See how it works</a>
+        </div>
+        <p class="fine">For iPhone, iOS 17 or later. Free to download.</p>
+      </div>
+      <div class="frame-meta" aria-hidden="true">
+        <span class="tc"><i></i>REC <b class="num" data-timecode>00:00:00:00</b></span>
+        <span class="scroll">Scroll to explore <span>&darr;</span></span>
+        <span class="look">Look <b>CP3513</b><span> Cinema Print II</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Look ticker: real look codes and their signature colours -->
+  <div class="ticker" aria-label="A few of the 123 looks">
+    <div class="ticker-track">
+      <div style="display:flex;gap:10px">
+        <span class="chip" style="--c:#ffb547"><i></i><b>KD2</b> Golden Hour</span>
+        <span class="chip" style="--c:#ff3db4"><i></i><b>AD2</b> Neon Nights</span>
+        <span class="chip" style="--c:#8db3d6"><i></i><b>AG60</b> London Rain</span>
+        <span class="chip" style="--c:#ff8a3d"><i></i><b>AD1</b> Afrobeats Glow</span>
+        <span class="chip" style="--c:#2ec4b6"><i></i><b>CN83</b> Hollywood Print</span>
+        <span class="chip" style="--c:#c9a27e"><i></i><b>KD52</b> Cine Negative</span>
+        <span class="chip" style="--c:#ff4b3e"><i></i><b>AD3</b> Night Drive</span>
+        <span class="chip" style="--c:#e9b38a"><i></i><b>PT160</b> Portrait Neg</span>
+        <span class="chip" style="--c:#d4af6a"><i></i><b>CN93</b> Premiere Night</span>
+        <span class="chip" style="--c:#c8c8c8"><i></i><b>TX400</b> Reportage Mono</span>
+        <span class="chip" style="--c:#f2c46d"><i></i><b>IN669</b> Instant Warm</span>
+        <span class="chip" style="--c:#4fa3ff"><i></i><b>KC64</b> Chrome 64</span>
+        <span class="chip" style="--c:#e8e2d6"><i></i><b>KD4</b> Portrait Neutral</span>
+        <span class="chip" style="--c:#ff6a3d"><i></i><b>RS100</b> Redscale</span>
+        <span class="chip" style="--c:#b6c9a0"><i></i><b>FJ4</b> Meadow Green</span>
+        <span class="chip" style="--c:#9aa4b8"><i></i><b>NP1600</b> Night Mono</span>
+      </div>
+      <div style="display:flex;gap:10px" aria-hidden="true">
+        <span class="chip" style="--c:#ffb547"><i></i><b>KD2</b> Golden Hour</span>
+        <span class="chip" style="--c:#ff3db4"><i></i><b>AD2</b> Neon Nights</span>
+        <span class="chip" style="--c:#8db3d6"><i></i><b>AG60</b> London Rain</span>
+        <span class="chip" style="--c:#ff8a3d"><i></i><b>AD1</b> Afrobeats Glow</span>
+        <span class="chip" style="--c:#2ec4b6"><i></i><b>CN83</b> Hollywood Print</span>
+        <span class="chip" style="--c:#c9a27e"><i></i><b>KD52</b> Cine Negative</span>
+        <span class="chip" style="--c:#ff4b3e"><i></i><b>AD3</b> Night Drive</span>
+        <span class="chip" style="--c:#e9b38a"><i></i><b>PT160</b> Portrait Neg</span>
+        <span class="chip" style="--c:#d4af6a"><i></i><b>CN93</b> Premiere Night</span>
+        <span class="chip" style="--c:#c8c8c8"><i></i><b>TX400</b> Reportage Mono</span>
+        <span class="chip" style="--c:#f2c46d"><i></i><b>IN669</b> Instant Warm</span>
+        <span class="chip" style="--c:#4fa3ff"><i></i><b>KC64</b> Chrome 64</span>
+        <span class="chip" style="--c:#e8e2d6"><i></i><b>KD4</b> Portrait Neutral</span>
+        <span class="chip" style="--c:#ff6a3d"><i></i><b>RS100</b> Redscale</span>
+        <span class="chip" style="--c:#b6c9a0"><i></i><b>FJ4</b> Meadow Green</span>
+        <span class="chip" style="--c:#9aa4b8"><i></i><b>NP1600</b> Night Mono</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statement -->
+  <section class="statement" aria-labelledby="say-title">
+    <div class="wrap">
+      <div class="say-col">
+        <h2 class="vh" id="say-title">What LumaLook is</h2>
+        <p class="say">Film looks tuned on <span class="faces" aria-hidden="true"><img src="assets/img/faces/golden.webp" width="128" height="128" alt="" loading="lazy"><img src="assets/img/faces/neon.webp" width="128" height="128" alt="" loading="lazy"><img src="assets/img/faces/bridge.webp" width="128" height="128" alt="" loading="lazy"><img src="assets/img/faces/party.webp" width="128" height="128" alt="" loading="lazy"></span> deep skin first, <span class="dim">so every complexion stays true.</span></p>
+        <p class="say">Shoot, grade and edit on your iPhone. <span class="dim">Every look is free to try, and nothing you export carries a watermark.</span></p>
+        <a class="btn btn-w btn-sm" href="#on-skin">See looks on real skin</a>
+      </div>
+      <div class="stage" data-reveal aria-label="LumaLook on iPhone">
+        <figure class="phone side" style="margin:70px 0 0"><img src="assets/img/screens/camera.webp" width="644" height="1400" loading="lazy" alt="The LumaLook camera with the KD2 Golden Hour look live in the viewfinder, a lens ruler set to 24 millimetres and exposure, white balance and focus readouts."></figure>
+        <figure class="phone mid develop" style="margin:0"><img src="assets/img/screens/home.webp" width="644" height="1400" alt="LumaLook Home: tonight's look, Neon Nights from the After Dark pack, graded over a portrait, with a strip of looks to try, a Resume card and Shoot and Edit a clip buttons." loading="lazy"></figure>
+        <figure class="phone side" style="margin:70px 0 0"><img src="assets/img/screens/editor.webp" width="644" height="1400" loading="lazy" alt="The LumaLook video editor: a clip graded with Neon Nights, a karaoke caption reading then the lights came on, and a timeline with a look on each clip."></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works: the app's real order of work -->
+  <section class="sec" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">How it works</p>
+          <h2 class="lh grad" id="how-title"><span class="l">One look, from shutter</span> <span class="h">to share.</span></h2>
+        </div>
+        <p class="lede">Pick a look once and it follows your footage through every step: in the viewfinder, on the timeline and in the file you post. Photos and video, in one app.</p>
+      </div>
+
+      <article class="step" id="shoot">
+        <div class="step-copy">
+          <p class="kicker"><span>1.0</span> Shoot</p>
+          <h3 class="lh" style="font-size:var(--step-h2)"><span class="l">Shoot it</span> <span class="h">graded.</span></h3>
+          <p class="lede">Choose a look before you press record and watch it live in the viewfinder. It is baked into every clip and photo you take, so what you see is what you get.</p>
+          <ul class="feats">
+            <li><svg aria-hidden="true"><use href="#i-aperture"/></svg><div><b>Live looks</b><span>Swipe through looks on the live picture and set the strength.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-ruler"/></svg><div><b>Lens ruler</b><span>Dial the focal length from 13 to 48 mm like a zoom ring.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-sliders"/></svg><div><b>Manual control</b><span>Exposure, white balance, shutter, ISO and focus, with readouts.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-film"/></svg><div><b>Four modes</b><span>Photo, video, slo-mo and portrait, with a roll counter.</span></div></li>
+          </ul>
+        </div>
+        <div class="step-vis" style="--glow:rgba(255,181,71,.12)">
+          <figure class="phone" style="margin:0"><img src="assets/img/screens/camera.webp" width="644" height="1400" alt="The camera with KD2 Golden Hour at 75 percent, a strip of look swatches and the shutter showing 24 shots left on the roll." loading="lazy"></figure>
+        </div>
+      </article>
+
+      <article class="step flip" id="grade">
+        <div class="step-copy">
+          <p class="kicker"><span>2.0</span> Grade</p>
+          <h3 class="lh" style="font-size:var(--step-h2)"><span class="l">Grade</span> <span class="h">anything.</span></h3>
+          <p class="lede">Put a look on any photo or clip in your library, stack another on top, then compare before and after. Bring your own .cube LUTs and they sit beside ours.</p>
+          <ul class="feats">
+            <li><svg aria-hidden="true"><use href="#i-film"/></svg><div><b>123 looks, 11 packs</b><span>Film negatives, slide, mono, instant, cinema print and LumaLook originals.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-layers"/></svg><div><b>Stack looks</b><span>Layer looks with a strength for each one.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-drop"/></svg><div><b>Fine-tune</b><span>Curves, colour wheels, HSL, split tone, grain and halation.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-cube"/></svg><div><b>Your own LUTs</b><span>Open .cube files or ZIP packs straight from the Files app.</span></div></li>
+          </ul>
+        </div>
+        <div class="step-vis" style="--glow:rgba(46,196,182,.10)">
+          <figure class="phone" style="margin:0"><img src="assets/img/screens/looks.webp" width="644" height="1400" alt="The Looks library: tiles for Clean Neutral, Teal and Orange, Neon Nights and Night Drive, each graded on a real photo, with packs below." loading="lazy"></figure>
+        </div>
+      </article>
+
+      <article class="step" id="edit">
+        <div class="step-copy">
+          <p class="kicker"><span>3.0</span> Edit</p>
+          <h3 class="lh" style="font-size:var(--step-h2)"><span class="l">Edit it</span> <span class="h">together.</span></h3>
+          <p class="lede">A full video editor that keeps the look on every clip. Trim, add music and captions, and cut to the beat without leaving the app.</p>
+          <ul class="feats">
+            <li><svg aria-hidden="true"><use href="#i-timeline"/></svg><div><b>A look per clip</b><span>Give each clip its own look, or one look to all.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-captions"/></svg><div><b>Auto captions</b><span>Word-by-word captions from your speech, worked out on your iPhone where it can.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-music"/></svg><div><b>Music and beats</b><span>Drop in a track and cut your clips to its beat.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-speed"/></svg><div><b>Speed, text and more</b><span>Speed curves, transitions, text, voiceover, green screen and picture in picture.</span></div></li>
+          </ul>
+        </div>
+        <div class="step-vis" style="--glow:rgba(255,61,180,.10)">
+          <figure class="phone" style="margin:0"><img src="assets/img/screens/editor-look.webp" width="644" height="1400" alt="The editor with the look drawer open for clip 2: Neon Nights picked at 75 percent strength, with the choice to apply it to this clip or all clips." loading="lazy"></figure>
+        </div>
+      </article>
+
+      <article class="step flip" id="export">
+        <div class="step-copy">
+          <p class="kicker"><span>4.0</span> Export</p>
+          <h3 class="lh" style="font-size:var(--step-h2)"><span class="l">Export it</span> <span class="h">clean.</span></h3>
+          <p class="lede">No watermark on anything you make, on the free plan or any other. Save to your camera roll at up to 4K, ready for Reels, TikTok and Shorts.</p>
+          <ul class="feats">
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><div><b>No watermark</b><span>Free or paid, your work carries only your name.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-film"/></svg><div><b>Up to 4K</b><span>H.264 or HEVC from 720p to 4K, plus GIF for loops.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-compare"/></svg><div><b>Before and after</b><span>Drag a wipe across the frame before you commit.</span></div></li>
+            <li><svg aria-hidden="true"><use href="#i-cube"/></svg><div><b>Take your grade</b><span>Export your grade as a .cube to use in other editors, with Pro.</span></div></li>
+          </ul>
+        </div>
+        <div class="step-vis">
+          <div class="readout" role="img" aria-label="Export settings: resolution up to 4K, H.264 or HEVC, GIF for loops, grade as .cube, and no watermark.">
+            <div class="ruler" aria-hidden="true"><span style="left:8%">720p</span><span style="left:35%">1080p</span><span style="left:62%">4K</span><span style="left:90%">GIF</span></div>
+            <div class="cell"><small>Resolution</small><b>4K <em>max</em></b></div>
+            <div class="cell"><small>Codec</small><b>HEVC <em>or</em> H.264</b></div>
+            <div class="cell"><small>Loops</small><b>GIF</b></div>
+            <div class="cell"><small>Grade</small><b>.cube <em>Pro</em></b></div>
+            <div class="cell wide"><div><small>Watermark</small><br><b class="y">None. Ever.</b></div><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffc53d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-check"/></svg></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Looks on real skin: the app's real LUTs on its own sample photos -->
+  <section class="sec" id="on-skin" aria-labelledby="onskin-title">
+    <div class="wrap">
+      <div class="feat-head">
+        <h2 id="onskin-title">Looks on real skin</h2>
+        <a class="btn btn-g btn-sm" href="#looks">See all 123 looks</a>
+      </div>
+      <p class="feat-note" id="compare-hint">Real looks from the app on the sample photos it comes with. Hover over a photo, or touch and hold, to see it before the look.</p>
+      <div class="feat-grid">
+        <figure class="lookcard w7" data-compare tabindex="0" style="--pos:50% 35%">
+          <img class="after" src="assets/img/looks/neon.webp" width="1400" height="1089" alt="A young woman with deep brown skin lit by red and green street light, graded with PT400 Portrait Neg 400." loading="lazy">
+          <img class="before" src="assets/img/looks/neon-original.webp" width="1400" height="1089" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">PT400</span><span class="b">Original</span></span>
+          <figcaption><b>Portrait Neg 400<small>PT400</small></b><span class="tags"><span>Negative Archive</span><span class="pro">Pro</span></span></figcaption>
+        </figure>
+        <figure class="lookcard w5" data-compare tabindex="0" style="--pos:50% 38%">
+          <img class="after" src="assets/img/looks/bridge.webp" width="1200" height="1500" alt="A man in an orange puffer jacket on an orange footbridge, graded with PX70W Integral Warm." loading="lazy">
+          <img class="before" src="assets/img/looks/bridge-original.webp" width="1200" height="1500" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">PX70W</span><span class="b">Original</span></span>
+          <figcaption><b>Integral Warm<small>PX70W</small></b><span class="tags"><span>Instant Lab</span><span class="pro">Pro</span></span></figcaption>
+        </figure>
+        <figure class="lookcard w5" data-compare tabindex="0" style="--pos:40% 60%">
+          <img class="after" src="assets/img/looks/party.webp" width="900" height="600" alt="Friends laughing at a packed night-time party, graded with PT160 Portrait Neg." loading="lazy">
+          <img class="before" src="assets/img/looks/party-original.webp" width="900" height="600" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">PT160</span><span class="b">Original</span></span>
+          <figcaption><b>Portrait Neg<small>PT160</small></b><span class="tags"><span>Film Stocks 01</span><span class="free">Free</span></span></figcaption>
+        </figure>
+        <figure class="lookcard w7" data-compare tabindex="0" style="--pos:50% 30%">
+          <img class="after" src="assets/img/looks/golden.webp" width="1400" height="950" alt="A woman with deep brown skin, eyes closed, in late light among leaves, graded with CP2383 Cinema Print." loading="lazy">
+          <img class="before" src="assets/img/looks/golden-original.webp" width="1400" height="950" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">CP2383</span><span class="b">Original</span></span>
+          <figcaption><b>Cinema Print<small>CP2383</small></b><span class="tags"><span>Film Stocks 01</span><span class="free">Free</span></span></figcaption>
+        </figure>
+        <figure class="lookcard w6" data-compare tabindex="0" style="--pos:50% 30%">
+          <img class="after" src="assets/img/looks/campaign.webp" width="1200" height="1800" alt="A woman with a full afro in a black blazer, in black and white with TX400 Reportage Mono." loading="lazy">
+          <img class="before" src="assets/img/looks/campaign-original.webp" width="1200" height="1800" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">TX400</span><span class="b">Original</span></span>
+          <figcaption><b>Reportage Mono<small>TX400</small></b><span class="tags"><span>Film Stocks 01</span><span class="free">Free</span></span></figcaption>
+        </figure>
+        <figure class="lookcard w6" data-compare tabindex="0" style="--pos:50% 55%">
+          <img class="after" src="assets/img/looks/drive.webp" width="1200" height="1200" alt="A driver at night lit by red light through the car window, graded with FN800 Evening Neg 800." loading="lazy">
+          <img class="before" src="assets/img/looks/drive-original.webp" width="1200" height="1200" alt="" loading="lazy">
+          <span class="state" aria-hidden="true"><span class="a">FN800</span><span class="b">Original</span></span>
+          <figcaption><b>Evening Neg 800<small>FN800</small></b><span class="tags"><span>Negative Archive</span><span class="pro">Pro</span></span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Skin-true -->
+  <section class="sec" id="skin" aria-labelledby="skin-title">
+    <div class="wrap skin">
+      <div>
+        <p class="kicker y">Skin-true</p>
+        <h2 class="lh grad" id="skin-title"><span class="l">Tuned on deep skin</span> <span class="h">first.</span></h2>
+        <p class="lede">Most filters were built on pale skin and turn everyone else grey or orange. LumaLook starts from Black and brown skin, so the warmth in a face survives the grade, under golden hour, neon or a phone torch.</p>
+        <div class="presets">
+          <div class="preset" style="--c:#c98a5e">
+            <span class="sw" aria-hidden="true"></span>
+            <div><h3>Deep &amp; True</h3><p>Accurate and luminous, with no cast.</p></div>
+            <span class="hex">#C98A5E</span>
+          </div>
+          <div class="preset" style="--c:#d89a55">
+            <span class="sw" aria-hidden="true"></span>
+            <div><h3>Melanin Glow</h3><p>A warm, golden editorial glow.</p></div>
+            <span class="hex">#D89A55</span>
+          </div>
+          <div class="preset" style="--c:#b87a4e">
+            <span class="sw" aria-hidden="true"></span>
+            <div><h3>Rich Cinema</h3><p>Teal and amber print, and faces stay warm.</p></div>
+            <span class="hex">#B87A4E</span>
+          </div>
+        </div>
+        <p class="note">Richness comes from light, not orange. The Skin First presets lift orange luminance and the toe of the curve instead of piling on contrast, which crushes detail in dark skin.</p>
+      </div>
+      <figure class="skin-photo" style="margin:0">
+        <img src="assets/img/photos/golden.webp" width="1600" height="1085" alt="A woman with deep brown skin and loose curls, eyes closed, lit by warm late light in a forest." loading="lazy">
+        <div class="scope">
+          <img src="assets/img/vectorscope.png" width="400" height="400" alt="A vectorscope of the skin in this photo. The points cluster along the yellow skin-tone line." loading="lazy">
+          <span><b>Park skin on the line.</b> The skin-tone line on the app's vectorscope, at about 11 o'clock. It holds for every complexion.</span>
+        </div>
+        <figcaption class="edge"><span><b>Sample frame</b><br>Photo: Diana Simumpande, Unsplash</span><span class="num">Skin-tone line 123&deg;</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- Promises -->
+  <section class="sec" id="promises" aria-labelledby="promises-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">Our promises</p>
+          <h2 class="lh grad" id="promises-title"><span class="l">No hostage</span> <span class="h">exports.</span></h2>
+        </div>
+        <p class="lede">The loudest complaint about video apps is a paywall sprung at export, after an hour of work. In LumaLook every premium look wears a lock from the start, and nothing else you make is ever held back.</p>
+      </div>
+      <div class="promises">
+        <div class="promise">
+          <span class="ix">01</span>
+          <h3>Every look, <b>free to try.</b></h3>
+          <p>Preview any look on your own photos and clips for as long as you like. Premium looks are marked before you use them, and you only pay if you export one.</p>
+        </div>
+        <div class="promise">
+          <span class="ix">02</span>
+          <h3>No watermark. <b>Ever.</b></h3>
+          <p>Nothing you export carries our logo, on the free plan or any other. Your work goes out looking like yours.</p>
+        </div>
+        <div class="promise">
+          <span class="ix">03</span>
+          <h3>Packs are <b>yours to keep.</b></h3>
+          <p>Buy a pack once and it stays yours, with no subscription. Lifetime includes every pack we ever make.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Looks and packs -->
+  <section class="sec" id="looks" aria-labelledby="looks-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">Looks</p>
+          <h2 class="lh grad" id="looks-title"><span class="l">123 looks.</span> <span class="h">11 packs.</span></h2>
+        </div>
+        <p class="lede">Each pack is a roll of film: one family, a short code on every look and a line about its character. Two packs are free, three are yours for a one-off price and six more come with Pro.</p>
+      </div>
+      <div class="packs">
+        <article class="pack">
+          <div class="cover"><span class="new">New</span><span class="price pro">Pro</span><img src="assets/img/photos/party.webp" width="900" height="600" alt="" loading="lazy"></div>
+          <div class="body"><h3>After Dark<small>5 looks</small></h3><p>Looks for flash, neon and packed rooms.</p><div class="codes"><span>AD1</span><span>AD2</span><span>AD3</span><span>AD4</span><span>AD5</span></div></div>
+        </article>
+        <article class="pack">
+          <div class="cover"><span class="price free">Free</span><img src="assets/img/photos/golden.webp" width="1600" height="1085" alt="" loading="lazy"></div>
+          <div class="body"><h3>Negative Set 01<small>5 looks</small></h3><p>Everyday colour negative: soft contrast, honest skin and forgiving highlights.</p><div class="codes"><span>KD2</span><span>KD4</span><span>KD52</span><span>FJ4</span><span>AG20</span></div></div>
+        </article>
+        <article class="pack">
+          <div class="cover"><span class="price free">Free</span><img src="assets/img/photos/bridge.webp" width="1200" height="1500" alt="" loading="lazy" style="object-position:50% 40%"></div>
+          <div class="body"><h3>Film Stocks 01<small>14 looks</small></h3><p>Measured emulations of real film: negative, slide, mono, instant and cinema print.</p><div class="codes"><span>PT160</span><span>EK100</span><span>KC64</span><span>TX400</span><span>IN669</span><span>CP2383</span><span class="more">+8</span></div></div>
+        </article>
+        <article class="pack">
+          <div class="cover"><span class="price">$3.99</span><img src="assets/img/photos/drive.webp" width="1200" height="1200" alt="" loading="lazy"></div>
+          <div class="body"><h3>Cine Print Set 01<small>5 looks</small></h3><p>The projection-print look: teal shadows, amber skin and blacks that mean it.</p><div class="codes"><span>CN83</span><span>CN93</span><span>CN71</span><span>CN12</span><span>CN44</span></div></div>
+        </article>
+        <article class="pack">
+          <div class="cover"><span class="price">$2.99</span><img src="assets/img/photos/neon.webp" width="1540" height="1198" alt="" loading="lazy" style="object-position:50% 30%"></div>
+          <div class="body"><h3>Originals 01<small>3 looks</small></h3><p>LumaLook signatures. Moods, not stocks.</p><div class="codes"><span>LL1</span><span>LL2</span><span>LL3</span></div></div>
+        </article>
+        <article class="pack">
+          <div class="cover"><span class="price">$2.99</span><img src="assets/img/photos/campaign.webp" width="1067" height="1600" alt="" loading="lazy" style="object-position:50% 25%;filter:grayscale(1) contrast(1.1)"></div>
+          <div class="body"><h3>B&amp;W Set 01<small>3 looks</small></h3><p>Monochrome with intent, from street contrast to gallery softness.</p><div class="codes"><span>BW32</span><span>BW4</span><span>BW16</span></div></div>
+        </article>
+      </div>
+      <div class="pack-foot">
+        <span><b>With Pro:</b> Negative Archive (17), Slide Archive (15), Mono Archive (22), Instant Lab (19), Mirrorless Sims (15) and After Dark (5).</span>
+        <span>Covers use the sample photos that come with the app.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="sec" id="pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">Pricing</p>
+          <h2 class="lh grad" id="pricing-title"><span class="l">Every look.</span> <span class="h">Every pack.</span></h2>
+        </div>
+        <p class="lede">The camera, the editor and two full packs are free, with no watermark. Go Pro for every look, or pay once and keep everything for good.</p>
+      </div>
+      <div class="plans">
+        <article class="plan">
+          <div class="plan-top"><h3>Free</h3></div>
+          <p class="amount"><b class="num">$0</b></p>
+          <p class="under">Free forever</p>
+          <ul>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Camera, grade room and the full video editor</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>Negative Set 01</b> and <b>Film Stocks 01</b> to export</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Preview every other look on your own shots</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Import your own .cube LUTs</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>No watermark</span></li>
+          </ul>
+          <a class="btn btn-g" href="#get" data-store><span data-store-label>Coming soon</span></a>
+        </article>
+
+        <article class="plan feature" id="pro">
+          <div class="plan-top">
+            <h3>Pro</h3>
+            <div class="seg" role="group" aria-label="Billing period">
+              <button type="button" aria-pressed="true" data-period="yearly">Yearly</button>
+              <button type="button" aria-pressed="false" data-period="monthly">Monthly</button>
+            </div>
+          </div>
+          <p class="amount yearly-only"><b class="num">$34.99</b><span>per year</span></p>
+          <p class="amount monthly-only" hidden><b class="num">$5.99</b><span>per month</span></p>
+          <p class="under yearly-only">7-day free trial. Works out at $2.92 a month.</p>
+          <p class="under monthly-only" hidden>Cancel any time in Settings.</p>
+          <ul>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>All 123 looks</b> and every new pack</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Stack looks with a strength for each</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Batch export up to 10 clips</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Take your grade anywhere as .cube</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>Cinematic lenses: anamorphic, vintage prime and more</span></li>
+          </ul>
+          <a class="btn btn-y" href="#get" data-store><span class="yearly-only">Start the free week</span><span class="monthly-only" hidden>Go Pro monthly</span></a>
+        </article>
+
+        <article class="plan">
+          <div class="plan-top"><h3>Lifetime</h3><span class="pill">Pay once</span></div>
+          <p class="amount"><b class="num">$79.99</b><span>once</span></p>
+          <p class="under">No subscription</p>
+          <ul>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>Everything in Pro</b>, for good</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>Every pack</b>, including all future packs</span></li>
+            <li><svg aria-hidden="true"><use href="#i-check"/></svg><span>One payment, nothing to renew</span></li>
+          </ul>
+          <a class="btn btn-w" href="#get" data-store>Get Lifetime</a>
+        </article>
+      </div>
+      <p class="price-note">Or buy single packs from $2.99 and keep them. Prices are in US dollars; the App Store shows the price in your currency. Subscriptions renew automatically until you cancel. See the <a href="terms.html#subscriptions">terms</a>.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="sec" id="faq" aria-labelledby="faq-title">
+    <div class="wrap faq">
+      <div>
+        <p class="kicker">Questions</p>
+        <h2 class="lh grad" id="faq-title"><span class="l">Good to</span> <span class="h">know.</span></h2>
+        <p class="lede">Anything else, <a href="support.html" style="color:var(--tx)">ask us</a>. A real person answers.</p>
+      </div>
+      <div class="qa">
+        <details>
+          <summary>Is LumaLook free?</summary>
+          <p>Yes. The camera, the grade room, the video editor and two full packs (19 looks) are free to use and export, with no watermark. You can preview every other look on your own photos and clips before you decide to buy anything.</p>
+        </details>
+        <details>
+          <summary>What does "skin-true" mean?</summary>
+          <p>Our looks are built and checked on Black and brown skin first, then everyone else. In practice that means warmth in faces is protected, shadows keep their detail, and skin lands on the vectorscope's skin-tone line instead of drifting grey or orange.</p>
+        </details>
+        <details>
+          <summary>Does it work for photos and video?</summary>
+          <p>Both. The same look works in the camera, on photos in your library and on every clip in the editor, so a shoot can match from stills to video.</p>
+        </details>
+        <details>
+          <summary>Can I use my own LUTs?</summary>
+          <p>Yes. Open .cube files or ZIP packs of them from the Files app and they appear in your library beside ours. With Pro you can also export any grade you build as a .cube.</p>
+        </details>
+        <details>
+          <summary>Are my photos and videos uploaded anywhere?</summary>
+          <p>No. Grading, editing and exporting all happen on your iPhone. Auto captions run on the device whenever your language supports it; otherwise Apple's speech recognition service handles them. The <a href="privacy.html">privacy policy</a> has the details.</p>
+        </details>
+        <details>
+          <summary>How does the free trial work?</summary>
+          <p>Yearly Pro starts with 7 days free. If you cancel at least 24 hours before the week ends, you pay nothing. Otherwise it renews at $34.99 a year (or your local price) until you cancel in Settings, then your name, then Subscriptions.</p>
+        </details>
+        <details>
+          <summary>Which iPhones does it run on?</summary>
+          <p>Any iPhone on iOS 17 or later. Some camera features depend on the lenses your iPhone has.</p>
+        </details>
+        <details>
+          <summary>I changed phones. How do I get my purchases back?</summary>
+          <p>Sign in with the same Apple Account, open You, then Settings, and tap Restore Purchases. Pro, Lifetime and any packs you bought come straight back.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing -->
+  <section class="closing" id="get" aria-labelledby="get-title">
+    <div class="bg" aria-hidden="true"><img src="assets/img/photos/neon.webp" width="1540" height="1198" alt="" loading="lazy"></div>
+    <div class="wrap">
+      <h2 class="lh grad" id="get-title"><span class="l">Get the</span> <span class="h">LumaLook.</span></h2>
+      <p class="sub">Film looks true to every skin.</p>
+      <div class="cta">
+        <a class="btn btn-y btn-lg" href="#get" data-store><span data-store-label>Coming soon to the App Store</span></a>
+      </div>
+      <p class="fine" style="color:var(--tx2)">For iPhone, iOS 17 or later.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="mark" href="./"><i></i>lumalook</a>
+        <p class="tag">Film looks true to every skin. Shoot, grade and edit on iPhone.</p>
+      </div>
+      <div>
+        <h4>App</h4>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#looks">Looks and packs</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Help</h4>
+        <ul>
+          <li><a href="support.html">Support</a></li>
+          <li><a href="support.html#restore">Restore purchases</a></li>
+          <li><a href="#faq">Questions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="privacy.html">Privacy</a></li>
+          <li><a href="terms.html">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <p>&copy; 2026 Emotive Impact. Sample photos from Unsplash by Diana Simumpande, Italo Guimas, Bobby Thapa, Jared Pizarro, Lola Azizada and Chuko Cribb. Screens are from the app.</p>
+      <p>Apple, iPhone and App Store are trademarks of Apple Inc.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>
