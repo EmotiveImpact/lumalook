@@ -241,13 +241,13 @@ struct CameraToolFan: View {
 
     @State private var shown = false
 
-    static let radius: CGFloat = 116
+    static let radius: CGFloat = 140
 
-    /// Bubble centres on an arc above `centre`, from 165° round to 15°.
+    /// Bubble centres on an arc above `centre`, from 170° round to 10°.
     static func layout(centre: CGPoint, count: Int, radius: CGFloat = CameraToolFan.radius) -> [CGPoint] {
         guard count > 0 else { return [] }
         return (0..<count).map { i in
-            let degrees = count == 1 ? 90 : 165 - Double(i) * 150 / Double(count - 1)
+            let degrees = count == 1 ? 90 : 170 - Double(i) * 160 / Double(count - 1)
             let t = degrees * .pi / 180
             return CGPoint(x: centre.x + radius * CGFloat(cos(t)),
                            y: centre.y - radius * CGFloat(sin(t)))

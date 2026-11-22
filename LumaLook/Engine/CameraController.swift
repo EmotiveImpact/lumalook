@@ -139,13 +139,8 @@ final class CameraController: NSObject, ObservableObject {
         guard !rawFrameRequests.isEmpty else { return }
         let requests = rawFrameRequests
         rawFrameRequests.removeAll()
-        // A sideways take's frames arrive wider than tall; turn them upright
-        // the same way the viewfinder does, so a reveal lines up with it.
-        let upright = source.extent.width > source.extent.height
-            ? source.oriented(takeLandscapeAngle == 180 ? .left : .right)
-            : source
-        var frame = upright.transformed(by: CGAffineTransform(
-            translationX: -upright.extent.minX, y: -upright.extent.minY))
+        var frame = source.transformed(by: CGAffineTransform(
+            translationX: -source.extent.minX, y: -source.extent.minY))
         let longest = max(frame.extent.width, frame.extent.height)
         if longest > rawFrameMaxSide, longest > 0 {
             let scale = rawFrameMaxSide / longest
@@ -1336,7 +1331,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let source = CIImage(cvPixelBuffer: pixelBuffer)
-        answerRawFrameRequests(source)
+        // A sideways take's frames arrive wider than tall; the looks' tiles
+        // and the swipe's still get them turned upright, as the viewfinder
+        // shows them.
+        answerRawFrameRequests(source.extent.width > source.extent.height
+            ? source.oriented(takeLandscapeAngle == 180 ? .left : .right)
+            : source)
         let graded: CIImage
         if let lookState {
             graded = pipeline.apply(state: lookState, to: source, includeSplit: false)

@@ -1524,8 +1524,14 @@ struct CameraLiveLookView: View {
     private func prepareReveal(of look: CameraLook, token: Int) {
         let job = app.cameraLookJob(for: look, intensity: app.settings.intensity)
         camera.requestRawFrame(maxSide: 1080) { cg in
+            #if DEBUG
+            print("[LUMA] REVEAL frame=\(cg.map { "\($0.width)x\($0.height)" } ?? "nil") token=\(token) now=\(swipe?.token ?? -1)")
+            #endif
             guard let cg, swipe?.token == token else { return }
             CameraLookThumbs.grade(CIImage(cgImage: cg), job: job, maxDimension: 1080) { image in
+                #if DEBUG
+                print("[LUMA] REVEAL graded=\(image == nil ? "nil" : "ok") token=\(token) now=\(swipe?.token ?? -1)")
+                #endif
                 guard swipe?.token == token else { return }
                 swipeReveal = image
             }

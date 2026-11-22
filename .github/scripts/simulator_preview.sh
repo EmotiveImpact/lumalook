@@ -170,7 +170,7 @@ kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
 
 # The app's own log lines for the picked Home and the camera.
-for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/16-locked-look.out.log"; do
+for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/11h-camera-swipe.out.log" "$OUT/logs/16-locked-look.out.log"; do
   [ -f "$f" ] && { echo "== $(basename "$f")"; grep -a '\[LUMA\]' "$f" | tail -20; }
 done
 
