@@ -5,13 +5,15 @@ pages the App Store listing links to. Plain HTML and CSS with a few lines of
 script: no build step, no framework, no cookies, no analytics.
 
 ```
+vercel.json       at the repository root: serves website/, clean URLs
+                  (/privacy, /terms, /support), headers, and skips builds
+                  on branches that have no website/ folder
 website/
   index.html      landing page
   privacy.html    privacy policy (the app's privacy link points here)
   terms.html      terms of use, including the subscription disclosure
   support.html    help and contact (the App Store support URL)
   404.html
-  vercel.json     clean URLs (/privacy, /terms, /support) and headers
   assets/
     site.css      Night Lab tokens and every style
     site.js       App Store link, support address, pricing toggle
@@ -34,8 +36,13 @@ python3 -m http.server 8000
 
 ## Put it live
 
-**Vercel (recommended).** New project, import `EmotiveImpact/lumalook`, set
-**Root Directory** to `website`, framework preset **Other**, no build command.
+**Vercel (recommended, and how it runs today).** The project `lumalook`
+imports `EmotiveImpact/lumalook` with the Root Directory left blank. The
+root `vercel.json` sets the output directory to `website`, with no install
+or build step. Its `ignoreCommand` (`test ! -d website`) skips any branch
+without the site, so app pull requests don't get a failed Vercel check. The
+same settings are saved in the Vercel project, because branches made before
+the site existed don't have the root `vercel.json`.
 Every push to `master` then redeploys, and pull requests get preview links.
 Add the domain under Project, Settings, Domains.
 
