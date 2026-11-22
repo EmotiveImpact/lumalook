@@ -1,0 +1,78 @@
+# Skin test: the Mac half of tools/skin-test.
+#
+# Core Image only exists on Apple platforms, so this job bakes every recipe
+# look through the real Core Image filters (the same code path as
+# LookPipeline.applyRecipe) into small colour cubes, writes probe images for
+# bloom and vignette, and fetches the licensed test portraits listed in
+# tools/skin-test/candidates.txt. It commits the results back to the branch
+# (tools/skin-test/out) so the rest of the test, which is plain Python, can
+# run anywhere. It only runs when the skin-test inputs change.
+name: Skin test bake
+
+on:
+  push:
+    branches: ['claude/**']
+    paths:
+      - 'tools/skin-test/bake_recipes.swift'
+      - 'tools/skin-test/extract_looks.py'
+      - 'tools/skin-test/candidates.txt'
+      - '.github/workflows/skin-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: skin-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bake:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: List the looks from the app's sources
+        run: python3 tools/skin-test/extract_looks.py
+
+      - name: Bake recipe looks through Core Image
+        run: |
+          rm -rf tools/skin-test/out/luts tools/skin-test/out/probes
+          swift tools/skin-test/bake_recipes.swift tools/skin-test/looks.json tools/skin-test/out \
+            LumaLook/Resources/HeroPhotos/hero_golden.jpg
+          ls -la tools/skin-test/out/luts | head
+          du -sh tools/skin-test/out/*
+
+      - name: Fetch the candidate portraits (Unsplash and Pexels licences)
+        run: |
+          mkdir -p tools/skin-test/out/candidates /tmp/raw
+          grep -v '^#' tools/skin-test/candidates.txt | while IFS='|' read -r name page url; do
+            [ -z "$name" ] && continue
+            if [ -f "tools/skin-test/out/candidates/$name.jpg" ]; then echo "have $name"; continue; fi
+            if curl -L --fail -s --max-time 60 -A "Mozilla/5.0 (Macintosh) skin-test" -o "/tmp/raw/$name" "$url"; then
+              sips -s format jpeg -s formatOptions 90 -Z 1400 \
+                --matchTo '/System/Library/ColorSync/Profiles/sRGB Profile.icc' \
+                "/tmp/raw/$name" --out "tools/skin-test/out/candidates/$name.jpg" >/dev/null \
+                && echo "ok $name" \
+                || { sips -s format jpeg -s formatOptions 90 -Z 1400 "/tmp/raw/$name" \
+                       --out "tools/skin-test/out/candidates/$name.jpg" >/dev/null \
+                     && echo "ok (no profile match) $name" || echo "CONVERT FAILED $name"; }
+            else
+              echo "DOWNLOAD FAILED $name"
+            fi
+          done
+          du -sh tools/skin-test/out/candidates
+
+      - name: Commit the results back to the branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add tools/skin-test/out tools/skin-test/looks.json
+          if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          git commit -m "Skin test: Core Image bake and test portraits (from the Mac runner)"
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 5
+          done
+          exit 1
