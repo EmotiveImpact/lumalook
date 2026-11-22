@@ -155,7 +155,7 @@ jobs:
               avconvert --source "$VIDEO" --output "$SMALL" --preset Preset1280x720 || true
             fi
             ls -l "$SMALL" 2>/dev/null || true
-            if [ -f "$SMALL" ] && [ "$(stat -f %z "$SMALL")" -le 6000000 ]; then
+            if [ -f "$SMALL" ] && [ "$(stat -f %z "$SMALL")" -le 8000000 ]; then
               emit "$SMALL"
             fi
           fi

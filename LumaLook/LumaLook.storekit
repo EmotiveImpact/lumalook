@@ -8,7 +8,7 @@
       "internalID": "A1000001-0000-4000-8000-000000000001",
       "localizations": [
         {
-          "description": "Every Pro feature, forever. One payment.",
+          "description": "Pro and every pack, including future ones. Pay once.",
           "displayName": "LumaLook Pro Lifetime",
           "locale": "en_US"
         }
@@ -23,7 +23,7 @@
       "internalID": "A1000001-0000-4000-8000-000000000002",
       "localizations": [
         {
-          "description": "Four cinema print emulation looks.",
+          "description": "Five cinema print emulation looks.",
           "displayName": "Cine Print Set",
           "locale": "en_US"
         }
@@ -38,7 +38,7 @@
       "internalID": "A1000001-0000-4000-8000-000000000003",
       "localizations": [
         {
-          "description": "Four black & white documentary looks.",
+          "description": "Three black & white documentary looks.",
           "displayName": "B&W Set",
           "locale": "en_US"
         }
@@ -53,13 +53,88 @@
       "internalID": "A1000001-0000-4000-8000-000000000004",
       "localizations": [
         {
-          "description": "Four original LumaLook signature looks.",
+          "description": "Three original LumaLook signature looks.",
           "displayName": "Originals Set",
           "locale": "en_US"
         }
       ],
       "productID": "com.emotiveimpact.lumalook.pack.originals-01",
       "referenceName": "Pack Originals",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "A1000001-0000-4000-8000-000000000005",
+      "localizations": [
+        {
+          "description": "17 measured colour negative film looks.",
+          "displayName": "Negative Archive",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.emotiveimpact.lumalook.pack.film-neg-archive",
+      "referenceName": "Pack Negative Archive",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "A1000001-0000-4000-8000-000000000006",
+      "localizations": [
+        {
+          "description": "15 measured colour slide film looks.",
+          "displayName": "Slide Archive",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.emotiveimpact.lumalook.pack.film-slide-archive",
+      "referenceName": "Pack Slide Archive",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "A1000001-0000-4000-8000-000000000007",
+      "localizations": [
+        {
+          "description": "22 measured black & white film looks.",
+          "displayName": "Mono Archive",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.emotiveimpact.lumalook.pack.film-mono-archive",
+      "referenceName": "Pack Mono Archive",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "A1000001-0000-4000-8000-000000000008",
+      "localizations": [
+        {
+          "description": "19 measured instant film looks.",
+          "displayName": "Instant Lab",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.emotiveimpact.lumalook.pack.film-instant-lab",
+      "referenceName": "Pack Instant Lab",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "A1000001-0000-4000-8000-000000000009",
+      "localizations": [
+        {
+          "description": "15 mirrorless camera colour looks.",
+          "displayName": "Mirrorless Sims",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.emotiveimpact.lumalook.pack.film-mirrorless-sims",
+      "referenceName": "Pack Mirrorless Sims",
       "type": "NonConsumable"
     }
   ],

@@ -24,12 +24,16 @@ enum RevenueCatConfig {
     }
 }
 
-/// StoreKit 2 storefront (C5). Pricing approved 21 Nov 2026: Pro $34.99/yr
-/// with a 7-day free trial, $5.99/mo, $79.99 lifetime (every pack, now and
-/// future), look packs $2.99 or $3.99. Deliberately no weekly tier: the LUT
-/// niche is mid-backlash against weekly subs, and monthly converts the
-/// impulse buyer without the stigma. The annual costs about six months of
-/// monthly, and lifetime about a year of it, so the ladder explains itself.
+/// StoreKit 2 storefront (C5). Pricing approved 21 Nov 2026: Pro $34.99 a
+/// year with a 7-day free trial, $5.99 a month, $79.99 Lifetime; paid packs
+/// $2.99 or $3.99 and yours to keep. Deliberately no WEEKLY tier: reviewers
+/// call weekly pricing a scam. The yearly plan costs about half of twelve
+/// months of monthly, and Lifetime a little over two years, so each step up
+/// reads as the better deal without a crossed-out price.
+///
+/// Every Pro product (yearly, monthly, Lifetime) opens every pack, including
+/// packs released later. Every pack except After Dark is also sold one at a
+/// time, so an owned pack stays owned if Pro lapses.
 @MainActor
 final class StoreService: ObservableObject {
 
@@ -51,6 +55,9 @@ final class StoreService: ObservableObject {
         static let monthly = "$5.99"
         static let lifetime = "$79.99"
         static let trialDays = 7
+        /// The yearly price as a number, for the "a month" equivalent the
+        /// paywall shows before StoreKit has answered.
+        static let yearlyAmount: Decimal = 34.99
     }
 
     @Published private(set) var proYearly: Product?
@@ -102,7 +109,8 @@ final class StoreService: ObservableObject {
     func loadProducts() async {
         isLoadingProducts = true
         defer { isLoadingProducts = false }
-        // The film archives come with Pro and are never sold on their own.
+        // Every paid pack is sold on its own, the film archives included;
+        // After Dark comes with Pro and has no product of its own.
         let packIDs = PackCatalog.packs
             .filter { !$0.isFree && !$0.isProIncluded }
             .map { ProductID.pack($0.id) }
@@ -177,8 +185,9 @@ final class StoreService: ObservableObject {
     }
 
     /// A pack is usable if it's free, individually owned, or the user is
-    /// Pro. Pro-included packs (the film archives) are NEVER à la carte —
-    /// they exist to make the membership feel enormous.
+    /// Pro. Pro (yearly, monthly or Lifetime) opens every pack, including
+    /// ones added after the purchase; a pack bought on its own is kept for
+    /// good, whatever happens to Pro.
     func ownsPack(_ packID: String) -> Bool {
         guard let pack = PackCatalog.pack(id: packID) else { return false }
         return pack.isFree || isPro || ownedPackIDs.contains(packID)

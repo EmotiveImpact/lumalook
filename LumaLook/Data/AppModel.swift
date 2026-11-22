@@ -761,6 +761,31 @@ final class AppModel: ObservableObject {
         return nil
     }
 
+    /// The free way out of the lock: the grade-room look becomes its closest
+    /// free look (`MockData.freeAlternative`). Strength and every adjustment
+    /// stay as they were, so only the base look changes.
+    func useFreeLookInGrade(_ store: StoreService) {
+        guard lockedLookInGrade(store) != nil else { return }
+        selectedLook = MockData.freeAlternative(to: selectedLook)
+    }
+
+    /// The same for a whole editor project: the timeline grade, every
+    /// per-clip grade and every adjustment layer wearing a locked look moves
+    /// to its closest free look, in one undo step.
+    func useFreeLooksInProject(_ store: StoreService) {
+        if editor.clips.contains(where: { $0.grade == nil }) {
+            useFreeLookInGrade(store)
+        }
+        editor.replaceGrades { grade in
+            guard store.lock(for: grade) != nil,
+                  let preset = MockData.looks.first(where: { $0.name == grade.baseLookName })
+            else { return nil }
+            var free = grade
+            free.baseLookName = MockData.freeAlternative(to: preset).name
+            return free
+        }
+    }
+
     // MARK: - Export
 
     func exportCurrentVideo(spec: ExportSpec = ExportSpec()) async -> Bool {
