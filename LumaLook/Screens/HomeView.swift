@@ -8,7 +8,7 @@ import CoreImage
 /// and regrades whoever is on screen; tapping the picture goes back to the
 /// reel.
 ///
-/// Top to bottom: the reel (story bars, greeting, search and avatar on it),
+/// Top to bottom: the reel (story bars, the wordmark and greeting, search and avatar on it),
 /// the Resume pill straddling its bottom edge, Shoot and Edit a clip with the
 /// quick starts, Cut to the beat templates, Looks (For you | Recents),
 /// Continue editing, and the pack spotlight.
@@ -506,13 +506,6 @@ private enum HomeDemo {
 // MARK: - Header
 
 private enum HomeClock {
-    /// "Friday · 21:40" (the time follows the device's 12/24 hour setting).
-    static func dayLine(_ date: Date) -> String {
-        let day = date.formatted(.dateTime.weekday(.wide))
-        let time = date.formatted(date: .omitted, time: .shortened)
-        return "\(day) · \(time)"
-    }
-
     static func partOfDay(_ date: Date) -> String {
         let hour = Calendar.current.component(.hour, from: date)
         switch hour {
@@ -523,7 +516,8 @@ private enum HomeClock {
     }
 }
 
-/// Day and time, the greeting, search and the avatar (which opens You).
+/// The wordmark over the greeting (the first run says "Welcome to lumalook"
+/// instead), then search and the avatar (which opens You).
 private struct HomeHeader: View {
     let isFirstRun: Bool
     let onSearch: () -> Void
@@ -553,11 +547,11 @@ private struct HomeHeader: View {
                     .lineLimit(1)
             }
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(HomeClock.dayLine(date))
-                    .font(.luma(size: 13.5, weight: .medium))
-                    .foregroundStyle(LumaTheme.textMuted)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 6) {
+                LumaWordmark(size: 18)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("lumalook")
+                    .accessibilityAddTraits(.isHeader)
                 LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(date), size: 34)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
