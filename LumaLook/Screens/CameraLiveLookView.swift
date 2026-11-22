@@ -242,15 +242,10 @@ struct CameraLiveLookView: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.85),
                    value: camera.lastRecordingURL != nil)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showRollDone)
-        // No auto-start after a purchase or a swap: a camera that begins
-        // recording on its own as a sheet slides away would catch the floor.
-        .lockedLookSheet($lookLock, context: .camera) {
-            app.settlePackPreview(storeService)
-            flash("Look unlocked. Ready when you are")
-        } onUseFreeLook: {
-            app.useFreeLookInGrade(storeService)
-            flash("Now on \(LookSignature.title(in: app.cameraLookName)). Ready when you are")
-        }
+        .animation(.easeOut(duration: 0.18), value: lookLock)
+        // The card asks about the look on the picture; a different look
+        // there makes it stale.
+        .onChange(of: app.cameraLookName) { _, _ in lookLock = nil }
         .onAppear {
             app.library.settleOrder()
             start()
@@ -314,6 +309,10 @@ struct CameraLiveLookView: View {
             overlays(size: size)
             if showHint {
                 hintCard(size: size, top: top)
+            }
+            if let lookLock {
+                lockCard(lookLock, size: size)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -771,6 +770,7 @@ struct CameraLiveLookView: View {
         if formatOpen { formatOpen = false; closed = true }
         if showLookBrowser { showLookBrowser = false; closed = true }
         if landscapeDropOpen { landscapeDropOpen = false; closed = true }
+        if lookLock != nil { lookLock = nil; closed = true }
         return closed
     }
 
@@ -1195,7 +1195,7 @@ struct CameraLiveLookView: View {
             if showHint { hideHint() } else { presentHint(for: 9) }
         } label: {
             CamGlyph(icon: .help, size: 18)
-                .foregroundStyle(showHint ? CamLab.sig : CamLab.text)
+                .foregroundStyle(CamLab.text)
                 .frame(width: 34, height: 34)
                 .camGlass(Circle())
                 .contentShape(Circle())
@@ -1249,6 +1249,55 @@ struct CameraLiveLookView: View {
     private func hideHint() {
         hintToken += 1
         withAnimation(.easeOut(duration: 0.3)) { showHint = false }
+    }
+
+    // MARK: The paid-look card
+    //
+    // Trying a look is free. The ask comes at the shutter, on the lab's card:
+    // 12 in from each side and 124 up from the bottom upright; beside the
+    // plate, 16 up, sideways.
+
+    @ViewBuilder
+    private func lockCard(_ lock: LookLock, size: CGSize) -> some View {
+        let card = CameraLockCard(lock: lock, stills: captureMode.takesStills,
+                                  onUnlocked: { lookUnlocked() },
+                                  onUseFreeLook: { shootWithFreeLook() },
+                                  onClose: { lookLock = nil })
+        if isLandscapeLayout {
+            let plateTrailing = landscapeTurn > 0
+            card
+                .frame(width: min(380, max(size.height - 232, 0)))
+                .padding(.bottom, 16)
+                .padding(plateTrailing ? .trailing : .leading, 116)
+                .frame(width: size.height, height: size.width,
+                       alignment: plateTrailing ? .bottomTrailing : .bottomLeading)
+                .rotationEffect(.degrees(landscapeTurn))
+                .frame(width: size.width, height: size.height)
+        } else {
+            card
+                .frame(width: max(size.width - 24, 0))
+                .frame(width: size.width, height: max(size.height - 124, 0), alignment: .bottom)
+        }
+    }
+
+    /// A purchase landed while the card was up. Nothing starts on its own:
+    /// the look is theirs and the shutter is right there.
+    private func lookUnlocked() {
+        lookLock = nil
+        app.settlePackPreview(storeService)
+        syncCameraLook()
+        flash("Look unlocked. Ready when you are")
+    }
+
+    /// The card's free way on, as its button says: the closest free look
+    /// goes on the picture, and the take (or the still) is made with it. The
+    /// camera gets the new look before anything is written.
+    private func shootWithFreeLook() {
+        lookLock = nil
+        app.useFreeLookInGrade(storeService)
+        syncCameraLook()
+        flash("Now on \(LookSignature.title(in: app.cameraLookName))")
+        shutterPressed()
     }
 
     /// The live histogram. Tap it for the scope.

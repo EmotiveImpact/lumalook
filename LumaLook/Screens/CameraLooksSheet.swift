@@ -1042,3 +1042,196 @@ struct CameraLooksSheet: View {
         }
     }
 }
+
+// MARK: - The paid-look card
+
+/// The lab's ask at the shutter. Trying a look is always free; this card
+/// comes up over the picture when a take (or a still) is about to be made
+/// with a look that is not owned, and gives every way on: the pack that sells
+/// it, Pro, the closest free look, or not now.
+struct CameraLockCard: View {
+    let lock: LookLock
+    /// The photo modes say "shoot"; film says "record".
+    let stills: Bool
+    /// A purchase landed while the card was up.
+    let onUnlocked: () -> Void
+    /// Carry on with the closest free look.
+    let onUseFreeLook: () -> Void
+    let onClose: () -> Void
+
+    @EnvironmentObject private var storeService: StoreService
+    @State private var showPaywall = false
+    @State private var trial: String?
+    @State private var errorMessage: String?
+
+    private static let corner: CGFloat = 24
+
+    private var preset: LookPreset? {
+        guard lock.previewPackID == nil else { return nil }
+        return MockData.looks.first { $0.name == lock.lookName }
+    }
+    /// The free look the third choice swaps in: the one the camera picked for
+    /// a pack it is trying on, or a built-in look's closest free neighbour.
+    private var freeLookName: String? {
+        if lock.previewPackID != nil { return lock.freeLookName }
+        guard let preset else { return nil }
+        let free = MockData.freeAlternative(to: preset)
+        return free.isPremium ? nil : free.name
+    }
+    private var isUnlocked: Bool {
+        if let packID = lock.previewPackID { return storeService.ownsPack(packID) }
+        guard let preset else { return true }
+        return storeService.lock(forBuiltIn: preset) == nil
+    }
+    private var packProduct: Product? {
+        lock.pack.flatMap { storeService.packProducts[$0.id] }
+    }
+    private var verb: String { stills ? "shoot" : "record" }
+    private var need: String { lock.pack.map { "\($0.name) or Pro" } ?? "Pro" }
+    /// A free trial is only promised to an account StoreKit says can have it.
+    private var proTitle: String {
+        trial.map { "Try Pro free for \($0)" } ?? "Get Pro for every look"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(lock.lookName)
+                .font(.luma(size: 17, weight: .bold))
+                .tracking(-0.2)
+                .foregroundStyle(CamLab.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text("Trying looks is always free. To \(verb) with this one you need \(need).")
+                .font(.luma(size: 13, weight: .regular))
+                .foregroundStyle(Color(hex: 0xC9CBD0))
+                .lineSpacing(3)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+                .padding(.bottom, 12)
+            VStack(spacing: 8) {
+                if let pack = lock.pack {
+                    choice("Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
+                           primary: true, busy: storeService.purchaseInFlight) { buyPack() }
+                    choice(proTitle) { openPaywall() }
+                } else {
+                    choice(proTitle, primary: true) { openPaywall() }
+                }
+                if let freeLookName {
+                    choice("\(stills ? "Shoot" : "Record") with \(freeLookName), free") {
+                        LumaHaptics.shared.tap()
+                        onUseFreeLook()
+                    }
+                    .accessibilityHint("Swaps in a free look and carries on")
+                }
+                Button(action: onClose) {
+                    Text("Not now")
+                        .font(.luma(size: 14, weight: .bold))
+                        .foregroundStyle(CamLab.grey)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 8)
+            .disabled(storeService.purchaseInFlight)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .camGlass(RoundedRectangle(cornerRadius: Self.corner), tint: Color(hex: 0x0C0D0F), opacity: 0.95)
+        .contentShape(RoundedRectangle(cornerRadius: Self.corner))
+        // A touch on the card itself never reaches the picture under it.
+        .onTapGesture {}
+        .shadow(color: .black.opacity(0.5), radius: 20, y: 18)
+        .accessibilityAddTraits(.isModal)
+        .sheet(isPresented: $showPaywall, onDismiss: {
+            // Went Pro on the paywall: it closed itself, and so does the card.
+            if isUnlocked { onUnlocked() }
+        }) {
+            PaywallView()
+        }
+        .onChange(of: isUnlocked) { _, unlocked in
+            // A pack bought here closes the card at once; while the paywall
+            // is up, its own dismissal does it instead.
+            if unlocked && !showPaywall { onUnlocked() }
+        }
+        .task(id: storeService.proYearly?.id) {
+            trial = await Self.freeTrial(on: storeService.proYearly)
+        }
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    /// One of the card's buttons: 44 tall on a 14 pt corner, the signal fill
+    /// for the one the card leads with.
+    private func choice(_ title: String, primary: Bool = false, busy: Bool = false,
+                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                if busy {
+                    ProgressView().tint(CamLab.ink)
+                } else {
+                    Text(title)
+                        .font(.luma(size: 14, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .foregroundStyle(primary ? CamLab.ink : CamLab.text)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(primary ? CamLab.sig : Color.white.opacity(0.09),
+                        in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    /// How long this account's free trial of the yearly plan runs, in the
+    /// units StoreKit reports ("7 days"); nil when there is none to offer.
+    private static func freeTrial(on product: Product?) async -> String? {
+        guard let subscription = product?.subscription,
+              let offer = subscription.introductoryOffer,
+              offer.paymentMode == .freeTrial,
+              await subscription.isEligibleForIntroOffer else { return nil }
+        let count = offer.period.value
+        switch offer.period.unit {
+        case .day: return count == 1 ? "1 day" : "\(count) days"
+        case .week: return count == 1 ? "7 days" : "\(count) weeks"
+        case .month: return count == 1 ? "1 month" : "\(count) months"
+        case .year: return count == 1 ? "1 year" : "\(count) years"
+        @unknown default: return nil
+        }
+    }
+
+    private func openPaywall() {
+        LumaHaptics.shared.tap()
+        showPaywall = true
+    }
+
+    /// Buys the one pack that holds this look. A cancel is silent; a real
+    /// failure, or a store that has not answered yet, says so.
+    private func buyPack() {
+        storeService.lastError = nil
+        Task {
+            if packProduct == nil { await storeService.loadProducts() }
+            guard let product = packProduct else {
+                errorMessage = "The App Store is not answering. Check your connection and try again."
+                return
+            }
+            if await storeService.purchase(product) {
+                LumaHaptics.shared.exportSuccess()
+            } else if let error = storeService.lastError {
+                errorMessage = error
+                storeService.lastError = nil
+            }
+        }
+    }
+}
