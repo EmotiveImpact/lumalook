@@ -2,16 +2,19 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
-/// Night Lab Home: the "Tonight" and "Studio" options merged into one
-/// scrolling page (spec: swarm HOME-MERGED.md, mocks h1_home and h2_home).
+/// Night Lab Home, "AF1 Viewfinder reel": direction A's edge-to-edge reel of
+/// tonight's looks wearing direction F's viewfinder (corner brackets, a
+/// thirds grid and a look strip). Tapping a look in the strip pauses the reel
+/// and regrades whoever is on screen; tapping the picture goes back to the
+/// reel.
 ///
-/// Returning user, top to bottom: greeting header, Resume card for the last
-/// edit, the make row (New video / New photo + quick starts), Tonight's look
-/// reel, Cut to the beat templates, Looks (For you | Recents), Continue
-/// editing, and the pack spotlight.
+/// Top to bottom: the reel (story bars, greeting, search and avatar on it),
+/// the Resume pill straddling its bottom edge, Shoot and Edit a clip with the
+/// quick starts, Cut to the beat templates, Looks (For you | Recents),
+/// Continue editing, and the pack spotlight.
 ///
-/// First run (no projects): the reel moves up under a "Welcome to lumalook"
-/// header, there is no Resume card and no Continue editing.
+/// First run (no projects): "Welcome to lumalook" on the reel, no Resume pill
+/// and no Continue editing.
 ///
 /// The avatar opens You; there is no crown or gear here any more. The Store
 /// is folded into Looks, so Home links to the pack page and the Looks tab,
@@ -21,26 +24,58 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var lookTiles = HomeLookTileRender()
     @State private var looksMode: HomeLooksMode = .forYou
+    /// Which of tonight's three looks the reel is on.
+    @State private var reelIndex = 0
+    /// A look picked in the reel's strip (preset name). It pauses the reel
+    /// and regrades the frame on screen; nil lets the reel cycle.
+    @State private var reelPick: String? = nil
+    /// Scrolled off the top: the status bar backing turns solid.
+    @State private var scrolled = false
 
     /// Scroll target for the "Templates" quick start.
     static let beatAnchor = "home.cutToTheBeat"
+    private static let scrollSpace = "home.scroll"
+
+    /// About three quarters of the screen, like the mock.
+    static func reelHeight(screen: CGFloat) -> CGFloat {
+        min(720, max(560, (screen * 0.74).rounded()))
+    }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            LumaTheme.background.ignoresSafeArea()
-            ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    page(scrollToBeat: {
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo(HomeView.beatAnchor, anchor: .top)
+        GeometryReader { geo in
+            let safeTop = geo.safeAreaInsets.top
+            let reelHeight = HomeView.reelHeight(
+                screen: geo.size.height + safeTop + geo.safeAreaInsets.bottom)
+            ZStack(alignment: .top) {
+                LumaTheme.background.ignoresSafeArea()
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        page(safeTop: safeTop, reelHeight: reelHeight, scrollToBeat: {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo(HomeView.beatAnchor, anchor: .top)
+                            }
+                        })
+                        .padding(.bottom, 40)
+                        .background(alignment: .top) {
+                            GeometryReader { inner in
+                                Color.clear.preference(
+                                    key: HomeScrollOffsetKey.self,
+                                    value: inner.frame(in: .named(HomeView.scrollSpace)).minY)
+                            }
                         }
-                    })
-                    .padding(.bottom, 40)
+                    }
+                    .coordinateSpace(name: HomeView.scrollSpace)
+                    // The reel runs up under the status bar.
+                    .ignoresSafeArea(.container, edges: .top)
                 }
+                HomeStatusScrim(solid: scrolled, height: safeTop)
             }
-            HomeStatusScrim()
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onPreferenceChange(HomeScrollOffsetKey.self) { offset in
+            let past = offset < -12
+            if past != scrolled { scrolled = past }
+        }
         .onAppear { renderLookTiles() }
         .onChange(of: tileStamp) { _, _ in renderLookTiles() }
     }
@@ -48,20 +83,25 @@ struct HomeView: View {
     // MARK: Page
 
     @ViewBuilder
-    private func page(scrollToBeat: @escaping () -> Void) -> some View {
+    private func page(safeTop: CGFloat, reelHeight: CGFloat,
+                      scrollToBeat: @escaping () -> Void) -> some View {
         let works = self.works
+        let resume = works.first
         VStack(alignment: .leading, spacing: 0) {
-            HomeHeader(isFirstRun: works.isEmpty,
-                       onSearch: { openLooks() },
-                       onAvatar: { openYou() })
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-            if let resume = works.first {
-                returningTop(resume: resume, scrollToBeat: scrollToBeat)
-            } else {
-                firstRunTop(scrollToBeat: scrollToBeat)
+            viewfinderReel(isFirstRun: works.isEmpty, safeTop: safeTop, height: reelHeight,
+                           pillRoom: resume == nil ? 0 : HomeResumePill.overlap)
+            if let resume {
+                // Straddles the reel's bottom edge (later siblings draw on top).
+                HomeResumePill(work: resume, store: app.store) { open(resume) }
+                    .padding(.horizontal, 12)
+                    .padding(.top, -HomeResumePill.overlap)
             }
+            HomeShootRow(onShoot: { shoot(with: shownLook) },
+                         onEdit: { newVideo() },
+                         onPhoto: { newPhoto() },
+                         onTemplates: scrollToBeat)
+                .padding(.horizontal, 12)
+                .padding(.top, resume == nil ? 4 : 12)
 
             beatSection
             looksSection
@@ -70,45 +110,32 @@ struct HomeView: View {
         }
     }
 
-    /// Studio first: the last edit and the two ways in, then Tonight's look.
-    @ViewBuilder
-    private func returningTop(resume: HomeWork, scrollToBeat: @escaping () -> Void) -> some View {
-        HomeResumeCard(work: resume, store: app.store) { open(resume) }
-            .padding(.horizontal, 12)
-            .padding(.top, 16)
-        makeRow(scrollToBeat: scrollToBeat)
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-        reel
-            .padding(.horizontal, 12)
-            .padding(.top, 28)
+    private func viewfinderReel(isFirstRun: Bool, safeTop: CGFloat, height: CGFloat,
+                                pillRoom: CGFloat) -> some View {
+        ViewfinderReel(looks: reelLooks,
+                       stripLooks: TonightsLook.all,
+                       index: $reelIndex,
+                       pick: $reelPick,
+                       packLine: { packLine(for: $0) },
+                       isFirstRun: isFirstRun,
+                       safeTop: safeTop,
+                       height: height,
+                       pillRoom: pillRoom,
+                       reduceMotion: reduceMotion,
+                       onSearch: { openLooks() },
+                       onAvatar: { openYou() })
     }
 
-    /// Nothing to resume yet: the reel leads, the make row follows.
-    @ViewBuilder
-    private func firstRunTop(scrollToBeat: @escaping () -> Void) -> some View {
-        reel
-            .padding(.horizontal, 12)
-            .padding(.top, 16)
-        makeRow(scrollToBeat: scrollToBeat)
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-    }
+    private var reelLooks: [TonightsLook] { TonightsLook.reel() }
 
-    private func makeRow(scrollToBeat: @escaping () -> Void) -> some View {
-        HomeMakeRow(onNewVideo: { newVideo() },
-                    onNewPhoto: { newPhoto() },
-                    onCamera: { openCamera() },
-                    onTemplates: scrollToBeat)
-    }
-
-    private var reel: some View {
-        let looks = TonightsLook.reel()
-        return TonightReel(looks: looks,
-                           packLines: looks.map { packLine(for: $0) },
-                           reduceMotion: reduceMotion,
-                           onTryOn: { tryOnTonight($0) },
-                           onShoot: { shoot(with: $0) })
+    /// What the reel's frame is wearing right now: the look picked in the
+    /// strip, else the reel's own. Shoot takes this look to the camera.
+    private var shownLook: TonightsLook {
+        let looks = reelLooks
+        let base = looks.isEmpty ? TonightsLook.today : looks[min(reelIndex, looks.count - 1)]
+        guard let name = reelPick,
+              let picked = TonightsLook.all.first(where: { $0.preset.name == name }) else { return base }
+        return TonightsLook(preset: picked.preset, photo: base.photo, line: picked.line)
     }
 
     @ViewBuilder
@@ -282,11 +309,6 @@ struct HomeView: View {
         app.openSelectClips(.photo)
     }
 
-    private func openCamera() {
-        app.path.append(.camera)
-        LumaHaptics.shared.tap()
-    }
-
     private func openLooks() {
         app.tab = .looks
         LumaHaptics.shared.tap()
@@ -316,14 +338,6 @@ struct HomeView: View {
             // DEBUG demo card: there is no media behind it.
             newVideo()
         }
-        LumaHaptics.shared.tap()
-    }
-
-    /// Try on a clip: the look goes on the grade and Select clips opens in
-    /// its grade mode (the Apply a Look flow).
-    private func tryOnTonight(_ look: TonightsLook) {
-        useLook(named: look.preset.name)
-        app.openSelectClips(.grade)
         LumaHaptics.shared.tap()
     }
 
@@ -577,19 +591,36 @@ private struct HomeHeader: View {
     }
 }
 
-/// Content scrolls under the status bar; this keeps the clock legible.
+/// The reel runs under the status bar. At the top a soft shade keeps the
+/// clock legible on the photo; once the page scrolls, the backing turns solid
+/// like a navigation bar, so text never slides under the clock.
 private struct HomeStatusScrim: View {
+    let solid: Bool
+    /// The top safe area inset.
+    let height: CGFloat
+
     var body: some View {
-        GeometryReader { geo in
-            LinearGradient(colors: [LumaTheme.background,
-                                    LumaTheme.background.opacity(0.85),
-                                    LumaTheme.background.opacity(0)],
+        ZStack(alignment: .top) {
+            LinearGradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0)],
                            startPoint: .top, endPoint: .bottom)
-                .frame(height: geo.safeAreaInsets.top + 14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(height: height + 26)
+            LumaTheme.background
+                .frame(height: height)
+                .opacity(solid ? 1 : 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.easeOut(duration: 0.18), value: solid)
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
+    }
+}
+
+/// The page's top edge in the scroll view's space (0 at rest, negative once
+/// scrolled).
+private struct HomeScrollOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -620,22 +651,6 @@ private struct HomeSectionHeader: View {
                 .buttonStyle(.lumaPress)
             }
         }
-    }
-}
-
-/// The dark glass pill that sits on photos ("Tonight's look", "Edited 2 h ago").
-private struct HomeGlassChip: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.luma(size: 13, weight: .medium))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 5)
-            .background(Color.black.opacity(0.45), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
     }
 }
 
@@ -884,98 +899,86 @@ private enum HomePosterFrame {
     }
 }
 
-// MARK: - Resume card
+// MARK: - Resume pill
 
-/// The last edit as the hero: its poster graded in its look, one white
-/// Resume button and a thin line in the look's colour.
-private struct HomeResumeCard: View {
+/// The last edit as a pill that straddles the reel's bottom edge: its poster
+/// in a ring of its look's colour, when it was edited, and a white play
+/// button.
+private struct HomeResumePill: View {
     let work: HomeWork
     let store: PersistenceStore
     let action: () -> Void
 
-    private static let radius: CGFloat = 22
+    static let height: CGFloat = 66
+    /// How far the pill rises into the reel.
+    static let overlap: CGFloat = 33
+
+    private var editedLine: String {
+        let label = HomeWork.editedLabel(work.updatedAt)
+        let rest = String(label.dropFirst())
+        return "Resume · " + label.prefix(1).lowercased() + rest
+    }
 
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .bottom) {
-                HomeWorkPoster(work: work, store: store, maxPixel: 1100)
-                LinearGradient(colors: [.clear, .black.opacity(0.85)],
-                               startPoint: UnitPoint(x: 0.5, y: 0.35), endPoint: .bottom)
-                    .allowsHitTesting(false)
-                footer
+            HStack(spacing: 12) {
+                HomeWorkPoster(work: work, store: store, maxPixel: 240)
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(work.signature, lineWidth: 2))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(editedLine)
+                        .font(.luma(size: 12.5))
+                        .foregroundStyle(LumaTheme.textMuted)
+                        .lineLimit(1)
+                    Text("\(work.title) · \(Poster.duration(work.duration))")
+                        .font(.luma(size: 17, weight: .semibold))
+                        .kerning(-0.3)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LumaTheme.onLight)
+                    .frame(width: 44, height: 44)
+                    .background(LumaTheme.textPrimary, in: Circle())
             }
+            .padding(.leading, 8)
+            .padding(.trailing, 11)
             .frame(maxWidth: .infinity)
-            .frame(height: 280)
-            .overlay(alignment: .topLeading) {
-                HomeGlassChip(text: HomeWork.editedLabel(work.updatedAt))
-                    .padding(14)
-            }
-            .overlay(alignment: .bottom) { progressLine }
-            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+            .frame(height: Self.height)
+            // Panel tone on solid ink, so the reel never shows through.
+            .background(Capsule().fill(LumaTheme.panel))
+            .background(Capsule().fill(LumaTheme.background))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 16, y: 6)
+            .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Resume \(work.title). \(work.detail)")
-    }
-
-    private var footer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(work.title)
-                    .font(.luma(size: 23, weight: .bold))
-                    .kerning(-0.8)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(work.detail)
-                    .font(.luma(size: 13))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Text("Resume")
-                .font(.luma(size: 15, weight: .semibold))
-                .foregroundStyle(LumaTheme.onLight)
-                .padding(.horizontal, 20)
-                .frame(height: 42)
-                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 20)
-    }
-
-    private var progressLine: some View {
-        ZStack(alignment: .leading) {
-            Rectangle().fill(Color.white.opacity(0.15))
-            Rectangle()
-                .fill(work.signature)
-                .scaleEffect(x: CGFloat(max(work.gradedFraction, 0.0001)), y: 1, anchor: .leading)
-        }
-        .frame(height: 3)
-        .allowsHitTesting(false)
     }
 }
 
 // MARK: - Make row
 
-/// New video (the one signal-yellow action) and New photo, then the quick
-/// starts: Camera, Templates and Import LUT.
-private struct HomeMakeRow: View {
-    let onNewVideo: () -> Void
-    let onNewPhoto: () -> Void
-    let onCamera: () -> Void
+/// Shoot (the one signal-yellow action, in the look on the reel) and Edit a
+/// clip, then the quick starts: Edit a photo, Templates and Import LUT.
+private struct HomeShootRow: View {
+    let onShoot: () -> Void
+    let onEdit: () -> Void
+    let onPhoto: () -> Void
     let onTemplates: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
-                makeButton(icon: "film", title: "New video", primary: true, action: onNewVideo)
-                makeButton(icon: "photo", title: "New photo", primary: false, action: onNewPhoto)
+                makeButton(icon: "camera", title: "Shoot", primary: true, action: onShoot)
+                makeButton(icon: "film", title: "Edit a clip", primary: false, action: onEdit)
             }
             HStack(spacing: 8) {
-                quickButton(icon: "camera", title: "Camera", action: onCamera)
+                quickButton(icon: "photo", title: "Edit a photo", action: onPhoto)
                 quickButton(icon: "wand.and.stars", title: "Templates", action: onTemplates)
                 LUTImportButton(onImported: nil, label: {
                     HomeQuickLabel(icon: "square.and.arrow.down", title: "Import LUT")
@@ -1086,6 +1089,15 @@ struct TonightsLook {
         ("BW32 · Documentary Grit", .gig, "Hard, honest black and white"),
     ]
 
+    /// Every look in the rotation: the reel's strip offers all of them.
+    static var all: [TonightsLook] { options }
+
+    /// The strip tile's label: the stock code, else the first word ("Neon").
+    var tileCode: String {
+        if let code = LookSignature.code(in: preset.name) { return code }
+        return light.isEmpty ? heavy : (light.split(separator: " ").first.map(String.init) ?? light)
+    }
+
     private static var options: [TonightsLook] {
         rotation.compactMap { entry -> TonightsLook? in
             guard let preset = MockData.looks.first(where: { $0.name == entry.0 }) else { return nil }
@@ -1112,55 +1124,80 @@ struct TonightsLook {
     }
 }
 
-/// The cycling hero: three looks on real people with story-style progress
-/// bars. Tap the photo to skip ahead. With Reduce Motion on it does not
-/// cycle or zoom; taps still move between looks.
-private struct TonightReel: View {
+/// AF1: tonight's three looks on real people, edge to edge, with story bars,
+/// the greeting on top and a viewfinder over the frame (corner brackets and a
+/// thirds grid). The strip under the title regrades the frame on screen:
+/// picking a look pauses the reel, and tapping the picture (or the picked
+/// look again) lets it cycle on. With Reduce Motion on it neither cycles nor
+/// zooms; taps still move between looks.
+private struct ViewfinderReel: View {
     let looks: [TonightsLook]
-    let packLines: [String]
+    let stripLooks: [TonightsLook]
+    @Binding var index: Int
+    @Binding var pick: String?
+    let packLine: (TonightsLook) -> String
+    let isFirstRun: Bool
+    let safeTop: CGFloat
+    let height: CGFloat
+    /// Room at the bottom for the Resume pill that rises into the reel.
+    let pillRoom: CGFloat
     let reduceMotion: Bool
-    let onTryOn: (TonightsLook) -> Void
-    let onShoot: (TonightsLook) -> Void
+    let onSearch: () -> Void
+    let onAvatar: () -> Void
 
-    @State private var index = 0
     @State private var started = Date()
 
     static let dwell: Double = 4.2
-    private static let height: CGFloat = 440
-    private static let radius: CGFloat = 24
+    /// Where the brackets start below the safe area (under the greeting),
+    /// and what the copy and strip need beneath them.
+    private static let bracketTop: CGFloat = 118
+    private static let copyRoom: CGFloat = 312
 
     private var safeIndex: Int {
         looks.isEmpty ? 0 : min(index, looks.count - 1)
     }
 
-    private var current: TonightsLook? {
+    private var base: TonightsLook? {
         looks.isEmpty ? nil : looks[safeIndex]
     }
 
-    private var signature: Color {
-        current?.preset.signature ?? LumaTheme.signal
+    private var picked: TonightsLook? {
+        guard let pick else { return nil }
+        return stripLooks.first { $0.preset.name == pick }
     }
 
-    private var packLine: String {
-        packLines.indices.contains(safeIndex) ? packLines[safeIndex] : ""
+    /// The reel's photo in the picked look, else the reel's own look.
+    private var shown: TonightsLook? {
+        guard let base else { return nil }
+        guard let picked else { return base }
+        return TonightsLook(preset: picked.preset, photo: base.photo, line: picked.line)
     }
+
+    private var signature: Color {
+        shown?.preset.signature ?? LumaTheme.signal
+    }
+
+    private var isPaused: Bool { reduceMotion || pick != nil }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             photos
             scrim
+            thirds
             copy
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Self.height)
-        .overlay(alignment: .top) { topBar }
+        .frame(height: height)
+        .overlay(alignment: .top) { brackets }
+        .overlay(alignment: .top) { top }
         .overlay(alignment: .bottom) { sigline }
-        .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
-        .task(id: reduceMotion) { await cycle() }
+        .clipped()
+        .task(id: "\(reduceMotion)-\(pick ?? "")") { await cycle() }
+        .onAppear { seedPick() }
         .accessibilityElement(children: .contain)
     }
+
+    // MARK: Picture
 
     private var photos: some View {
         ZStack {
@@ -1169,106 +1206,170 @@ private struct TonightReel: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            advance()
-            LumaHaptics.shared.tap()
-        }
+        .onTapGesture { tapPicture() }
         .accessibilityHidden(true)
     }
 
     private func reelPhoto(_ look: TonightsLook, at position: Int) -> some View {
         let isOn = position == safeIndex
-        return HomeGradedPhoto(photo: look.photo, lookName: look.preset.name, maxDimension: 1100)
+        let lookName = (isOn ? picked?.preset.name : nil) ?? look.preset.name
+        return HomeGradedPhoto(photo: look.photo, lookName: lookName, maxDimension: 1100)
             .scaleEffect(isOn || reduceMotion ? 1 : 1.07)
             .animation(reduceMotion ? nil : .easeOut(duration: 3.4), value: safeIndex)
             .opacity(isOn ? 1 : 0)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: safeIndex)
     }
 
+    /// Dark under the status bar, clear across the face, then down into the
+    /// page's ink so the copy, the strip and the Resume pill read.
     private var scrim: some View {
         LinearGradient(stops: [
-            .init(color: .black.opacity(0.35), location: 0),
-            .init(color: .clear, location: 0.22),
+            .init(color: .black.opacity(0.5), location: 0),
+            .init(color: .clear, location: 0.24),
             .init(color: .clear, location: 0.42),
-            .init(color: .black.opacity(0.88), location: 1),
+            .init(color: .black.opacity(0.62), location: 0.66),
+            .init(color: LumaTheme.background, location: 1),
         ], startPoint: .top, endPoint: .bottom)
         .allowsHitTesting(false)
     }
 
-    private var topBar: some View {
+    private var thirds: some View {
+        GeometryReader { geo in
+            Path { path in
+                for step in 1...2 {
+                    let x = geo.size.width * CGFloat(step) / 3
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: geo.size.height))
+                    let y = geo.size.height * CGFloat(step) / 3
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: geo.size.width, y: y))
+                }
+            }
+            .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var brackets: some View {
+        GeometryReader { geo in
+            let boxHeight = max(90, height - safeTop - Self.bracketTop - Self.copyRoom)
+            ViewfinderBrackets()
+                .stroke(Color.white.opacity(0.88),
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                .frame(width: geo.size.width * 0.6, height: boxHeight)
+                .position(x: geo.size.width / 2, y: safeTop + Self.bracketTop + boxHeight / 2)
+        }
+        .frame(height: height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: Chrome
+
+    private var top: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
                 ReelBars(count: looks.count, index: safeIndex, progress: progress(at: context.date))
             }
             .frame(height: 3)
-            HomeGlassChip(text: "Tonight's look")
+            .allowsHitTesting(false)
+            HomeHeader(isFirstRun: isFirstRun, onSearch: onSearch, onAvatar: onAvatar)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
-        .allowsHitTesting(false)
+        .padding(.horizontal, 16)
+        .padding(.top, safeTop + 6)
     }
 
     @ViewBuilder
     private var copy: some View {
-        if let look = current {
+        if let look = shown {
             VStack(alignment: .leading, spacing: 0) {
-                Text(packLine)
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(look.preset.signature)
-                    .lineLimit(1)
-                LumaHeadline(light: look.light, heavy: look.heavy, size: 40)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.top, 4)
-                Text(look.line)
-                    .font(.luma(size: 14))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .lineLimit(1)
-                    .padding(.top, 4)
-                buttons(look)
+                VStack(alignment: .leading, spacing: 0) {
+                    stateChip
+                    Text(packLine(look))
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(look.preset.signature)
+                        .lineLimit(1)
+                        .padding(.top, 14)
+                    LumaHeadline(light: look.light, heavy: look.heavy, size: 40)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.top, 4)
+                    Text(look.line)
+                        .font(.luma(size: 14))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                        .lineLimit(1)
+                        .padding(.top, 4)
+                }
+                .padding(.horizontal, 18)
+                .id("\(safeIndex)-\(pick ?? "")")
+                .transition(.opacity)
+                .allowsHitTesting(false)
+                strip(on: look.photo)
                     .padding(.top, 16)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 22)
-            .id(safeIndex)
-            .transition(.opacity)
+            .padding(.bottom, pillRoom + 16)
         }
     }
 
-    private func buttons(_ look: TonightsLook) -> some View {
-        HStack(spacing: 10) {
-            Button { onTryOn(look) } label: {
-                Text("Try on a clip")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(LumaTheme.onLight)
-                    .lineLimit(1)
-                    .padding(.horizontal, 18)
-                    .frame(height: 46)
-                    .background(LumaTheme.textPrimary,
-                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-            }
-            .buttonStyle(.lumaPress)
-
-            Button { onShoot(look) } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "camera")
-                        .font(.system(size: 15, weight: .medium))
-                    Text("Shoot with it")
-                        .font(.luma(size: 15, weight: .semibold))
-                        .lineLimit(1)
-                }
+    /// "Tonight's look" while the reel runs; once a look is picked, how to
+    /// get back to it.
+    private var stateChip: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(signature)
+                .frame(width: 7, height: 7)
+                .shadow(color: signature, radius: 4)
+            Text(pick == nil ? "Tonight's look" : "Your pick · tap the picture to go back")
+                .font(.luma(size: 13, weight: .medium))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .frame(height: 46)
-                .background(Color.black.opacity(0.42),
-                            in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
-                .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-            }
-            .buttonStyle(.lumaPress)
+                .lineLimit(1)
         }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.45), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+    }
+
+    private func strip(on photo: HeroPhoto) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(stripLooks, id: \.preset.name) { entry in
+                    tile(entry, on: photo)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func tile(_ entry: TonightsLook, on photo: HeroPhoto) -> some View {
+        let isOn = (pick ?? base?.preset.name) == entry.preset.name
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return Button { choose(entry) } label: {
+            HomeGradedPhoto(photo: photo, lookName: entry.preset.name, maxDimension: 240)
+                .frame(width: 64, height: 80)
+                .overlay {
+                    LinearGradient(colors: [.clear, .black.opacity(0.72)],
+                                   startPoint: .center, endPoint: .bottom)
+                }
+                .overlay(alignment: .bottom) {
+                    Text(entry.tileCode)
+                        .font(.luma(size: 12, weight: .bold))
+                        .foregroundStyle(entry.preset.signature)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 6)
+                }
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                .pickedRing(isOn, cornerRadius: 12)
+                .contentShape(shape)
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("Try \(entry.preset.title) on this picture")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     private var sigline: some View {
@@ -1276,12 +1377,32 @@ private struct TonightReel: View {
             .fill(signature)
             .frame(height: 2.5)
             .shadow(color: signature.opacity(0.9), radius: 9)
-            .animation(.easeInOut(duration: 0.6), value: safeIndex)
+            .animation(.easeInOut(duration: 0.6), value: signature)
             .allowsHitTesting(false)
     }
 
+    // MARK: Behaviour
+
+    /// Picks a look, or lets the reel go on when it is tapped again.
+    private func choose(_ entry: TonightsLook) {
+        LumaHaptics.shared.tap()
+        withAnimation(.easeOut(duration: 0.2)) {
+            pick = pick == entry.preset.name ? nil : entry.preset.name
+        }
+    }
+
+    /// With a look picked, back to the reel; otherwise the next look.
+    private func tapPicture() {
+        LumaHaptics.shared.tap()
+        if pick != nil {
+            withAnimation(.easeOut(duration: 0.2)) { pick = nil }
+        } else {
+            advance()
+        }
+    }
+
     private func progress(at date: Date) -> Double {
-        if reduceMotion { return 1 }
+        if isPaused { return 1 }
         return min(1, max(0, date.timeIntervalSince(started) / Self.dwell))
     }
 
@@ -1296,11 +1417,12 @@ private struct TonightReel: View {
         started = Date()
     }
 
-    /// Advances every `dwell` seconds while Home is on screen. A tap resets
-    /// the clock, so the loop re-reads `started` after every sleep.
+    /// Advances every `dwell` seconds while Home is on screen and nothing is
+    /// picked. A tap resets the clock, so the loop re-reads `started` after
+    /// every sleep.
     private func cycle() async {
         started = Date()
-        guard !reduceMotion, looks.count > 1 else { return }
+        guard !isPaused, looks.count > 1 else { return }
         while !Task.isCancelled {
             let elapsed = Date().timeIntervalSince(started)
             if elapsed >= Self.dwell {
@@ -1310,6 +1432,41 @@ private struct TonightReel: View {
             let wait = max(0.05, Self.dwell - elapsed)
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
         }
+    }
+
+    /// LUMA_SEED_HOMEPICK=<look name or code> shows a picked look in the
+    /// simulator preview.
+    private func seedPick() {
+        #if DEBUG
+        guard pick == nil,
+              let seed = ProcessInfo.processInfo.environment["LUMA_SEED_HOMEPICK"],
+              let entry = stripLooks.first(where: { $0.preset.name == seed || $0.tileCode == seed })
+        else { return }
+        pick = entry.preset.name
+        #endif
+    }
+}
+
+/// Four rounded corner brackets, like a camera's focus frame.
+private struct ViewfinderBrackets: Shape {
+    var arm: CGFloat = 24
+
+    func path(in rect: CGRect) -> Path {
+        let a = min(arm, rect.width / 3, rect.height / 3)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + a))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + a, y: rect.minY))
+        path.move(to: CGPoint(x: rect.maxX - a, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + a))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - a))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - a, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.minX + a, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - a))
+        return path
     }
 }
 
