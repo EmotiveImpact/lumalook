@@ -46,6 +46,12 @@ the site existed don't have the root `vercel.json`.
 Every push to `master` then redeploys, and pull requests get preview links.
 Add the domain under Project, Settings, Domains.
 
+**Caching.** `site.css` and `site.js` are revalidated on every visit; images
+and fonts are cached for a day. Browsers that saw an earlier version may
+still hold old copies, so when you change `site.css`, `site.js` or replace an
+image at the same path, bump its `?v=` value in the HTML (every page links
+the stylesheet and script).
+
 **GitHub Pages** also works because the repository is public: Settings, Pages,
 deploy from a GitHub Actions workflow that uploads the `website` folder.
 
