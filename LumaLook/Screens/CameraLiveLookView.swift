@@ -75,6 +75,15 @@ struct CameraLiveLookView: View {
         case photo = "Photo", video = "Video", slowMo = "Slo-mo", portrait = "Portrait"
 
         var takesStills: Bool { self == .photo || self == .portrait }
+
+        var symbol: String {
+            switch self {
+            case .photo:    return "camera.fill"
+            case .video:    return "video.fill"
+            case .slowMo:   return "slowmo"
+            case .portrait: return "person.fill"
+            }
+        }
     }
     @State private var captureMode: CaptureMode = .video
     /// Portrait's f-number, as an index into `apertureStops` (f/2.8).
@@ -418,9 +427,8 @@ struct CameraLiveLookView: View {
                 if !isLandscapeLayout {
                     deckMain
                 }
-                modeSwitch
-                    .padding(.bottom, 12)
                 captureRow
+                    .padding(.top, 8)
             }
             .frame(maxWidth: .infinity)
             .background(alignment: .bottom) { bottomBackground }
@@ -840,11 +848,11 @@ struct CameraLiveLookView: View {
         VStack(spacing: 4) {
             chipsRow
             ZStack(alignment: .bottom) {
-                // The arc's centre is the shutter's: 71 pt below this strip
-                // (the mode names, their gap, half the shutter row).
+                // The arc's centre is the shutter's: 43 pt below this strip
+                // (the gap above the dock, then half the dock).
                 CameraArcDial(ticks: dialTicks(for: dialTarget),
                               index: dialPosition(for: dialTarget),
-                              centreBelow: 71, radius: 168,
+                              centreBelow: 43, radius: 140,
                               onChange: { applyDial($0, to: dialTarget) },
                               onPullUp: { openPro() })
                     .id(dialTarget)
@@ -1524,14 +1532,8 @@ struct CameraLiveLookView: View {
     private func prepareReveal(of look: CameraLook, token: Int) {
         let job = app.cameraLookJob(for: look, intensity: app.settings.intensity)
         camera.requestRawFrame(maxSide: 1080) { cg in
-            #if DEBUG
-            print("[LUMA] REVEAL frame=\(cg.map { "\($0.width)x\($0.height)" } ?? "nil") token=\(token) now=\(swipe?.token ?? -1)")
-            #endif
             guard let cg, swipe?.token == token else { return }
             CameraLookThumbs.grade(CIImage(cgImage: cg), job: job, maxDimension: 1080) { image in
-                #if DEBUG
-                print("[LUMA] REVEAL graded=\(image == nil ? "nil" : "ok") token=\(token) now=\(swipe?.token ?? -1)")
-                #endif
                 guard swipe?.token == token else { return }
                 swipeReveal = image
             }
@@ -1934,32 +1936,34 @@ struct CameraLiveLookView: View {
 
     private var recordingBusy: Bool { camera.isRecording || camera.isPreparingRecording }
 
-    /// Photo, Video, Slo-mo, Portrait. Locked while a take is rolling.
-    /// Sideways, each name turns upright in a square of its own.
-    private var modeSwitch: some View {
-        HStack(spacing: isLandscapeLayout ? 4 : 24) {
+    /// Photo, Video, Slo-mo, Portrait as icons in the dock's right pill;
+    /// the one in use sits in a white circle. Locked while a take is rolling.
+    private var modePill: some View {
+        HStack(spacing: 0) {
             ForEach(visibleModes, id: \.self) { mode in
+                let on = captureMode == mode
                 Button {
                     captureMode = mode
                     LumaHaptics.shared.tap()
                 } label: {
-                    Text(mode.rawValue)
-                        .font(.luma(size: 13, weight: .semibold))
-                        .foregroundStyle(captureMode == mode ? LumaTheme.signal : LumaTheme.textMuted)
-                        .fixedSize()
-                        .padding(.vertical, 4)
+                    Image(systemName: mode.symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(on ? LumaTheme.ink : Color.white.opacity(0.62))
+                        .frame(width: 32, height: 32)
+                        .background(on ? Color.white : Color.clear, in: Circle())
                         .rotationEffect(.degrees(controlTurn))
-                        .frame(width: isLandscapeLayout ? 56 : nil,
-                               height: isLandscapeLayout ? 56 : nil)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
-                .accessibilityAddTraits(captureMode == mode ? .isSelected : [])
+                .accessibilityLabel(mode.rawValue)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .disabled(recordingBusy)
         .opacity(recordingBusy ? 0.45 : 1)
-        .animation(.easeOut(duration: 0.18), value: captureMode)
+        .animation(.snappy(duration: 0.18), value: captureMode)
     }
 
     // MARK: Format — resolution / fps / codec; the photo modes swap it for
@@ -2135,16 +2139,24 @@ struct CameraLiveLookView: View {
 
     // MARK: Capture row
 
-    /// The shutter stays optically centred; the two secondary actions (the
-    /// last shot, flip) sit on the outside. Sideways, each turns in place.
+    /// The dock: the last shot and flip in a grey pill on the left, the
+    /// shutter in the notch between, the modes in a grey pill on the right.
+    /// Sideways, each icon turns in place.
     private var captureRow: some View {
-        HStack(spacing: 0) {
-            // The last shot replaces the gallery glyph once there is one.
-            CameraLastShotButton(image: lastShot?.thumbnail) { openLastShot() }
-                .rotationEffect(.degrees(controlTurn))
-                .animation(.easeOut(duration: 0.25), value: lastShot?.id)
-
-            Spacer(minLength: 0)
+        HStack(spacing: -Self.dockOverlap) {
+            HStack(spacing: 8) {
+                // The last shot replaces the gallery glyph once there is one.
+                CameraLastShotButton(image: lastShot?.thumbnail) { openLastShot() }
+                    .rotationEffect(.degrees(controlTurn))
+                    .animation(.easeOut(duration: 0.25), value: lastShot?.id)
+                Spacer(minLength: 0)
+                flipButton
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 20)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.dockHeight)
+            .background { dockPill(notchLeading: false) }
 
             CameraShutterButton(isRecording: camera.isRecording,
                                 photoMode: captureMode.takesStills,
@@ -2152,34 +2164,54 @@ struct CameraLiveLookView: View {
                 shutterPressed()
             }
             .rotationEffect(.degrees(controlTurn))
+            .zIndex(1)
 
-            Spacer(minLength: 0)
-
-            Button {
-                camera.flipCamera()
-                resetFocusBrackets()
-                LumaHaptics.shared.tap()
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(LumaTheme.textPrimary)
-                    .frame(width: 46, height: 46)
-                    .background(LumaTheme.raised, in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.lumaPress)
-            .rotationEffect(.degrees(controlTurn))
-            .disabled(camera.isRecording)
-            .opacity(camera.isRecording ? 0.35 : 1)
-            .accessibilityLabel("Flip camera")
+            modePill
+                .padding(.leading, 18)
+                .padding(.trailing, 4)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.dockHeight)
+                .background { dockPill(notchLeading: true) }
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, 12)
         // The tab bar's yellow shutter is placed to land on this button's
-        // centre (see LumaTabBar), so keep the two in step.
+        // centre (see LumaTabBar), so keep the row 70 tall with 6 under it.
+        .frame(height: 70)
         .padding(.bottom, 6)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
         .sensoryFeedback(.success, trigger: stillSavedFlash)
+    }
+
+    private static let dockHeight: CGFloat = 58
+    /// How far each pill runs under the shutter's frame, so its notch hugs
+    /// the ring with a 6 pt gap (see `CameraDockPill`).
+    private static let dockOverlap: CGFloat = 6
+
+    private func dockPill(notchLeading: Bool) -> some View {
+        ZStack {
+            CameraDockPill(notchLeading: notchLeading).fill(.ultraThinMaterial)
+            CameraDockPill(notchLeading: notchLeading).fill(LumaTheme.raised.opacity(0.88))
+        }
+    }
+
+    private var flipButton: some View {
+        Button {
+            camera.flipCamera()
+            resetFocusBrackets()
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(LumaTheme.textPrimary)
+                .frame(width: 42, height: 42)
+                .background(LumaTheme.control, in: Circle())
+                .rotationEffect(.degrees(controlTurn))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .disabled(camera.isRecording)
+        .opacity(camera.isRecording ? 0.35 : 1)
+        .accessibilityLabel("Flip camera")
     }
 
     private func shutterPressed() {
@@ -2462,7 +2494,7 @@ struct CameraLiveLookView: View {
             dialTarget = .aperture
             flash("Background blur goes on as you shoot")
         case .photo, .video:
-            break
+            flash(new.rawValue)
         }
         if new != .portrait, dialTarget == .aperture { dialTarget = .lens }
     }
@@ -2977,6 +3009,47 @@ private struct CameraShutterButton: View {
         if photoMode, let rollCount { return "Take photo, \(rollCount) frames left" }
         if photoMode { return "Take photo" }
         return isRecording ? "Stop recording" : "Record"
+    }
+}
+
+/// One of the dock's two grey pills: round at the outer end, and at the
+/// inner end a notch that hugs the shutter's ring with a 6 pt gap. The
+/// notch is a circle of radius 41 round the shutter's centre, which sits
+/// 29 pt past the pill's inner edge (where that circle meets the pill's top
+/// and bottom edges on a 58 pt pill).
+private struct CameraDockPill: Shape {
+    var notchLeading: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        let r = h / 2
+        let notch: CGFloat = 41
+        let reach = sqrt(max(notch * notch - r * r, 0))
+        var path = Path()
+        path.move(to: CGPoint(x: r, y: 0))
+        path.addLine(to: CGPoint(x: w, y: 0))
+        // The notch, from the top edge round to the bottom edge, through
+        // the side of the circle that faces the pill.
+        let centre = CGPoint(x: w + reach, y: r)
+        let top = atan2(Double(-r), Double(-reach))
+        let sweep = 2 * atan2(Double(r), Double(reach))
+        for step in 1...24 {
+            let a = top - sweep * Double(step) / 24
+            path.addLine(to: CGPoint(x: centre.x + notch * CGFloat(cos(a)),
+                                     y: centre.y + notch * CGFloat(sin(a))))
+        }
+        path.addLine(to: CGPoint(x: r, y: h))
+        // The round outer end.
+        for step in 1...24 {
+            let a = Double.pi / 2 + Double.pi * Double(step) / 24
+            path.addLine(to: CGPoint(x: r + r * CGFloat(cos(a)), y: r + r * CGFloat(sin(a))))
+        }
+        path.closeSubpath()
+        var transform = CGAffineTransform(translationX: rect.minX, y: rect.minY)
+        if notchLeading {
+            transform = transform.translatedBy(x: w, y: 0).scaledBy(x: -1, y: 1)
+        }
+        return path.applying(transform)
     }
 }
 

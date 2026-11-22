@@ -202,8 +202,19 @@ final class CameraController: NSObject, ObservableObject {
     private func startStubIfSeeded() -> Bool {
         guard let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
               let source = CIImage(contentsOf: URL(fileURLWithPath: path)) else { return false }
-        let upright = source.transformed(by: CGAffineTransform(
-            translationX: -source.extent.minX, y: -source.extent.minY))
+        // Cropped to the 9:16 a phone's sensor delivers upright, so the
+        // screenshots show the picture as it fills a real phone.
+        var frame = source.extent
+        if frame.width / frame.height > 9.0 / 16.0 {
+            let width = frame.height * 9 / 16
+            frame = CGRect(x: frame.midX - width / 2, y: frame.minY, width: width, height: frame.height)
+        } else {
+            let height = frame.width * 16 / 9
+            frame = CGRect(x: frame.minX, y: frame.midY - height / 2, width: frame.width, height: height)
+        }
+        let cropped = source.cropped(to: frame)
+        let upright = cropped.transformed(by: CGAffineTransform(
+            translationX: -cropped.extent.minX, y: -cropped.extent.minY))
         let timer = DispatchSource.makeTimerSource(queue: mediaQueue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(33))
         timer.setEventHandler { [weak self] in
