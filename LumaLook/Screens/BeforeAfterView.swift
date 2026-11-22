@@ -210,6 +210,18 @@ struct BeforeAfterView: View {
                 applyMode(mode)
                 if tool == .crop { syncCropRatio() }
                 if tool == .mask { beginMask() }
+                #if DEBUG
+                // Preview cell: LUMA_SEED_LOCK=<built-in look name> puts that
+                // look on the grade and opens the lock, as export would.
+                if let name = ProcessInfo.processInfo.environment["LUMA_SEED_LOCK"],
+                   let look = MockData.looks.first(where: { $0.name == name }) {
+                    app.select(look: LibraryLook(builtIn: look))
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        lookLock = app.lockedLookInGrade(storeService)
+                    }
+                }
+                #endif
             }
             .onChange(of: mode) { _, new in applyMode(new) }
             .onChange(of: splitFraction) { _, _ in syncVideoSplit() }
@@ -231,8 +243,14 @@ struct BeforeAfterView: View {
     private func sheets<V: View>(_ content: V) -> some View {
         content
             // Previewing a premium look is free; exporting it asks once, and a
-            // purchase carries straight on into the export sheet.
-            .lockedLookSheet($lookLock) { openExportSheet() }
+            // purchase, or the swap to the closest free look, carries straight
+            // on into the export sheet.
+            .lockedLookSheet($lookLock) {
+                openExportSheet()
+            } onUseFreeLook: {
+                app.useFreeLookInGrade(storeService)
+                openExportSheet()
+            }
             .lumaToolSheet(isPresented: $showExportSheet, style: .panel) {
                 ExportSpecSheet(durationSeconds: app.selectedImage != nil ? 0 : duration,
                                 gradeCubeTitle: "LumaLook_\(app.selectedLook.name.components(separatedBy: " ").first ?? "Grade")",

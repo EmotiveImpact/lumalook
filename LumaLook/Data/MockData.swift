@@ -57,6 +57,33 @@ enum MockData {
             ?? looks[0]
     }
 
+    /// The free built-in look closest to `look`, for the "Export with a free
+    /// look" way out of the premium lock. Nearest by recipe, with each axis
+    /// scaled to roughly one visible step (1000 K of warmth, 0.1 of contrast,
+    /// 0.2 of saturation and so on), so a cool, moody look lands on a cool,
+    /// moody free one: Night Drive gives AG60 London Rain, Afrobeats Glow
+    /// gives KD2 Golden Hour, the Cine prints give KD52 Cine Negative.
+    /// A look that is already free comes back unchanged.
+    static func freeAlternative(to look: LookPreset) -> LookPreset {
+        guard look.isPremium else { return look }
+        let a = look.recipe
+        func distance(_ b: LookRecipe) -> Float {
+            let steps: [Float] = [
+                (a.temperature - b.temperature) / 1000,
+                (a.tint - b.tint) / 20,
+                (a.contrast - b.contrast) / 0.1,
+                (a.saturation - b.saturation) / 0.2,
+                (a.brightness - b.brightness) / 0.05,
+                (a.vignette - b.vignette) / 0.5,
+                (a.bloom - b.bloom) / 0.3,
+                (a.shadowLift - b.shadowLift) / 0.1,
+            ]
+            return steps.reduce(0) { $0 + $1 * $1 }
+        }
+        return looks.filter { !$0.isPremium }
+            .min { distance($0.recipe) < distance($1.recipe) } ?? defaultLook
+    }
+
     // RNI-style process taxonomy (research §4.2): grouping by process reads
     // as expertise; "Trending" reads as commodity.
     static let categories = ["All", "Skin", "Negative", "Cine", "Slide", "B&W", "Original"]

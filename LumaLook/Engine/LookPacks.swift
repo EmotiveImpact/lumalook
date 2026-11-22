@@ -25,9 +25,11 @@ struct LookPack: Identifiable {
     let eraTag: String          // "inspired by 60s chrome"
     let photo: HeroPhoto
     let isFree: Bool
-    let price: String           // display only until StoreKit (C5)
-    /// Included with the Pro membership (not sold à la carte): the film
-    /// archives. Free packs stay free; recipe packs stay purchasable.
+    /// Shown until StoreKit answers with the real local price.
+    let price: String
+    /// Comes with Pro and is not sold on its own (After Dark, the Night Lab
+    /// launch pack). Every other paid pack, the five film archives included,
+    /// is sold one at a time and is also part of Pro.
     var isProIncluded: Bool = false
     let looks: [PackLook]
     /// The newest release: its pack page and its cover say "New pack".
@@ -36,7 +38,8 @@ struct LookPack: Identifiable {
 
 enum PackCatalog {
     /// Launch catalog per the merchandising playbook: Negative free anchor,
-    /// Cine flagship, B&W, Originals.
+    /// Cine flagship, B&W, Originals, the five measured film archives
+    /// ($3.99 each, 15 to 22 looks apiece) and After Dark, which comes with Pro.
     static let packs: [LookPack] = [
         LookPack(
             id: "negative-set-01",
@@ -129,8 +132,7 @@ enum PackCatalog {
             eraTag: "Measured colour negative stocks",
             photo: .golden,
             isFree: false,
-            price: "PRO",
-            isProIncluded: true,
+            price: "$3.99",
             looks: [
                 PackLook(code: "FN160", name: "FN160 · Pastel Neg 160",
                          character: "Soft pastel palette, forgiving highlight roll-off.",
@@ -192,8 +194,7 @@ enum PackCatalog {
             eraTag: "Measured slide films",
             photo: .party,
             isFree: false,
-            price: "PRO",
-            isProIncluded: true,
+            price: "$3.99",
             looks: [
                 PackLook(code: "AP100", name: "AP100 · Euro Slide 100",
                          character: "Middle-European chrome: cool, precise, quiet.",
@@ -249,8 +250,7 @@ enum PackCatalog {
             eraTag: "Measured monochrome stocks",
             photo: .rain,
             isFree: false,
-            price: "PRO",
-            isProIncluded: true,
+            price: "$3.99",
             looks: [
                 PackLook(code: "APX100", name: "APX100 · Fine Mono 100",
                          character: "European fine-grain classic.",
@@ -327,8 +327,7 @@ enum PackCatalog {
             eraTag: "Measured instant films",
             photo: .neon,
             isFree: false,
-            price: "PRO",
-            isProIncluded: true,
+            price: "$3.99",
             looks: [
                 PackLook(code: "PX70W", name: "PX70W · Integral Warm",
                          character: "First-generation integral film, sun-warmed.",
@@ -396,8 +395,7 @@ enum PackCatalog {
             eraTag: "Measured mirrorless profiles",
             photo: .skate,
             isFree: false,
-            price: "PRO",
-            isProIncluded: true,
+            price: "$3.99",
             looks: [
                 PackLook(code: "MS1", name: "MS1 · Standard Sim",
                          character: "The mirrorless standard profile.",

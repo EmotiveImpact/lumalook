@@ -100,8 +100,11 @@ photo clips, multi-audio), Apple-native tranche 1, grain/halation.
 ## NEXT (recommended order)
 ### Ship-blockers (do before App Store)
 - [ ] **App Store Connect products** — recreate the `LumaLook.storekit` IDs
-      (pro.yearly, pro.lifetime, 3 pack IDs) as real products in ASC, or
-      NOTHING can be purchased on a real build. The single hard revenue gate.
+      (pro.yearly $34.99 with a 1-week free trial, pro.monthly $5.99,
+      pro.lifetime $79.99, and 8 pack IDs: three sets at $2.99 to $3.99 plus
+      the five film archives at $3.99) as real products in ASC, then attach
+      them in RevenueCat, or NOTHING can be purchased on a real build. The
+      single hard revenue gate. Pricing approved 2026-11-21.
 - [ ] **Real-device QA session** — the one thing the sim can't do: camera
       flip/zoom/still on hardware, filtered recording, export thermals,
       haptics feel, voiceover mic quality.

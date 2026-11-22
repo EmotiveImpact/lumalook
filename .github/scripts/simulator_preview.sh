@@ -53,12 +53,12 @@ xcrun simctl privacy "$UDID" grant all "$BUNDLE_ID" || true
 xcrun simctl addmedia "$UDID" "$MEDIA"/*.jpg || true
 xcrun simctl spawn "$UDID" defaults write "$BUNDLE_ID" hasSeenOnboarding -bool YES || true
 
-# True unless launchd positively lists no LumaLook process; a failed query
-# is not taken as a crash.
+# 0 when launchd lists LumaLook, 1 when it positively doesn't (a crash), and
+# 2 when the process list couldn't be read, so the screen is unverified.
 running() {
   local list
-  list=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null) || return 0
-  [ -z "$list" ] && return 0
+  list=$(xcrun simctl spawn "$UDID" launchctl list 2>/dev/null) || return 2
+  [ -z "$list" ] && return 2
   grep -q "UIKitApplication:$BUNDLE_ID" <<< "$list"
 }
 
@@ -73,6 +73,7 @@ launch() {
 }
 
 FAILED=""
+UNVERIFIED=""
 CAPTURED=0
 # shot <name> <seconds> [SIMCTL_CHILD_...=value ...]
 shot() {
@@ -82,10 +83,17 @@ shot() {
     FAILED="$FAILED $name"
     return
   fi
-  if ! running; then
-    echo "::warning::LumaLook had stopped by the time the $name screen was captured, so it probably crashed. See logs/$name.err.log."
-    FAILED="$FAILED $name"
-  fi
+  running
+  case $? in
+    1)
+      echo "::warning::LumaLook had stopped by the time the $name screen was captured, so it probably crashed. See logs/$name.err.log."
+      FAILED="$FAILED $name"
+      ;;
+    2)
+      echo "Could not read the simulator's process list for $name; check its screenshot."
+      UNVERIFIED="$UNVERIFIED $name"
+      ;;
+  esac
   xcrun simctl io "$UDID" screenshot --type=png "$OUT/screens/$name.png" > /dev/null 2>&1 \
     && CAPTURED=$((CAPTURED + 1))
   echo "Captured $name"
@@ -121,9 +129,15 @@ shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_T
 shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
 shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
+# A film archive, now sold on its own as well as with Pro.
+shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
+# The export lock with its three ways on, one of them free.
+shot 16-locked-look 10 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_party.jpg" \
+  "${P}SEED_LOCK=Night Drive"
+
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).
 shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
@@ -156,6 +170,7 @@ cp ~/Library/Logs/DiagnosticReports/LumaLook* "$OUT/logs/" 2>/dev/null || true
   echo "Simulator: $DEVICE ($RUNTIME)"
   echo "Screens captured: $CAPTURED"
   if [ -n "$FAILED" ]; then echo "Screens with problems:$FAILED"; fi
+  if [ -n "$UNVERIFIED" ]; then echo "Screens not checked for a crash:$UNVERIFIED"; fi
 } | tee "$OUT/summary.txt"
 
 if [ "$CAPTURED" -eq 0 ]; then
