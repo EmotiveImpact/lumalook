@@ -1,60 +1,63 @@
 import SwiftUI
 import CoreMotion
 
-/// C11 — gyroscope horizon level: a centre line that counter-rotates with
-/// device roll and snaps solid green when level (±1°), the standard cue for
-/// keeping horizons straight. Dead in the simulator (no motion hardware) —
-/// the line simply stays at 0°, which is honest.
+/// The camera's level, as the Camera Lab draws it: a line either side of a
+/// small signal-yellow ring, 180 pt across. The lines stay on the horizon as
+/// the phone rolls, and light up when it is level (within a degree), upright
+/// or sideways.
+///
+/// The simulator has no motion hardware, so there the mark rests at
+/// `restTurn`: flat upright, and turned with the controls when the preview
+/// forces the sideways layout.
 struct LevelIndicator: View {
+    /// Where the mark rests when there is no motion to read.
+    var restTurn: Double = 0
+
     @StateObject private var motion = MotionRollModel()
 
-    private var isLevel: Bool { abs(motion.rollDegrees) < 1.0 }
-
     var body: some View {
-        ZStack {
-            // Fixed reference ticks either side.
-            HStack {
-                tick
-                Spacer()
-                tick
-            }
-            .frame(width: 150)
-
-            // The rolling horizon line.
-            RoundedRectangle(cornerRadius: 1)
-                .fill(isLevel ? Color.green : .white.opacity(0.85))
-                .frame(width: isLevel ? 150 : 84, height: 2)
-                .rotationEffect(.degrees(-motion.rollDegrees))
-                .shadow(color: .black.opacity(0.5), radius: 2)
-                .animation(.easeOut(duration: 0.12), value: isLevel)
+        let live = motion.isLive
+        let roll = motion.rollDegrees
+        // How far off the nearest of upright and sideways.
+        let off = abs(roll.remainder(dividingBy: 90))
+        let isLevel = live && off < 1.0
+        let line = isLevel ? CamLab.sig : Color.white.opacity(0.6)
+        HStack(spacing: 8) {
+            Rectangle().fill(line).frame(height: 1.5)
+            Circle()
+                .strokeBorder(CamLab.sig, lineWidth: 1.5)
+                .background(Circle().fill(isLevel ? CamLab.sig.opacity(0.35) : Color.clear))
+                .frame(width: 14, height: 14)
+            Rectangle().fill(line).frame(height: 1.5)
         }
+        .frame(width: 180, height: 14)
+        .rotationEffect(.degrees(live ? -roll : restTurn))
+        .animation(.easeOut(duration: 0.12), value: isLevel)
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .onAppear { motion.start() }
         .onDisappear { motion.stop() }
     }
-
-    private var tick: some View {
-        RoundedRectangle(cornerRadius: 1)
-            .fill(.white.opacity(0.55))
-            .frame(width: 22, height: 2)
-            .shadow(color: .black.opacity(0.5), radius: 2)
-    }
 }
 
-/// Publishes device roll at ~15 Hz — enough for a smooth line without
+/// Publishes device roll at about 15 Hz: enough for a smooth line without
 /// burning the main thread during recording.
 private final class MotionRollModel: ObservableObject {
+    /// 0 upright, ±90 on either side.
     @Published var rollDegrees: Double = 0
+    /// False until the first reading (always, in the simulator).
+    @Published var isLive = false
     private let manager = CMMotionManager()
 
     func start() {
         guard manager.isDeviceMotionAvailable else { return }
         manager.deviceMotionUpdateInterval = 1.0 / 15.0
         manager.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
-            guard let data else { return }
-            // Portrait: gravity.x maps to roll about the screen axis.
-            let roll = atan2(data.gravity.x, -data.gravity.y) * 180 / .pi
-            self?.rollDegrees = max(-45, min(45, roll))
+            guard let self, let data else { return }
+            // Lying flat there is no horizon to read; hold the last angle.
+            guard hypot(data.gravity.x, data.gravity.y) > 0.25 else { return }
+            self.rollDegrees = atan2(data.gravity.x, -data.gravity.y) * 180 / .pi
+            if !self.isLive { self.isLive = true }
         }
     }
 

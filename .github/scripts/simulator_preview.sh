@@ -75,9 +75,20 @@ launch() {
 FAILED=""
 UNVERIFIED=""
 CAPTURED=0
+# While one screen is being worked on, a file at .github/preview-only holding
+# the start of its shots' names (for example 11 for the camera) limits the run
+# to those shots and skips the recording. Delete the file for the full preview.
+ONLY=""
+if [ -f "$ROOT/.github/preview-only" ]; then
+  ONLY=$(tr -d '[:space:]' < "$ROOT/.github/preview-only")
+  [ -n "$ONLY" ] && echo "Only the shots starting with: $ONLY"
+fi
 # shot <name> <seconds> [SIMCTL_CHILD_...=value ...]
 shot() {
   local name=$1
+  if [ -n "$ONLY" ] && [[ "$name" != "$ONLY"* ]]; then
+    return
+  fi
   if ! launch "$@"; then
     echo "::warning::LumaLook would not launch for the $name screen."
     FAILED="$FAILED $name"
@@ -126,16 +137,20 @@ shot 10e-editor-captions 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEE
 shot 10f-editor-speed 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_RAMP=hero" "${P}SEED_TOOLPANEL=speed"
 shot 10g-editor-transition 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=transition"
 shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
-shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg"
+shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
 # Camera A: pull-up Pro, the looks sheet, the thumb fan, sideways, the ask at
 # record for a paid look tried on free, and the swipe between favourites.
-shot 11c-camera-pro 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMPRO=shutter"
-shot 11d-camera-looks 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_BROWSER=1"
+shot 11c-camera-pro 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMPRO=lens"
+shot 11d-camera-looks 14 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_BROWSER=1"
 shot 11e-camera-fan 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMFAN=1"
 shot 11f-camera-landscape 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMLOOK=pack:after-dark:AD2"
 shot 11g-camera-locked 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1"
 shot 11h-camera-swipe 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMSWIPE=1"
+shot 11i-camera-hint 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMHINT=1"
+shot 11j-camera-locked-land 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1"
+shot 11k-camera-format 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMFORMAT=1"
+shot 11l-camera-format-land 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMMODE=portrait" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFORMAT=1"
 shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
 # A film archive, now sold on its own as well as with Pro.
 shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
@@ -155,6 +170,7 @@ shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" 
 
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.
+if [ -z "$ONLY" ]; then
 xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/lumalook-preview.mp4" \
   > "$OUT/logs/recording.log" 2>&1 &
 RECORDER=$!
@@ -168,6 +184,7 @@ launch video-editor 9 "${P}ROUTE=editor" "${P}SEED_PHOTO=$MEDIA/hero_rain.jpg" "
 launch video-camera 6 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" || true
 kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
+fi
 
 # The app's own log lines for the picked Home and the camera.
 for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/11h-camera-swipe.out.log" "$OUT/logs/16-locked-look.out.log"; do
