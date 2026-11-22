@@ -241,28 +241,24 @@ struct LumaMark: View {
 /// Where the shared top row sits on every tab, so switching tabs never moves
 /// it.
 enum LumaTabMetrics {
-    /// The row's top below the safe area at rest. Home's story bars use the
-    /// space above it; the other tabs leave it as air.
-    static let restTop: CGFloat = 21
-    /// Where Home's row rises to once it has become the top bar.
-    static let compactTop: CGFloat = 2
+    /// The row's top below the safe area, on every tab.
+    static let top: CGFloat = 6
     static let rowHeight: CGFloat = 40
     static let sideInset: CGFloat = 16
+    /// The bar's bottom edge below the safe area: the row plus a little air.
+    /// Home's story bars start here at rest.
+    static let barBottom: CGFloat = top + rowHeight + 8
 }
 
 /// The top row every tab shares (Home, Looks, Projects, You): the title on
 /// the left, Home's being the wordmark, and the tab's actions on the right as
 /// plain glyphs, all at one height and one inset.
 struct LumaTabHeader<Leading: View, Trailing: View>: View {
-    /// How far the row has tightened into a top bar on scroll (Home), 0 to 1.
-    var collapse: CGFloat = 0
     private let leading: Leading
     private let trailing: Trailing
 
-    init(collapse: CGFloat = 0,
-         @ViewBuilder leading: () -> Leading,
+    init(@ViewBuilder leading: () -> Leading,
          @ViewBuilder trailing: () -> Trailing) {
-        self.collapse = collapse
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -270,7 +266,6 @@ struct LumaTabHeader<Leading: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: 4) {
             leading
-                .scaleEffect(1 - 0.15 * collapse, anchor: .leading)
             Spacer(minLength: 8)
             trailing
         }

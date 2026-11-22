@@ -93,8 +93,7 @@ struct HomeView: View {
                     }
                 }
                 HomeStatusScrim(height: safeTop)
-                HomeTopBar(scroll: scroll, safeTop: safeTop,
-                           onSearch: { openLooks() }, onAvatar: { openYou() })
+                HomeTopBar(scroll: scroll, safeTop: safeTop, onSearch: { openLooks() })
                     .accessibilitySortPriority(1)
             }
         }
@@ -173,7 +172,7 @@ struct HomeView: View {
     /// that with its 30 pt gap the words land just clear of the bar's soft
     /// edge. Kept under the Shoot row's height, which gives the room back.
     private static func beatReach(safeTop: CGFloat) -> CGFloat {
-        safeTop + HomeTopBar.compactBottom - 14
+        safeTop + LumaTabMetrics.barBottom - 14
     }
 
     @ViewBuilder
@@ -353,11 +352,6 @@ struct HomeView: View {
 
     private func openLooks() {
         app.tab = .looks
-        LumaHaptics.shared.tap()
-    }
-
-    private func openYou() {
-        app.tab = .profile
         LumaHaptics.shared.tap()
     }
 
@@ -596,43 +590,38 @@ private struct HomeScrollTracker: ViewModifier {
     }
 }
 
-/// The wordmark with search and the avatar (which opens You), pinned above
-/// the page. At rest it sits on the reel, with no backing, where the reel
-/// leaves room for it above the greeting. As the page scrolls it rises to just
-/// under the status bar, the wordmark and avatar tighten, and the page's ink
-/// fades in behind it, so it becomes the top bar and everything scrolls
-/// underneath, the way Spotify's does.
+/// The wordmark and search, pinned above the page in the same spot as every
+/// tab's top row. At rest it sits on the reel's picture, which runs to the
+/// top of the screen, above the story bars. As the page scrolls the row stays
+/// put and the page's ink fades in behind it, so it becomes the top bar and
+/// everything scrolls underneath.
 private struct HomeTopBar: View {
     @ObservedObject var scroll: HomeScrollProgress
     /// The top safe area inset.
     let safeTop: CGFloat
     let onSearch: () -> Void
-    let onAvatar: () -> Void
 
-    /// Scroll distance over which the row turns into the bar.
+    /// Scroll distance over which the ink fades in behind the row.
     static let collapseDistance: CGFloat = 56
-    /// The bar's bottom edge below the safe area once it has collapsed.
-    static let compactBottom: CGFloat = LumaTabMetrics.compactTop + LumaTabMetrics.rowHeight + 4
 
     var body: some View {
         let p = scroll.collapse
-        let rest = LumaTabMetrics.restTop, compact = LumaTabMetrics.compactTop
-        let top = safeTop + rest + (compact - rest) * p
         ZStack(alignment: .top) {
-            backing(height: top + LumaTabMetrics.rowHeight + 4)
+            backing(height: safeTop + LumaTabMetrics.barBottom)
                 .opacity(p)
                 .allowsHitTesting(p > 0.6)
-            LumaTabHeader(collapse: p) {
+            LumaTabHeader {
                 LumaWordmark(size: 20)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("lumalook")
                     .accessibilityAddTraits(.isHeader)
             } trailing: {
-                searchButton
-                avatarButton
-                    .scaleEffect(1 - 0.16 * p, anchor: .trailing)
+                searchButton(collapse: p)
             }
-            .padding(.top, top)
+            // A soft shadow keeps the row legible on the photo; it goes with
+            // the photo.
+            .shadow(color: .black.opacity(0.35 * (1 - p)), radius: 8, y: 1)
+            .padding(.top, safeTop + LumaTabMetrics.top)
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -654,25 +643,30 @@ private struct HomeTopBar: View {
         .contentShape(Rectangle())
     }
 
-    private var searchButton: some View {
+    /// White on the photo, the other tabs' grey once the bar is solid.
+    private func searchButton(collapse p: CGFloat) -> some View {
         Button(action: onSearch) {
-            LumaTabGlyph(systemName: "magnifyingglass")
+            ZStack {
+                LumaTabGlyph(systemName: "magnifyingglass", active: true)
+                    .opacity(1 - p)
+                LumaTabGlyph(systemName: "magnifyingglass")
+                    .opacity(p)
+            }
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Search looks")
     }
+}
 
-    private var avatarButton: some View {
-        Button(action: onAvatar) {
-            HomeGradedPhoto(photo: .bridge)
-                .frame(width: 38, height: 38)
-                .clipShape(Circle())
-                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                .contentShape(Circle())
-                .padding(.bottom, 1)
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("You")
+/// Fades its content out over the first part of the scroll, faster than the
+/// bar fades in, so nothing on the reel shows through the bar.
+private struct HomeScrollFade<Content: View>: View {
+    @ObservedObject var scroll: HomeScrollProgress
+    var rate: CGFloat = 1.4
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content.opacity(max(0, 1 - scroll.collapse * rate))
     }
 }
 
@@ -1275,7 +1269,7 @@ private struct ViewfinderReel: View {
     /// Where the brackets start below the safe area (under the greeting, and
     /// on the first run its extra line), and what the copy and strip need
     /// beneath them.
-    private var bracketTop: CGFloat { isFirstRun ? 146 : 126 }
+    private var bracketTop: CGFloat { isFirstRun ? 154 : 134 }
     private static let copyRoom: CGFloat = 312
 
     private var safeIndex: Int {
@@ -1403,21 +1397,24 @@ private struct ViewfinderReel: View {
 
     // MARK: Chrome
 
-    /// The story bars, then room for the pinned top row (HomeView draws it
-    /// above the page), then the greeting.
+    /// Room for the pinned top row (HomeView draws it above the page), then
+    /// the story bars just under it, then the greeting. The bars and the
+    /// greeting fade as the page scrolls up under the bar.
     private var top: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
-                ReelBars(count: looks.count, index: safeIndex, progress: progress(at: context.date))
+        VStack(alignment: .leading, spacing: 0) {
+            HomeScrollFade(scroll: scroll, rate: 3) {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
+                    ReelBars(count: looks.count, index: safeIndex, progress: progress(at: context.date))
+                }
             }
             .frame(height: 3)
             .allowsHitTesting(false)
             HomeGreeting(isFirstRun: isFirstRun, scroll: scroll)
-                .padding(.top, LumaTabMetrics.rowHeight + 4)
+                .padding(.top, 16)
                 .allowsHitTesting(false)
         }
         .padding(.horizontal, 16)
-        .padding(.top, safeTop + 6)
+        .padding(.top, safeTop + LumaTabMetrics.barBottom)
     }
 
     @ViewBuilder

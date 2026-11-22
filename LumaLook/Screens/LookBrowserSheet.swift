@@ -463,8 +463,8 @@ struct LookBrowserSheet: View {
     private var libraryDrawer: some View {
         VStack(spacing: 0) {
             pageHeader
-                .padding(.top, 8)
-                .padding(.bottom, 14)
+                .padding(.top, LumaTabMetrics.top)
+                .padding(.bottom, 12)
             shelfPills
                 .padding(.bottom, 14)
             if searchExpanded {
@@ -493,17 +493,17 @@ struct LookBrowserSheet: View {
             + countText(app.lutRepository.collections.count, "collections", size: 12)
     }
 
-    /// Looks tab: the page title, search and import.
+    /// Looks tab: the shared top row (the same spot as every tab's), with
+    /// search, import and new look as plain glyphs.
     private var pageHeader: some View {
-        HStack(spacing: 8) {
-            if showsBackButton {
-                BackArrow()
+        LumaTabHeader {
+            HStack(spacing: 8) {
+                if showsBackButton {
+                    BackArrow()
+                }
+                LumaTabTitle(text: "Looks")
             }
-            Text("Looks")
-                .font(.luma(size: 30, weight: .bold))
-                .kerning(-1.2)
-                .foregroundStyle(LumaTheme.textPrimary)
-            Spacer(minLength: 6)
+        } trailing: {
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     searchExpanded.toggle()
@@ -511,7 +511,8 @@ struct LookBrowserSheet: View {
                 }
                 LumaHaptics.shared.tap()
             } label: {
-                glyph(searchExpanded ? "xmark" : "magnifyingglass", active: searchExpanded)
+                LumaTabGlyph(systemName: searchExpanded ? "xmark" : "magnifyingglass",
+                             active: searchExpanded)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(searchExpanded ? "Close search" : "Search looks")
@@ -521,7 +522,7 @@ struct LookBrowserSheet: View {
                     select(LibraryLook(lut: imported), navigate: false)
                 }
             } label: {
-                glyph("square.and.arrow.down", active: false)
+                LumaTabGlyph(systemName: "square.and.arrow.down")
             }
             .accessibilityLabel("Import a LUT")
 
@@ -532,13 +533,12 @@ struct LookBrowserSheet: View {
                     app.path.append(.customLook)
                     LumaHaptics.shared.tap()
                 } label: {
-                    glyph("plus", active: false)
+                    LumaTabGlyph(systemName: "plus")
                 }
                 .buttonStyle(.lumaPress)
                 .accessibilityLabel("Create a new look")
             }
         }
-        .padding(.horizontal, 16)
     }
 
     /// Looks tab: the shelves as pills, the current one filled white.
