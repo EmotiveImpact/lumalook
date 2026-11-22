@@ -598,6 +598,7 @@ struct SelectClipView: View {
         }
         let batch = chosen.compactMap { $0.asset }.map { PhotosPickerItem(itemIdentifier: $0.localIdentifier) }
         app.batchItems = batch.count > 1 ? batch : []
+        app.batchPreviewItemID = batch.count > 1 ? first.asset?.localIdentifier : nil
         guard app.path.last == .selectClip else { return }
         app.path.append(.applyLook)
     }

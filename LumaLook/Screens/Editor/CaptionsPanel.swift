@@ -742,9 +742,18 @@ struct CaptionsPanel: View {
         let onProgress: CaptionProgressHandler = { progress in
             Task { @MainActor in job.progress = progress }
         }
+        // The editor object is shared across projects: remember which one
+        // was transcribed so a late result never lands in another project
+        // opened from the title menu meanwhile.
+        let projectID = editor.projectID
         Task { @MainActor in
             do {
                 let transcript = try await editor.transcribeCaptions(locale: locale, onProgress: onProgress)
+                guard editor.projectID == projectID else {
+                    job.progress = nil
+                    isCaptioning = false
+                    return
+                }
                 let added = editor.replaceCaptions(transcript.segments, style: style,
                                                    position: position, size: size, hidden: hidden)
                 job.lastRunOnDevice = transcript.onDevice
