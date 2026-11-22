@@ -2121,7 +2121,7 @@ private struct EditorContent: View {
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .animation(.easeInOut(duration: 0.22), value: audioFocusKey)
@@ -3468,7 +3468,7 @@ extension View {
             .background(LumaTheme.raised,
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 }
 
@@ -3494,7 +3494,7 @@ private struct LDPSegmented: View {
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .fill(LumaTheme.control)
                                     .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .strokeBorder(LumaTheme.border, lineWidth: 1))
+                                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                             }
                         }
                         .contentShape(Rectangle())
@@ -3506,7 +3506,7 @@ private struct LDPSegmented: View {
         .padding(2)
         .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 }
 
@@ -3529,7 +3529,7 @@ private struct LDPChip: View {
                 .background(selected ? LumaTheme.textPrimary : LumaTheme.raised,
                             in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(selected ? Color.clear : LumaTheme.hairline, lineWidth: 1))
+                    .strokeBorder(selected ? Color.clear : LumaTheme.edge, lineWidth: 1))
                 .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.lumaPress)
@@ -3615,7 +3615,7 @@ private struct LDPTile<Art: View>: View {
                     .background(LumaTheme.raised)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(selected ? LumaTheme.signal : LumaTheme.hairline,
+                        .strokeBorder(selected ? LumaTheme.signal : LumaTheme.edge,
                                       lineWidth: selected ? 2 : 1))
                 Text(title)
                     .font(.luma(size: 11, weight: selected ? .semibold : .medium))
@@ -4040,7 +4040,7 @@ private struct LDPSpeedGraph: View {
         }
         .background(LumaTheme.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
         .accessibilityElement()
         .accessibilityLabel("Speed curve")
     }
@@ -5036,7 +5036,7 @@ private struct LDOverlayPanel: View {
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(LumaTheme.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(LumaTheme.border, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .onSubmit { editor.setOverlayText(id: id, draftText) }
             .onChange(of: draftText) { _, new in editor.setOverlayText(id: id, new) }
 
@@ -6320,7 +6320,7 @@ private struct FullscreenPreview: View {
                     .foregroundStyle(LumaTheme.textPrimary)
                     .frame(width: 38, height: 38)
                     .background(LumaTheme.ink.opacity(0.6), in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.border, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .contentShape(Circle())
             }
             .buttonStyle(.lumaPress)

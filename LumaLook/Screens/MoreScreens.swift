@@ -198,7 +198,7 @@ struct PackStatePill: View {
                 .lineLimit(1)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                .background(Color.white.opacity(0.13), in: Capsule())
         }
     }
 }
@@ -684,7 +684,7 @@ struct BackArrow: View {
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .frame(width: 40, height: 40, alignment: .leading)
             } else {
                 Image(systemName: "chevron.left")
@@ -1556,7 +1556,7 @@ struct ProjectLibraryView: View {
                 .frame(height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .padding(.horizontal, 10)
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 0) {

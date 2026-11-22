@@ -98,7 +98,7 @@ private struct MiniAudioBar: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(LumaTheme.surfaceStrong)
                 .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
             if !track.waveform.isEmpty {
                 MiniWaveform(samples: track.waveform)
                     .padding(.horizontal, 5)
@@ -403,7 +403,7 @@ private struct EditorToolTile: View {
                     .frame(height: 50)
                     .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 Text(entry.title)
                     .font(.luma(size: 11.5, weight: .medium))
                     .foregroundStyle(LumaTheme.textSecondary)
@@ -436,7 +436,7 @@ struct EditorMiniSegment: View {
         .padding(2)
         .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     private func segment(_ index: Int) -> some View {
@@ -455,7 +455,7 @@ struct EditorMiniSegment: View {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(LumaTheme.control)
                             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .strokeBorder(LumaTheme.border, lineWidth: 1))
+                                .strokeBorder(LumaTheme.edge, lineWidth: 1))
                     }
                 }
                 .contentShape(Rectangle())

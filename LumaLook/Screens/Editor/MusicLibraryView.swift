@@ -291,7 +291,7 @@ struct MusicLibraryList: View {
         .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1)
+                .strokeBorder(LumaTheme.edge, lineWidth: 1)
         )
     }
 }
@@ -336,7 +336,7 @@ struct MusicTrackRow: View {
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isActive ? track.colour.opacity(0.45) : LumaTheme.hairline, lineWidth: 1)
+                .strokeBorder(isActive ? track.colour.opacity(0.45) : LumaTheme.edge, lineWidth: 1)
         )
     }
 

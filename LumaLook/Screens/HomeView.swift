@@ -582,7 +582,7 @@ private struct HomeHeader: View {
             HomeGradedPhoto(photo: .bridge)
                 .frame(width: 38, height: 38)
                 .clipShape(Circle())
-                .overlay(Circle().strokeBorder(LumaTheme.border, lineWidth: 1))
+                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .contentShape(Circle())
                 .padding(.bottom, 1)
         }
@@ -960,7 +960,7 @@ private struct HomeResumePill: View {
             // Panel tone on solid ink, so the reel never shows through.
             .background(Capsule().fill(LumaTheme.panel))
             .background(Capsule().fill(LumaTheme.background))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
             .shadow(color: .black.opacity(0.5), radius: 16, y: 6)
             .contentShape(Capsule())
         }
@@ -1020,7 +1020,7 @@ private struct HomeShootRow: View {
             .background(primary ? LumaTheme.signal : LumaTheme.panel,
                         in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(primary ? Color.clear : LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(primary ? Color.clear : LumaTheme.edge, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.lumaPress)
@@ -1060,7 +1060,7 @@ private struct HomeQuickLabel: View {
         .frame(height: 42)
         .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 }
@@ -1346,7 +1346,7 @@ private struct ViewfinderReel: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 6)
         .background(Color.black.opacity(0.45), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     /// The strip's swatches all grade one close face, so each look reads on
@@ -1386,7 +1386,7 @@ private struct ViewfinderReel: View {
                         .padding(.bottom, 6)
                 }
                 .clipShape(shape)
-                .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .pickedRing(isOn, cornerRadius: 12)
                 .contentShape(shape)
         }
@@ -1614,7 +1614,7 @@ private struct BeatTemplateCard: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
     }
 
@@ -1625,7 +1625,7 @@ private struct BeatTemplateCard: View {
             .offset(x: 1)
             .frame(width: 38, height: 38)
             .background(Color.black.opacity(0.5), in: Circle())
-            .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+            .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 }
 
@@ -1718,7 +1718,7 @@ private struct HomeLooksHeader: View {
                         .padding(.horizontal, 11)
                         .frame(height: 26)
                         .background(mode == option ? LumaTheme.control : Color.clear, in: Capsule())
-                        .overlay(Capsule().strokeBorder(mode == option ? LumaTheme.border : Color.clear,
+                        .overlay(Capsule().strokeBorder(mode == option ? LumaTheme.edge : Color.clear,
                                                         lineWidth: 1))
                         .contentShape(Capsule())
                 }
@@ -1728,7 +1728,7 @@ private struct HomeLooksHeader: View {
         }
         .padding(2)
         .background(LumaTheme.raised, in: Capsule())
-        .overlay(Capsule().strokeBorder(LumaTheme.hairline, lineWidth: 1))
+        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 }
 
@@ -1808,7 +1808,7 @@ private struct HomeLookTile: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .pickedRing(isOn, cornerRadius: Self.radius)
             .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         }
@@ -1996,7 +1996,7 @@ private struct WorkPosterCard: View {
                     .frame(width: Poster.width, height: Poster.height)
                     .clipShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous)
-                        .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if work.lookName != nil {
                             Poster.dot(work.signature).padding(9)
@@ -2041,7 +2041,7 @@ private struct GradeSessionPoster: View {
                     .clipShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous)
-                        .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         Poster.dot(LookSignature.colour(forLookNamed: session.baseLookName)).padding(9)
                     }
@@ -2118,7 +2118,7 @@ private struct PackSpotlight: View {
             .overlay(alignment: .bottomTrailing) { facesRow.padding(16) }
             .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         }
         .buttonStyle(.lumaPress)

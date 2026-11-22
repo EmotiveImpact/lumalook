@@ -75,7 +75,7 @@ struct PaywallView: View {
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
                         .background(.ultraThinMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                        .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                 }
                 .buttonStyle(.lumaPress)
                 .accessibilityLabel("Close")
@@ -302,7 +302,7 @@ private struct PaywallPlanRow: View {
             .background(selected ? LumaTheme.signal.opacity(0.06) : LumaTheme.panel,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.hairline,
+                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.edge,
                               lineWidth: selected ? 1.5 : 1))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }

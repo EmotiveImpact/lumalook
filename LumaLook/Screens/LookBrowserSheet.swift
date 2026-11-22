@@ -564,8 +564,8 @@ struct LookBrowserSheet: View {
                 .foregroundStyle(on ? LumaTheme.onLight : LumaTheme.textSecondary)
                 .padding(.horizontal, 14)
                 .frame(height: 32)
-                .background(on ? LumaTheme.textPrimary : Color.clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(on ? LumaTheme.textPrimary : LumaTheme.hairline,
+                .background(on ? LumaTheme.textPrimary : LumaTheme.chip, in: Capsule())
+                .overlay(Capsule().strokeBorder(on ? LumaTheme.textPrimary : LumaTheme.edge,
                                                 lineWidth: 1))
                 .contentShape(Capsule())
         }
@@ -657,7 +657,7 @@ struct LookBrowserSheet: View {
             .background {
                 Circle().fill(active ? AnyShapeStyle(LumaTheme.textPrimary) : AnyShapeStyle(LumaTheme.raised))
             }
-            .overlay(Circle().strokeBorder(LumaTheme.hairline, lineWidth: active ? 0 : 1))
+            .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: active ? 0 : 1))
     }
 
     /// Leave the sheet for the full Looks library. The push has to wait for the
@@ -1312,7 +1312,7 @@ struct LookBrowserSheet: View {
         }
         .padding(12)
         .background(LumaTheme.panel, in: shape)
-        .overlay(shape.strokeBorder(LumaTheme.hairline, lineWidth: 1))
+        .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
         .contentShape(shape)
     }
 
@@ -1729,7 +1729,7 @@ struct LookPosterTile: View {
                     .clipShape(shape)
                     // scaledToFill overflows: confine touches to the tile.
                     .contentShape(shape)
-                    .overlay(shape.strokeBorder(LumaTheme.hairline, lineWidth: 1).opacity(selected ? 0 : 1))
+                    .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1).opacity(selected ? 0 : 1))
                     .pickedRing(selected, cornerRadius: 16)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
             }
@@ -1938,7 +1938,7 @@ struct LookPackCover: View {
                 .overlay(alignment: .bottomLeading) { caption }
                 .clipShape(shape)
                 .contentShape(shape)
-                .overlay(shape.strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("\(pack.name), \(pack.looks.count) looks, \(state)")

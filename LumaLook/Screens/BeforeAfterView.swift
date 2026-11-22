@@ -283,7 +283,7 @@ struct BeforeAfterView: View {
                 .padding(.vertical, 11)
                 .background(LumaTheme.bar, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 76)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -390,7 +390,7 @@ struct BeforeAfterView: View {
         .padding(2)
         .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     private func compareSegment(_ title: String, on: Bool,
@@ -471,7 +471,7 @@ struct BeforeAfterView: View {
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(.black.opacity(0.5), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.lumaPress)
@@ -649,7 +649,7 @@ struct BeforeAfterView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
                         .background(LumaTheme.raised, in: Capsule())
-                        .overlay(Capsule().strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.lumaPress)
@@ -670,7 +670,7 @@ struct BeforeAfterView: View {
         .frame(height: 40)
         .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
@@ -857,7 +857,7 @@ struct BeforeAfterView: View {
             .background(on ? LumaTheme.control : LumaTheme.raised,
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(on ? Color.white.opacity(0.3) : LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(on ? Color.white.opacity(0.3) : LumaTheme.edge, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
@@ -995,7 +995,7 @@ struct BeforeAfterView: View {
                     .frame(height: 32)
                     .background(LumaTheme.control, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             .buttonStyle(.lumaPress)

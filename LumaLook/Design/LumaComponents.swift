@@ -21,8 +21,8 @@ extension ButtonStyle where Self == LumaPressStyle {
 
 // MARK: - Card depth
 
-/// Night Lab panels: one value step above the canvas plus a hairline border,
-/// the structure you can feel in a well-made software product. No drop
+/// Night Lab panels: one value step above the canvas and no border, so the
+/// fill alone carries the structure. No drop
 /// shadow on ink; shadows are kept for things that float over footage.
 struct LumaCardChrome: ViewModifier {
     var cornerRadius: CGFloat = 14
@@ -37,7 +37,7 @@ struct LumaCardChrome: ViewModifier {
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(LumaTheme.hairline, lineWidth: 1)
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1)
             )
     }
 }
@@ -47,19 +47,19 @@ extension View {
         modifier(LumaCardChrome(cornerRadius: cornerRadius, raised: raised, shadow: shadow))
     }
 
-    /// A hairline-bordered panel in any shape colour (default: panel).
+    /// A borderless panel in any shape colour (default: panel).
     func lumaPanel(_ fill: Color = LumaTheme.card, cornerRadius: CGFloat = 14) -> some View {
         background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
-    /// Glass pill over footage: dark translucent fill, blur, faint rim.
+    /// Glass pill over footage: dark translucent fill and blur.
     func lumaGlass(cornerRadius: CGFloat = 999) -> some View {
         background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .background(Color(hex: 0x0C0C0E, opacity: 0.45), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.09), lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .environment(\.colorScheme, .dark)
     }
 }
@@ -325,14 +325,14 @@ struct Chip: View {
             .foregroundStyle(selected ? LumaTheme.onLight : LumaTheme.textSecondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(selected ? LumaTheme.textPrimary : Color.clear))
-            .overlay(Capsule().strokeBorder(selected ? Color.clear : LumaTheme.hairline, lineWidth: 1))
+            .background(Capsule().fill(selected ? LumaTheme.textPrimary : LumaTheme.chip))
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : LumaTheme.edge, lineWidth: 1))
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
-/// Segmented control in a hairline panel. The selected segment is one step
-/// lighter with a stronger rim, and slides between options.
+/// Segmented control on a raised panel. The selected segment is one step
+/// lighter and slides between options.
 struct SegmentPills: View {
     let options: [String]
     @Binding var selection: String
@@ -358,7 +358,7 @@ struct SegmentPills: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(LumaTheme.control)
                                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .strokeBorder(LumaTheme.border, lineWidth: 1))
+                                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                                     .matchedGeometryEffect(id: "segment.pill", in: ns)
                             }
                         }
@@ -448,7 +448,7 @@ struct ToolTile: View {
             VStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card))
-                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .frame(height: 62)
                     .overlay(Image(systemName: icon)
                         .font(.luma(size: 21, weight: .medium))

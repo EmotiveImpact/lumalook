@@ -61,7 +61,7 @@ struct LumaRootView: View {
                         .padding(.horizontal, 18)
                         .padding(.vertical, 11)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 1))
+                        .overlay(Capsule().stroke(LumaTheme.edge, lineWidth: 1))
                         .padding(.top, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .task {

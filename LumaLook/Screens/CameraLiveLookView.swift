@@ -407,7 +407,7 @@ struct CameraLiveLookView: View {
                 .frame(width: 34, height: 34)
                 .background(.ultraThinMaterial, in: Circle())
                 .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.lumaPress)
@@ -552,7 +552,7 @@ struct CameraLiveLookView: View {
                     .frame(width: 30, height: 30)
                     .background(.ultraThinMaterial, in: Circle())
                     .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .contentShape(Circle())
             }
             .buttonStyle(.lumaPress)
@@ -631,7 +631,7 @@ struct CameraLiveLookView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(.black.opacity(0.55), in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+                        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 0.5))
                         .padding(.top, 14)
                         .transition(.opacity)
                 }
@@ -1594,7 +1594,7 @@ struct CameraLiveLookView: View {
                     .foregroundStyle(LumaTheme.textPrimary)
                     .frame(width: 46, height: 46)
                     .background(LumaTheme.raised, in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .contentShape(Circle())
             }
             .buttonStyle(.lumaPress)
@@ -2218,7 +2218,7 @@ private struct CameraHandOffCard: View {
         .padding(16)
         .background(Color.black, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
+            .strokeBorder(LumaTheme.edge, lineWidth: 0.5))
         .shadow(color: .black.opacity(0.6), radius: 24, y: 8)
         .task {
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))

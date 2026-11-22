@@ -153,10 +153,9 @@ private struct RailGlass: View {
             shape.fill(.black.opacity(0.30))
             shape.fill(.ultraThinMaterial)
         }
-        // Over live video the chrome has no predictable backdrop, so a
-        // hairline is meaning rather than decoration: it is what keeps the
-        // control's edge legible against a blown-out sky.
-        .overlay(shape.strokeBorder(.white.opacity(0.07), lineWidth: 0.5))
+        // Borderless like the rest of Night Lab: the dark glass fill is what
+        // keeps the control legible against a blown-out sky.
+        .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 0.5))
     }
 }
 
@@ -441,7 +440,7 @@ struct CameraHistogramPill: View {
         .background(Color(hex: 0x0C0C0E).opacity(0.5),
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(.white.opacity(0.09), lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
         .accessibilityLabel("Histogram")
     }
 
@@ -537,7 +536,7 @@ struct CameraLastShotButton: View {
             .frame(width: 46, height: 46)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(LumaTheme.border, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
@@ -578,7 +577,7 @@ struct CameraRollDoneCard: View {
                         .frame(height: 44)
                         .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                            .strokeBorder(LumaTheme.edge, lineWidth: 1))
                         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
@@ -597,7 +596,7 @@ struct CameraRollDoneCard: View {
         .padding(18)
         .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(LumaTheme.border, lineWidth: 0.5))
+            .strokeBorder(LumaTheme.edge, lineWidth: 0.5))
         .shadow(color: .black.opacity(0.6), radius: 24, y: 8)
     }
 }

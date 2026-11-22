@@ -142,7 +142,7 @@ struct RollPickThumb: View {
             .frame(width: 44, height: 44)
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(LumaTheme.border, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .overlay(alignment: .topTrailing) {
                 Image(systemName: "xmark")
                     .font(.system(size: 7, weight: .bold))
@@ -168,7 +168,7 @@ struct RollDeniedView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(LumaTheme.panel)
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 Image(systemName: "photo.on.rectangle")
                     .font(.system(size: 28, weight: .regular))
                     .foregroundStyle(LumaTheme.textSecondary)
