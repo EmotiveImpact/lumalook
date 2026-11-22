@@ -271,7 +271,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 
 /* ---------- sections ---------- */
 .sec { position: relative; padding: 120px 0; overflow-x: clip; }
-.sec + .sec { border-top: 1px solid var(--line); }
+.sec + .sec, .statement + .sec { border-top: 1px solid var(--line); }
 .kicker { margin: 0 0 22px; display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 550; color: var(--tx); letter-spacing: -.01em; }
 .kicker span { color: var(--tx3); font-variant-numeric: tabular-nums; font-weight: 500; }
 .kicker::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line2), transparent); }
