@@ -15,6 +15,15 @@ struct LumaLookApp: App {
     // cold launch only, never when the app comes back from the background.
     @State private var showLaunch = LaunchGate.shouldShow
 
+    #if DEBUG
+    init() {
+        // The simulator preview writes stdout to a file and then terminates
+        // the app, so block-buffered `[LUMA]` lines never reached the log.
+        // Line buffering flushes each one as it is printed.
+        setvbuf(stdout, nil, _IOLBF, 0)
+    }
+    #endif
+
     private var needsOnboarding: Bool {
         let env = ProcessInfo.processInfo.environment
         #if DEBUG

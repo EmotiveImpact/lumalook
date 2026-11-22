@@ -101,7 +101,7 @@ shot 00-launch 5 "${P}ROUTE=launch"
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
 shot 02-home 10 "${P}ROUTE=none" "${P}TAB=Home"
 shot 02b-home-first-run 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEEMPTY=1"
-shot 02c-home-picked 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEPICK=AG60"
+shot 02c-home-picked 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEPICK=BW32"
 shot 03-store 6 "${P}ROUTE=none" "${P}TAB=Store"
 shot 04-projects 5 "${P}ROUTE=none" "${P}TAB=Projects"
 shot 05-looks 9 "${P}ROUTE=none" "${P}TAB=Looks"
@@ -141,8 +141,8 @@ launch video-camera 6 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.j
 kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
 
-# The camera's own log lines, for checking the histogram and the stub.
-for f in "$OUT/logs/11-camera.out.log" "$OUT/logs/11-camera.err.log"; do
+# The app's own log lines for the picked Home and the camera.
+for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/11-camera.out.log"; do
   [ -f "$f" ] && { echo "== $(basename "$f")"; grep -a '\[LUMA\]' "$f" | tail -20; }
 done
 

@@ -769,6 +769,11 @@ struct HomeGradedPhoto: View {
         // quick tap in the reel's strip): only the latest may land, or a
         // slow earlier grade would paint over it.
         if !Task.isCancelled { graded = image }
+        #if DEBUG
+        if size >= 1000 {
+            print("[LUMA] HOMEGRADE \(key) \(Task.isCancelled ? "dropped" : "landed")")
+        }
+        #endif
     }
 }
 
