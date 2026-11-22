@@ -85,6 +85,12 @@ final class AppModel: ObservableObject {
     @Published var batchItems: [PhotosPickerItem] = []
     @Published var batchStatus: String?
 
+    /// Select clips hand-off (see `openSelectClips(_:templateID:)` in
+    /// SelectClipsLibrary.swift): what the picker was opened for, and a template
+    /// picked before it. The picker reads both once, then resets them.
+    var selectClipIntent: SelectClipIntent = .grade
+    var pendingTemplateID: String?
+
     /// Applies the current grade to every batch item sequentially, saving
     /// each to Photos. Returns how many succeeded.
     func runBatchExport(spec: ExportSpec) async -> Int {
@@ -481,6 +487,10 @@ final class AppModel: ObservableObject {
             tab = seeded
         }
         guard let route = ProcessInfo.processInfo.environment["LUMA_ROUTE"] else { return }
+        // LUMA_ROUTE=launch shows the launch animation held at 1.2 s for a
+        // screenshot; =launchLive plays it. LaunchGate (LaunchView.swift)
+        // reads both. Nothing to push: Home sits underneath.
+        if route == "launch" || route == "launchLive" { return }
         let map: [String: [LumaRoute]] = [
             "selectClip": [.selectClip],
             "applyLook": [.selectClip, .applyLook],
@@ -858,5 +868,19 @@ extension AVMutableVideoComposition {
         colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
         colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
         colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+    }
+}
+
+// MARK: - Photo edit (crop and mask)
+
+extension AppModel {
+    /// Photo edit: swaps the still for an edited copy (crop, mask) without
+    /// detaching the grade session or clearing the source conversion. The
+    /// next autosave writes the edited pixels into the same Recent project.
+    func replaceSelectedStill(with image: CIImage) {
+        isRestoringSession = true
+        selectedImage = image
+        isRestoringSession = false
+        sessionMediaFileName = nil
     }
 }

@@ -17,6 +17,9 @@ enum BeatDetector {
     /// Analyses `url` for beat onset times (seconds) + tempo. Runs off the
     /// main thread; returns empty beats + bpm 0 on any failure.
     static func analyze(url: URL) async -> BeatAnalysis {
+        // Generated library tracks know their grid exactly: no detection,
+        // no octave errors, beat 0 on the downbeat.
+        if let known = knownGrid(for: url) { return known }
         guard let samples = await readMonoSamples(url: url),
               samples.count >= windowSize else {
             return BeatAnalysis(beats: [], bpm: 0)
@@ -25,6 +28,21 @@ enum BeatDetector {
         return await Task.detached(priority: .userInitiated) {
             process(samples: samples)
         }.value
+    }
+
+    /// The exact grid of a generated track (see MusicBeatGrid), whether the
+    /// lane plays the imported file or the rendered cache itself.
+    static func knownGrid(for url: URL) -> BeatAnalysis? {
+        if let entry = MusicBeatGrid.entry(for: url), !entry.beats.isEmpty {
+            return BeatAnalysis(beats: entry.beats, bpm: entry.bpm)
+        }
+        // A file straight from the render cache: "<track id>-v<n>.m4a".
+        let stem = url.deletingPathExtension().lastPathComponent
+        if let dash = stem.range(of: "-v", options: .backwards),
+           let track = MusicCatalogue.track(id: String(stem[..<dash.lowerBound])) {
+            return BeatAnalysis(beats: track.beatTimes, bpm: track.bpm)
+        }
+        return nil
     }
 
     // MARK: - PCM reading

@@ -46,6 +46,12 @@ struct ExportSpec: Equatable {
     /// G1 — tag the output HLG instead of Rec.709. Only legal when
     /// `HDRDelivery` says the source can carry it; see that type.
     var hdr: Bool = false
+    /// Film-rebate strip burned along one edge (look code, frame counter,
+    /// sprocket marks). nil = off. Set per export, not remembered.
+    var edgeStrip: EdgeStripSpec? = nil
+    /// Captions as SubRip, saved beside the export when they are not burned
+    /// in. nil = no sidecar. Set per export, not remembered.
+    var captionsSRT: String? = nil
 
     var presetName: String {
         switch (resolution, codec) {
@@ -122,6 +128,9 @@ struct ExportSpec: Equatable {
 final class VideoExporter: ObservableObject {
     @Published var progress: Double = 0
     @Published var isExporting = false
+    /// The .srt saved beside the last export (ExportSpec.captionsSRT), nil
+    /// when that export carried none.
+    @Published var lastCaptionsURL: URL?
 
     private var session: AVAssetExportSession?
     private var progressTask: Task<Void, Never>?
@@ -170,12 +179,18 @@ final class VideoExporter: ObservableObject {
         let asset = AVURLAsset(url: videoURL)
         let pipeline = LookPipeline.shared
 
+        let strip = spec.edgeStrip
         let composition = AVMutableVideoComposition(asset: asset) { request in
             // Finite extent: spatial ops (lens et al.) need real frame bounds.
             let source = request.sourceImage
             // includeSplit: false — the Before/After wipe never bakes into exports.
             let filtered = pipeline.apply(state: lookState, to: source, includeSplit: false)
-            request.finish(with: filtered.cropped(to: request.sourceImage.extent), context: pipeline.context)
+            var output = filtered.cropped(to: request.sourceImage.extent)
+            if let strip {
+                output = EdgeStripRenderer.apply(strip, to: output, rect: request.sourceImage.extent,
+                                                 seconds: request.compositionTime.seconds)
+            }
+            request.finish(with: output, context: pipeline.context)
         }
         // HDR delivery is the ONLY case where the 709 tag is wrong: an HLG
         // source passed through untouched must stay HLG or the grade is
@@ -192,6 +207,14 @@ final class VideoExporter: ObservableObject {
         if let mutable = videoComposition as? AVMutableVideoComposition, spec.fps > 0 {
             mutable.frameDuration = CMTime(value: 1, timescale: CMTimeScale(spec.fps))
         }
+        // Edge strip on timeline exports: the compositor burns it from the
+        // export's own instructions (the preview's are never touched).
+        if let strip = spec.edgeStrip, let instructions = videoComposition?.instructions {
+            for case let instruction as LumaCompositionInstruction in instructions {
+                instruction.edgeStrip = strip
+            }
+        }
+        lastCaptionsURL = nil
         // #92 preflight: disk space + thermal, before any work starts.
         let durationSeconds = (try? await asset.load(.duration).seconds) ?? 0
         try preflight(estimatedMB: spec.estimatedMegabytes(durationSeconds: durationSeconds))
@@ -247,6 +270,7 @@ final class VideoExporter: ObservableObject {
 
         if session.status == .completed {
             progress = 1
+            lastCaptionsURL = Self.writeCaptions(spec.captionsSRT, beside: outputURL)
             return outputURL
         }
         // Never leave a partial file behind on failure or cancel.
@@ -261,6 +285,7 @@ final class VideoExporter: ObservableObject {
     func exportAudioOnly(asset: AVAsset, audioMix: AVAudioMix?) async throws -> URL {
         isExporting = true
         progress = 0
+        lastCaptionsURL = nil
         defer { isExporting = false; progressTask?.cancel() }
 
         let outputURL = FileManager.default.temporaryDirectory
@@ -291,6 +316,20 @@ final class VideoExporter: ObservableObject {
 
     func cancel() {
         session?.cancelExport()
+    }
+
+    /// Writes the captions sidecar next to the export ("….srt", same stem,
+    /// so the stale-export sweep clears it too). Nil when there is nothing
+    /// to write or the write fails.
+    private static func writeCaptions(_ srt: String?, beside video: URL) -> URL? {
+        guard let srt, !srt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let url = video.deletingPathExtension().appendingPathExtension("srt")
+        do {
+            try srt.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     /// Saves to the photo library. Returns false (NEVER throws a scary

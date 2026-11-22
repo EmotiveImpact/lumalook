@@ -205,6 +205,8 @@ final class EditorState: ObservableObject {
     /// each slice so playback smoothly accelerates/decelerates.
     enum SpeedRamp: String, CaseIterable {
         case none, slowFast, fastSlow, slowFastSlow, fastSlowFast
+        // Round-three curve presets (Speed panel tiles). Same slicing build.
+        case montage, hero, bullet, jumpCut, flashIn, flashOut
 
         var label: String {
             switch self {
@@ -213,6 +215,12 @@ final class EditorState: ObservableObject {
             case .fastSlow: return "Fast → Slow"
             case .slowFastSlow: return "Slow-Fast-Slow"
             case .fastSlowFast: return "Fast-Slow-Fast"
+            case .montage: return "Montage"
+            case .hero: return "Hero"
+            case .bullet: return "Bullet"
+            case .jumpCut: return "Jump cut"
+            case .flashIn: return "Flash in"
+            case .flashOut: return "Flash out"
             }
         }
 
@@ -225,6 +233,25 @@ final class EditorState: ObservableObject {
             case .fastSlow: return fast + (slow - fast) * t
             case .slowFastSlow: return slow + (fast - slow) * (1 - abs(2 * t - 1))
             case .fastSlowFast: return fast + (slow - fast) * (1 - abs(2 * t - 1))
+            case .montage:
+                // Normal, a fast push, normal, a slow drift, normal.
+                return pow(2.4, sin(2 * Double.pi * t))
+            case .hero:
+                // Fast in, a smooth dip to slow motion mid-clip, fast out.
+                return 0.3 + 2.3 * (0.5 + 0.5 * cos(2 * Double.pi * t))
+            case .bullet:
+                // Fast, then a long held slow-motion stretch, then fast.
+                func ease(_ a: Double, _ b: Double, _ x: Double) -> Double {
+                    let u = min(max((x - a) / (b - a), 0), 1)
+                    return u * u * (3 - 2 * u)
+                }
+                let held = ease(0.08, 0.3, t) * (1 - ease(0.7, 0.92, t))
+                return 2.5 + (0.25 - 2.5) * held
+            case .jumpCut:
+                // Normal speed with a hard fast burst through the middle.
+                return (t >= 0.35 && t < 0.65) ? 3.5 : 1
+            case .flashIn: return 1 + 3 * t * t * t
+            case .flashOut: return 1 + 3 * pow(1 - t, 3)
             }
         }
     }
@@ -419,6 +446,13 @@ final class EditorState: ObservableObject {
         var loopsMedia: Bool = false
         /// Non-placement effect stack (blend/chroma/mask/adjust/border).
         var effects: OverlayEffects = OverlayEffects()
+        /// Captions: word timings RELATIVE to this layer's start, so the
+        /// renderer can light the word being spoken. Empty = spread evenly.
+        var captionWords: [CaptionWord] = []
+        /// Captions: CaptionStyle rawValue. nil = drawn as a plain text layer.
+        var captionStyle: String? = nil
+        /// Captions: kept for the SRT but left out of the picture.
+        var captionHidden: Bool = false
 
         var timelineEnd: Double { timelineOffset + duration }
     }
@@ -721,7 +755,10 @@ final class EditorState: ObservableObject {
                               shapeFillHex: $0.shapeFillHex,
                               shapeStrokeHex: $0.shapeStrokeHex,
                               shapeStrokeWidth: $0.shapeStrokeWidth == 0 ? nil : $0.shapeStrokeWidth,
-                              shapeRotation: $0.shapeRotation == 0 ? nil : $0.shapeRotation)
+                              shapeRotation: $0.shapeRotation == 0 ? nil : $0.shapeRotation,
+                              captionWords: $0.captionWords.isEmpty ? nil : $0.captionWords,
+                              captionStyle: $0.captionStyle,
+                              captionHidden: $0.captionHidden ? true : nil)
             },
             canvasMode: canvasMode == .fill ? nil : canvasMode.rawValue,
             canvasSolidHex: canvasSolidHex,
@@ -855,6 +892,9 @@ final class EditorState: ObservableObject {
             item.effects = stored.effects ?? OverlayEffects()
             item.kind = stored.kind
             item.loopsMedia = stored.loopsMedia ?? false
+            item.captionWords = stored.captionWords ?? []
+            item.captionStyle = stored.captionStyle
+            item.captionHidden = stored.captionHidden ?? false
             return item
         }
         rebuild(keepPosition: false)
@@ -1366,6 +1406,98 @@ final class EditorState: ObservableObject {
             if performSplit(at: beat) { lastCut = beat }
         }
         rebuild()
+    }
+
+    /// Sets a lane's beat markers directly. Tracks from the generated music
+    /// library know their grid exactly, so nothing needs detecting.
+    func setBeatMarkers(trackID: UUID, _ beats: [Double]) {
+        guard let i = audioTracks.firstIndex(where: { $0.id == trackID }) else { return }
+        audioTracks[i].beatMarkers = beats.sorted()
+    }
+
+    /// A lane's beat grid in timeline seconds, keeping every `everyBeats`-th
+    /// beat counted from the lane's first beat (so 4 lands on bar lines for a
+    /// generated track). Looping lanes repeat the grid on every pass.
+    func timelineBeatGrid(trackID: UUID, everyBeats: Int = 1) -> [Double] {
+        guard let track = audioTracks.first(where: { $0.id == trackID }) else { return [] }
+        let every = max(1, everyBeats)
+        let picked = track.beatMarkers.sorted().enumerated()
+            .filter { $0.offset % every == 0 }
+            .map { $0.element }
+            .filter { $0 >= track.trimStart - 0.0005 && $0 <= track.trimEnd + 0.0005 }
+        guard !picked.isEmpty, track.timelineDuration > 0.05 else { return [] }
+        let horizon = totalDuration + 60
+        var grid: [Double] = []
+        var pass = 0.0
+        repeat {
+            for beat in picked {
+                let t = beat - track.trimStart + track.timelineOffset + pass * track.timelineDuration
+                if t >= 0 && t <= horizon { grid.append(t) }
+            }
+            pass += 1
+        } while track.isLooping && track.timelineOffset + pass * track.timelineDuration < horizon
+        return grid.sorted()
+    }
+
+    /// Cut to the beat (editor mock 6): moves every cut between clips onto
+    /// the lane's beat grid (every `everyBeats` beats), trimming or extending
+    /// each clip's out point to the nearest reachable beat, and lands the
+    /// end of the edit on a beat too. A single clip is split on the grid
+    /// instead. Detects beats first when the lane has none. One undo.
+    /// Returns false when nothing moved (no beats, or already on the beat).
+    @discardableResult
+    func cutToBeat(trackID: UUID, everyBeats: Int = 1) async -> Bool {
+        if let lane = audioTracks.first(where: { $0.id == trackID }), lane.beatMarkers.isEmpty {
+            if let known = BeatDetector.knownGrid(for: lane.url) {
+                setBeatMarkers(trackID: trackID, known.beats)
+            } else {
+                await detectBeats(trackID: trackID)
+            }
+        }
+        let grid = timelineBeatGrid(trackID: trackID, everyBeats: everyBeats)
+        guard !grid.isEmpty, !clips.isEmpty else { return false }
+
+        if clips.count == 1 {
+            let cuts = grid.filter { $0 > 0.4 && $0 < totalDuration - 0.4 }
+            guard !cuts.isEmpty else { return false }
+            pushUndoSnapshot()
+            var lastCut = -1.0
+            for t in cuts where t - lastCut >= 0.4 {
+                if performSplit(at: t) { lastCut = t }
+            }
+            rebuild()
+            return lastCut >= 0
+        }
+
+        // Plan every new out point first, so an edit that is already on the
+        // beat costs no undo step.
+        var newTrimEnds: [Double] = []
+        var cursor = 0.0
+        var changed = false
+        for clip in clips {
+            let speed = max(0.01, clip.speed)
+            let naturalEnd = cursor + clip.timelineDuration
+            let latestEnd = cursor + max(0, clip.assetDuration - clip.trimStart) / speed
+            let earliestEnd = cursor + 0.3
+            let reachable = grid.filter { $0 >= earliestEnd && $0 <= latestEnd + 0.0005 }
+            var trimEnd = clip.trimEnd
+            if let target = reachable.min(by: { abs($0 - naturalEnd) < abs($1 - naturalEnd) }) {
+                trimEnd = min(clip.assetDuration, clip.trimStart + (target - cursor) * speed)
+            }
+            if abs(trimEnd - clip.trimEnd) > 0.0005 { changed = true }
+            newTrimEnds.append(trimEnd)
+            cursor += max(0, (trimEnd - clip.trimStart) / speed)
+        }
+        guard changed else { return false }
+        pushUndoSnapshot()
+        for i in clips.indices where i < newTrimEnds.count {
+            if abs(newTrimEnds[i] - clips[i].trimEnd) > 0.0005 {
+                clips[i].trimEnd = newTrimEnds[i]
+                refreshFilmstrip(clipID: clips[i].id)
+            }
+        }
+        rebuild()
+        return true
     }
 
     /// Default freeze-frame hold duration (seconds).
@@ -2166,6 +2298,11 @@ final class EditorState: ObservableObject {
             item.center = CGPoint(x: 0.5, y: 0.82)
             item.sizeFraction = 0.8
             item.kind = "caption"
+            // Captions v3: big karaoke style by default, with the line's words.
+            item.captionStyle = CaptionStyle.karaoke.rawValue
+            item.captionWords = CaptionTiming.relative(seg.words, lineStart: offset, duration: duration)
+            item.center = CGPoint(x: 0.5, y: CaptionPosition.lower.centerY)
+            item.sizeFraction = CaptionSize.medium.sizeFraction(aspect: format.aspect)
             item.lane = firstFreeLane(at: offset, duration: duration)
             overlays.append(item)
         }
@@ -2199,6 +2336,144 @@ final class EditorState: ObservableObject {
             .sorted { $0.timelineOffset < $1.timelineOffset }
             .map { CaptionSegment(text: $0.text ?? "", start: $0.timelineOffset, duration: $0.duration) }
         return CaptionEngine.srt(from: segs)
+    }
+
+    // MARK: Captions (styles, line editing, burn-in)
+
+    /// Caption layers in timeline order.
+    var captionLines: [OverlayItem] {
+        overlays
+            .filter { $0.kind == "caption" && $0.text != nil }
+            .sorted { $0.timelineOffset < $1.timelineOffset }
+    }
+
+    /// Replaces every caption line with a fresh transcript, styled and placed
+    /// together. One undo step. Returns the number of lines laid in.
+    @discardableResult
+    func replaceCaptions(_ segments: [CaptionSegment], style: CaptionStyle,
+                         position: CaptionPosition, size: CaptionSize,
+                         hidden: Bool = false) -> Int {
+        let usable = segments.filter { $0.duration > 0.05 && $0.start < totalDuration }
+        guard !usable.isEmpty else { return 0 }
+        pushUndoSnapshot()
+        overlays.removeAll { $0.kind == "caption" }
+        var added = 0
+        for seg in usable {
+            let offset = min(max(0, seg.start), max(0, totalDuration - 0.1))
+            let duration = min(seg.duration, totalDuration - offset)
+            guard duration > 0.05 else { continue }
+            var item = OverlayItem(id: UUID(), url: URL(fileURLWithPath: "/dev/null"),
+                                   isImage: true, timelineOffset: offset,
+                                   duration: duration, title: "Caption")
+            item.text = seg.text
+            item.textStyle = .subtitle
+            item.textColorHex = "#FFFFFF"
+            item.center = CGPoint(x: 0.5, y: position.centerY)
+            item.sizeFraction = size.sizeFraction(aspect: format.aspect)
+            item.kind = "caption"
+            item.captionStyle = style.rawValue
+            item.captionWords = CaptionTiming.relative(seg.words, lineStart: offset, duration: duration)
+            item.captionHidden = hidden
+            item.lane = firstFreeLane(at: offset, duration: duration)
+            overlays.append(item)
+            added += 1
+        }
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+        return added
+    }
+
+    /// Restyles every caption line. Rebuilds: a style changes the layout.
+    func setCaptionStyle(_ style: CaptionStyle) {
+        guard overlays.contains(where: { $0.kind == "caption" && $0.captionStyle != style.rawValue })
+        else { return }
+        pushUndoSnapshot()
+        for i in overlays.indices where overlays[i].kind == "caption" {
+            overlays[i].captionStyle = style.rawValue
+        }
+        rebuild()
+    }
+
+    /// Moves and/or resizes every caption line together. Live, like the
+    /// overlay size and position setters: no rebuild.
+    func setCaptionPlacement(position: CaptionPosition? = nil, size: CaptionSize? = nil) {
+        let indices = overlays.indices.filter { overlays[$0].kind == "caption" }
+        guard !indices.isEmpty, position != nil || size != nil else { return }
+        pushUndoSnapshot()
+        for i in indices {
+            if let position { overlays[i].center = CGPoint(x: 0.5, y: position.centerY) }
+            if let size { overlays[i].sizeFraction = size.sizeFraction(aspect: format.aspect) }
+        }
+        syncOverlayLayout(refreshFrame: true)
+        scheduleAutosave()
+    }
+
+    /// Burns captions into the picture, or keeps them for the SRT only.
+    func setCaptionsHidden(_ hidden: Bool) {
+        guard overlays.contains(where: { $0.kind == "caption" && $0.captionHidden != hidden }) else { return }
+        pushUndoSnapshot()
+        for i in overlays.indices where overlays[i].kind == "caption" {
+            overlays[i].captionHidden = hidden
+        }
+        rebuild()
+    }
+
+    /// Edits one caption line's words and timing (one undo step). The line
+    /// stays between its neighbours. Word timings follow the edit: a new
+    /// duration rescales them, a new word count hands the line to the
+    /// renderer's even spread.
+    func updateCaptionLine(id: UUID, text: String, start: Double, duration: Double) {
+        guard let i = overlays.firstIndex(where: { $0.id == id }),
+              overlays[i].kind == "caption", let oldText = overlays[i].text else { return }
+        let item = overlays[i]
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newText = trimmed.isEmpty ? oldText : trimmed
+
+        let others = overlays.filter { $0.kind == "caption" && $0.id != id }
+        let previousEnd = others.filter { $0.timelineOffset <= item.timelineOffset }
+            .map(\.timelineEnd).max() ?? 0
+        let nextStart = others.filter { $0.timelineOffset > item.timelineOffset }
+            .map(\.timelineOffset).min() ?? totalDuration
+        let low = max(0, min(previousEnd, item.timelineOffset))
+        let high = min(totalDuration, max(nextStart, item.timelineEnd))
+        guard high - low >= 0.3 else { return }
+        let newStart = min(max(low, start), high - 0.3)
+        let newEnd = min(max(newStart + 0.3, start + duration), high)
+        let newDuration = newEnd - newStart
+
+        let textChanged = newText != oldText
+        guard textChanged
+                || abs(newStart - item.timelineOffset) > 0.001
+                || abs(newDuration - item.duration) > 0.001 else { return }
+        pushUndoSnapshot()
+
+        var words = item.captionWords
+        if textChanged {
+            let ns = newText as NSString
+            let tokens = TextRasterizer.captionTokens(newText).map { ns.substring(with: $0) }
+            if tokens.count == words.count {
+                words = zip(words, tokens).map { CaptionWord(text: $1, start: $0.start, duration: $0.duration) }
+            } else {
+                words = []
+            }
+        }
+        if abs(newDuration - item.duration) > 0.001 {
+            words = CaptionTiming.rescale(words, from: item.duration, to: newDuration)
+        }
+        overlays[i].text = newText
+        overlays[i].timelineOffset = newStart
+        overlays[i].duration = newDuration
+        overlays[i].captionWords = words
+        overlays.sort { $0.timelineOffset < $1.timelineOffset }
+        rebuild()
+    }
+
+    /// Removes every caption line (one undo step).
+    func removeAllCaptions() {
+        guard overlays.contains(where: { $0.kind == "caption" }) else { return }
+        pushUndoSnapshot()
+        overlays.removeAll { $0.kind == "caption" }
+        rebuild()
     }
 
     /// F3 — sets the animated-text preset (with undo).
@@ -3374,6 +3649,15 @@ final class EditorState: ObservableObject {
                                                 start: start, end: start + playable,
                                                 shape: shape,
                                                 lane: overlay.lane))
+                continue
+            }
+            // Styled captions: their own fixed-width layout and word timings
+            // (a caption hidden from the picture adds no spec at all).
+            if overlay.text != nil, overlay.captionStyle != nil {
+                if let captionSpec = CaptionLayout.overlaySpec(for: overlay, start: start,
+                                                               end: start + playable) {
+                    overlaySpecs.append(captionSpec)
+                }
                 continue
             }
             if let text = overlay.text {

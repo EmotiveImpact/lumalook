@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreImage
+import UIKit
 
 // MARK: - Grade → .cube baking (queue #11)
 
@@ -129,6 +130,11 @@ struct ExportSpecSheet: View {
     @State private var showCubePanel = false
     /// Resolved once per open from the source's format description.
     @State private var sourceIsHLG = false
+    /// Edge strip for this export. Off by default, not remembered.
+    @State private var edgeStripOn = false
+    /// Mirrors the project's caption burn-in state (the editor is not
+    /// observed here, so the switch keeps its own copy).
+    @State private var burnCaptions = true
 
     /// Discrete frame rates. A continuous fps slider produces rates no camera
     /// or platform actually uses, and five values do not need 300 pt of travel.
@@ -147,6 +153,15 @@ struct ExportSpecSheet: View {
     /// sheet offered "Audio only" on a photo and promised an M4A that cannot
     /// exist.
     private var offersAudioOnly: Bool { durationSeconds > 0 }
+
+    /// Captions are text overlays on the editor timeline; the grade flow has
+    /// none.
+    private var hasCaptions: Bool {
+        gradeCubeTitle == nil && app.editor.overlays.contains { $0.kind == "caption" }
+    }
+
+    /// The edge strip prints a frame counter, so it needs moving pictures.
+    private var offersEdgeStrip: Bool { durationSeconds > 0 }
 
     var body: some View {
         // The spec controls scroll; the estimate and the instruction bar are
@@ -176,6 +191,7 @@ struct ExportSpecSheet: View {
         .animation(.easeOut(duration: 0.18), value: spec.audioOnly)
         .task {
             spec = ExportSpec.from(rawValue: storedSpec)
+            burnCaptions = app.editor.overlays.contains { $0.kind == "caption" && !$0.captionHidden }
             if let url = app.selectedVideoURL, gradeCubeTitle != nil {
                 sourceIsHLG = await HDRDelivery.sourceIsHLG(url: url)
             }
@@ -228,6 +244,12 @@ struct ExportSpecSheet: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 12)
+
+                if hasCaptions || offersEdgeStrip {
+                    switchRows
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 12)
+                }
             }
 
             toolRow
@@ -430,6 +452,7 @@ struct ExportSpecSheet: View {
                 }
                 tool("arrow.uturn.backward", "Reset", on: false) {
                     spec = ExportSpec()
+                    edgeStripOn = false
                     if !hdrAvailability.isAvailable { spec.hdr = false }
                     LumaHaptics.shared.tap()
                 }
@@ -557,6 +580,101 @@ struct ExportSpecSheet: View {
         .transition(.opacity)
     }
 
+    // MARK: Switches: burn in captions, edge strip
+
+    private var switchRows: some View {
+        VStack(spacing: 0) {
+            if hasCaptions {
+                switchRow("Burn in captions",
+                          detail: burnCaptions ? nil : "Saved as an .srt file to share with the video.",
+                          isOn: Binding(get: { burnCaptions }, set: { on in setBurnCaptions(on) }))
+            }
+            if hasCaptions && offersEdgeStrip {
+                Rectangle().fill(LumaTheme.hairline).frame(height: 1)
+            }
+            if offersEdgeStrip {
+                switchRow("Edge strip",
+                          detail: edgeStripOn ? edgeStripDetail : nil,
+                          isOn: Binding(get: { edgeStripOn }, set: { on in
+                              edgeStripOn = on
+                              LumaHaptics.shared.tap()
+                          }))
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: burnCaptions)
+        .animation(.easeOut(duration: 0.18), value: edgeStripOn)
+    }
+
+    private func switchRow(_ title: String, detail: String?, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.luma(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                if let detail {
+                    Text(detail)
+                        .font(.luma(size: 12))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .tint(LumaTheme.signal)
+        }
+        .padding(.vertical, 9)
+    }
+
+    /// Burn-in is project state (the captions lane's hidden flag, with
+    /// undo), so the preview shows what the export will.
+    private func setBurnCaptions(_ on: Bool) {
+        burnCaptions = on
+        app.editor.setCaptionsHidden(!on)
+        LumaHaptics.shared.tap()
+    }
+
+    private var edgeStripDetail: String {
+        let strip = edgeStripSpec
+        let look = strip.title.isEmpty ? strip.code : "\(strip.code) \(strip.title)"
+        return "\(look), a frame counter and sprocket marks along one edge."
+    }
+
+    /// The look the strip prints: the editor's first clip grade, else the
+    /// current LUT or look.
+    private var edgeStripSpec: EdgeStripSpec {
+        var name = app.selectedLook.name
+        var colour = app.selectedLook.signature
+        if let lut = app.selectedLUT {
+            name = lut.displayName
+            colour = LookSignature.colour(name: name)
+        }
+        if gradeCubeTitle == nil,
+           let graded = app.editor.clips.first?.grade?.baseLookName
+               .trimmingCharacters(in: .whitespaces), !graded.isEmpty {
+            name = graded
+            colour = LookSignature.colour(forLookNamed: graded)
+        }
+        var r: CGFloat = 1, g: CGFloat = 0.773, b: CGFloat = 0.239, a: CGFloat = 1
+        _ = UIColor(colour).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return EdgeStripSpec(code: LookSignature.code(in: name) ?? "LL",
+                             title: LookSignature.title(in: name),
+                             red: Double(min(max(r, 0), 1)),
+                             green: Double(min(max(g, 0), 1)),
+                             blue: Double(min(max(b, 0), 1)),
+                             fps: spec.fps)
+    }
+
+    /// The spec as delivered: the remembered options plus this export's
+    /// edge strip and captions file.
+    private var deliverySpec: ExportSpec {
+        var out = spec
+        out.edgeStrip = edgeStripOn && offersEdgeStrip && !spec.audioOnly ? edgeStripSpec : nil
+        out.captionsSRT = hasCaptions && !burnCaptions && !spec.audioOnly ? app.editor.captionsSRT() : nil
+        return out
+    }
+
     // MARK: HDR
 
     private var hdrAvailability: HDRDelivery.Availability {
@@ -612,7 +730,8 @@ struct ExportSpecSheet: View {
     private var deliverySpecLine: String {
         if spec.audioOnly { return "AAC · M4A" }
         let colour = spec.hdr ? "HLG" : "Rec.709"
-        return "\(codecLabel(spec.codec)) · \(colour) · AAC"
+        let sidecar = hasCaptions && !burnCaptions ? " · SRT" : ""
+        return "\(codecLabel(spec.codec)) · \(colour) · AAC\(sidecar)"
     }
 
     // MARK: Preflight
@@ -711,7 +830,7 @@ struct ExportSpecSheet: View {
                 storedSpec = spec.rawValue
                 app.exportError = nil
                 LumaHaptics.shared.tap()
-                onExport(spec)
+                onExport(deliverySpec)
             } label: {
                 Text(spec.audioOnly ? "Export audio" : "Export")
                     .font(.luma(size: 15, weight: .semibold))

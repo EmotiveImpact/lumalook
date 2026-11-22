@@ -372,6 +372,10 @@ struct OverlaySpec {
     var textAnimation: String? = nil
     /// Stacking lane: higher lanes composite last (on top).
     var lane: Int = 0
+    /// Captions: CaptionStyle rawValue (nil = ordinary text) and the line's
+    /// word timings relative to `start`, for the karaoke highlight.
+    var captionStyle: String? = nil
+    var captionWords: [CaptionWord] = []
 }
 
 // MARK: - Instruction
@@ -448,6 +452,9 @@ final class LumaCompositionInstruction: NSObject, AVVideoCompositionInstructionP
     let audioReactive: AudioReactiveSpec?
     /// Project-level frame/border, composited last. `FramePreset` rawValue.
     let framePreset: String
+    /// Export-only film-rebate edge strip, burned after the frame. Set by
+    /// VideoExporter on the export's own instructions; nil in the preview.
+    var edgeStrip: EdgeStripSpec? = nil
 
     init(timeRange: CMTimeRange,
          requiredSourceTrackIDs: [NSValue],
@@ -744,7 +751,10 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                 // t=0.1 falling to 83k by t=1.5). A stable extent keeps the
                 // glyphs one size and grows the line, which is what a
                 // typewriter actually does.
-                overlayImage = TextRasterizer.image(text, style: spec.textSpec)
+                // Styled captions draw their own word-by-word raster (same
+                // extent every frame); everything else is plain text.
+                overlayImage = TextRasterizer.captionFrame(text, spec: spec, localTime: seconds - spec.start)
+                    ?? TextRasterizer.image(text, style: spec.textSpec)
                 if reveal < 0.999, let full = overlayImage {
                     let e = full.extent
                     let cut = CGRect(x: e.minX, y: e.minY,
@@ -937,6 +947,9 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         // Last, deliberately: a wipe or veil must never run across the border.
         if let preset = FramePreset(rawValue: instruction.framePreset), preset != .none {
             graded = FrameRenderer.apply(preset, to: graded, rect: renderRect)
+        }
+        if let strip = instruction.edgeStrip {
+            graded = EdgeStripRenderer.apply(strip, to: graded, rect: renderRect, seconds: seconds)
         }
 
         // --- Render into the pool buffer and hand it back -------------------

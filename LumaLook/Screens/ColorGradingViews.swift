@@ -182,7 +182,7 @@ struct ColorWheelsPanel: View {
                 ColorWheelMasterSlider(zone: .gamma, wheels: bindingOrDefault)
                 ColorWheelMasterSlider(zone: .gain, wheels: bindingOrDefault)
             }
-            Button("Reset Wheels") { wheels = nil }
+            Button("Reset wheels") { wheels = nil }
                 .font(.luma(.footnote, weight: .semibold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .disabled(wheels?.isIdentity ?? true)
@@ -366,7 +366,7 @@ struct SplitTonePanel: View {
             InlineSlider(title: "Balance", value: balanceBinding, range: -1...1) {
                 $0 < -0.05 ? "Shadows" : $0 > 0.05 ? "Highlights" : "Even"
             }
-            Button("Reset Split Tone") { tone = nil }
+            Button("Reset split tone") { tone = nil }
                 .font(.luma(.footnote, weight: .semibold))
                 .foregroundStyle(LumaTheme.accentBright)
                 .disabled(tone?.isIdentity ?? true)

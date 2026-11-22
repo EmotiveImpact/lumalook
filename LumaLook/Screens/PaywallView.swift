@@ -3,8 +3,8 @@ import StoreKit
 
 // MARK: - Paywall (C5)
 
-/// Pro paywall. Pricing locked (StoreService.LockedPricing): $49.99/yr with a
-/// 7-day free trial, $9.99/mo or $119.99 lifetime. No WEEKLY tier, matching
+/// Pro paywall. Pricing locked (StoreService.LockedPricing): $34.99/yr with a
+/// 7-day free trial, $5.99/mo or $79.99 lifetime. No WEEKLY tier, matching
 /// the anti-subscription wave in the LUT niche. Presented as a sheet from Settings, onboarding,
 /// premium looks, and pack purchases.
 struct PaywallView: View {
