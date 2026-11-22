@@ -126,11 +126,7 @@ final class LookPipeline: @unchecked Sendable {
             out = c.outputImage ?? out
         }
         if a.warmth != 0 {
-            let t = CIFilter.temperatureAndTint()
-            t.inputImage = out
-            t.neutral = CIVector(x: 6500 - CGFloat(a.warmth) * 1500, y: 0)
-            t.targetNeutral = CIVector(x: 6500, y: 0)
-            out = t.outputImage ?? out
+            out = Self.shiftWhite(out, towards: 6500 - CGFloat(a.warmth) * 1500, tint: 0)
         }
         return out.cropped(to: image.extent)
     }
@@ -402,17 +398,35 @@ final class LookPipeline: @unchecked Sendable {
         return dissolve.outputImage ?? out
     }
 
+    // MARK: - White balance
+
+    /// Shifts `image` towards the colour of light at `kelvin`: below 6500 is
+    /// warmer (golden hour is about 4900), above it cooler. `tint` keeps the
+    /// meaning it has always had in recipes and settings.
+    ///
+    /// CITemperatureAndTint's `neutral` is the white of the light a picture
+    /// was taken under, which the filter corrects to `targetNeutral`, so a
+    /// 4900 K neutral takes warmth OUT. Every recipe temperature and warmth
+    /// slider here means the light the look should have, and used to sit in
+    /// `neutral`: Golden Hour rendered bluer than the photo, London Rain
+    /// warmer, and auto grade and the white-balance picker pushed a cast
+    /// further instead of removing it. The look's light belongs in the target.
+    static func shiftWhite(_ image: CIImage, towards kelvin: CGFloat, tint: CGFloat) -> CIImage {
+        let filter = CIFilter.temperatureAndTint()
+        filter.inputImage = image
+        filter.neutral = CIVector(x: 6500, y: tint)
+        filter.targetNeutral = CIVector(x: kelvin, y: 0)
+        return filter.outputImage ?? image
+    }
+
     // MARK: - Built-in look recipes
 
     func applyRecipe(_ recipe: LookRecipe, to image: CIImage) -> CIImage {
         var output = image
 
         if recipe.temperature != 6500 || recipe.tint != 0 {
-            let temp = CIFilter.temperatureAndTint()
-            temp.inputImage = output
-            temp.neutral = CIVector(x: CGFloat(recipe.temperature), y: CGFloat(recipe.tint))
-            temp.targetNeutral = CIVector(x: 6500, y: 0)
-            output = temp.outputImage ?? output
+            output = Self.shiftWhite(output, towards: CGFloat(recipe.temperature),
+                                     tint: CGFloat(recipe.tint))
         }
 
         if recipe.contrast != 1 || recipe.saturation != 1 || recipe.brightness != 0 {
@@ -459,11 +473,8 @@ final class LookPipeline: @unchecked Sendable {
         }
 
         if settings.warmth != 0 || settings.tint != 0 {
-            let temp = CIFilter.temperatureAndTint()
-            temp.inputImage = output
-            temp.neutral = CIVector(x: 6500 - CGFloat(settings.warmth) * 20, y: CGFloat(settings.tint))
-            temp.targetNeutral = CIVector(x: 6500, y: 0)
-            output = temp.outputImage ?? output
+            output = Self.shiftWhite(output, towards: 6500 - CGFloat(settings.warmth) * 20,
+                                     tint: CGFloat(settings.tint))
         }
 
         // Pro colour surfaces (Grade Room): curves + wheels fold into one
