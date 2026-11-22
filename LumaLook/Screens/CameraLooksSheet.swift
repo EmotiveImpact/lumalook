@@ -512,16 +512,23 @@ final class CameraLookThumbs: ObservableObject {
 }
 
 // MARK: - The sheet
+//
+// Every look, as the Camera Lab draws it: a grab bar, search and a close
+// chevron, the filter chips, rows of graded tiles, and a footer naming the
+// look on the picture over its strength ruler. The camera gives it its glass
+// and its place over the lower picture.
 
 struct CameraLooksSheet: View {
     /// The camera's own frame, before any look, for the tiles.
     let frame: CIImage?
     /// Bumped by the camera when a fresh frame is worth regrading.
     var frameID: Int = 0
+    /// The keyboard is up: the footer steps aside so the results have room.
+    var compact: Bool = false
     /// Recording or taking a still does not happen from here; this closes it.
     let onClose: () -> Void
-    /// A pack installed on first use, so the camera can say so.
-    var onInstalled: ((String) -> Void)? = nil
+    /// A short note for the camera's caption ("KD2 is in your swipe").
+    var onNote: (String) -> Void = { _ in }
 
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
@@ -529,8 +536,10 @@ struct CameraLooksSheet: View {
     @StateObject private var thumbs = CameraLookThumbs()
     @State private var filter: CameraLookFilter = .all
     @State private var search = ""
-    @State private var note: String?
     @FocusState private var searchFocused: Bool
+
+    /// Every 5% from 0 to 100, as the lab's strength ruler steps.
+    private static let strengthStops: [Int] = Array(stride(from: 0, through: 100, by: 5))
 
     private var sections: [CameraLookSection] { app.cameraLookSections(store: storeService) }
 
@@ -553,32 +562,15 @@ struct CameraLooksSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.top, 16)
-                .padding(.bottom, 10)
-            filterChips
-                .padding(.bottom, 4)
             ScrollView(showsIndicators: false) {
                 content
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
             }
             .scrollDismissesKeyboard(.immediately)
-            footer
-        }
-        .overlay(alignment: .top) {
-            if let note {
-                Text(note)
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(LumaTheme.onSignal)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(LumaTheme.signal, in: Capsule())
-                    .padding(.top, 96)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                    .allowsHitTesting(false)
+            if !compact {
+                footer
             }
         }
-        .animation(.easeOut(duration: 0.18), value: note)
-        .preferredColorScheme(.dark)
         .onAppear { renderThumbs() }
         .onChange(of: frameID) { _, _ in renderThumbs() }
         .onChange(of: allLooks.count) { _, _ in renderThumbs() }
@@ -591,52 +583,62 @@ struct CameraLooksSheet: View {
                       looks: allLooks, app: app)
     }
 
-    // MARK: Header: search and close
+    // MARK: Header: grab bar, search, close, filters
 
     private var header: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(LumaTheme.textMuted)
-                TextField("Search \(allLooks.count) looks", text: $search)
-                    .font(.luma(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .tint(.white)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .submitLabel(.search)
-                    .focused($searchFocused)
-                if !search.isEmpty {
-                    Button {
-                        search = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(LumaTheme.textMuted)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
+                searchField
+                Button {
+                    LumaHaptics.shared.tap()
+                    onClose()
+                } label: {
+                    CamMiniLabel(icon: .down)
                 }
+                .buttonStyle(CamPressStyle())
+                .accessibilityLabel("Close looks")
             }
-            .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            Button {
-                LumaHaptics.shared.tap()
-                onClose()
-            } label: {
-                Text("Done")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .frame(height: 38)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.lumaPress)
+            .padding(.horizontal, 14)
+            filterChips
         }
-        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+        .overlay(alignment: .top) {
+            CamGrab()
+                .padding(.top, 6)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            CamGlyph(icon: .search, size: 16, weight: 2)
+                .foregroundStyle(CamLab.grey)
+            TextField("", text: $search,
+                      prompt: Text("Search \(allLooks.count) looks").foregroundColor(CamLab.grey3))
+                .font(.luma(size: 15, weight: .medium))
+                .foregroundStyle(CamLab.text)
+                .tint(CamLab.sig)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .focused($searchFocused)
+            if !search.isEmpty {
+                Button {
+                    search = ""
+                } label: {
+                    CamGlyph(icon: .close, size: 16, weight: 2)
+                        .foregroundStyle(CamLab.grey)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var filterChips: some View {
@@ -645,25 +647,25 @@ struct CameraLooksSheet: View {
                 ForEach(CameraLookFilter.allCases) { item in
                     let on = item == filter && trimmedSearch.isEmpty
                     Button {
-                        withAnimation(.snappy(duration: 0.2)) {
+                        withAnimation(.easeOut(duration: 0.18)) {
                             filter = item
                             search = ""
                         }
                         LumaHaptics.shared.tap()
                     } label: {
                         Text(item.title)
-                            .font(.luma(size: 13, weight: .semibold))
-                            .foregroundStyle(on ? LumaTheme.onSignal : Color.white.opacity(0.85))
+                            .font(.luma(size: 12.5, weight: .semibold))
+                            .foregroundStyle(on ? CamLab.ink : Color(hex: 0xD9DADE))
                             .padding(.horizontal, 12)
                             .frame(height: 30)
-                            .background(on ? LumaTheme.signal : Color.white.opacity(0.08), in: Capsule())
+                            .background(on ? CamLab.sig : Color.white.opacity(0.08), in: Capsule())
                             .contentShape(Capsule())
                     }
-                    .buttonStyle(.lumaPress)
+                    .buttonStyle(CamPressStyle())
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
         }
     }
 
@@ -687,82 +689,99 @@ struct CameraLooksSheet: View {
                     openStore()
                 } label: {
                     Text("Get more looks in the Store")
-                        .font(.luma(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(.luma(size: 13.5, weight: .semibold))
+                        .foregroundStyle(CamLab.text)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .contentShape(Rectangle())
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        .contentShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .buttonStyle(.lumaPress)
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
+                .buttonStyle(CamPressStyle())
+                .padding(.horizontal, 14)
+                .padding(.top, 18)
+                .padding(.bottom, 4)
             }
         }
     }
 
     private var favouritesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader("★ Favourites", tag: nil, count: favourites.count)
             Text("Swipe the picture to step through these. Long-press any look to add or remove it.")
-                .font(.luma(size: 12))
-                .foregroundStyle(LumaTheme.textSecondary)
+                .font(.luma(size: 11.5))
+                .lineSpacing(1.5)
+                .foregroundStyle(CamLab.grey)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.top, -4)
+                .padding(.bottom, 8)
             lookRow(favourites)
         }
         .padding(.top, 12)
     }
 
     private func sectionRow(_ section: CameraLookSection) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader(section.title, tag: section.tag, count: section.looks.count)
             lookRow(section.looks, trailingImport: section.id == "imported")
         }
-        .padding(.top, 16)
+        .padding(.top, 12)
     }
 
     private var importRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader("Imported", tag: nil, count: 0)
             lookRow([], trailingImport: true)
         }
-        .padding(.top, 16)
+        .padding(.top, 12)
     }
 
     private func sectionHeader(_ title: String, tag: CameraLookSection.Tag?, count: Int) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.luma(size: 15, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.luma(size: 14, weight: .bold))
+                .kerning(-0.1)
+                .foregroundStyle(CamLab.text)
                 .lineLimit(1)
             if let tag { tagPill(tag) }
             Spacer(minLength: 0)
             Text("\(count)")
-                .font(.luma(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(LumaTheme.textMuted)
+                .font(.luma(size: 11.5, weight: .semibold))
+                .foregroundStyle(CamLab.grey3)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
-    @ViewBuilder
     private func tagPill(_ tag: CameraLookSection.Tag) -> some View {
-        let (text, fg, bg): (String, Color, Color) = {
-            switch tag {
-            case .free:  return ("Free", Color(hex: 0x6EE7A8), Color(hex: 0x3DDC84).opacity(0.15))
-            case .owned: return ("Yours", .white, Color.white.opacity(0.12))
-            case .pro:   return ("With Pro", LumaTheme.signal, LumaTheme.signal.opacity(0.16))
-            case .price(let price): return (price, Color.white.opacity(0.85), Color.white.opacity(0.09))
-            }
-        }()
-        Text(text)
-            .font(.luma(size: 11, weight: .bold))
-            .foregroundStyle(fg)
+        let text: String
+        let ink: Color
+        let fill: Color
+        switch tag {
+        case .free:
+            text = "Free"
+            ink = Color(hex: 0x6EE7A8)
+            fill = Color(hex: 0x3DDC84).opacity(0.15)
+        case .owned:
+            text = "Yours"
+            ink = Color(hex: 0xD9DADE)
+            fill = Color.white.opacity(0.09)
+        case .pro:
+            text = "With Pro"
+            ink = CamLab.sig
+            fill = CamLab.sig.opacity(0.16)
+        case .price(let price):
+            text = price
+            ink = Color(hex: 0xD9DADE)
+            fill = Color.white.opacity(0.09)
+        }
+        return Text(text)
+            .font(.luma(size: 10.5, weight: .bold))
+            .kerning(0.2)
+            .foregroundStyle(ink)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func lookRow(_ looks: [CameraLook], trailingImport: Bool = false) -> some View {
@@ -775,8 +794,10 @@ struct CameraLooksSheet: View {
                     importCard
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
         }
+        // The worn tile's glow runs past the row.
+        .scrollClipDisabled()
     }
 
     private var filteredGrid: some View {
@@ -802,23 +823,23 @@ struct CameraLooksSheet: View {
                 return haystack.contains(query) || (query == "favourite" && favouriteSet.contains(look.id))
             }
         }()
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 0) {
             sectionHeader(query.isEmpty ? filter.title : "Results", tag: nil, count: matches.count)
                 .padding(.top, 12)
             if matches.isEmpty {
                 Text(query.isEmpty ? "No looks here yet." : "No looks match “\(trimmedSearch)”.")
                     .font(.luma(size: 13))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .foregroundStyle(CamLab.grey)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 30)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 76, maximum: 96), spacing: 8, alignment: .top)],
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 76, maximum: 120), spacing: 8, alignment: .topLeading)],
                           alignment: .leading, spacing: 12) {
                     ForEach(matches) { look in
                         card(look)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
             }
         }
     }
@@ -830,52 +851,44 @@ struct CameraLooksSheet: View {
         let favourite = favouriteIDs.contains(look.id)
         let locked = app.isLockedForCamera(look, store: storeService)
         return VStack(alignment: .leading, spacing: 0) {
-            Group {
-                if let image = thumbs.images[look.id] {
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    LinearGradient(colors: [look.signature.opacity(0.55), Color(white: 0.1)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+            tile(look)
+                .frame(width: 76, height: 95)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    if wearing {
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(look.signature, lineWidth: 2.5)
+                            .shadow(color: look.signature, radius: 7)
+                    }
                 }
-            }
-            .frame(width: 76, height: 95)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                if wearing {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(look.signature, lineWidth: 2.5)
-                        .shadow(color: look.signature.opacity(0.8), radius: 6)
+                .overlay(alignment: .topTrailing) {
+                    if locked {
+                        CamGlyph(icon: .lock, size: 11, weight: 2.2)
+                            .foregroundStyle(.white)
+                            .frame(width: 20, height: 20)
+                            .background(Color.black.opacity(0.6), in: Circle())
+                            .padding(5)
+                    }
                 }
-            }
-            .overlay(alignment: .topTrailing) {
-                if locked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 20, height: 20)
-                        .background(Color.black.opacity(0.6), in: Circle())
-                        .padding(5)
+                .overlay(alignment: .topLeading) {
+                    if favourite {
+                        Text("★")
+                            .font(.luma(size: 13))
+                            .foregroundStyle(CamLab.sig)
+                            .shadow(color: .black.opacity(0.7), radius: 1.5, y: 1)
+                            .padding(.top, 4)
+                            .padding(.leading, 6)
+                    }
                 }
-            }
-            .overlay(alignment: .topLeading) {
-                if favourite {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(LumaTheme.signal)
-                        .shadow(color: .black.opacity(0.7), radius: 2)
-                        .padding(6)
-                }
-            }
             Text(look.code)
                 .font(.luma(size: 11, weight: .bold))
+                .kerning(0.2)
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .padding(.top, 6)
             Text(look.title)
-                .font(.luma(size: 10.5, weight: .medium))
-                .foregroundStyle(LumaTheme.textSecondary)
+                .font(.luma(size: 10.5))
+                .foregroundStyle(CamLab.grey)
                 .lineLimit(1)
         }
         .frame(width: 76, alignment: .leading)
@@ -889,27 +902,38 @@ struct CameraLooksSheet: View {
         .accessibilityAction(named: favourite ? "Remove from swipe" : "Add to swipe") { toggleFavourite(look) }
     }
 
+    @ViewBuilder
+    private func tile(_ look: CameraLook) -> some View {
+        if let image = thumbs.images[look.id] {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            Color(hex: 0x1A1B1F)
+        }
+    }
+
     private var importCard: some View {
         LUTImportButton(onImported: { imported in
             pick(.library(LibraryLook(lut: imported)))
         }) {
             VStack(alignment: .leading, spacing: 0) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
                     .frame(width: 76, height: 95)
                     .overlay {
-                        Image(systemName: "plus")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(LumaTheme.textSecondary)
+                        CamGlyph(icon: .plus, size: 22, weight: 2)
+                            .foregroundStyle(CamLab.grey)
                     }
                 Text("Import")
                     .font(.luma(size: 11, weight: .bold))
+                    .kerning(0.2)
                     .foregroundStyle(.white)
                     .padding(.top, 6)
                 Text(".cube or .zip")
-                    .font(.luma(size: 10.5, weight: .medium))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(size: 10.5))
+                    .foregroundStyle(CamLab.grey)
             }
             .frame(width: 76, alignment: .leading)
         }
@@ -920,34 +944,55 @@ struct CameraLooksSheet: View {
 
     private var footer: some View {
         let strength = Int(app.settings.intensity.rounded())
+        let index = min(max(Int((app.settings.intensity / 5).rounded()), 0), Self.strengthStops.count - 1)
+        let worn = app.cameraWornLook
         return VStack(spacing: 0) {
-            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(height: 1)
             HStack(spacing: 10) {
-                Text(app.cameraLookName)
-                    .font(.luma(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                (Text(worn.code).font(.luma(size: 11, weight: .bold)).foregroundColor(.white)
+                 + Text(" " + wornLine(worn)).font(.luma(size: 11, weight: .semibold)))
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: 0)
-                Text("Strength")
-                    .font(.luma(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.55))
-                Text(strength == 0 ? "Off" : "\(strength)%")
-                    .font(.luma(size: 12, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
+                (Text("STRENGTH ").font(.luma(size: 11, weight: .semibold))
+                 + Text("\(strength)%").font(.luma(size: 11, weight: .bold)).foregroundColor(.white))
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .padding(.horizontal, 16)
+            .foregroundStyle(Color.white.opacity(0.62))
+            .padding(.horizontal, 14)
             .padding(.top, 8)
-            LumaStrengthRuler(value: $app.settings.intensity,
-                              needle: currentSignature)
-                .padding(.bottom, 6)
+            .frame(height: 22, alignment: .top)
+            CamRuler(ticks: Self.strengthStops.map { "\($0)%" }, index: index,
+                     spacing: 14, labelEvery: 5) { stop in
+                guard Self.strengthStops.indices.contains(stop) else { return }
+                app.settings.intensity = Double(Self.strengthStops[stop])
+            }
+            .padding(.top, 2)
         }
-        .background(LumaTheme.bar)
+        .frame(height: 70, alignment: .top)
     }
 
-    private var currentSignature: Color {
-        if let worn = app.wornCameraLook(in: allLooks) { return worn.signature }
-        return LookSignature.colour(name: app.cameraLookName)
+    /// "Golden Hour · Signature · free": the look, where it comes from, and
+    /// whether shooting with it is free, yours, or a free try.
+    private func wornLine(_ worn: CameraLook) -> String {
+        let home = sections.first { section in
+            section.id != "favourites" && section.looks.contains { $0.id == worn.id }
+        }
+        let status: String
+        if app.isLockedForCamera(worn, store: storeService) {
+            status = "try free"
+        } else if home?.tag == .free {
+            status = "free"
+        } else {
+            status = "unlocked"
+        }
+        var parts = [worn.title]
+        if let title = home?.title { parts.append(title) }
+        parts.append(status)
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Actions
@@ -955,8 +1000,7 @@ struct CameraLooksSheet: View {
     private func pick(_ look: CameraLook) {
         searchFocused = false
         if let installed = app.wear(look, store: storeService) {
-            onInstalled?(installed)
-            show("\(installed) is in your library now")
+            onNote("\(installed) is in your library now")
         }
         LumaHaptics.shared.tap()
     }
@@ -965,31 +1009,23 @@ struct CameraLooksSheet: View {
         var ids = favouriteIDs
         if let at = ids.firstIndex(of: look.id) {
             guard ids.count > 1 else {
-                show("Keep at least one look in your swipe")
+                onNote("Keep at least one look in your swipe")
                 return
             }
             ids.remove(at: at)
-            show("\(look.code) is out of your swipe")
+            onNote("\(look.code) is out of your swipe")
         } else {
             ids.append(look.id)
-            show("\(look.code) is in your swipe")
+            onNote("\(look.code) is in your swipe")
         }
         favouritesRaw = CameraFavourites.encode(ids)
         LumaHaptics.shared.tap()
     }
 
-    private func show(_ text: String) {
-        note = text
-        Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            if note == text { note = nil }
-        }
-    }
-
     private func openStore() {
         LumaHaptics.shared.tap()
         onClose()
-        // The push waits for the sheet to go, or the Store lands behind it.
+        // The push waits for the library to go, or the Store lands behind it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             app.path.append(.filterStore)
         }

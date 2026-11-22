@@ -4,48 +4,55 @@ import AVFoundation
 import Photos
 
 // =============================================================================
-// CameraLiveLookView — camera A, "one camera that grows".
+// CameraLiveLookView — camera A from the Camera Lab, "one camera that grows".
 //
-// The picture fills the screen. What sits on it, from the top:
-//   · close, the capture format, the take's timecode, and zoom (the focus
-//     mode in the photo modes)
-//   · the look on the picture at top left (ring, name, strength, a dot for
-//     each favourite), the histogram and Pro at top right
-//   · the chips over the dial: Look, Lens (Aperture in Portrait), Shutter,
-//     ISO, EV, WB, Focus. The dial curves over the shutter and turns
-//     whichever chip is lit; drag it up for Pro
-//   · the modes and the capture row, where they always were, so the tab
-//     bar's yellow shutter still lands on the record button
+// Built to the lab's own measurements (LumaLook/Design/CameraDial.swift holds
+// the parts). The lab was drawn on a 402 x 874 screen; everything here hangs
+// off the top safe area or the bottom edge at the same distances, so the
+// plate, the dial and the shutter sit where they were designed on every
+// iPhone.
+//
+// The picture fills the whole screen. On it, from the top:
+//   · close, the capture format (the take's clock while rolling) and the
+//     live histogram
+//   · the look at top left (ring, name, code and strength, a dot for each
+//     favourite) and Pro at top right
+//   · the chips over the dial: Lens (Aperture in Portrait), Shutter, ISO,
+//     Exposure, WB, Focus. One big dial on an arc centred on the shutter
+//     turns whichever chip is lit; drag it up for Pro
+//   · the plate: last shot, flip, the shutter in its notch, and Photo ·
+//     Video · Slo-mo · Portrait
 //
 // Four ways it grows:
 //   1. Swipe the picture sideways to step through your favourite looks.
-//      Tap the look name for every look in the app (CameraLooksSheet).
-//   2. Pull the dial up, or tap Pro: six readouts on one ruler and every
-//      tool as a tile, with the format page inside.
+//      Tap the look for every look in the app (CameraLooksSheet), which
+//      opens over the lower picture while the picture slides up.
+//   2. Pull the dial or the plate up, or tap Pro: six readouts on one ruler
+//      and every tool as a tile.
 //   3. Press and hold anywhere on the picture: the tools fan out above the
-//      thumb. Slide onto one and let go.
+//      thumb. Slide onto one and let go. Let go where you pressed to lock
+//      focus and exposure there.
 //   4. Turn the phone sideways: readouts along the top, the look at bottom
-//      left, tools at bottom right, every label upright. The shutter stays
-//      where the thumb already is.
+//      left, tools at bottom right, every label upright. The plate and the
+//      shutter stay where the thumb already is.
 //
 // FEATURE INVENTORY. Nothing from the previous camera was dropped:
-//   ✓ Capture-format chip off camera.activeSpec; resolution, frame rate and
-//     codec (tap the chip, or Pro → Format)
+//   ✓ Capture format off camera.activeSpec; resolution, frame rate and codec
+//     (tap the format chip, or Pro → Format, or Format in the fan)
 //   ✓ Every look in the app with live graded tiles, search, filters,
 //     favourites and strength; paid looks free to try, asked for at record
-//   ✓ Look strength on the dial (Look chip) and in the looks sheet
 //   ✓ Zoom: the Lens chip on the dial, and continuous pinch
-//   ✓ Shutter, ISO, EV, white balance and manual focus on the dial and in
-//     Pro, each with Auto; Auto all in Pro
+//   ✓ Shutter, ISO, exposure, white balance and manual focus on the dial and
+//     in Pro, each with Auto; Auto all in Pro
 //   ✓ Zebras, focus peaking, grid, level, frame guides (long-press for the
 //     social safe zone), live scope in five modes, histogram
-//   ✓ AE/AF lock (the fan, Pro and the sideways tools) with its badge
-//   ✓ Tap to focus with brackets; front/back flip (blocked mid-take)
+//   ✓ AE/AF lock (hold and let go, or the sideways tools) with its badge
+//   ✓ Tap to focus; front/back flip (blocked mid-take)
 //   ✓ Photo · Video · Slo-mo · Portrait; roll mode; portrait blur at the
 //     dial's aperture; full-resolution graded stills
-//   ✓ Recording with the look baked in, timecode, mic meter, the
+//   ✓ Recording with the look baked in, the take's clock, mic meter, the
 //     saved-to-Photos caption and the hand-off card (Retake / Grade / Edit)
-//   ✓ Last shot by the shutter; permission and no-camera fallbacks
+//   ✓ Last shot on the plate; permission and no-camera fallbacks
 //   ✓ DEBUG seeds: CAMFRAME, CAMASSIST, CAMPRO, CAMMODE, CAMROLL, CAMFOCUS,
 //     BROWSER, CAMLOOK, CAMLOCK, CAMLAND, CAMFAN, CAMSWIPE
 //
@@ -59,44 +66,42 @@ struct CameraLiveLookView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraController()
 
-    /// Pro, or the format page inside it, over the shutter. The sideways
-    /// layout shows the format page as a card instead.
-    private enum Panel: Equatable { case none, pro, format }
-    @State private var panel: Panel = .none
+    /// Pro, pulled up over the lower picture.
+    @State private var proOpen = false
+    /// The format card under the format chip.
+    @State private var formatOpen = false
 
     /// What the dial, Pro's ruler and the sideways ruler turn.
     @State private var dialTarget: DialTarget = .lens
 
     /// Photo takes a graded still; Video records with the look baked in;
     /// Slo-mo records at the camera's highest rate and plays back slowed;
-    /// Portrait takes a still with a depth blur. Slo-mo and Portrait only
-    /// show on cameras that can do them.
+    /// Portrait takes a still with a depth blur. All four always show on the
+    /// plate; the two a camera cannot do are dimmed.
     private enum CaptureMode: String, CaseIterable {
         case photo = "Photo", video = "Video", slowMo = "Slo-mo", portrait = "Portrait"
 
         var takesStills: Bool { self == .photo || self == .portrait }
 
-        var symbol: String {
+        var icon: CamIcon {
             switch self {
-            case .photo:    return "camera.fill"
-            case .video:    return "video.fill"
-            case .slowMo:   return "slowmo"
-            case .portrait: return "person.fill"
+            case .photo:    return .photo
+            case .video:    return .video
+            case .slowMo:   return .slomo
+            case .portrait: return .portrait
             }
         }
     }
     @State private var captureMode: CaptureMode = .video
     /// Portrait's f-number, as an index into `apertureStops` (f/2.8).
     @State private var apertureIndex = 2
-    /// The live histogram pill, on by default; tap hides it to a small glyph.
-    @AppStorage("lumalook.camera.histogram") private var showHistogram = true
     /// Roll mode: an optional roll of 36 that the shutter counts down.
     @AppStorage("lumalook.camera.rollOn") private var rollOn = false
     @AppStorage("lumalook.camera.rollLeft") private var rollLeft = 36
     @State private var showRollDone = false
-    /// The newest capture (or library item) for the button by the shutter.
+    /// The newest capture (or library item) for the thumb on the plate.
     @State private var lastShot: LastShot?
-    /// The 120 ms white blink when a still is taken.
+    /// The white blink when a still is taken.
     @State private var shutterFlash = false
 
     @State private var showGrid = false
@@ -108,12 +113,10 @@ struct CameraLiveLookView: View {
     @State private var recordStart: Date?
     @State private var statusCaption: String?
     @State private var stillSavedFlash = 0
-    /// Where the focus brackets sit (nil: at rest, faint), whether they are
-    /// still lit from the tap, and a counter that restarts the animate-in.
-    @State private var focusPoint: CGPoint?
-    @State private var focusActive = false
-    @State private var focusTapID = 0
-    /// DEBUG only: a unit point for lit brackets in the preview screenshot.
+    /// The square a tap (or a lock) leaves on the picture.
+    @State private var focusMark: FocusMark?
+    @State private var focusToken = 0
+    /// DEBUG only: a unit point for a held square in the preview screenshot.
     @State private var focusSeed: CGPoint?
     @State private var isPinching = false
     /// A paid look is on the picture but not unlocked: shooting with it asks
@@ -140,7 +143,9 @@ struct CameraLiveLookView: View {
     /// The next look graded over a still of the frame, wiped in by a swipe.
     @State private var swipeReveal: CGImage?
     @State private var fan: FanState?
+    /// The whole screen, edge to edge, and its top safe inset.
     @State private var screenSize: CGSize = .zero
+    @State private var topInset: CGFloat = 59
 
     // MARK: Sideways
     /// DEBUG: LUMA_SEED_CAMLAND forces the sideways layout.
@@ -150,10 +155,8 @@ struct CameraLiveLookView: View {
     @State private var landscapeDropOpen = false
 
     private static let space = "camera"
-    private static let looksSheetStyle = LumaSheetStyle(
-        detents: [.lumaSmall, .fraction(0.56), .large],
-        defaultDetent: .fraction(0.56),
-        undimmedUpThrough: .fraction(0.56))
+    /// The lab's ease for sheets and the picture: quick out, soft landing.
+    private static let glide = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.3)
 
     // MARK: - Body
 
@@ -176,13 +179,15 @@ struct CameraLiveLookView: View {
             .onChange(of: camera.isConformingSlowMo) { _, conforming in
                 if conforming { flash("Slowing the clip down") }
             }
-            .onChange(of: showHistogram, initial: true) { _, on in
-                camera.histogramOn = on
+            .onChange(of: camera.aeafLocked) { _, locked in
+                // A held square belongs to the lock: it goes when the lock does.
+                if !locked, focusMark?.hold == true { focusMark = nil }
             }
             .onChange(of: isLandscapeLayout) { _, _ in
-                // Pro lives over the shutter upright; sideways has its own
+                // Pro and the format card live upright; sideways has its own
                 // readouts, so nothing carries across the turn.
-                panel = .none
+                proOpen = false
+                formatOpen = false
                 landscapeDropOpen = false
                 cancelTouch()
             }
@@ -193,76 +198,44 @@ struct CameraLiveLookView: View {
     }
 
     private var mainBody: some View {
-        ZStack(alignment: .top) {
-            LumaTheme.ink.ignoresSafeArea()
-
-            // The picture runs full width from the top edge; everything else
-            // sits over it.
-            viewfinder
-                .frame(maxWidth: .infinity)
-                .ignoresSafeArea(edges: .top)
-
-            controls
-
-            if let fan {
-                CameraToolFan(touch: fan.touch, centre: fan.centre, items: fanItems,
-                              positions: fan.positions, hot: fan.hot)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-                    .zIndex(40)
-            }
-
-            if let recording = camera.lastRecordingURL, !camera.isRecording {
-                CameraHandOffCard(url: recording,
-                                  onRetake: { camera.lastRecordingURL = nil },
-                                  onGrade: { handOffToGrade(recording) },
-                                  onEdit: { handOffToEditor(recording) })
-                    .frame(maxWidth: 380)
-                    .rotationEffect(.degrees(controlTurn))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .padding(.horizontal, 20)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .zIndex(50)
-            }
-
-            if showRollDone {
-                CameraRollDoneCard(frames: Self.rollLength,
-                                   onNewRoll: { loadNewRoll() },
-                                   onDevelop: { developRoll() })
-                    .frame(maxWidth: 360)
-                    .rotationEffect(.degrees(controlTurn))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .padding(.horizontal, 24)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .zIndex(51)
-            }
-        }
-        .coordinateSpace(name: Self.space)
-        .background {
+        // The outer reader keeps the safe area (for the top inset, and the
+        // keyboard under the looks' search); the inner one is the whole
+        // screen, which everything is placed in.
+        GeometryReader { safe in
+            let top = safe.safeAreaInsets.top
+            let keyboard = safe.safeAreaInsets.bottom
             GeometryReader { geo in
-                Color.clear
-                    .onAppear { screenSize = geo.size }
+                screen(size: geo.size, top: top, keyboard: keyboard)
+                    .onAppear {
+                        screenSize = geo.size
+                        topInset = top
+                    }
                     .onChange(of: geo.size) { _, size in screenSize = size }
+                    .onChange(of: top) { _, inset in topInset = inset }
             }
+            .ignoresSafeArea()
         }
+        .background(CamLab.ink.ignoresSafeArea())
+        .environment(\.colorScheme, .dark)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: panel)
+        .animation(Self.glide, value: proOpen)
+        .animation(Self.glide, value: showLookBrowser)
+        .animation(.easeOut(duration: 0.18), value: formatOpen)
         .animation(.easeOut(duration: 0.15), value: showGrid)
         .animation(.easeOut(duration: 0.15), value: showLevel)
         .animation(.easeOut(duration: 0.18), value: frameGuide)
+        .animation(.easeOut(duration: 0.18), value: scopeMode)
         .animation(.easeOut(duration: 0.25), value: isLandscapeLayout)
         .animation(.easeOut(duration: 0.15), value: fan != nil)
-        .animation(.easeOut(duration: 0.2), value: nameFlash?.id)
+        .animation(.easeOut(duration: 0.25), value: nameFlash?.id)
+        .animation(.easeOut(duration: 0.2), value: statusCaption)
+        .animation(.easeOut(duration: 0.18), value: camera.isRecording)
+        .animation(.easeOut(duration: 0.18), value: camera.aeafLocked)
+        .animation(.easeOut(duration: 0.18), value: captureMode)
         .animation(.spring(response: 0.34, dampingFraction: 0.85),
                    value: camera.lastRecordingURL != nil)
         .animation(.spring(response: 0.34, dampingFraction: 0.85), value: showRollDone)
-        // Every look over the lower picture, which stays live, undimmed and
-        // swipeable above the sheet.
-        .lumaToolSheet(isPresented: looksSheetBinding, style: Self.looksSheetStyle) {
-            CameraLooksSheet(frame: rawFrame, frameID: rawFrameID,
-                             onClose: { showLookBrowser = false })
-        }
         // No auto-start after a purchase or a swap: a camera that begins
         // recording on its own as a sheet slides away would catch the floor.
         .lockedLookSheet($lookLock, context: .camera) {
@@ -280,7 +253,7 @@ struct CameraLiveLookView: View {
         .onChange(of: camera.isRecording) { _, recording in
             recordStart = recording ? Date() : nil
             if recording {
-                if panel == .format { panel = .none }
+                formatOpen = false
                 cancelTouch()
             }
         }
@@ -302,16 +275,93 @@ struct CameraLiveLookView: View {
         .task(id: scopeMode) { await runScopeLoop() }
     }
 
-    /// The sheet is the upright way in; sideways, the looks open as a panel
-    /// on the picture instead.
-    private var looksSheetBinding: Binding<Bool> {
-        Binding(get: { showLookBrowser && !isLandscapeLayout },
-                set: { showLookBrowser = $0 })
+    // MARK: - The screen
+    //
+    // One stack in the whole screen's own coordinates. Every child is placed
+    // from the top left with the lab's left and top, so the numbers here can
+    // be read straight against the design.
+
+    private func screen(size: CGSize, top: CGFloat, keyboard: CGFloat) -> some View {
+        let upright = !isLandscapeLayout
+        return ZStack(alignment: .topLeading) {
+            CamLab.ink
+            viewfinder(size: size, top: top)
+                .offset(y: pictureLift)
+            touchSurface
+            pictureMarks(size: size, top: top)
+            if upright {
+                uprightChrome(size: size, top: top)
+            } else {
+                landscapeChrome(size: size, top: top)
+                    .transition(.opacity)
+            }
+            if proOpen && upright {
+                proSheet(size: size)
+                    .transition(.move(edge: .bottom))
+            }
+            plate(size: size)
+            if showLookBrowser && upright {
+                looksLibrary(size: size, top: top, keyboard: keyboard)
+                    .transition(.opacity.combined(with: .offset(y: 30)))
+            }
+            overlays(size: size)
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .coordinateSpace(name: Self.space)
+    }
+
+    /// The picture slides up while the looks are open, so the face stays in
+    /// view above them.
+    private var pictureLift: CGFloat {
+        showLookBrowser && !isLandscapeLayout ? -104 : 0
+    }
+
+    /// Whatever sits over everything: the caption, the fan, and the cards a
+    /// take or a finished roll returns.
+    @ViewBuilder
+    private func overlays(size: CGSize) -> some View {
+        if !isLandscapeLayout, let statusCaption {
+            CamToast(text: statusCaption)
+                .id(statusCaption)
+                .frame(width: size.width)
+                .offset(y: size.height - (proOpen ? 524 : (showLookBrowser ? 596 : 374)))
+                .transition(.opacity)
+        }
+        if let fan {
+            CamFan(touch: fan.touch, centre: fan.centre, items: fanItems,
+                   positions: fan.positions, hot: fan.hot,
+                   restLabel: fan.resting ? (camera.aeafLocked ? "Let go to unlock AE/AF"
+                                                               : "Let go to lock AE/AF") : nil)
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity)
+        }
+        if let recording = camera.lastRecordingURL, !camera.isRecording {
+            CameraHandOffCard(url: recording,
+                              onRetake: { camera.lastRecordingURL = nil },
+                              onGrade: { handOffToGrade(recording) },
+                              onEdit: { handOffToEditor(recording) })
+                .frame(maxWidth: 380)
+                .rotationEffect(.degrees(controlTurn))
+                .padding(.horizontal, 20)
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        }
+        if showRollDone {
+            CameraRollDoneCard(frames: Self.rollLength,
+                               onNewRoll: { loadNewRoll() },
+                               onDevelop: { developRoll() })
+                .frame(maxWidth: 360)
+                .rotationEffect(.degrees(controlTurn))
+                .padding(.horizontal, 24)
+                .frame(width: size.width, height: size.height)
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        }
     }
 
     private func start() {
         // A restored scene must never open ON a panel.
-        panel = .none
+        proOpen = false
+        formatOpen = false
         camera.lookState = app.lookState
         camera.requestAndStart()
         #if DEBUG
@@ -329,10 +379,10 @@ struct CameraLiveLookView: View {
         }
         // Pro open on a chosen readout, e.g. LUMA_SEED_CAMPRO=shutter.
         if let pro = env["LUMA_SEED_CAMPRO"] {
-            panel = .pro
-            dialTarget = DialTarget.allCases.first { $0.title.lowercased() == pro.lowercased() } ?? .shutter
+            proOpen = true
+            dialTarget = DialTarget.named(pro) ?? .lens
         }
-        // Another mode, a roll loaded, or the focus brackets lit, e.g.
+        // Another mode, a roll loaded, or the focus square held, e.g.
         // LUMA_SEED_CAMMODE=photo LUMA_SEED_CAMROLL=24 LUMA_SEED_CAMFOCUS=1.
         if let mode = env["LUMA_SEED_CAMMODE"] {
             switch mode.lowercased() {
@@ -347,8 +397,7 @@ struct CameraLiveLookView: View {
             rollLeft = min(max(left, 0), Self.rollLength)
         }
         if env["LUMA_SEED_CAMFOCUS"] == "1" {
-            focusSeed = CGPoint(x: 0.56, y: 0.3)
-            focusActive = true
+            focusSeed = CGPoint(x: 0.56, y: 0.36)
         }
         // A look on the picture, e.g. LUMA_SEED_CAMLOOK=pack:film-neg-archive:FN400,
         // and with LUMA_SEED_CAMLOCK=1 the ask a paid one makes at record.
@@ -389,7 +438,7 @@ struct CameraLiveLookView: View {
             if let frame = camera.previewImage {
                 scopeImage = await Scopes.render(frame: CIImage(cgImage: frame),
                                                  state: neutral, mode: mode,
-                                                 size: CGSize(width: 200, height: 92))
+                                                 size: CGSize(width: 232, height: 108))
             }
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
@@ -404,818 +453,171 @@ struct CameraLiveLookView: View {
         }
     }
 
-    // MARK: - Controls over the picture
-
-    private var controls: some View {
-        VStack(spacing: 0) {
-            if !isLandscapeLayout {
-                topBar
-                    .transition(.opacity)
-            }
-            // Without a live picture, the permission or status message sits
-            // in the clear space, so nothing can cover Open Settings.
-            if showsLivePicture {
-                Spacer(minLength: 0)
-            } else {
-                fallbackMessage
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            if !isLandscapeLayout {
-                deckExtras
-            }
-            VStack(spacing: 0) {
-                if !isLandscapeLayout {
-                    deckMain
-                }
-                captureRow
-                    .padding(.top, 8)
-            }
-            .frame(maxWidth: .infinity)
-            .background(alignment: .bottom) { bottomBackground }
-        }
-    }
-
-    /// An ink gradient under the dial (the picture reads through it), or the
-    /// panel's own dark glass while Pro is up.
-    @ViewBuilder
-    private var bottomBackground: some View {
-        if panel != .none && !isLandscapeLayout {
-            ZStack {
-                UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous)
-                    .fill(LumaTheme.ink.opacity(0.8))
-            }
-            .ignoresSafeArea(edges: .bottom)
-            .transition(.opacity)
-        } else {
-            LinearGradient(stops: [
-                .init(color: LumaTheme.ink.opacity(0), location: 0),
-                .init(color: LumaTheme.ink.opacity(0.5), location: 0.45),
-                .init(color: LumaTheme.ink.opacity(0.85), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
-            .padding(.top, -60)
-            .ignoresSafeArea(edges: .bottom)
-            .allowsHitTesting(false)
-        }
-    }
-
-    // MARK: Top bar
-
-    private var topBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                closeButton
-                if captureMode.takesStills {
-                    photoPills
-                } else {
-                    videoFormatButton
-                }
-                Spacer(minLength: 0)
-                if camera.isRecording {
-                    recordTimer
-                }
-                if captureMode.takesStills {
-                    focusModePill
-                } else {
-                    zoomPill
-                }
-            }
-            HStack(alignment: .top, spacing: 8) {
-                lookTag(ring: 42)
-                Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    histogramControl
-                    proPill
-                }
-                .padding(.top, 6)
-            }
-            if camera.isRecording || camera.aeafLocked {
-                statusRow
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .animation(.easeOut(duration: 0.18), value: camera.isRecording)
-        .animation(.easeOut(duration: 0.18), value: camera.aeafLocked)
-        .animation(.easeOut(duration: 0.18), value: captureMode)
-    }
-
-    private var closeButton: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(.ultraThinMaterial, in: Circle())
-                .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
-                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Close camera")
-    }
-
-    /// Live from the ACTIVE spec, so the HUD never lies. Tap to change
-    /// resolution, frame rate and codec.
-    private var videoFormatButton: some View {
-        Button {
-            panel = panel == .format ? .none : .format
-            LumaHaptics.shared.tap()
-        } label: {
-            CaptureFormatChip(spec: camera.activeSpec)
-                .lumaGlassPill()
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .disabled(recordingBusy)
-        .accessibilityHint(recordingBusy
-                           ? "Stop recording to change the capture format"
-                           : "Change resolution, frame rate, and codec")
-    }
-
-    /// Photo modes: the still format and size, and the roll when one is
-    /// loaded. Either opens the photo format page.
-    private var photoPills: some View {
-        HStack(spacing: 8) {
-            Button {
-                panel = panel == .format ? .none : .format
-                LumaHaptics.shared.tap()
-            } label: {
-                PhotoFormatChip(format: camera.photoSpec.format.rawValue,
-                                megapixels: camera.activePhotoMegapixels)
-                    .lumaGlassPill()
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.lumaPress)
-            .accessibilityHint("Change the photo format and size")
-
-            if rollOn {
-                Button {
-                    panel = panel == .format ? .none : .format
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Text("Roll · \(rollLeft) left")
-                        .font(.luma(size: 12, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
-                        .padding(.vertical, 5)
-                        .lumaGlassPill()
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.lumaPress)
-                .transition(.opacity)
-            }
-        }
-    }
-
-    /// What the lens is doing never leaves the top line. Tap puts the lens
-    /// on the dial.
-    private var zoomPill: some View {
-        Button {
-            dialTarget = .lens
-            if panel != .none { panel = .none }
-            LumaHaptics.shared.tap()
-        } label: {
-            Text(String(format: "%.1f×", camera.zoomFactor))
-                .font(.luma(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .lumaGlassPill()
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel(String(format: "Zoom %.1f times", camera.zoomFactor))
-        .accessibilityHint("Puts the lens on the dial")
-    }
-
-    /// Photo modes show the focus mode where video shows zoom: AF, MF, or
-    /// AF L while AE/AF is locked. Tap puts focus on the dial.
-    private var focusModePill: some View {
-        Button {
-            dialTarget = .focus
-            if panel != .none { panel = .none }
-            LumaHaptics.shared.tap()
-        } label: {
-            Text(camera.aeafLocked ? "AF L" : (camera.manualFocus ? "MF" : "AF"))
-                .font(.luma(size: 12, weight: .semibold))
-                .foregroundStyle(camera.aeafLocked ? LumaTheme.signal : .white)
-                .lineLimit(1)
-                .lumaGlassPill()
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Focus")
-    }
-
-    private var recordTimer: some View {
-        // Slo-mo runs at 120 / 240: the timecode keeps a readable frame
-        // count and redraws at no more than 60 Hz.
-        let fps = min(max(1, camera.activeSpec.fps), 60)
-        return HStack(spacing: 6) {
-            RecordTally()
-            TimelineView(.periodic(from: recordStart ?? Date(), by: 1.0 / Double(fps))) { context in
-                Text(Timecode.string(
-                    seconds: context.date.timeIntervalSince(recordStart ?? context.date),
-                    fps: Double(fps)))
-                    .font(.luma(size: 12, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-            }
-        }
-        .lumaGlassPill()
-        .transition(.opacity)
-    }
-
-    /// Pro: pulls up every pro control. A dot while anything is set by hand.
-    private var proPill: some View {
-        Button { openPro() } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Pro")
-                    .font(.luma(size: 13, weight: .semibold))
-                if anyManual {
-                    Circle().fill(LumaTheme.signal).frame(width: 5, height: 5)
-                }
-            }
-            .foregroundStyle(.white)
-            .lumaGlassPill()
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Pro controls")
-    }
-
-    /// The mic meter while rolling, and the AE/AF lock (tap to undo it).
-    private var statusRow: some View {
-        HStack(spacing: 8) {
-            if camera.isRecording {
-                InputMeterView(level: camera.audioLevel)
-                    .grayscale(1)
-            }
-            if camera.aeafLocked {
-                aeafBadge
-            }
-            Spacer(minLength: 0)
-        }
-        .transition(.opacity)
-    }
-
-    private var aeafBadge: some View {
-        Button {
-            camera.unlockAEAF()
-            flash("AE/AF unlocked")
-            LumaHaptics.shared.tap()
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 10, weight: .bold))
-                Text("AE/AF locked")
-                    .font(.luma(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(LumaTheme.onSignal)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(LumaTheme.signal, in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityHint("Unlocks focus and exposure")
-    }
-
-    /// The histogram pill, or a small glyph to bring it back.
-    @ViewBuilder
-    private var histogramControl: some View {
-        if showHistogram {
-            Button {
-                showHistogram = false
-                LumaHaptics.shared.tap()
-            } label: {
-                CameraHistogramPill(histogram: camera.histogram)
-                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            }
-            .buttonStyle(.lumaPress)
-            .accessibilityHint("Hide the histogram")
-            .transition(.opacity)
-        } else {
-            Button {
-                showHistogram = true
-                LumaHaptics.shared.tap()
-            } label: {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 30, height: 30)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("Show histogram")
-            .transition(.opacity)
-        }
-    }
-
-    // MARK: The look tag
-
-    /// The look on the picture: its ring (filled to the strength), its name,
-    /// code and strength, and a dot for each favourite in the swipe. Tap for
-    /// every look.
-    private func lookTag(ring: CGFloat) -> some View {
-        let worn = app.cameraWornLook
-        let strength = app.settings.intensity
-        let locked = app.lockedLookInGrade(storeService) != nil
-        return Button { openLooks() } label: {
-            HStack(spacing: 10) {
-                CameraLookRing(code: worn.code,
-                               colour: strength == 0 ? LumaTheme.textMuted : worn.signature,
-                               strength: strength / 100, size: ring)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 5) {
-                        Text(worn.title)
-                            .font(.luma(size: ring > 40 ? 14.5 : 13.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        if locked {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                    }
-                    Text(lookSubtitle(worn, locked: locked))
-                        .font(.luma(size: 11.5, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(1)
-                    favouriteDots(worn)
-                        .padding(.top, 5)
-                }
-                .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Looks: \(app.cameraLookName)")
-        .accessibilityHint("Opens every look. Swipe the picture for your favourites")
-    }
-
-    private func lookSubtitle(_ look: CameraLook, locked: Bool) -> String {
-        let strength = Int(app.settings.intensity.rounded())
-        let amount = strength == 0 ? "Off" : "\(strength)%"
-        return locked ? "\(look.code) · \(amount) · free to try" : "\(look.code) · \(amount)"
-    }
-
-    /// Where the look on the picture sits in the swipe.
-    @ViewBuilder
-    private func favouriteDots(_ worn: CameraLook) -> some View {
-        let favourites = cameraFavourites
-        let current = favourites.firstIndex { $0.id == worn.id }
-        if favourites.count > 12 {
-            Text(current.map { "\($0 + 1) of \(favourites.count) favourites" }
-                 ?? "\(favourites.count) favourites")
-                .font(.luma(size: 10.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.55))
-        } else if favourites.count > 1 {
-            HStack(spacing: 4) {
-                ForEach(Array(favourites.enumerated()), id: \.element.id) { index, _ in
-                    Capsule()
-                        .fill(index == current ? worn.signature : Color.white.opacity(0.4))
-                        .frame(width: index == current ? 12 : 4, height: 4)
-                }
-            }
-            .animation(.easeOut(duration: 0.2), value: current)
-        }
-    }
-
-    private var cameraFavourites: [CameraLook] {
-        app.cameraFavourites(raw: favouritesRaw)
-    }
-
-    // MARK: - The deck over the shutter
-
-    /// Captions and the scope, just above the chips.
-    private var deckExtras: some View {
-        VStack(spacing: 10) {
-            if let statusCaption {
-                toast(statusCaption)
-            }
-            if scopeMode != nil {
-                scopeStrip
-            }
-        }
-        .padding(.bottom, 10)
-        .animation(.easeOut(duration: 0.18), value: statusCaption)
-        .animation(.easeOut(duration: 0.18), value: scopeMode)
-    }
-
-    private func toast(_ text: String) -> some View {
-        Text(text)
-            .font(.luma(size: 12.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .lumaGlassPill()
-            .id(text)
-            .transition(.opacity)
-            .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
-    private var deckMain: some View {
-        switch panel {
-        case .none:
-            dialDeck
-                .transition(.opacity)
-        case .pro:
-            proPanel
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-        case .format:
-            formatPage
-                .transition(.opacity)
-        }
-    }
-
-    // MARK: Chips and the dial
-
-    private var lensTarget: DialTarget { captureMode == .portrait ? .aperture : .lens }
-    private var chipTargets: [DialTarget] { [.look, lensTarget, .shutter, .iso, .ev, .wb, .focus] }
-    private var proTargets: [DialTarget] { [lensTarget, .shutter, .iso, .wb, .ev, .focus] }
-
-    private var dialDeck: some View {
-        VStack(spacing: 4) {
-            chipsRow
-            ZStack(alignment: .bottom) {
-                // The arc's centre is the shutter's: 43 pt below this strip
-                // (the gap above the dock, then half the dock).
-                CameraArcDial(ticks: dialTicks(for: dialTarget),
-                              index: dialPosition(for: dialTarget),
-                              centreBelow: 43, radius: 140,
-                              onChange: { applyDial($0, to: dialTarget) },
-                              onPullUp: { openPro() })
-                    .id(dialTarget)
-                dialReadout
-                    .padding(.bottom, 8)
-            }
-            .frame(height: 128)
-        }
-    }
-
-    private var chipsRow: some View {
-        HStack(spacing: 4) {
-            ForEach(chipTargets, id: \.self) { target in
-                CameraDialChip(title: target.title, active: dialTarget == target,
-                               manual: isManual(target)) {
-                    dialTarget = target
-                    LumaHaptics.shared.tap()
-                }
-            }
-        }
-        .padding(.horizontal, 8)
-    }
-
-    /// The dial's value, large, under the needle; Auto beside it when the
-    /// value is set by hand.
-    private var dialReadout: some View {
-        VStack(spacing: 0) {
-            Text(dialValue(for: dialTarget))
-                .font(.luma(size: 30, weight: .semibold))
-                .kerning(-0.8)
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .contentTransition(.numericText())
-            Text(isAutoTarget(dialTarget) ? "\(dialTarget.longName) · auto" : dialTarget.longName)
-                .font(.luma(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.62))
-                .lineLimit(1)
-        }
-        .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
-        .allowsHitTesting(false)
-        .overlay(alignment: .trailing) {
-            if isManual(dialTarget) {
-                autoButton(for: dialTarget)
-                    .fixedSize()
-                    .offset(x: 62)
-            }
-        }
-        .animation(.snappy(duration: 0.14), value: dialValue(for: dialTarget))
-    }
-
-    private func autoButton(for target: DialTarget) -> some View {
-        Button { setAuto(target) } label: {
-            Text("Auto")
-                .font(.luma(size: 12, weight: .bold))
-                .foregroundStyle(LumaTheme.onSignal)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(LumaTheme.signal, in: Capsule())
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("\(target.longName) back to auto")
-    }
-
-    // MARK: Pro panel
+    // MARK: - The picture
     //
-    // The capture row never leaves, so a take can be started and stopped with
-    // Pro up.
-
-    private var proPanel: some View {
-        VStack(spacing: 12) {
-            panelHeader("Pro", showsAuto: isManual(dialTarget))
-            HStack(spacing: 0) {
-                ForEach(proTargets, id: \.self) { target in
-                    CameraProReadout(title: target.title,
-                                     value: dialValue(for: target),
-                                     auto: isAutoTarget(target),
-                                     active: dialTarget == target) {
-                        dialTarget = target
-                        LumaHaptics.shared.tap()
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            // One ruler, re-targeted by the readouts above it.
-            CameraRulerDial(ticks: dialTicks(for: dialTarget),
-                            index: dialPosition(for: dialTarget)) { newIndex in
-                applyDial(newIndex, to: dialTarget)
-            }
-            .id(dialTarget)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
-                      spacing: 8) {
-                proTiles
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 14)
-    }
-
-    @ViewBuilder
-    private var proTiles: some View {
-        CameraToolTile(symbol: "rectangle.on.rectangle", label: "Format", enabled: !recordingBusy) {
-            panel = .format
-            LumaHaptics.shared.tap()
-        }
-        CameraToolTile(symbol: "rectangle.dashed",
-                       label: frameGuide == .off ? "Guides" : frameGuide.label,
-                       on: frameGuide != .off) { cycleGuide() }
-            // Long-press toggles the social safe zone inside the guide.
-            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                toggleSafeZone()
-            })
-        CameraToolTile(symbol: "waveform.path.ecg.rectangle", label: "Scope",
-                       on: scopeMode != nil) { cycleScope() }
-        CameraToolTile(symbol: "light.beacon.max", label: "Zebras",
-                       on: camera.zebrasOn) { toggleZebras() }
-        CameraToolTile(symbol: "camera.metering.spot", label: "Peaking",
-                       on: camera.peakingOn) { togglePeaking() }
-        CameraToolTile(symbol: "grid", label: "Grid", on: showGrid) { toggleGrid() }
-        CameraToolTile(symbol: "level", label: "Level", on: showLevel) { toggleLevel() }
-        CameraToolTile(symbol: camera.aeafLocked ? "lock.fill" : "lock.open", label: "AE/AF lock",
-                       on: camera.aeafLocked) { toggleAEAF() }
-        CameraToolTile(symbol: "chart.bar.fill", label: "Histogram", on: showHistogram) {
-            showHistogram.toggle()
-            flash(showHistogram ? "Histogram on" : "Histogram off")
-        }
-        CameraToolTile(symbol: "a.circle", label: "Auto all") { autoAll() }
-    }
-
-    /// The grab bar and title; drag it down (or tap the chevron) to close.
-    private func panelHeader(_ title: String, showsAuto: Bool,
-                             back: (() -> Void)? = nil) -> some View {
-        VStack(spacing: 10) {
-            Capsule()
-                .fill(Color.white.opacity(0.28))
-                .frame(width: 36, height: 5)
-            HStack(spacing: 8) {
-                if let back {
-                    Button(action: back) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .frame(width: 32, height: 32)
-                            .background(Color.white.opacity(0.08), in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.lumaPress)
-                    .accessibilityLabel("Back to Pro")
-                }
-                Text(title)
-                    .font(.luma(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer(minLength: 0)
-                if showsAuto {
-                    autoButton(for: dialTarget)
-                }
-                Button { closePanel() } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.08), in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Close")
-            }
-        }
-        .padding(.top, 8)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 10)
-                .onEnded { value in
-                    if value.translation.height > 40 { closePanel() }
-                }
-        )
-    }
-
-    private var formatPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            panelHeader("Format", showsAuto: false, back: { panel = .pro })
-            formatPanel
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 14)
-    }
-
-    // MARK: Scope
-
-    @ViewBuilder
-    private var scopeStrip: some View {
-        HStack(spacing: 12) {
-            Group {
-                if let scopeImage {
-                    Image(decorative: scopeImage, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    LumaTheme.surface
-                }
-            }
-            .frame(width: 200, height: 92)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            // clipShape clips pixels, NOT touches.
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(scopeName(scopeMode))
-                    .font(.luma(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
-                Text("Reading the graded frame")
-                    .font(.luma(size: 11))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(2)
-                Button {
-                    scopeMode = scopeMode?.next
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Text("Next scope")
-                        .font(.luma(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-            }
-            .shadow(color: .black.opacity(0.5), radius: 4)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 18)
-        .transition(.opacity)
-    }
-
-    /// Sentence-case scope names — `ScopeMode.title` is shouted caps, which is
-    /// the mono instrument voice and wrong for a heading.
-    private func scopeName(_ mode: ScopeMode?) -> String {
-        switch mode {
-        case .waveform:    return "RGB waveform"
-        case .parade:      return "RGB parade"
-        case .vectorscope: return "Vectorscope"
-        case .histogram:   return "RGB histogram"
-        case .falseColor:  return "False colour"
-        case nil:          return ""
-        }
-    }
-
-    // MARK: - Viewfinder
-    //
-    // Letterboxed to the 9:16 capture aspect: what you frame is what is
-    // written. Only overlays that must register with the picture (grid,
-    // level, guides, brackets) are drawn on it, plus the swipe's wipe.
+    // Edge to edge behind everything. Only what must register with the
+    // picture is drawn on it: the wipe of a swipe, the grid, the level, a
+    // frame guide, the shutter's blink, and the two scrims the controls read
+    // against. It takes no touches of its own; `touchSurface` does.
 
     private var showsLivePicture: Bool { camera.isRunning && !camera.cameraUnavailable }
 
-    private var viewfinder: some View {
-        pictureStack
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-            // A hairline is the one stroke allowed over live video: it is
-            // what separates an unpredictable frame from the matte around it.
-            .overlay(Rectangle().strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
-            .contentShape(Rectangle())
-            // Pinch zooms; a finger swipes looks or holds for the fan. Both
-            // simultaneous, so tap-to-focus keeps working.
-            .simultaneousGesture(pinchGesture)
-            .simultaneousGesture(touchGesture)
-            .overlay {
-                if isLandscapeLayout {
-                    landscapeChrome
-                        .transition(.opacity)
-                }
+    private func viewfinder(size: CGSize, top: CGFloat) -> some View {
+        let upright = !isLandscapeLayout
+        return ZStack(alignment: .topLeading) {
+            livePicture
+            swipeRevealLayer(size: size)
+            if showGrid {
+                CamGrid().transition(.opacity)
             }
+            if showLevel {
+                LevelIndicator(restTurn: controlTurn)
+                    .frame(width: size.width, height: 40)
+                    .offset(y: levelCentre(size: size) - 20)
+                    .transition(.opacity)
+            }
+            if upright, frameGuide != .off {
+                CamGuide(box: guideBox(size: size, top: top), label: frameGuide.label,
+                         safeZone: showSafeZone && frameGuide == .vertical)
+                    .transition(.opacity)
+            }
+            if upright {
+                scrims(size: size)
+            }
+            if shutterFlash {
+                Color.white.opacity(0.8).transition(.opacity)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .clipped()
+        .allowsHitTesting(false)
     }
 
-    private var pictureStack: some View {
-        ZStack {
-            Group {
-                if showsLivePicture {
-                    FilteredCameraPreview(camera: camera, onTapUnit: { unit, viewPoint in
-                        tapPicture(unit: unit, at: viewPoint)
-                    })
-                } else {
-                    ZStack {
-                        HeroImage(photo: .golden)
-                        Color.black.opacity(0.45)
-                    }
-                }
-            }
-            .overlay { if showGrid { RuleOfThirdsGrid().transition(.opacity) } }
-            // Desaturated: the level snap still reads, it just no longer
-            // turns green over footage the user is judging colour on.
-            .overlay { if showLevel { LevelIndicator().grayscale(1).transition(.opacity) } }
-            .overlay {
-                if frameGuide != .off {
-                    FrameGuidesOverlay(guide: frameGuide, showSafeZone: showSafeZone)
-                        .transition(.opacity)
-                }
-            }
-            .overlay { focusBracketsLayer }
-            .overlay { swipeRevealLayer }
-            .overlay {
-                if shutterFlash {
-                    Color.white.opacity(0.8)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
-            .overlay {
-                if !isLandscapeLayout {
-                    ZStack {
-                        swipeEdgeLayer
-                        bigNameLayer
-                    }
-                }
+    @ViewBuilder
+    private var livePicture: some View {
+        if showsLivePicture {
+            FilteredCameraPreview(camera: camera, fill: true)
+        } else {
+            ZStack {
+                HeroImage(photo: .golden)
+                Color.black.opacity(0.45)
             }
         }
     }
 
-    private func tapPicture(unit: CGPoint, at viewPoint: CGPoint) {
-        guard fan == nil else { return }
-        // A tap on the picture puts away whatever is open over it first.
-        if panel != .none {
-            closePanel()
-            return
+    /// The lab's two scrims: 170 pt down from the top, and the lower 404 pt.
+    private func scrims(size: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(width: size.width, height: 170)
+            LinearGradient(stops: [
+                .init(color: .black.opacity(0), location: 0),
+                .init(color: .black.opacity(0.55), location: 0.45),
+                .init(color: .black.opacity(0.82), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+                .frame(width: size.width, height: 404)
+                .offset(y: size.height - 404)
         }
-        if isLandscapeLayout, landscapeDropOpen || showLookBrowser {
-            landscapeDropOpen = false
-            showLookBrowser = false
-            return
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    /// The level sits a little above the middle; sideways, in the middle of
+    /// the picture left clear of the plate.
+    private func levelCentre(size: CGSize) -> CGFloat {
+        isLandscapeLayout ? (size.height - CamLab.plateHeight) / 2 : size.height * 0.46
+    }
+
+    /// The guide's box, in the picture left clear between the top bar and the
+    /// plate.
+    private func guideBox(size: CGSize, top: CGFloat) -> CGRect {
+        let aspect = CGFloat(frameGuide.aspect ?? 1)
+        let top0 = top + 48
+        let clear = size.height - 124 - top0
+        var gw = size.width - 24
+        var gh = gw / aspect
+        if gh > clear - 20 {
+            gh = clear - 20
+            gw = gh * aspect
         }
-        if camera.aeafLocked { camera.unlockAEAF() }
-        camera.focusExpose(at: unit)
-        placeFocusBrackets(at: viewPoint)
-        LumaHaptics.shared.tap()
+        return CGRect(x: (size.width - gw) / 2, y: top0 + (clear - gh) / 2, width: gw, height: gh)
+    }
+
+    /// The next look, graded over a still of this frame, wiped in from the
+    /// side the finger is pulling from. It fills the screen as the live
+    /// picture does, so the two line up.
+    @ViewBuilder
+    private func swipeRevealLayer(size: CGSize) -> some View {
+        if let swipe, let swipeReveal, !isLandscapeLayout {
+            let edge = swipe.edge(in: size.width)
+            let shown = swipe.direction == 1 ? size.width - edge : edge
+            Image(decorative: swipeReveal, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size.width, height: size.height)
+                .clipped()
+                .mask(alignment: .leading) {
+                    Rectangle()
+                        .frame(width: max(shown, 0))
+                        .offset(x: swipe.direction == 1 ? edge : 0)
+                }
+        }
+    }
+
+    // MARK: Marks on the picture
+
+    /// The focus square, the swipe's edge and the look's name; and, with no
+    /// camera to show, why.
+    @ViewBuilder
+    private func pictureMarks(size: CGSize, top: CGFloat) -> some View {
+        if !showsLivePicture {
+            fallbackMessage
+                .rotationEffect(.degrees(controlTurn))
+                .frame(width: size.width, height: max(size.height - 424 - top, 120))
+                .offset(y: top + 110)
+        }
+        focusLayer(size: size)
+        if !isLandscapeLayout {
+            if let swipe {
+                Rectangle()
+                    .fill(Color.white.opacity(0.85))
+                    .frame(width: 2, height: size.height)
+                    .shadow(color: .white.opacity(0.6), radius: 7)
+                    .offset(x: swipe.edge(in: size.width) - 1)
+                    .allowsHitTesting(false)
+            }
+            bigName(width: size.width)
+                .offset(y: size.height - 474)
+        }
     }
 
     @ViewBuilder
     private var fallbackMessage: some View {
         VStack(spacing: 10) {
-            Image(systemName: camera.permissionDenied ? "lock.shield" : "camera.badge.ellipsis")
-                .font(.system(size: 26))
-                .foregroundStyle(.white.opacity(0.8))
             if camera.permissionDenied {
+                CamGlyph(icon: .lock, size: 28)
+                    .foregroundStyle(Color.white.opacity(0.8))
                 Text("Camera access is off")
                     .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                Button("Open Settings") {
+                    .foregroundStyle(CamLab.text)
+                Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
+                } label: {
+                    CamMiniLabel(title: "Open Settings")
                 }
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
+                .buttonStyle(CamPressStyle())
             } else if camera.cameraUnavailable {
+                CamGlyph(icon: .photo, size: 28)
+                    .foregroundStyle(Color.white.opacity(0.8))
                 Text("No camera on this device")
                     .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(CamLab.text)
                 Text("Run LumaLook on an iPhone to shoot with live looks.")
                     .font(.luma(size: 12))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Color.white.opacity(0.55))
             } else {
                 ProgressView().tint(.white)
             }
@@ -1223,160 +625,103 @@ struct CameraLiveLookView: View {
         .padding(20)
     }
 
-    // MARK: Focus brackets
-    //
-    // Four signal-yellow corners. At rest they sit faint in the clear middle
-    // of the picture; a tap snaps them to that point, they animate in lit,
-    // then settle dimmer where focus and exposure are now held.
-
-    private var focusBracketsLayer: some View {
-        GeometryReader { geo in
-            let point = focusPoint ?? seededFocusPoint(in: geo.size)
-            ZStack {
-                if let point {
-                    CameraFocusBrackets(colour: LumaTheme.signal.opacity(bracketOpacity),
-                                        lineWidth: 2, arm: 16)
-                        .frame(width: 84, height: 84)
-                        .position(point)
-                        .id(focusTapID)
-                        .transition(.scale(scale: 1.45).combined(with: .opacity))
-                } else if !isLandscapeLayout {
-                    let rest = restBracketRect(in: geo.size)
-                    CameraFocusBrackets(colour: LumaTheme.signal.opacity(camera.aeafLocked ? 1 : 0.42),
-                                        lineWidth: 1.5, arm: 18)
-                        .frame(width: rest.width, height: rest.height)
-                        .position(x: rest.midX, y: rest.midY)
-                        .transition(.opacity)
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.35), value: focusActive)
-        .animation(.easeOut(duration: 0.18), value: camera.aeafLocked)
-    }
-
-    /// Lit just after a tap or while AE/AF is locked, then settled.
-    private var bracketOpacity: Double {
-        camera.aeafLocked || focusActive ? 1 : 0.6
-    }
-
-    /// The resting frame: in the part of the picture left clear between the
-    /// look tag and the chips.
-    private func restBracketRect(in size: CGSize) -> CGRect {
-        let inset: CGFloat = 26
-        let top = size.height * 0.24
-        let height = size.height * 0.34
-        return CGRect(x: inset, y: top, width: max(0, size.width - inset * 2), height: height)
-    }
-
-    private func seededFocusPoint(in size: CGSize) -> CGPoint? {
-        guard let seed = focusSeed else { return nil }
-        return CGPoint(x: seed.x * size.width, y: seed.y * size.height)
-    }
-
-    private func placeFocusBrackets(at point: CGPoint) {
-        focusTapID += 1
-        let tap = focusTapID
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
-            focusPoint = point
-            focusActive = true
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            guard tap == focusTapID else { return }
-            focusActive = false
-        }
-    }
-
-    /// Back to the faint resting frame (auto all, a flip).
-    private func resetFocusBrackets() {
-        focusTapID += 1
-        focusSeed = nil
-        withAnimation(.easeOut(duration: 0.25)) {
-            focusPoint = nil
-            focusActive = false
-        }
-    }
-
-    // MARK: - Swipe through favourites
-
-    /// The next look, graded over a still of this frame, wiped in from the
-    /// side the finger is pulling from.
+    /// The square a tap leaves, or the one held while AE/AF is locked.
     @ViewBuilder
-    private var swipeRevealLayer: some View {
-        if let swipe, let swipeReveal, !isLandscapeLayout {
-            GeometryReader { geo in
-                let edge = swipe.edge(in: geo.size.width)
-                // Fitted, as the viewfinder fits its frames, so the still
-                // lines up with the live picture under it.
-                Image(decorative: swipeReveal, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
-                    .mask(alignment: .leading) {
-                        Rectangle()
-                            .frame(width: swipe.direction == 1 ? geo.size.width - edge : edge)
-                            .offset(x: swipe.direction == 1 ? edge : 0)
-                    }
-            }
-            .allowsHitTesting(false)
-        }
-    }
-
-    @ViewBuilder
-    private var swipeEdgeLayer: some View {
-        if let swipe {
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(.white.opacity(0.85))
-                    .frame(width: 2)
-                    .shadow(color: .white.opacity(0.6), radius: 7)
-                    .position(x: swipe.edge(in: geo.size.width), y: geo.size.height / 2)
-            }
-            .allowsHitTesting(false)
+    private func focusLayer(size: CGSize) -> some View {
+        if let mark = focusMark {
+            CamFocusPulse(label: mark.label, hold: mark.hold)
+                .rotationEffect(.degrees(controlTurn))
+                .id(mark.id)
+                .offset(x: mark.point.x - 37, y: mark.point.y - 37)
+        } else if let seed = focusSeed, showsLivePicture {
+            CamFocusPulse(label: "AF", hold: true)
+                .offset(x: seed.x * size.width - 37, y: seed.y * size.height - 37)
         }
     }
 
     /// The look's name, large, while it is swiped in and for a moment after.
     @ViewBuilder
-    private var bigNameLayer: some View {
+    private func bigName(width: CGFloat) -> some View {
         if let look = swipe?.next ?? nameFlash {
             let strength = Int(app.settings.intensity.rounded())
             VStack(spacing: 4) {
                 Text(look.title)
                     .font(.luma(size: 32, weight: .bold))
-                    .kerning(-0.9)
+                    .kerning(-0.96)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Text("\(look.code) · \(strength == 0 ? "Off" : "\(strength)%")")
-                    .font(.luma(size: 13, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.78))
+                Text("\(look.code) · \(strength)%")
+                    .font(.luma(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.78))
             }
-            .shadow(color: .black.opacity(0.45), radius: 12, y: 2)
+            .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
             .padding(.horizontal, 24)
-            .offset(y: -30)
+            .frame(width: width)
             .transition(.opacity)
             .allowsHitTesting(false)
         }
     }
 
+    private func placeFocusMark(at point: CGPoint, label: String, hold: Bool) {
+        focusToken += 1
+        let token = focusToken
+        focusSeed = nil
+        focusMark = FocusMark(id: token, point: point, label: label, hold: hold)
+        guard !hold else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.15) {
+            if focusMark?.id == token { focusMark = nil }
+        }
+    }
+
+    /// No square on the picture (auto all, a flip).
+    private func clearFocusMark() {
+        focusToken += 1
+        focusSeed = nil
+        focusMark = nil
+    }
+
+    /// A point on the screen as a unit point in the picture, which fills the
+    /// screen and so runs off its sides.
+    private func unitPoint(for point: CGPoint) -> CGPoint? {
+        guard let frame = camera.previewImage, screenSize.width > 0, screenSize.height > 0,
+              frame.width > 0, frame.height > 0 else { return nil }
+        let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
+        let scale = max(screenSize.width / iw, screenSize.height / ih)
+        let shownW = iw * scale, shownH = ih * scale
+        let x = (point.x - (screenSize.width - shownW) / 2) / shownW
+        let y = (point.y - pictureLift - (screenSize.height - shownH) / 2) / shownH
+        return CGPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1))
+    }
+
+    // MARK: - A finger on the picture
+    //
+    // One clear layer over the picture and under every control. A tap
+    // focuses there; a sideways drag steps through the favourites; a hold
+    // fans the tools out; two fingers zoom.
+
+    private var touchSurface: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .simultaneousGesture(pinchGesture)
+            .simultaneousGesture(touchGesture)
+            .accessibilityHidden(true)
+    }
+
     private var canSwipe: Bool {
-        guard !recordingBusy, showsLivePicture else { return false }
-        if panel != .none && !isLandscapeLayout { return false }
+        guard !recordingBusy, showsLivePicture, !showLookBrowser else { return false }
         return !cameraFavourites.isEmpty
     }
 
     private var canFan: Bool {
-        !isLandscapeLayout && panel == .none && showsLivePicture
+        !isLandscapeLayout && showsLivePicture && !showLookBrowser
     }
 
     /// How far a full swipe travels: the picture's width as it is held.
     private var swipeWidth: CGFloat {
         let width = screenSize.width > 0 ? screenSize.width : 393
-        return isLandscapeLayout ? width * 16 / 9 : width
+        let height = screenSize.height > 0 ? screenSize.height : 852
+        return isLandscapeLayout ? height : width
     }
 
     private var pinchGesture: some Gesture {
@@ -1398,18 +743,39 @@ struct CameraLiveLookView: View {
             .onEnded { touchEnded($0) }
     }
 
+    /// Whatever is open over the picture goes away under a finger; true when
+    /// something did, so that touch does nothing else.
+    private func putAwayPanels() -> Bool {
+        var closed = false
+        if proOpen { proOpen = false; closed = true }
+        if formatOpen { formatOpen = false; closed = true }
+        if showLookBrowser { showLookBrowser = false; closed = true }
+        if landscapeDropOpen { landscapeDropOpen = false; closed = true }
+        return closed
+    }
+
     private func touchChanged(_ value: DragGesture.Value) {
         if isPinching {
             cancelTouch()
             return
         }
+        // A gesture the system took away never ends; a new start replaces it.
+        if let stale = touch, stale.start != value.startLocation {
+            cancelTouch()
+            touch = nil
+        }
         if touch == nil {
             touchToken += 1
             let token = touchToken
-            touch = TouchState(mode: .pending, last: value.location, token: token)
+            if putAwayPanels() {
+                touch = TouchState(mode: .ignored, start: value.startLocation,
+                                   last: value.location, token: token)
+                return
+            }
+            touch = TouchState(mode: .pending, start: value.startLocation,
+                               last: value.location, token: token)
             if canFan {
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
                     openFanIfHeld(token: token)
                 }
             }
@@ -1418,7 +784,7 @@ struct CameraLiveLookView: View {
         state.last = value.location
         let travel = userTravel(value.translation)
         if state.mode == .pending,
-           hypot(value.translation.width, value.translation.height) > 12 {
+           hypot(value.translation.width, value.translation.height) > 10 {
             state.mode = canSwipe && abs(travel.width) > abs(travel.height) * 1.2 ? .swipe : .ignored
         }
         touch = state
@@ -1435,6 +801,7 @@ struct CameraLiveLookView: View {
         switch mode {
         case .swipe: endSwipe()
         case .fan: endFan()
+        case .pending: tapPicture(at: value.location)
         default: break
         }
     }
@@ -1449,12 +816,55 @@ struct CameraLiveLookView: View {
         if fan != nil { fan = nil }
     }
 
+    /// A tap focuses and exposes there. Focus set by hand goes back to auto
+    /// first, and a lock lets go.
+    private func tapPicture(at point: CGPoint) {
+        guard showsLivePicture, fan == nil, let unit = unitPoint(for: point) else { return }
+        if camera.manualFocus {
+            camera.resetAutoFocus()
+            flash("Focus back on auto")
+        }
+        if camera.aeafLocked { camera.unlockAEAF() }
+        camera.focusExpose(at: unit)
+        placeFocusMark(at: point, label: "AF", hold: false)
+        LumaHaptics.shared.tap()
+    }
+
+    /// Hold, then let go where you pressed: focus and exposure lock there
+    /// (or, already locked, let go again).
+    private func lockFocus(at point: CGPoint) {
+        if camera.aeafLocked {
+            camera.unlockAEAF()
+            clearFocusMark()
+            flash("AE/AF unlocked")
+            LumaHaptics.shared.tap()
+            return
+        }
+        guard let unit = unitPoint(for: point) else { return }
+        camera.focusExpose(at: unit)
+        placeFocusMark(at: point, label: "AE/AF L", hold: true)
+        let token = focusToken
+        // The lens needs a moment to settle on the point before it is held.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            guard focusToken == token, !camera.aeafLocked else { return }
+            camera.toggleAEAFLock()
+        }
+        flash("AE/AF locked")
+        LumaHaptics.shared.tap()
+    }
+
     /// The finger's travel as the person holding the phone sees it.
     private func userTravel(_ t: CGSize) -> CGSize {
         guard isLandscapeLayout else { return t }
         return landscapeTurn < 0
             ? CGSize(width: -t.height, height: t.width)
             : CGSize(width: t.height, height: -t.width)
+    }
+
+    // MARK: Swipe through favourites
+
+    private var cameraFavourites: [CameraLook] {
+        app.cameraFavourites(raw: favouritesRaw)
     }
 
     private func moveSwipe(_ travel: CGFloat) {
@@ -1499,16 +909,16 @@ struct CameraLiveLookView: View {
 
     private func wearFromSwipe(_ look: CameraLook) {
         let installed = app.wear(look, store: storeService)
-        showName(look)
+        showName(look, for: 0.65)
         if let installed { flash("\(installed) is in your library now") }
         LumaHaptics.shared.tap()
     }
 
-    private func showName(_ look: CameraLook) {
+    private func showName(_ look: CameraLook, for seconds: Double = 0.9) {
         nameFlashID += 1
         let id = nameFlashID
         nameFlash = look
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
             guard nameFlashID == id else { return }
             nameFlash = nil
         }
@@ -1540,30 +950,28 @@ struct CameraLiveLookView: View {
         }
     }
 
-    // MARK: - The thumb fan
+    // MARK: The thumb fan
 
-    private var fanItems: [CameraFanItem] {
+    private var fanItems: [CamFanItem] {
         [
-            CameraFanItem(id: "pro", symbol: "slider.horizontal.3", label: "Pro", on: panel == .pro),
-            CameraFanItem(id: "aeaf", symbol: camera.aeafLocked ? "lock.fill" : "lock.open",
-                          label: camera.aeafLocked ? "Unlock AE/AF" : "Lock AE/AF", on: camera.aeafLocked),
-            CameraFanItem(id: "guides", symbol: "rectangle.dashed",
-                          label: frameGuide == .off ? "Guides" : frameGuide.label, on: frameGuide != .off),
-            CameraFanItem(id: "scope", symbol: "waveform.path.ecg.rectangle", label: "Scope",
-                          on: scopeMode != nil),
-            CameraFanItem(id: "zebras", symbol: "light.beacon.max", label: "Zebras", on: camera.zebrasOn),
-            CameraFanItem(id: "peaking", symbol: "camera.metering.spot", label: "Peaking",
-                          on: camera.peakingOn),
-            CameraFanItem(id: "grid", symbol: "grid", label: "Grid", on: showGrid),
-            CameraFanItem(id: "level", symbol: "level", label: "Level", on: showLevel),
+            CamFanItem(id: "pro", icon: .pro, label: "Pro", on: proOpen),
+            CamFanItem(id: "format", icon: .format, label: "Format", on: formatOpen),
+            CamFanItem(id: "guides", icon: .guides,
+                       label: frameGuide == .off ? "Guides" : frameGuide.label, on: frameGuide != .off),
+            CamFanItem(id: "scope", icon: .scope, label: "Scope", on: scopeMode != nil),
+            CamFanItem(id: "zebras", icon: .zebras, label: "Zebras", on: camera.zebrasOn),
+            CamFanItem(id: "peaking", icon: .peaking, label: "Peaking", on: camera.peakingOn),
+            CamFanItem(id: "grid", icon: .grid, label: "Grid", on: showGrid),
+            CamFanItem(id: "level", icon: .level, label: "Level", on: showLevel),
         ]
     }
 
     private func openFanIfHeld(token: Int) {
         guard let state = touch, state.token == token, state.mode == .pending, canFan else { return }
-        let centre = CameraToolFan.centre(for: state.last, in: screenSize)
-        fan = FanState(touch: state.last, centre: centre,
-                       positions: CameraToolFan.layout(centre: centre, count: fanItems.count),
+        let size = screenSize == .zero ? CGSize(width: 393, height: 852) : screenSize
+        let centre = CamFan.centre(for: state.last, in: size)
+        fan = FanState(touch: state.last, origin: state.last, centre: centre,
+                       positions: CamFan.layout(centre: centre, count: fanItems.count),
                        hot: nil)
         touch?.mode = .fan
         LumaHaptics.shared.tap()
@@ -1587,33 +995,39 @@ struct CameraLiveLookView: View {
     }
 
     private func endFan() {
-        let hot = fan?.hot
+        guard let state = fan else { return }
         fan = nil
-        guard let hot, fanItems.indices.contains(hot) else { return }
-        useTool(fanItems[hot].id)
+        if let hot = state.hot, fanItems.indices.contains(hot) {
+            useTool(fanItems[hot].id)
+        } else if state.resting {
+            lockFocus(at: state.origin)
+        }
     }
 
     private func useTool(_ id: String) {
         switch id {
         case "pro": openPro()
-        case "aeaf": toggleAEAF()
+        case "format": toggleFormat()
         case "guides": cycleGuide()
         case "scope": cycleScope()
         case "zebras": toggleZebras()
         case "peaking": togglePeaking()
         case "grid": toggleGrid()
         case "level": toggleLevel()
+        case "aeaf": toggleAEAF()
+        case "auto": autoAll()
         default: break
         }
     }
 
     #if DEBUG
     private func seedFan() {
-        let size = screenSize == .zero ? CGSize(width: 393, height: 760) : screenSize
-        let centre = CameraToolFan.centre(for: CGPoint(x: size.width * 0.5, y: size.height * 0.56),
-                                          in: size)
-        let positions = CameraToolFan.layout(centre: centre, count: fanItems.count)
-        fan = FanState(touch: positions[2], centre: centre, positions: positions, hot: 2)
+        let size = screenSize == .zero ? CGSize(width: 393, height: 852) : screenSize
+        let press = CGPoint(x: size.width * 0.5, y: size.height * 0.56)
+        let centre = CamFan.centre(for: press, in: size)
+        let positions = CamFan.layout(centre: centre, count: fanItems.count)
+        fan = FanState(touch: positions[2], origin: press, centre: centre,
+                       positions: positions, hot: 2)
     }
 
     private func seedSwipe() {
@@ -1624,308 +1038,533 @@ struct CameraLiveLookView: View {
     }
     #endif
 
-    // MARK: - Sideways
+    // MARK: - Over the picture, upright
     //
-    // The interface stays fixed to the phone; when it is held sideways the
-    // controls on the picture turn to read upright, laid out for the long
-    // edge. The shutter, modes, last shot and flip stay where the thumb is
-    // and only their labels turn.
+    // The lab's own positions: the top bar on the safe area's edge, the look
+    // 48 pt under it, the chips 314 pt up from the bottom, the dial turning
+    // on the shutter's centre.
 
-    private var isLandscapeLayout: Bool { forcedLandscape || camera.isLandscape }
-    private var landscapeClockwise: Bool {
-        forcedLandscape ? forcedClockwise : camera.landscapeClockwise
-    }
-    /// How far the sideways controls turn to read upright.
-    private var landscapeTurn: Double { landscapeClockwise ? -90 : 90 }
-    /// The turn for anything that stays put in the bottom matte.
-    private var controlTurn: Double { isLandscapeLayout ? landscapeTurn : 0 }
+    /// The look, Pro, the chips and the dial step back while Pro is up and
+    /// while a look is being swiped in.
+    private var chromeQuiet: Bool { proOpen || swipe != nil }
+    private var dialQuiet: Bool { chromeQuiet || showLookBrowser }
 
-    /// The sideways chrome, laid out upright for the long edge, then turned
-    /// onto the picture.
-    private var landscapeChrome: some View {
-        GeometryReader { geo in
-            let size = CGSize(width: geo.size.height, height: geo.size.width)
-            landscapeContent(size: size)
-                .frame(width: size.width, height: size.height)
-                .rotationEffect(.degrees(landscapeTurn))
-                .position(x: geo.size.width / 2, y: geo.size.height / 2)
+    @ViewBuilder
+    private func uprightChrome(size: CGSize, top: CGFloat) -> some View {
+        let w = size.width
+        topBar
+            .frame(width: max(w - 32, 0), height: 34)
+            .offset(x: 16, y: top)
+        lookTag(ring: 42)
+            .offset(x: 16, y: top + 48)
+            .opacity(chromeQuiet ? 0 : 1)
+            .allowsHitTesting(!chromeQuiet)
+            .animation(.easeOut(duration: 0.2), value: chromeQuiet)
+        proPill
+            .frame(width: max(w - 16, 0), alignment: .trailing)
+            .offset(y: top + 52)
+            .opacity(chromeQuiet ? 0 : 1)
+            .allowsHitTesting(!chromeQuiet)
+            .animation(.easeOut(duration: 0.2), value: chromeQuiet)
+        sideStack
+            .offset(x: 16, y: top + 98)
+        dialDeck(size: size)
+            .opacity(dialQuiet ? 0 : 1)
+            .allowsHitTesting(!dialQuiet)
+            .animation(.easeOut(duration: 0.2), value: dialQuiet)
+        if formatOpen {
+            formatCard
+                .frame(width: min(264, max(w - 76, 0)), alignment: .leading)
+                .offset(x: 60, y: top + 42)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
         }
     }
 
-    private func landscapeContent(size: CGSize) -> some View {
-        // Turned anticlockwise (+90) the island sits on the left; the
-        // shutter is always on the far side from it.
-        let islandLeading = landscapeTurn > 0
-        return ZStack {
-            VStack(spacing: 0) {
-                LinearGradient(colors: [.black.opacity(0.55), .clear],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 110)
-                Spacer(minLength: 0)
-                LinearGradient(colors: [.clear, .black.opacity(0.55)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 120)
-            }
-            .allowsHitTesting(false)
+    // MARK: Top bar
 
-            if let swipe {
-                Rectangle()
-                    .fill(.white.opacity(0.85))
-                    .frame(width: 2, height: size.height)
-                    .shadow(color: .white.opacity(0.6), radius: 7)
-                    .position(x: swipe.edge(in: size.width), y: size.height / 2)
-                    .allowsHitTesting(false)
-            }
-            bigNameLayer
-
-            VStack(alignment: .leading, spacing: 8) {
-                landscapeTopStrip
-                if landscapeDropOpen {
-                    landscapeDrop
-                        .transition(.opacity)
-                }
-                if scopeMode != nil {
-                    scopeStrip
-                }
-                if camera.isRecording || camera.aeafLocked {
-                    statusRow
-                }
-                Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: 12) {
-                    lookTag(ring: 40)
-                    Spacer(minLength: 0)
-                    landscapeTools
-                }
-            }
-            .padding(.leading, islandLeading ? 52 : 16)
-            .padding(.trailing, islandLeading ? 16 : 52)
-            .padding(.vertical, 12)
-
-            if let statusCaption {
-                toast(statusCaption)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 120)
-            }
-            if panel == .format {
-                landscapeFormatCard
-            }
-            if showLookBrowser {
-                landscapeLooksPanel(islandLeading: islandLeading)
-            }
-        }
-        .animation(.easeOut(duration: 0.18), value: landscapeDropOpen)
-        .animation(.easeOut(duration: 0.18), value: statusCaption)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showLookBrowser)
-    }
-
-    private var landscapeTopStrip: some View {
+    private var topBar: some View {
         HStack(spacing: 8) {
             closeButton
-            if camera.isRecording {
-                recordTimer
-            } else if captureMode.takesStills {
-                photoPills
-            } else {
-                videoFormatButton
-            }
+            formatChip
             Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                ForEach(proTargets, id: \.self) { target in
-                    landscapeReadout(target)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 3)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .background(Color(hex: 0x0C0C0E).opacity(0.45),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            histogramControl
+            histogramButton
         }
     }
 
-    /// A value along the top. Tap it and its ruler drops down beneath.
-    private func landscapeReadout(_ target: DialTarget) -> some View {
-        let active = landscapeDropOpen && dialTarget == target
-        return Button {
-            if active {
-                landscapeDropOpen = false
-            } else {
-                dialTarget = target
-                landscapeDropOpen = true
-            }
-            LumaHaptics.shared.tap()
-        } label: {
-            VStack(spacing: 1) {
-                Text(dialValue(for: target))
-                    .font(.luma(size: 13.5, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(active ? LumaTheme.signal
-                                     : .white.opacity(isAutoTarget(target) ? 0.62 : 0.95))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                HStack(spacing: 2) {
-                    Text(target.title)
-                    if isManual(target) {
-                        Circle().fill(LumaTheme.signal).frame(width: 4, height: 4)
-                    }
-                }
-                .font(.luma(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
-                .lineLimit(1)
-            }
-            .frame(width: 54, height: 38)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("\(target.longName) \(dialValue(for: target))")
-    }
-
-    private var landscapeDrop: some View {
-        HStack(spacing: 10) {
-            CameraRulerDial(ticks: dialTicks(for: dialTarget),
-                            index: dialPosition(for: dialTarget)) { newIndex in
-                applyDial(newIndex, to: dialTarget)
-            }
-            .id(dialTarget)
-            .frame(width: 320)
-            if isManual(dialTarget) {
-                autoButton(for: dialTarget)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .background(Color(hex: 0x0C0C0E).opacity(0.45),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
-    private var landscapeTools: some View {
-        HStack(spacing: 2) {
-            landscapeTool("rectangle.dashed", "Guides", on: frameGuide != .off) { cycleGuide() }
-                .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                    toggleSafeZone()
-                })
-            landscapeTool("light.beacon.max", "Zebras", on: camera.zebrasOn) { toggleZebras() }
-            landscapeTool("camera.metering.spot", "Peaking", on: camera.peakingOn) { togglePeaking() }
-            landscapeTool("grid", "Grid", on: showGrid) { toggleGrid() }
-            landscapeTool("level", "Level", on: showLevel) { toggleLevel() }
-            landscapeTool("waveform.path.ecg.rectangle", "Scope", on: scopeMode != nil) { cycleScope() }
-            landscapeTool(camera.aeafLocked ? "lock.fill" : "lock.open", "AE/AF lock",
-                          on: camera.aeafLocked) { toggleAEAF() }
-            landscapeTool("rectangle.on.rectangle", "Format", on: panel == .format) {
-                panel = panel == .format ? .none : .format
-            }
-            .disabled(recordingBusy)
-            .opacity(recordingBusy ? 0.35 : 1)
-        }
-        .padding(4)
-        .background(.ultraThinMaterial, in: Capsule())
-        .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Capsule())
-    }
-
-    private func landscapeTool(_ symbol: String, _ label: String, on: Bool,
-                               action: @escaping () -> Void) -> some View {
+    private var closeButton: some View {
         Button {
-            action()
-            LumaHaptics.shared.tap()
+            dismiss()
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(on ? LumaTheme.onSignal : Color.white.opacity(0.85))
-                .frame(width: 36, height: 36)
-                .background(on ? LumaTheme.signal : Color.clear, in: Circle())
+            CamGlyph(icon: .close, size: 18)
+                .foregroundStyle(CamLab.text)
+                .frame(width: 34, height: 34)
+                .camGlass(Circle())
                 .contentShape(Circle())
         }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(on ? .isSelected : [])
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Close camera")
     }
 
-    private var landscapeFormatCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Format")
-                    .font(.luma(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer(minLength: 0)
-                Button { panel = .none } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 30, height: 30)
-                        .background(Color.white.opacity(0.08), in: Circle())
-                        .contentShape(Circle())
+    /// What the camera is writing, live from the spec in force. While a take
+    /// rolls it is the take's clock, on red.
+    private var formatChip: some View {
+        Button {
+            toggleFormat()
+        } label: {
+            formatChipLabel
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel(camera.isRecording ? "Recording" : "Format, \(formatSummary)")
+        .accessibilityHint(camera.isRecording ? "" : "Changes what the camera shoots")
+    }
+
+    @ViewBuilder
+    private var formatChipLabel: some View {
+        if camera.isRecording {
+            TimelineView(.periodic(from: recordStart ?? Date(), by: 0.5)) { context in
+                chipText("● " + Self.clock(context.date.timeIntervalSince(recordStart ?? context.date)))
+                    .background(CamLab.rec.opacity(0.85), in: Capsule())
+            }
+        } else {
+            chipText(formatSummary)
+                .camGlass(Capsule())
+        }
+    }
+
+    private func chipText(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 13, weight: .semibold))
+            .foregroundStyle(CamLab.text)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .contentShape(Capsule())
+    }
+
+    private var formatSummary: String {
+        if captureMode.takesStills {
+            return "\(camera.photoSpec.format.rawValue) · \(camera.activePhotoMegapixels) MP"
+        }
+        let spec = camera.activeSpec
+        return "\(spec.resolution.rawValue) · \(spec.fps) · \(spec.codec.rawValue)"
+    }
+
+    /// "00:07" for a take seven seconds in.
+    private static func clock(_ interval: TimeInterval) -> String {
+        let seconds = max(0, Int(interval))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// The live histogram. Tap it for the scope.
+    private var histogramButton: some View {
+        Button {
+            cycleScope()
+        } label: {
+            CamHistogramGlyph(bins: camera.histogram?.luma)
+                .padding(.horizontal, 8)
+                .frame(height: 30)
+                .camGlass(RoundedRectangle(cornerRadius: 10))
+                .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Histogram")
+        .accessibilityHint("Shows the scope")
+    }
+
+    // MARK: The look
+
+    /// The look on the picture: its ring (filled to the strength), its name,
+    /// code and strength, and a dot for each favourite in the swipe. Tap for
+    /// every look.
+    private func lookTag(ring: CGFloat) -> some View {
+        let worn = app.cameraWornLook
+        let strength = app.settings.intensity
+        let locked = app.lockedLookInGrade(storeService) != nil
+        let large = ring > 40
+        return Button {
+            openLooks()
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                CamRing(code: worn.code, colour: worn.signature, strength: strength / 100, size: ring)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 5) {
+                        Text(worn.title)
+                            .font(.luma(size: large ? 14.5 : 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        if locked {
+                            CamGlyph(icon: .lock, size: 11, weight: 2.2)
+                                .foregroundStyle(Color.white.opacity(0.85))
+                        }
+                    }
+                    Text("\(worn.code) · \(Int(strength.rounded()))%")
+                        .font(.luma(size: large ? 11.5 : 11))
+                        .foregroundStyle(Color.white.opacity(0.72))
+                        .lineLimit(1)
+                        .padding(.top, 1)
+                    if large {
+                        favouriteDots(worn)
+                            .padding(.top, 6)
+                    }
                 }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Close")
+                .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }
-            formatPanel
+            .contentShape(Rectangle())
         }
-        .padding(16)
-        .frame(maxWidth: 460)
-        .background(LumaTheme.bar.opacity(0.96), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 0.5))
-        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Looks: \(app.cameraLookName)")
+        .accessibilityHint("Opens every look. Swipe the picture for your favourites")
     }
 
-    /// Every look, as a panel down the shutter side of the picture.
-    private func landscapeLooksPanel(islandLeading: Bool) -> some View {
-        CameraLooksSheet(frame: rawFrame, frameID: rawFrameID,
-                         onClose: { showLookBrowser = false })
-            .frame(width: 392)
-            .frame(maxHeight: .infinity)
-            .background(LumaTheme.bar, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .padding(.vertical, 8)
-            .padding(islandLeading ? .trailing : .leading, 8)
-            .frame(maxWidth: .infinity, alignment: islandLeading ? .trailing : .leading)
-            .transition(.move(edge: islandLeading ? .trailing : .leading).combined(with: .opacity))
-    }
-
-    // MARK: - Modes
-
-    private static let strengthStops: [Double] = stride(from: 0.0, through: 100.0, by: 10.0).map { $0 }
-    private static let lensStops: [CGFloat] = [0.5, 1, 1.5, 2, 3, 5]
-    /// Portrait's f-numbers: f/1.4 blurs the most, f/16 barely at all.
-    private static let apertureStops: [Double] = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
-    /// A roll of film.
-    static let rollLength = 36
-
-    /// "f/1.4", "f/2", "f/11" for an index into `apertureStops`.
-    private static func fNumber(_ index: Int) -> String {
-        guard apertureStops.indices.contains(index) else { return "f/2.8" }
-        let value = apertureStops[index]
-        if value == value.rounded() { return "f/\(Int(value))" }
-        return String(format: "f/%.1f", value)
-    }
-
-    /// 35 mm-equivalent focal length for a display zoom, from the familiar
-    /// iPhone marks (0.5× 13 mm, 1× 24 mm, 2× 48 mm, 3× 77 mm, 5× 120 mm).
-    static func millimetres(_ zoom: CGFloat) -> Int {
-        let marks: [(CGFloat, CGFloat)] = [(0.5, 13), (1, 24), (2, 48), (3, 77), (5, 120)]
-        guard zoom > marks[0].0 else { return Int(marks[0].1) }
-        for (a, b) in zip(marks, marks.dropFirst()) where zoom <= b.0 {
-            let t = (zoom - a.0) / (b.0 - a.0)
-            return Int((a.1 + t * (b.1 - a.1)).rounded())
+    /// Where the look on the picture sits in the swipe.
+    @ViewBuilder
+    private func favouriteDots(_ worn: CameraLook) -> some View {
+        let favourites = cameraFavourites
+        let current = favourites.firstIndex { $0.id == worn.id }
+        if favourites.count > 12 {
+            Text(current.map { "\($0 + 1) of \(favourites.count) favourites" }
+                 ?? "\(favourites.count) favourites")
+                .font(.luma(size: 10.5, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.55))
+        } else if favourites.count > 1 {
+            HStack(spacing: 4) {
+                ForEach(Array(favourites.enumerated()), id: \.element.id) { index, _ in
+                    Capsule()
+                        .fill(index == current ? worn.signature : Color.white.opacity(0.4))
+                        .frame(width: index == current ? 12 : 4, height: 4)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: current)
         }
-        return Int((zoom / 5 * 120).rounded())
     }
 
-    /// The modes this camera can shoot. Slo-mo needs a high-frame-rate
-    /// format and Portrait needs depth; DEBUG preview shows every mode,
-    /// because the simulator has no camera to ask.
-    private var visibleModes: [CaptureMode] {
-        CaptureMode.allCases.filter { mode in
-            switch mode {
-            case .photo, .video: return true
-            case .slowMo:        return camera.slowMotionFPS != nil || showsAllModesForPreview
-            case .portrait:      return camera.depthSupported || showsAllModesForPreview
+    /// Pro: pulls up the readouts and every tool.
+    private var proPill: some View {
+        Button {
+            openPro()
+        } label: {
+            HStack(spacing: 5) {
+                CamGlyph(icon: .up, size: 18, weight: 2.2)
+                    .foregroundStyle(CamLab.sig)
+                Text("Pro")
+                    .font(.luma(size: 14, weight: .semibold))
+                    .foregroundStyle(CamLab.text)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .frame(height: 34)
+            .camGlass(Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Pro controls")
+    }
+
+    // MARK: Scope, mic and the lock
+
+    /// Down the left under the look: the scope when it is on, the mic while
+    /// a take rolls, and the AE/AF lock (tap to let go).
+    private var sideStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if scopeMode != nil {
+                scopeBox.transition(.opacity)
+            }
+            if camera.isRecording {
+                micMeter.transition(.opacity)
+            }
+            if camera.aeafLocked {
+                aeafBadge.transition(.opacity)
             }
         }
     }
 
+    private var scopeBox: some View {
+        Button {
+            scopeMode = scopeMode?.next
+            if let scopeMode { flash("Scope: \(scopeName(scopeMode))") }
+            LumaHaptics.shared.tap()
+        } label: {
+            scopePicture
+                .frame(width: 116, height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .padding(8)
+                .camGlass(RoundedRectangle(cornerRadius: 12), tint: Color(hex: 0x0E0F12), opacity: 0.62)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel(scopeMode.map { "Scope: \(scopeName($0))" } ?? "Scope")
+        .accessibilityHint("Shows the next scope")
+    }
+
+    @ViewBuilder
+    private var scopePicture: some View {
+        if let scopeImage {
+            Image(decorative: scopeImage, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            Color.white.opacity(0.04)
+        }
+    }
+
+    private func scopeName(_ mode: ScopeMode) -> String {
+        switch mode {
+        case .waveform:    return "RGB waveform"
+        case .parade:      return "RGB parade"
+        case .vectorscope: return "Vectorscope"
+        case .histogram:   return "RGB histogram"
+        case .falseColor:  return "False colour"
+        }
+    }
+
+    private var micMeter: some View {
+        let level = camera.audioLevel
+        return HStack(spacing: 2.5) {
+            Text("MIC")
+                .font(.luma(size: 9, weight: .semibold))
+                .kerning(0.7)
+                .foregroundStyle(CamLab.text)
+                .padding(.trailing, 3)
+            ForEach(0..<12, id: \.self) { index in
+                Capsule()
+                    .fill(level >= Double(index + 1) / 12
+                          ? (index >= 10 ? CamLab.rec : CamLab.text)
+                          : Color.white.opacity(0.18))
+                    .frame(width: 3, height: 10)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 26)
+        .camGlass(Capsule())
+        .accessibilityElement()
+        .accessibilityLabel("Microphone level")
+    }
+
+    private var aeafBadge: some View {
+        Button {
+            camera.unlockAEAF()
+            clearFocusMark()
+            flash("AE/AF unlocked")
+            LumaHaptics.shared.tap()
+        } label: {
+            HStack(spacing: 5) {
+                CamGlyph(icon: .lock, size: 12, weight: 2.4)
+                Text("AE/AF locked")
+                    .font(.luma(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(CamLab.ink)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(CamLab.sig, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityHint("Unlocks focus and exposure")
+    }
+
+    // MARK: Chips and the dial
+
+    private var lensTarget: DialTarget { captureMode == .portrait ? .aperture : .lens }
+    private var chipTargets: [DialTarget] { [lensTarget, .shutter, .iso, .ev, .wb, .focus] }
+    private var proTargets: [DialTarget] { [lensTarget, .iso, .shutter, .wb, .ev, .focus] }
+
+    /// The chips, the arc and the value on it.
+    @ViewBuilder
+    private func dialDeck(size: CGSize) -> some View {
+        let w = size.width, h = size.height
+        chipsRow
+            .frame(width: max(w - 20, 0))
+            .offset(x: 10, y: h - 314)
+        CamDial(ticks: dialTicks(for: dialTarget), index: dialPosition(for: dialTarget),
+                onChange: { applyDial($0, to: dialTarget) },
+                onPullUp: { openPro() })
+            .id(dialTarget)
+            .frame(width: w, height: CamDial.height)
+            .offset(y: h - 290)
+        dialReadout
+            .frame(width: w)
+            .offset(y: h - 194)
+            .allowsHitTesting(false)
+    }
+
+    /// One row, centred. A phone too narrow for the lab's chips gets the
+    /// same row with tighter sides.
+    private var chipsRow: some View {
+        ViewThatFits(in: .horizontal) {
+            chips(compact: false, gap: 4)
+            chips(compact: true, gap: 3)
+        }
+    }
+
+    private func chips(compact: Bool, gap: CGFloat) -> some View {
+        HStack(spacing: gap) {
+            ForEach(chipTargets, id: \.self) { target in
+                CamChip(title: target.chip, active: dialTarget == target, compact: compact) {
+                    dialTarget = target
+                    LumaHaptics.shared.tap()
+                }
+            }
+        }
+    }
+
+    /// The value on the dial, and under it what it is (and "AUTO" while the
+    /// camera is choosing it).
+    private var dialReadout: some View {
+        let parts = dialValueParts(for: dialTarget)
+        let caption = dialTarget.caption + (isAutoTarget(dialTarget) ? " · AUTO" : "")
+        return VStack(spacing: 1) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(parts.value)
+                    .font(.luma(size: 34, weight: .semibold))
+                    .kerning(-1)
+                    .foregroundStyle(CamLab.text)
+                if let unit = parts.unit {
+                    Text(unit)
+                        .font(.luma(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.65))
+                }
+            }
+            .lineLimit(1)
+            .frame(height: 38)
+            Text(caption)
+                .font(.luma(size: 10, weight: .semibold))
+                .kerning(0.8)
+                .foregroundStyle(Color.white.opacity(0.62))
+                .lineLimit(1)
+        }
+        .shadow(color: .black.opacity(0.4), radius: 5, y: 2)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - The plate
+    //
+    // Full width, 100 pt up from the bottom edge, in panel grey with the
+    // look's colour glowing from its lower left. The shutter sits in the
+    // notch, its centre 74 pt up from the bottom: the dial turns on it.
+
+    private func plate(size: CGSize) -> some View {
+        let w = size.width
+        return ZStack(alignment: .topLeading) {
+            CamPlate(glow: app.cameraWornLook.signature)
+                .frame(width: w, height: CamLab.plateHeight)
+                .contentShape(Rectangle())
+                .gesture(platePull)
+                .accessibilityHidden(true)
+            lastShotButton
+                .offset(x: 22, y: 15)
+            flipButton
+                .offset(x: 80, y: 15)
+            modeSwitch
+                .frame(width: max(w - 18, 0), alignment: .trailing)
+                .offset(y: 15)
+            CamShutter(isRecording: camera.isRecording,
+                       photoMode: captureMode.takesStills,
+                       rollCount: captureMode.takesStills && rollOn ? rollLeft : nil) {
+                shutterPressed()
+            }
+            .rotationEffect(.degrees(controlTurn))
+            .offset(x: w / 2 - 35, y: CamLab.plateHeight - CamLab.shutterRise - 35)
+        }
+        .frame(width: w, height: CamLab.plateHeight, alignment: .topLeading)
+        .offset(y: size.height - CamLab.plateHeight)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
+        .sensoryFeedback(.success, trigger: stillSavedFlash)
+    }
+
+    /// Dragging the plate up pulls up Pro.
+    private var platePull: some Gesture {
+        DragGesture(minimumDistance: 14)
+            .onEnded { value in
+                let dx = value.translation.width, dy = value.translation.height
+                if dy < -34, abs(dy) > abs(dx) * 1.3 { openPro() }
+            }
+    }
+
+    /// The newest shot; a plain tile until there is one.
+    private var lastShotButton: some View {
+        Button {
+            openLastShot()
+        } label: {
+            ZStack {
+                CamLab.raised
+                if let image = lastShot?.thumbnail {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 46, height: 46)
+                } else {
+                    CamGlyph(icon: .photo, size: 20)
+                        .foregroundStyle(CamLab.grey)
+                }
+            }
+            .frame(width: 46, height: 46)
+            .clipShape(RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1.5))
+            .rotationEffect(.degrees(controlTurn))
+            .contentShape(RoundedRectangle(cornerRadius: 13))
+        }
+        .buttonStyle(CamPressStyle())
+        .animation(.easeOut(duration: 0.25), value: lastShot?.id)
+        .accessibilityLabel("Last shot")
+    }
+
+    private var flipButton: some View {
+        Button {
+            guard !camera.isRecording else {
+                flash("Stop recording first")
+                return
+            }
+            camera.flipCamera()
+            clearFocusMark()
+            LumaHaptics.shared.tap()
+        } label: {
+            CamGlyph(icon: .flip, size: 20)
+                .foregroundStyle(CamLab.text)
+                .rotationEffect(.degrees(controlTurn))
+                .frame(width: 46, height: 46)
+                .background(CamLab.raised, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .opacity(camera.isRecording ? 0.4 : 1)
+        .accessibilityLabel("Flip camera")
+    }
+
+    /// Photo, Video, Slo-mo and Portrait always show. The two a camera
+    /// cannot do are dimmed, and say why when tapped.
+    private var modeSwitch: some View {
+        let modes = CaptureMode.allCases.map { mode in
+            CamMode(id: mode.rawValue, icon: mode.icon, label: mode.rawValue,
+                    enabled: modeAvailable(mode))
+        }
+        return CamModeSwitch(modes: modes, selected: captureMode.rawValue, turn: controlTurn) { picked in
+            guard let mode = CaptureMode(rawValue: picked.id), mode != captureMode else { return }
+            if recordingBusy {
+                flash("Stop recording first")
+                return
+            }
+            guard modeAvailable(mode) else {
+                flash(mode == .slowMo ? "This camera has no slo-mo" : "This camera has no depth for Portrait")
+                return
+            }
+            captureMode = mode
+            LumaHaptics.shared.tap()
+        }
+        .opacity(recordingBusy ? 0.5 : 1)
+    }
+
+    private func modeAvailable(_ mode: CaptureMode) -> Bool {
+        switch mode {
+        case .photo, .video: return true
+        case .slowMo:        return camera.slowMotionFPS != nil || showsAllModesForPreview
+        case .portrait:      return camera.depthSupported || showsAllModesForPreview
+        }
+    }
+
+    /// DEBUG preview shows every mode, because the simulator has no camera
+    /// to ask.
     private var showsAllModesForPreview: Bool {
         #if DEBUG
         return ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"] != nil
@@ -1935,284 +1574,6 @@ struct CameraLiveLookView: View {
     }
 
     private var recordingBusy: Bool { camera.isRecording || camera.isPreparingRecording }
-
-    /// Photo, Video, Slo-mo, Portrait as icons in the dock's right pill;
-    /// the one in use sits in a white circle. Locked while a take is rolling.
-    private var modePill: some View {
-        HStack(spacing: 0) {
-            ForEach(visibleModes, id: \.self) { mode in
-                let on = captureMode == mode
-                Button {
-                    captureMode = mode
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Image(systemName: mode.symbol)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(on ? LumaTheme.ink : Color.white.opacity(0.62))
-                        .frame(width: 32, height: 32)
-                        .background(on ? Color.white : Color.clear, in: Circle())
-                        .rotationEffect(.degrees(controlTurn))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel(mode.rawValue)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .disabled(recordingBusy)
-        .opacity(recordingBusy ? 0.45 : 1)
-        .animation(.snappy(duration: 0.18), value: captureMode)
-    }
-
-    // MARK: Format — resolution / fps / codec; the photo modes swap it for
-    // the still format, size and roll.
-
-    @ViewBuilder
-    private var formatPanel: some View {
-        if captureMode.takesStills {
-            photoFormatPanel
-        } else {
-            videoFormatPanel
-        }
-    }
-
-    private var videoFormatPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if recordingBusy {
-                Text("Stop recording to change format.")
-                    .font(.luma(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            // Options this camera cannot shoot are dimmed rather than offered
-            // and then quietly swapped for something else. Selection shows what
-            // is actually running. Slo-mo owns the size and rate.
-            formatRow("Resolution", options: CameraSpec.Resolution.allCases,
-                      label: { $0.rawValue }, isOn: { camera.activeSpec.resolution == $0 },
-                      enabled: { captureMode != .slowMo && resolutionAvailable($0) }) { r in
-                var s = camera.spec; s.resolution = r; camera.setSpec(s)
-            }
-            formatRow("Frame rate", options: CameraSpec.fpsOptions,
-                      label: { "\($0)" }, isOn: { camera.activeSpec.fps == $0 },
-                      enabled: { captureMode != .slowMo && fpsAvailable($0) }) { f in
-                var s = camera.spec; s.fps = f; camera.setSpec(s)
-            }
-            formatRow("Codec", options: CameraSpec.Codec.allCases,
-                      label: { $0.rawValue }, isOn: { camera.activeSpec.codec == $0 }) { c in
-                var s = camera.spec; s.codec = c; camera.setSpec(s)
-            }
-            if let note = formatFallbackNote {
-                Text(note)
-                    .font(.luma(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .disabled(recordingBusy)
-        .opacity(recordingBusy ? 0.45 : 1)
-        .transition(.opacity)
-    }
-
-    /// Unknown capabilities (simulator, camera not configured yet) enable
-    /// everything rather than greying out the whole panel.
-    private func resolutionAvailable(_ resolution: CameraSpec.Resolution) -> Bool {
-        camera.maxFrameRates.isEmpty || camera.maxFrameRates[resolution] != nil
-    }
-
-    private func fpsAvailable(_ fps: Int) -> Bool {
-        guard let ceiling = camera.maxFrameRates[camera.activeSpec.resolution] else { return true }
-        return Double(fps) <= ceiling + 0.5
-    }
-
-    /// Says so when the camera is running something other than what was
-    /// picked (4K on the front camera, 60 at a size that tops out at 30).
-    private var formatFallbackNote: String? {
-        if captureMode == .slowMo {
-            return "Slo-mo shoots \(camera.activeSpec.resolution.rawValue) at \(camera.activeSpec.fps) fps and plays back at 30, so it's slowed down."
-        }
-        let asked = camera.spec, running = camera.activeSpec
-        guard asked.resolution != running.resolution || asked.fps != running.fps else { return nil }
-        return "This camera can't shoot \(asked.resolution.rawValue) at \(asked.fps) fps, so it's recording \(running.resolution.rawValue) at \(running.fps) fps."
-    }
-
-    /// Still format, size and the roll. Sizes are only the ones this camera
-    /// can deliver right now.
-    private var photoFormatPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            formatRow("Format", options: PhotoCaptureSpec.Format.allCases,
-                      label: { $0.rawValue }, isOn: { camera.photoSpec.format == $0 }) { format in
-                var spec = camera.photoSpec
-                spec.format = format
-                camera.setPhotoSpec(spec)
-            }
-            formatRow("Size", options: offeredPhotoSizes,
-                      label: { $0.label }, isOn: { photoSizeIsOn($0) }) { size in
-                var spec = camera.photoSpec
-                spec.size = size
-                camera.setPhotoSpec(spec)
-            }
-            if captureMode == .portrait {
-                Text("Portrait shoots at up to 12 MP, where depth is available.")
-                    .font(.luma(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            formatRow("Roll", options: [false, true],
-                      label: { $0 ? "\(Self.rollLength) frames" : "Off" },
-                      isOn: { rollOn == $0 }) { on in
-                setRoll(on)
-            }
-            if rollOn {
-                HStack(spacing: 10) {
-                    Text(rollLeft == 0 ? "Roll done" : "\(rollLeft) of \(Self.rollLength) left")
-                        .font(.luma(size: 11, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.55))
-                    Button {
-                        loadNewRoll()
-                    } label: {
-                        Text("New roll")
-                            .font(.luma(size: 11, weight: .semibold))
-                            .foregroundStyle(LumaTheme.signal)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.lumaPress)
-                    .disabled(rollLeft == Self.rollLength)
-                    .opacity(rollLeft == Self.rollLength ? 0.4 : 1)
-                }
-                .padding(.leading, 94)
-            }
-        }
-        .transition(.opacity)
-    }
-
-    /// Sizes the camera reported; before it has (or in the simulator) only
-    /// the size in force.
-    private var offeredPhotoSizes: [PhotoCaptureSpec.Size] {
-        if !camera.photoSizes.isEmpty { return camera.photoSizes }
-        return [camera.activePhotoSize ?? camera.photoSpec.size]
-    }
-
-    private func photoSizeIsOn(_ size: PhotoCaptureSpec.Size) -> Bool {
-        if let active = camera.activePhotoSize { return active == size }
-        return camera.photoSpec.size == size
-    }
-
-    private func formatRow<T: Hashable>(_ title: String, options: [T],
-                                        label: @escaping (T) -> String,
-                                        isOn: @escaping (T) -> Bool,
-                                        enabled: @escaping (T) -> Bool = { _ in true },
-                                        pick: @escaping (T) -> Void) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.luma(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.45))
-                .frame(width: 84, alignment: .leading)
-            ForEach(options, id: \.self) { option in
-                Button {
-                    pick(option)
-                    LumaHaptics.shared.tap()
-                } label: {
-                    // Format codes are values, so they keep the mono voice;
-                    // selection is the ring, everything else is a bare word.
-                    Text(label(option))
-                        .font(.luma(size: 12, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(isOn(option) ? 0.95 : 0.42))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .overlay {
-                            if isOn(option) {
-                                Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 1)
-                            }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.lumaPress)
-                .disabled(!enabled(option))
-                .opacity(enabled(option) ? 1 : 0.35)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    // MARK: Capture row
-
-    /// The dock: the last shot and flip in a grey pill on the left, the
-    /// shutter in the notch between, the modes in a grey pill on the right.
-    /// Sideways, each icon turns in place.
-    private var captureRow: some View {
-        HStack(spacing: -Self.dockOverlap) {
-            HStack(spacing: 8) {
-                // The last shot replaces the gallery glyph once there is one.
-                CameraLastShotButton(image: lastShot?.thumbnail) { openLastShot() }
-                    .rotationEffect(.degrees(controlTurn))
-                    .animation(.easeOut(duration: 0.25), value: lastShot?.id)
-                Spacer(minLength: 0)
-                flipButton
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, 20)
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.dockHeight)
-            .background { dockPill(notchLeading: false) }
-
-            CameraShutterButton(isRecording: camera.isRecording,
-                                photoMode: captureMode.takesStills,
-                                rollCount: captureMode.takesStills && rollOn ? rollLeft : nil) {
-                shutterPressed()
-            }
-            .rotationEffect(.degrees(controlTurn))
-            .zIndex(1)
-
-            modePill
-                .padding(.leading, 18)
-                .padding(.trailing, 4)
-                .frame(maxWidth: .infinity)
-                .frame(height: Self.dockHeight)
-                .background { dockPill(notchLeading: true) }
-        }
-        .padding(.horizontal, 12)
-        // The tab bar's yellow shutter is placed to land on this button's
-        // centre (see LumaTabBar), so keep the row 70 tall with 6 under it.
-        .frame(height: 70)
-        .padding(.bottom, 6)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
-        .sensoryFeedback(.success, trigger: stillSavedFlash)
-    }
-
-    private static let dockHeight: CGFloat = 58
-    /// How far each pill runs under the shutter's frame, so its notch hugs
-    /// the ring with a 6 pt gap (see `CameraDockPill`).
-    private static let dockOverlap: CGFloat = 6
-
-    private func dockPill(notchLeading: Bool) -> some View {
-        ZStack {
-            CameraDockPill(notchLeading: notchLeading).fill(.ultraThinMaterial)
-            CameraDockPill(notchLeading: notchLeading).fill(LumaTheme.raised.opacity(0.88))
-        }
-    }
-
-    private var flipButton: some View {
-        Button {
-            camera.flipCamera()
-            resetFocusBrackets()
-            LumaHaptics.shared.tap()
-        } label: {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(LumaTheme.textPrimary)
-                .frame(width: 42, height: 42)
-                .background(LumaTheme.control, in: Circle())
-                .rotationEffect(.degrees(controlTurn))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.lumaPress)
-        .disabled(camera.isRecording)
-        .opacity(camera.isRecording ? 0.35 : 1)
-        .accessibilityLabel("Flip camera")
-    }
 
     private func shutterPressed() {
         if captureMode.takesStills {
@@ -2233,37 +1594,649 @@ struct CameraLiveLookView: View {
         camera.toggleRecording()
     }
 
+    // MARK: - Pro
+    //
+    // Pulled up over the lower picture: six readouts on one ruler, and every
+    // tool as a tile. The plate stays in front of it, so a take can start
+    // (or stop) without putting Pro away.
+
+    private func proSheet(size: CGSize) -> some View {
+        let w = size.width
+        let target = dialTarget
+        let shape = UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30)
+        return ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(width: w, height: 56)
+                .contentShape(Rectangle())
+                .gesture(proDismissDrag)
+            CamGrab()
+                .frame(width: w)
+                .offset(y: 8)
+                .allowsHitTesting(false)
+            proHeader
+                .frame(width: max(w - 36, 0), height: 32)
+                .offset(x: 20, y: 20)
+            proReadouts
+                .frame(width: max(w - 40, 0))
+                .offset(x: 20, y: 66)
+            CamRuler(ticks: dialTicks(for: target), index: dialPosition(for: target),
+                     spacing: target.spacing) { applyDial($0, to: target) }
+                .id(target)
+                .frame(width: w)
+                .offset(y: 124)
+            proTiles
+                .frame(width: max(w - 32, 0))
+                .offset(x: 16, y: 186)
+        }
+        .frame(width: w, height: 476, alignment: .topLeading)
+        .background {
+            ZStack {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(Color(hex: 0x0C0D0F).opacity(0.84))
+            }
+        }
+        .contentShape(Rectangle())
+        .offset(y: size.height - 476)
+    }
+
+    private var proDismissDrag: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                if value.translation.height > 36 { proOpen = false }
+            }
+    }
+
+    private var proHeader: some View {
+        let target = dialTarget
+        return HStack(spacing: 0) {
+            Text("Pro")
+                .font(.luma(size: 17, weight: .bold))
+                .kerning(-0.3)
+                .foregroundStyle(CamLab.text)
+            Spacer(minLength: 0)
+            Button {
+                toggleAuto(target)
+            } label: {
+                CamMiniLabel(title: autoTitle(for: target), lit: isAutoTarget(target))
+            }
+            .buttonStyle(CamPressStyle())
+            .padding(.trailing, 8)
+            Button {
+                proOpen = false
+            } label: {
+                CamMiniLabel(icon: .down)
+            }
+            .buttonStyle(CamPressStyle())
+            .accessibilityLabel("Close Pro")
+        }
+    }
+
+    /// Lens, ISO, shutter, white balance, exposure, focus: spread edge to
+    /// edge. Tap one to put the ruler on it.
+    private var proReadouts: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(proTargets.enumerated()), id: \.element) { index, target in
+                if index > 0 { Spacer(minLength: 4) }
+                CamReadout(name: target.short, value: dialValue(for: target),
+                           auto: isAutoTarget(target), active: dialTarget == target) {
+                    dialTarget = target
+                    LumaHaptics.shared.tap()
+                }
+            }
+        }
+    }
+
+    private var proTiles: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        return LazyVGrid(columns: columns, spacing: 8) {
+            CamTile(icon: .format, label: "Format", on: formatOpen, enabled: !recordingBusy) {
+                useTool("format")
+            }
+            CamTile(icon: .guides, label: frameGuide == .off ? "Guides" : frameGuide.label,
+                    on: frameGuide != .off) {
+                useTool("guides")
+            }
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                toggleSafeZone()
+            })
+            CamTile(icon: .scope, label: "Scope", on: scopeMode != nil) { useTool("scope") }
+            CamTile(icon: .zebras, label: "Zebras", on: camera.zebrasOn) { useTool("zebras") }
+            CamTile(icon: .peaking, label: "Peaking", on: camera.peakingOn) { useTool("peaking") }
+            CamTile(icon: .grid, label: "Grid", on: showGrid) { useTool("grid") }
+            CamTile(icon: .level, label: "Level", on: showLevel) { useTool("level") }
+            CamTile(icon: .auto, label: "Auto all") { useTool("auto") }
+        }
+    }
+
+    // MARK: - Format
+    //
+    // A card under the format chip: resolution, frame rate and codec; the
+    // photo modes swap those for the still format, size and the roll.
+
+    private var formatCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Format")
+                .font(.luma(size: 13, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.75))
+                .padding(.top, 2)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 10)
+            if captureMode.takesStills {
+                photoFormatRows
+            } else {
+                videoFormatRows
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color.black.opacity(0.4))
+                    .blur(radius: 20)
+                    .offset(y: 18)
+                RoundedRectangle(cornerRadius: 22).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 22).fill(Color(hex: 0x0E0F12).opacity(0.78))
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 22))
+    }
+
+    private var videoFormatRows: some View {
+        // Options this camera cannot shoot are dimmed rather than offered and
+        // then quietly swapped. Selection shows what is actually running.
+        // Slo-mo owns the size and the rate.
+        VStack(alignment: .leading, spacing: 10) {
+            formatGroup("RESOLUTION") {
+                ForEach(CameraSpec.Resolution.allCases, id: \.self) { resolution in
+                    CamOption(title: resolution.rawValue,
+                              on: camera.activeSpec.resolution == resolution,
+                              enabled: captureMode != .slowMo && resolutionAvailable(resolution)) {
+                        var spec = camera.spec
+                        spec.resolution = resolution
+                        camera.setSpec(spec)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            formatGroup("FRAME RATE") {
+                ForEach(CameraSpec.fpsOptions, id: \.self) { fps in
+                    CamOption(title: "\(fps)", on: camera.activeSpec.fps == fps,
+                              enabled: captureMode != .slowMo && fpsAvailable(fps)) {
+                        var spec = camera.spec
+                        spec.fps = fps
+                        camera.setSpec(spec)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            formatGroup("CODEC") {
+                ForEach(CameraSpec.Codec.allCases, id: \.self) { codec in
+                    CamOption(title: codec.rawValue, on: camera.activeSpec.codec == codec) {
+                        var spec = camera.spec
+                        spec.codec = codec
+                        camera.setSpec(spec)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            if let note = formatFallbackNote {
+                formatNote(note)
+            }
+        }
+    }
+
+    /// Still format, size and the roll. Sizes are only the ones this camera
+    /// can deliver right now.
+    private var photoFormatRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            formatGroup("FORMAT") {
+                ForEach(PhotoCaptureSpec.Format.allCases, id: \.self) { format in
+                    CamOption(title: format.rawValue, on: camera.photoSpec.format == format) {
+                        var spec = camera.photoSpec
+                        spec.format = format
+                        camera.setPhotoSpec(spec)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            formatGroup("SIZE") {
+                ForEach(offeredPhotoSizes, id: \.self) { size in
+                    CamOption(title: size.label, on: photoSizeIsOn(size)) {
+                        var spec = camera.photoSpec
+                        spec.size = size
+                        camera.setPhotoSpec(spec)
+                        LumaHaptics.shared.tap()
+                    }
+                }
+            }
+            if captureMode == .portrait {
+                formatNote("Portrait shoots at up to 12 MP, where depth is available.")
+            }
+            formatGroup("ROLL") {
+                CamOption(title: "Off", on: !rollOn) { setRoll(false) }
+                CamOption(title: "\(Self.rollLength) frames", on: rollOn) { setRoll(true) }
+            }
+            if rollOn {
+                HStack(spacing: 10) {
+                    Text(rollLeft == 0 ? "Roll done" : "\(rollLeft) of \(Self.rollLength) left")
+                        .font(.luma(size: 11.5, weight: .medium))
+                        .foregroundStyle(CamLab.grey)
+                    Button {
+                        loadNewRoll()
+                    } label: {
+                        Text("New roll")
+                            .font(.luma(size: 11.5, weight: .semibold))
+                            .foregroundStyle(CamLab.sig)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(CamPressStyle())
+                    .disabled(rollLeft == Self.rollLength)
+                    .opacity(rollLeft == Self.rollLength ? 0.4 : 1)
+                }
+                .padding(.leading, 4)
+            }
+        }
+    }
+
+    private func formatGroup<Content: View>(_ title: String,
+                                            @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.luma(size: 9, weight: .semibold))
+                .kerning(0.7)
+                .foregroundStyle(CamLab.label)
+                .padding(.leading, 4)
+            HStack(spacing: 6) {
+                content()
+            }
+        }
+    }
+
+    private func formatNote(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 11.5, weight: .medium))
+            .foregroundStyle(CamLab.grey)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+    }
+
+    /// Unknown capabilities (simulator, camera not configured yet) enable
+    /// everything rather than greying out the whole card.
+    private func resolutionAvailable(_ resolution: CameraSpec.Resolution) -> Bool {
+        camera.maxFrameRates.isEmpty || camera.maxFrameRates[resolution] != nil
+    }
+
+    private func fpsAvailable(_ fps: Int) -> Bool {
+        guard let ceiling = camera.maxFrameRates[camera.activeSpec.resolution] else { return true }
+        return Double(fps) <= ceiling + 0.5
+    }
+
+    /// Says so when the camera is running something other than what was
+    /// picked (4K on the front camera, 60 at a size that tops out at 30).
+    private var formatFallbackNote: String? {
+        if captureMode == .slowMo {
+            return "Slo-mo shoots \(camera.activeSpec.resolution.rawValue) at \(camera.activeSpec.fps) fps and plays back at 30, so it's slowed down."
+        }
+        let asked = camera.spec, running = camera.activeSpec
+        guard asked.resolution != running.resolution || asked.fps != running.fps else { return nil }
+        return "This camera can't shoot \(asked.resolution.rawValue) at \(asked.fps) fps, so it's recording \(running.resolution.rawValue) at \(running.fps) fps."
+    }
+
+    /// Sizes the camera reported; before it has (or in the simulator) only
+    /// the size in force.
+    private var offeredPhotoSizes: [PhotoCaptureSpec.Size] {
+        if !camera.photoSizes.isEmpty { return camera.photoSizes }
+        return [camera.activePhotoSize ?? camera.photoSpec.size]
+    }
+
+    private func photoSizeIsOn(_ size: PhotoCaptureSpec.Size) -> Bool {
+        if let active = camera.activePhotoSize { return active == size }
+        return camera.photoSpec.size == size
+    }
+
+    // MARK: - Every look
+    //
+    // Over the lower picture, which slides up so the face stays in view.
+    // With the keyboard up it runs from under the look to the keyboard.
+
+    private func looksLibrary(size: CGSize, top: CGFloat, keyboard: CGFloat) -> some View {
+        let typing = keyboard > 120
+        let y = typing ? top + 100 : max(size.height - 552, top + 44)
+        let below = typing ? keyboard + 8 : 112
+        let height = max(size.height - y - below, 160)
+        return CameraLooksSheet(frame: rawFrame, frameID: rawFrameID, compact: typing,
+                                onClose: { showLookBrowser = false },
+                                onNote: { flash($0) })
+            .frame(width: max(size.width - 16, 0), height: height)
+            .camGlass(RoundedRectangle(cornerRadius: 26), tint: Color(hex: 0x0A0B0D), opacity: 0.9)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .contentShape(RoundedRectangle(cornerRadius: 26))
+            .offset(x: 8, y: y)
+    }
+
+    // MARK: - Sideways
+    //
+    // The interface stays fixed to the phone. Held sideways, the controls on
+    // the picture are laid out for the long edge and turned to read upright:
+    // the top bar by the island, the readouts along the top with their ruler
+    // dropping under them, the look at the bottom by the island and the tools
+    // at the bottom by the plate. The plate stays where the thumb is and only
+    // its icons turn.
+
+    private var isLandscapeLayout: Bool { forcedLandscape || camera.isLandscape }
+    private var landscapeClockwise: Bool {
+        forcedLandscape ? forcedClockwise : camera.landscapeClockwise
+    }
+    /// How far the sideways controls turn to read upright.
+    private var landscapeTurn: Double { landscapeClockwise ? -90 : 90 }
+    /// The turn for anything that stays put on the plate.
+    private var controlTurn: Double { isLandscapeLayout ? landscapeTurn : 0 }
+
+    private func landscapeChrome(size: CGSize, top: CGFloat) -> some View {
+        let long = size.height, short = size.width
+        return landscapeContent(long: long, short: short, top: top)
+            .frame(width: long, height: short, alignment: .topLeading)
+            .rotationEffect(.degrees(landscapeTurn))
+            .frame(width: size.width, height: size.height)
+    }
+
+    /// Where things hang when the phone is held sideways: `long` across and
+    /// `short` tall. Turned anticlockwise (+90) the island is on the left and
+    /// the plate on the right; the other way round they swap, and so does
+    /// everything hung off them.
+    private struct Sideways {
+        let long: CGFloat
+        let short: CGFloat
+        let islandLeading: Bool
+        let islandInset: CGFloat
+        let plateInset: CGFloat = 112
+
+        var inner: CGFloat { max(long - islandInset - plateInset, 0) }
+        var originX: CGFloat { islandLeading ? islandInset : plateInset }
+        var islandSide: HorizontalAlignment { islandLeading ? .leading : .trailing }
+        var plateSide: HorizontalAlignment { islandLeading ? .trailing : .leading }
+        /// The picture left clear of the plate.
+        var pictureX: CGFloat { islandLeading ? 0 : CamLab.plateHeight }
+        var pictureW: CGFloat { max(long - CamLab.plateHeight, 0) }
+        var stripWidth: CGFloat { min(390, max(inner - 250, 200)) }
+
+        func at(_ horizontal: HorizontalAlignment, _ vertical: VerticalAlignment = .center) -> Alignment {
+            Alignment(horizontal: horizontal, vertical: vertical)
+        }
+    }
+
+    private func landscapeContent(long: CGFloat, short: CGFloat, top: CGFloat) -> some View {
+        let layout = Sideways(long: long, short: short, islandLeading: landscapeTurn > 0,
+                              islandInset: max(top - 2, 16))
+        return ZStack(alignment: .topLeading) {
+            landscapeScrims(long: long, short: short)
+            landscapeMarks(layout)
+            landscapeBars(layout)
+            landscapeCorners(layout)
+            landscapePanels(layout)
+        }
+        .frame(width: long, height: short, alignment: .topLeading)
+        .animation(.easeOut(duration: 0.18), value: landscapeDropOpen)
+    }
+
+    /// The guide, the swipe's edge and the look's name.
+    @ViewBuilder
+    private func landscapeMarks(_ layout: Sideways) -> some View {
+        if frameGuide != .off {
+            CamGuide(box: landscapeGuideBox(x: layout.pictureX, width: layout.pictureW,
+                                            height: layout.short),
+                     label: frameGuide.label,
+                     safeZone: showSafeZone && frameGuide == .vertical)
+                .frame(width: layout.long, height: layout.short)
+                .transition(.opacity)
+        }
+        if let swipe {
+            Rectangle()
+                .fill(Color.white.opacity(0.85))
+                .frame(width: 2, height: layout.short)
+                .shadow(color: .white.opacity(0.6), radius: 7)
+                .offset(x: swipe.edge(in: layout.long) - 1)
+                .allowsHitTesting(false)
+        }
+        bigName(width: layout.pictureW)
+            .offset(x: layout.pictureX, y: 150)
+    }
+
+    /// Along the top: the bar by the island, the readouts by the plate, and
+    /// their ruler dropping under them.
+    @ViewBuilder
+    private func landscapeBars(_ layout: Sideways) -> some View {
+        landscapeTopBar
+            .frame(width: layout.inner, alignment: layout.at(layout.islandSide))
+            .offset(x: layout.originX, y: 14)
+        landscapeStrip
+            .frame(width: layout.stripWidth, height: 50, alignment: .top)
+            .landscapeGlass(opacity: 0.55)
+            .frame(width: layout.inner, alignment: layout.at(layout.plateSide))
+            .offset(x: layout.originX, y: 10)
+        if landscapeDropOpen {
+            landscapeDrop(width: layout.stripWidth)
+                .frame(width: layout.inner, alignment: layout.at(layout.plateSide))
+                .offset(x: layout.originX, y: 66)
+                .transition(.opacity)
+        }
+        sideStack
+            .frame(width: layout.inner, alignment: layout.at(layout.islandSide))
+            .offset(x: layout.originX, y: 60)
+    }
+
+    /// Along the bottom: the look by the island, the tools by the plate.
+    @ViewBuilder
+    private func landscapeCorners(_ layout: Sideways) -> some View {
+        lookTag(ring: 40)
+            .frame(width: layout.inner, height: max(layout.short - 12, 0),
+                   alignment: layout.at(layout.islandSide, .bottom))
+            .offset(x: layout.originX)
+            .opacity(swipe != nil ? 0 : 1)
+        landscapeTools
+            .frame(width: max(layout.inner - 4, 0), height: max(layout.short - 10, 0),
+                   alignment: layout.at(layout.plateSide, .bottom))
+            .offset(x: layout.islandLeading ? layout.originX : layout.originX + 4)
+    }
+
+    /// The caption, the format card and every look.
+    @ViewBuilder
+    private func landscapePanels(_ layout: Sideways) -> some View {
+        if let statusCaption {
+            let naming = swipe != nil || nameFlash != nil
+            CamToast(text: statusCaption)
+                .id(statusCaption)
+                .frame(width: layout.pictureW)
+                .offset(x: layout.pictureX, y: naming ? 104 : 150)
+                .transition(.opacity)
+        }
+        if formatOpen {
+            let cardX = layout.islandLeading ? layout.islandInset + 50
+                                             : layout.long - layout.islandInset - 314
+            formatCard
+                .frame(width: 264, alignment: .leading)
+                .offset(x: cardX, y: 56)
+                .transition(.opacity)
+        }
+        if showLookBrowser {
+            landscapeLooks(long: layout.long, short: layout.short,
+                           islandLeading: layout.islandLeading, islandInset: layout.islandInset)
+        }
+    }
+
+    private func landscapeScrims(long: CGFloat, short: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(width: long, height: 120)
+            LinearGradient(stops: [
+                .init(color: .black.opacity(0), location: 0),
+                .init(color: .black.opacity(0.55), location: 0.45),
+                .init(color: .black.opacity(0.82), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+                .frame(width: long, height: 132)
+                .offset(y: short - 132)
+        }
+        .frame(width: long, height: short, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
+    private func landscapeGuideBox(x: CGFloat, width: CGFloat, height: CGFloat) -> CGRect {
+        let aspect = CGFloat(frameGuide.aspect ?? 1)
+        var gw = width - 24
+        var gh = gw / aspect
+        if gh > height - 20 {
+            gh = height - 20
+            gw = gh * aspect
+        }
+        return CGRect(x: x + (width - gw) / 2, y: (height - gh) / 2, width: gw, height: gh)
+    }
+
+    private var landscapeTopBar: some View {
+        HStack(spacing: 8) {
+            closeButton
+            formatChip
+            histogramButton
+        }
+    }
+
+    /// The readouts along the top. Tap one and its ruler drops under them.
+    private var landscapeStrip: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(proTargets.enumerated()), id: \.element) { index, target in
+                if index > 0 { Spacer(minLength: 2) }
+                CamReadout(name: target.short, value: dialValue(for: target),
+                           auto: isAutoTarget(target),
+                           active: landscapeDropOpen && dialTarget == target) {
+                    if landscapeDropOpen, dialTarget == target {
+                        landscapeDropOpen = false
+                    } else {
+                        dialTarget = target
+                        landscapeDropOpen = true
+                        formatOpen = false
+                    }
+                    LumaHaptics.shared.tap()
+                }
+            }
+        }
+        .padding(.top, 7)
+        .padding(.horizontal, 14)
+    }
+
+    private func landscapeDrop(width: CGFloat) -> some View {
+        let target = dialTarget
+        let auto = isAutoTarget(target)
+        return ZStack(alignment: .topLeading) {
+            CamRuler(ticks: dialTicks(for: target), index: dialPosition(for: target),
+                     spacing: target.spacing) { applyDial($0, to: target) }
+                .id(target)
+                .frame(width: max(width - 50, 0))
+                .offset(y: 3)
+            Button {
+                toggleAuto(target)
+            } label: {
+                Text("A")
+                    .font(.luma(size: 12, weight: .bold))
+                    .foregroundStyle(auto ? CamLab.ink : CamLab.text)
+                    .frame(width: 28, height: 28)
+                    .background(auto ? CamLab.sig : CamLab.raised, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(CamPressStyle())
+            .accessibilityLabel(autoTitle(for: target))
+            .offset(x: width - 40, y: 11)
+        }
+        .frame(width: width, height: 50, alignment: .topLeading)
+        .landscapeGlass(opacity: 0.62)
+    }
+
+    private var landscapeTools: some View {
+        HStack(spacing: 4) {
+            landscapeTool(.guides, "Guides", on: frameGuide != .off) { cycleGuide() }
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                    toggleSafeZone()
+                })
+            landscapeTool(.zebras, "Zebras", on: camera.zebrasOn) { toggleZebras() }
+            landscapeTool(.peaking, "Peaking", on: camera.peakingOn) { togglePeaking() }
+            landscapeTool(.grid, "Grid", on: showGrid) { toggleGrid() }
+            landscapeTool(.level, "Level", on: showLevel) { toggleLevel() }
+            landscapeTool(.scope, "Scope", on: scopeMode != nil) { cycleScope() }
+            landscapeTool(.lock, "AE/AF lock", on: camera.aeafLocked) { toggleAEAF() }
+            landscapeTool(.format, "Format", on: formatOpen) { toggleFormat() }
+        }
+        .padding(4)
+        .camGlass(RoundedRectangle(cornerRadius: 22), tint: Color(hex: 0x0C0D0F), opacity: 0.55)
+    }
+
+    private func landscapeTool(_ icon: CamIcon, _ label: String, on: Bool,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CamGlyph(icon: icon, size: 21, weight: 1.6)
+                .foregroundStyle(on ? CamLab.sig : Color.white.opacity(0.85))
+                .frame(width: 36, height: 36)
+                .background(on ? CamLab.sig.opacity(0.15) : Color.clear, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// Every look, as a panel down the island's side of the picture.
+    private func landscapeLooks(long: CGFloat, short: CGFloat, islandLeading: Bool,
+                                islandInset: CGFloat) -> some View {
+        let width = min(440 + max(islandInset - 60, 0), max(long - 130, 0))
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: islandLeading ? 0 : 26, bottomLeadingRadius: islandLeading ? 0 : 26,
+            bottomTrailingRadius: islandLeading ? 26 : 0, topTrailingRadius: islandLeading ? 26 : 0)
+        return CameraLooksSheet(frame: rawFrame, frameID: rawFrameID, compact: false,
+                                onClose: { showLookBrowser = false },
+                                onNote: { flash($0) })
+            .padding(islandLeading ? .leading : .trailing, max(islandInset - 14, 0))
+            .frame(width: width, height: short)
+            .camGlass(shape, tint: Color(hex: 0x0A0B0D), opacity: 0.9)
+            .clipShape(shape)
+            .contentShape(Rectangle())
+            .offset(x: islandLeading ? 0 : long - width)
+            .transition(.move(edge: islandLeading ? .leading : .trailing).combined(with: .opacity))
+    }
+
     // MARK: - Actions
 
     private func openPro() {
         guard !isLandscapeLayout else { return }
-        // The look's strength has no readout in Pro; it stays on the dial.
-        if dialTarget == .look { dialTarget = lensTarget }
-        panel = .pro
+        formatOpen = false
+        showLookBrowser = false
+        proOpen = true
         LumaHaptics.shared.tap()
-    }
-
-    private func closePanel() {
-        panel = .none
     }
 
     private func openLooks() {
         landscapeDropOpen = false
-        if isLandscapeLayout {
-            if panel == .format { panel = .none }
-            showLookBrowser.toggle()
-        } else {
-            if panel != .none { panel = .none }
-            showLookBrowser = true
+        formatOpen = false
+        proOpen = false
+        showLookBrowser.toggle()
+        LumaHaptics.shared.tap()
+    }
+
+    private func toggleFormat() {
+        guard !recordingBusy else {
+            flash("Stop recording to change the format")
+            return
         }
+        landscapeDropOpen = false
+        showLookBrowser = false
+        proOpen = false
+        formatOpen.toggle()
         LumaHaptics.shared.tap()
     }
 
     /// All five scopes, then off.
     private func cycleScope() {
         let all = ScopeMode.allCases
-        if let current = scopeMode, let idx = all.firstIndex(of: current) {
-            scopeMode = idx + 1 < all.count ? all[idx + 1] : nil
+        if let current = scopeMode, let index = all.firstIndex(of: current) {
+            scopeMode = index + 1 < all.count ? all[index + 1] : nil
         } else {
             scopeMode = all.first
         }
@@ -2273,8 +2246,8 @@ struct CameraLiveLookView: View {
 
     private func cycleGuide() {
         let all = FrameGuide.allCases
-        let idx = ((all.firstIndex(of: frameGuide) ?? 0) + 1) % all.count
-        frameGuide = all[idx]
+        let index = ((all.firstIndex(of: frameGuide) ?? 0) + 1) % all.count
+        frameGuide = all[index]
         flash(frameGuide == .off ? "Guides off" : "Guide \(frameGuide.label)")
         LumaHaptics.shared.tap()
     }
@@ -2282,59 +2255,60 @@ struct CameraLiveLookView: View {
     private func toggleSafeZone() {
         showSafeZone.toggle()
         flash(showSafeZone ? "Safe zone on" : "Safe zone off")
+        LumaHaptics.shared.tap()
     }
 
     private func toggleZebras() {
         camera.zebrasOn.toggle()
         flash(camera.zebrasOn ? "Zebras on" : "Zebras off")
+        LumaHaptics.shared.tap()
     }
 
     private func togglePeaking() {
         camera.peakingOn.toggle()
         flash(camera.peakingOn ? "Peaking on" : "Peaking off")
+        LumaHaptics.shared.tap()
     }
 
     private func toggleGrid() {
         showGrid.toggle()
         flash(showGrid ? "Grid on" : "Grid off")
+        LumaHaptics.shared.tap()
     }
 
     private func toggleLevel() {
         showLevel.toggle()
         flash(showLevel ? "Level on" : "Level off")
+        LumaHaptics.shared.tap()
     }
 
     private func toggleAEAF() {
         // The lock lands on the session queue, so read the intent first.
         let locking = !camera.aeafLocked
         camera.toggleAEAFLock()
+        if !locking { clearFocusMark() }
         flash(locking ? "AE/AF locked" : "AE/AF unlocked")
         LumaHaptics.shared.tap()
     }
 
-    /// The escape hatch: everything back to automatic in one tap, including the
-    /// AE/AF lock, so no invisible manual state can survive it.
+    /// The escape hatch: everything back to automatic in one tap, including
+    /// the AE/AF lock, so no invisible manual state can survive it.
     private func autoAll() {
         camera.resetAutoExposure()
         camera.resetAutoWB()
         camera.resetAutoFocus()
         camera.setEVBias(0)
         camera.unlockAEAF()
-        resetFocusBrackets()
+        clearFocusMark()
         flash("Everything back to auto")
         LumaHaptics.shared.tap()
     }
 
-    private var anyManual: Bool {
-        camera.manualExposure || camera.manualWB || camera.manualFocus
-            || camera.evBias != 0 || camera.aeafLocked
-    }
-
     /// A short caption over the picture.
     private func flash(_ text: String) {
-        withAnimation(.snappy(duration: 0.2)) { statusCaption = text }
+        withAnimation(.easeOut(duration: 0.2)) { statusCaption = text }
         Task {
-            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            try? await Task.sleep(nanoseconds: 1_300_000_000)
             if statusCaption == text {
                 withAnimation(.easeOut(duration: 0.25)) { statusCaption = nil }
             }
@@ -2366,10 +2340,17 @@ struct CameraLiveLookView: View {
         app.path = [.editor]
     }
 
+    // MARK: Stills
+
+    /// A roll of film.
+    static let rollLength = 36
+    /// Portrait's f-numbers: f/1.4 blurs the most, f/16 barely at all.
+    private static let apertureStops: [Double] = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
+
     /// Full sensor resolution through AVCapturePhotoOutput at the chosen
     /// size, graded with the live look and saved as HEIF or JPEG. Portrait
-    /// adds the depth blur at the dial's aperture. Sim falls back to the
-    /// preview buffer. With a roll loaded, every press spends a frame.
+    /// adds the depth blur at the dial's aperture. The simulator falls back
+    /// to the preview buffer. With a roll loaded, every press spends a frame.
     private func captureStill() {
         app.settlePackPreview(storeService)
         if let lock = app.lockedLookInGrade(storeService) {
@@ -2390,7 +2371,7 @@ struct CameraLiveLookView: View {
                     saveStill(still)
                 } else if let frame = camera.previewImage,
                           let fallback = camera.makeStill(fromPreview: frame) {
-                    // Sensor capture failed — degrade gracefully to the preview.
+                    // Sensor capture failed: fall back to the preview.
                     saveStill(fallback)
                 }
             }
@@ -2417,7 +2398,7 @@ struct CameraLiveLookView: View {
                 // Compare against the SAME literal we set, so the caption
                 // always clears.
                 let denied = "Turn on Add Photos Only in Settings to save"
-                withAnimation(.snappy(duration: 0.2)) { statusCaption = denied }
+                withAnimation(.easeOut(duration: 0.2)) { statusCaption = denied }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if statusCaption == denied {
                     withAnimation(.easeOut(duration: 0.25)) { statusCaption = nil }
@@ -2426,7 +2407,7 @@ struct CameraLiveLookView: View {
             }
             do {
                 // Added as a resource so the file stays the HEIF or JPEG the
-                // format pill promised.
+                // format chip promised.
                 try await PHPhotoLibrary.shared().performChanges {
                     let request = PHAssetCreationRequest.forAsset()
                     request.addResource(with: .photo, data: data, options: nil)
@@ -2453,10 +2434,12 @@ struct CameraLiveLookView: View {
     }
 
     private func setRoll(_ on: Bool) {
+        guard on != rollOn else { return }
         rollOn = on
         if on, rollLeft <= 0 { rollLeft = Self.rollLength }
         if !on { showRollDone = false }
         flash(on ? "Roll loaded · \(rollLeft) frames" : "Roll off")
+        LumaHaptics.shared.tap()
     }
 
     private func loadNewRoll() {
@@ -2476,11 +2459,9 @@ struct CameraLiveLookView: View {
     // MARK: Modes
 
     private func modeChanged(from old: CaptureMode, to new: CaptureMode) {
-        if panel == .format { panel = .none }
+        formatOpen = false
         if old == .slowMo, new != .slowMo { camera.setSlowMotion(false) }
-        if old == .portrait, new != .portrait {
-            camera.setDepthCapture(false)
-        }
+        if old == .portrait, new != .portrait { camera.setDepthCapture(false) }
         switch new {
         case .slowMo:
             camera.setSlowMotion(true)
@@ -2491,11 +2472,12 @@ struct CameraLiveLookView: View {
             }
         case .portrait:
             camera.setDepthCapture(true)
-            dialTarget = .aperture
             flash("Background blur goes on as you shoot")
         case .photo, .video:
             flash(new.rawValue)
         }
+        // The first chip is Lens, or Aperture in Portrait.
+        if new == .portrait, dialTarget == .lens { dialTarget = .aperture }
         if new != .portrait, dialTarget == .aperture { dialTarget = .lens }
     }
 
@@ -2554,100 +2536,235 @@ struct CameraLiveLookView: View {
         #endif
         if let image = await CameraLibraryThumb.latest(side: 160) {
             if lastShot == nil { lastShot = LastShot(thumbnail: image, source: .library) }
-            return
         }
     }
 
     // MARK: - What the dial turns
+    //
+    // The dial, Pro's ruler and the sideways ruler all step through the same
+    // stops (cine practice: discrete, repeatable between takes).
+
+    /// The lab's lens stops, as 35 mm focal lengths.
+    private static let lensMillimetres: [Int] = [13, 16, 20, 24, 28, 35, 48, 65, 77, 100]
+    private static let isoStops: [Float] = [25, 32, 50, 64, 100, 125, 160, 200, 250, 320,
+                                            400, 500, 640, 800, 1000, 1250, 1600, 2000,
+                                            2500, 3200, 4000, 5000, 6400]
+    /// Ordered so faster shutters move RIGHT (1/30 to 1/240 at 30 fps).
+    private static let shutterAngles: [Double] = [360, 270, 180, 90, 45]
+    private static let wbStops: [Float] = [2500, 2800, 3200, 3600, 4000, 4500, 5000,
+                                           5600, 6500, 7500, 9000]
+    private static let evStops: [Float] = [-2, -1.7, -1.3, -1, -0.7, -0.3, 0,
+                                            0.3, 0.7, 1, 1.3, 1.7, 2]
+    /// Normalised lens positions, near to far. The dial puts AF before them.
+    private static let focusStops: [Float] = stride(from: 0.0, through: 1.0, by: 0.1)
+        .map { Float($0) }
+
+    /// The familiar iPhone marks: display zoom against 35 mm focal length.
+    private static let lensMarks: [(zoom: CGFloat, mm: CGFloat)] =
+        [(0.5, 13), (1, 24), (2, 48), (3, 77), (5, 120)]
+
+    /// 35 mm-equivalent focal length for a display zoom.
+    static func millimetres(_ zoom: CGFloat) -> Int {
+        let marks = lensMarks
+        guard zoom > marks[0].zoom else { return Int(marks[0].mm) }
+        for (a, b) in zip(marks, marks.dropFirst()) where zoom <= b.zoom {
+            let t = (zoom - a.zoom) / (b.zoom - a.zoom)
+            return Int((a.mm + t * (b.mm - a.mm)).rounded())
+        }
+        return Int((zoom / 5 * 120).rounded())
+    }
+
+    /// The display zoom that gives a focal length: `millimetres` backwards.
+    static func zoom(forMillimetres mm: CGFloat) -> CGFloat {
+        let marks = lensMarks
+        guard mm > marks[0].mm else { return marks[0].zoom }
+        for (a, b) in zip(marks, marks.dropFirst()) where mm <= b.mm {
+            let t = (mm - a.mm) / (b.mm - a.mm)
+            return a.zoom + t * (b.zoom - a.zoom)
+        }
+        return mm / 120 * 5
+    }
+
+    /// The lab's stops this camera can reach (a camera with no ultra-wide
+    /// starts at 24).
+    private var lensStops: [Int] {
+        let range = camera.zoomRange
+        let reachable = Self.lensMillimetres.filter { mm in
+            let zoom = Self.zoom(forMillimetres: CGFloat(mm))
+            return zoom >= range.lowerBound - 0.02 && zoom <= range.upperBound + 0.02
+        }
+        return reachable.count > 1 ? reachable : Self.lensMillimetres
+    }
+
+    private var isoStopsInRange: [Float] {
+        let range = camera.isoRange
+        let inRange = Self.isoStops.filter { range.contains($0) }
+        return inRange.isEmpty ? Self.isoStops : inRange
+    }
+
+    /// "f/1.4", "f/2", "f/11" for an index into `apertureStops`.
+    private static func fNumber(_ index: Int) -> String {
+        guard apertureStops.indices.contains(index) else { return "f/2.8" }
+        let value = apertureStops[index]
+        if value == value.rounded() { return "f/\(Int(value))" }
+        return String(format: "f/%.1f", value)
+    }
+
+    /// Shutter speed implied by an angle at the current frame rate.
+    private func shutterLabel(_ angle: Double) -> String {
+        "1/\(Int((360.0 / max(angle, 1)) * Double(camera.activeSpec.fps)))"
+    }
+
+    /// "+0.3", "−1.0": a real minus sign, one decimal.
+    private static func evLabel(_ value: Float) -> String {
+        let size = String(format: "%.1f", abs(value))
+        return (value < -0.04 ? "\u{2212}" : "+") + size
+    }
+
+    private static func nearest<T: BinaryFloatingPoint>(_ value: T, in stops: [T]) -> Int {
+        stops.enumerated().min { abs($0.element - value) < abs($1.element - value) }?.offset ?? 0
+    }
 
     private func dialTicks(for target: DialTarget) -> [String] {
         switch target {
-        case .look:     return Self.strengthStops.map { "\(Int($0))" }
-        case .lens:     return Self.lensStops.map { "\(Self.millimetres($0))" }
+        case .lens:     return lensStops.map { "\($0)" }
         case .aperture: return Self.apertureStops.indices.map { Self.fNumber($0) }
-        case .shutter:  return paramTicks(for: .shutter)
-        case .iso:      return paramTicks(for: .iso)
-        case .ev:       return paramTicks(for: .ev)
-        case .wb:       return paramTicks(for: .wb)
-        case .focus:    return paramTicks(for: .focus)
+        case .shutter:  return Self.shutterAngles.map { shutterLabel($0) }
+        case .iso:      return isoStopsInRange.map { "\(Int($0))" }
+        case .ev:       return Self.evStops.map { Self.evLabel($0) }
+        case .wb:       return Self.wbStops.map { "\(Int($0))" }
+        case .focus:    return ["AF"] + Self.focusStops.map { String(format: "%.1f", $0) }
         }
     }
 
+    /// The stop nearest the value in force, so the dial always opens centred
+    /// on what the camera is actually doing.
     private func dialPosition(for target: DialTarget) -> Int {
         switch target {
-        case .look:
-            let value = app.settings.intensity
-            return Self.strengthStops.indices.min {
-                abs(Self.strengthStops[$0] - value) < abs(Self.strengthStops[$1] - value)
-            } ?? 0
         case .lens:
-            let zoom = camera.zoomFactor
-            return Self.lensStops.indices.min {
-                abs(Self.lensStops[$0] - zoom) < abs(Self.lensStops[$1] - zoom)
-            } ?? 1
-        case .aperture: return apertureIndex
-        case .shutter:  return paramIndex(for: .shutter)
-        case .iso:      return paramIndex(for: .iso)
-        case .ev:       return paramIndex(for: .ev)
-        case .wb:       return paramIndex(for: .wb)
-        case .focus:    return paramIndex(for: .focus)
+            let mm = Self.millimetres(camera.zoomFactor)
+            let stops = lensStops
+            return stops.indices.min { abs(stops[$0] - mm) < abs(stops[$1] - mm) } ?? 0
+        case .aperture:
+            return apertureIndex
+        case .shutter:
+            return Self.nearest(camera.shutterAngle, in: Self.shutterAngles)
+        case .iso:
+            let stops = isoStopsInRange
+            let iso = camera.currentISO > 0 ? camera.currentISO : (stops.first ?? 100)
+            return Self.nearest(iso, in: stops)
+        case .ev:
+            return Self.nearest(camera.evBias, in: Self.evStops)
+        case .wb:
+            return Self.nearest(camera.wbTemperature, in: Self.wbStops)
+        case .focus:
+            guard camera.manualFocus else { return 0 }
+            return Self.nearest(camera.lensPosition, in: Self.focusStops) + 1
         }
     }
 
+    /// Every move writes straight through to the camera. Moving a stop is
+    /// also what takes a value off auto, so there is no switch to forget.
     private func applyDial(_ index: Int, to target: DialTarget) {
         switch target {
-        case .look:
-            guard Self.strengthStops.indices.contains(index) else { return }
-            app.settings.intensity = Self.strengthStops[index]
         case .lens:
-            guard Self.lensStops.indices.contains(index) else { return }
-            camera.setDisplayZoom(Self.lensStops[index])
+            let stops = lensStops
+            guard stops.indices.contains(index) else { return }
+            camera.setDisplayZoom(Self.zoom(forMillimetres: CGFloat(stops[index])))
         case .aperture:
             guard Self.apertureStops.indices.contains(index) else { return }
             apertureIndex = index
-        case .shutter: applyParam(index, to: .shutter)
-        case .iso:     applyParam(index, to: .iso)
-        case .ev:      applyParam(index, to: .ev)
-        case .wb:      applyParam(index, to: .wb)
-        case .focus:   applyParam(index, to: .focus)
+        case .shutter:
+            guard Self.shutterAngles.indices.contains(index) else { return }
+            camera.setManualExposure(angle: Self.shutterAngles[index])
+        case .iso:
+            let stops = isoStopsInRange
+            guard stops.indices.contains(index) else { return }
+            camera.setManualExposure(iso: stops[index])
+        case .ev:
+            guard Self.evStops.indices.contains(index) else { return }
+            camera.setEVBias(Self.evStops[index])
+        case .wb:
+            guard Self.wbStops.indices.contains(index) else { return }
+            camera.setWhiteBalance(temperature: Self.wbStops[index], tint: camera.wbTint)
+        case .focus:
+            if index == 0 {
+                camera.resetAutoFocus()
+                return
+            }
+            guard Self.focusStops.indices.contains(index - 1) else { return }
+            camera.setManualFocus(Self.focusStops[index - 1])
         }
     }
 
+    /// The value as Pro and the sideways readouts show it.
     private func dialValue(for target: DialTarget) -> String {
         switch target {
-        case .look:
-            let strength = Int(app.settings.intensity.rounded())
-            return strength == 0 ? "Off" : "\(strength)%"
-        case .lens:     return "\(Self.millimetres(camera.zoomFactor)) mm"
+        case .lens:     return "\(Self.millimetres(camera.zoomFactor))mm"
         case .aperture: return Self.fNumber(apertureIndex)
-        case .shutter:  return paramReadout(for: .shutter)
-        case .iso:      return paramReadout(for: .iso)
-        case .ev:       return paramReadout(for: .ev)
-        case .wb:       return paramReadout(for: .wb)
-        case .focus:    return paramReadout(for: .focus)
+        case .shutter:  return shutterLabel(camera.shutterAngle)
+        case .iso:      return "\(Int(camera.currentISO > 0 ? camera.currentISO : 100))"
+        case .ev:       return Self.evLabel(camera.evBias)
+        case .wb:       return "\(Int(camera.wbTemperature))K"
+        case .focus:    return camera.manualFocus ? String(format: "%.1f", camera.lensPosition) : "AF"
         }
+    }
+
+    /// The value on the dial: the lens sets its unit smaller beside it.
+    private func dialValueParts(for target: DialTarget) -> (value: String, unit: String?) {
+        if target == .lens {
+            return ("\(Self.millimetres(camera.zoomFactor))", "mm")
+        }
+        return (dialValue(for: target), nil)
     }
 
     /// The camera, not the person, is choosing this value.
     private func isAutoTarget(_ target: DialTarget) -> Bool {
         switch target {
-        case .shutter: return paramIsAuto(.shutter)
-        case .iso:     return paramIsAuto(.iso)
-        case .wb:      return paramIsAuto(.wb)
-        case .focus:   return !camera.manualFocus
-        case .look, .lens, .aperture, .ev: return false
+        case .shutter, .iso: return !camera.manualExposure
+        case .wb:            return !camera.manualWB
+        case .focus:         return !camera.manualFocus
+        case .lens, .aperture, .ev: return false
         }
     }
 
-    /// Set by hand, so Auto has something to undo.
-    private func isManual(_ target: DialTarget) -> Bool {
+    /// Pro's Auto button: "Auto on" while the camera chooses, "Auto" to hand
+    /// it back, "Manual" for the values that are always set by hand.
+    private func autoTitle(for target: DialTarget) -> String {
         switch target {
-        case .shutter, .iso: return camera.manualExposure
-        case .wb:            return camera.manualWB
-        case .focus:         return camera.manualFocus
-        case .ev:            return camera.evBias != 0
-        case .look, .lens, .aperture: return false
+        case .lens, .aperture, .ev: return "Manual"
+        case .shutter, .iso, .wb, .focus: return isAutoTarget(target) ? "Auto on" : "Auto"
         }
+    }
+
+    private func toggleAuto(_ target: DialTarget) {
+        switch target {
+        case .lens, .aperture:
+            flash("\(target.spoken) is always manual")
+        case .ev:
+            if camera.evBias != 0 {
+                camera.setEVBias(0)
+                flash("Exposure back to 0")
+            } else {
+                flash("Exposure is always manual")
+            }
+        case .shutter, .iso, .wb:
+            if isAutoTarget(target) {
+                // Leaving auto holds the value auto was showing.
+                applyDial(dialPosition(for: target), to: target)
+                flash("\(target.spoken) on manual")
+            } else {
+                setAuto(target)
+            }
+        case .focus:
+            if isAutoTarget(target) {
+                applyDial(6, to: target)
+                flash("Focus on manual")
+            } else {
+                setAuto(target)
+            }
+        }
+        LumaHaptics.shared.tap()
     }
 
     private func setAuto(_ target: DialTarget) {
@@ -2656,109 +2773,9 @@ struct CameraLiveLookView: View {
         case .wb:            camera.resetAutoWB()
         case .focus:         camera.resetAutoFocus()
         case .ev:            camera.setEVBias(0)
-        case .look, .lens, .aperture: return
+        case .lens, .aperture: return
         }
-        flash("\(target.longName) back to auto")
-        LumaHaptics.shared.tap()
-    }
-
-    // MARK: Dial stops (cine practice: discrete, repeatable between takes)
-
-    private static let isoStops: [Float] = [25, 32, 50, 64, 100, 125, 160, 200, 250, 320,
-                                            400, 500, 640, 800, 1000, 1250, 1600, 2000,
-                                            2500, 3200, 4000, 5000, 6400]
-    /// Ordered so faster shutters move RIGHT (1/30 → 1/240 at 30fps).
-    private static let shutterAngles: [Double] = [360, 270, 180, 90, 45]
-    private static let wbStops: [Float] = [2500, 2800, 3200, 3600, 4000, 4500, 5000,
-                                           5600, 6500, 7500, 9000]
-    private static let evStops: [Float] = [-2, -1.7, -1.3, -1, -0.7, -0.3, 0,
-                                            0.3, 0.7, 1, 1.3, 1.7, 2]
-    /// Index 0 is AF; the rest are normalised lens positions, near → far.
-    private static let focusStops: [Float] = stride(from: 0.0, through: 1.0, by: 0.1)
-        .map { Float($0) }
-
-    private var isoStopsInRange: [Float] {
-        let range = camera.isoRange
-        let inRange = Self.isoStops.filter { range.contains($0) }
-        return inRange.isEmpty ? Self.isoStops : inRange
-    }
-
-    /// Shutter speed implied by an angle at the current frame rate.
-    private func shutterLabel(_ angle: Double) -> String {
-        "1/\(Int((360.0 / max(angle, 1)) * Double(camera.activeSpec.fps)))"
-    }
-
-    private func paramIsAuto(_ parameter: ProParameter) -> Bool {
-        switch parameter {
-        case .iso, .shutter: return !camera.manualExposure
-        case .wb:            return !camera.manualWB
-        case .ev, .focus:    return false
-        }
-    }
-
-    private func paramReadout(for parameter: ProParameter) -> String {
-        switch parameter {
-        case .iso:     return "\(Int(camera.currentISO > 0 ? camera.currentISO : 100))"
-        case .shutter: return shutterLabel(camera.shutterAngle)
-        case .wb:      return "\(Int(camera.wbTemperature))K"
-        case .ev:      return String(format: "%+.1f", camera.evBias)
-        case .focus:   return camera.manualFocus ? String(format: "%.1f", camera.lensPosition) : "AF"
-        }
-    }
-
-    private func paramTicks(for parameter: ProParameter) -> [String] {
-        switch parameter {
-        case .iso:     return isoStopsInRange.map { "\(Int($0))" }
-        case .shutter: return Self.shutterAngles.map(shutterLabel)
-        case .wb:      return Self.wbStops.map { "\(Int($0))K" }
-        case .ev:      return Self.evStops.map { String(format: "%+.1f", $0) }
-        case .focus:   return ["AF"] + Self.focusStops.map { String(format: "%.1f", $0) }
-        }
-    }
-
-    /// Nearest stop to the value currently in force, so the dial always opens
-    /// centred on what the camera is actually doing.
-    private func paramIndex(for parameter: ProParameter) -> Int {
-        func nearest<T: BinaryFloatingPoint>(_ value: T, in stops: [T]) -> Int {
-            stops.enumerated().min { abs($0.element - value) < abs($1.element - value) }?.offset ?? 0
-        }
-        switch parameter {
-        case .iso:
-            let stops = isoStopsInRange
-            let iso = camera.currentISO > 0 ? camera.currentISO : (stops.first ?? 100)
-            return nearest(iso, in: stops)
-        case .shutter: return nearest(camera.shutterAngle, in: Self.shutterAngles)
-        case .wb:      return nearest(camera.wbTemperature, in: Self.wbStops)
-        case .ev:      return nearest(camera.evBias, in: Self.evStops)
-        case .focus:
-            guard camera.manualFocus else { return 0 }
-            return nearest(camera.lensPosition, in: Self.focusStops) + 1
-        }
-    }
-
-    /// Every dial move writes straight through to the device — moving a stop is
-    /// also what engages manual, so there is no AUTO/MANUAL switch to forget.
-    private func applyParam(_ index: Int, to parameter: ProParameter) {
-        switch parameter {
-        case .iso:
-            let stops = isoStopsInRange
-            guard stops.indices.contains(index) else { return }
-            camera.setManualExposure(iso: stops[index])
-        case .shutter:
-            guard Self.shutterAngles.indices.contains(index) else { return }
-            camera.setManualExposure(angle: Self.shutterAngles[index])
-        case .wb:
-            guard Self.wbStops.indices.contains(index) else { return }
-            camera.setWhiteBalance(temperature: Self.wbStops[index], tint: camera.wbTint)
-        case .ev:
-            guard Self.evStops.indices.contains(index) else { return }
-            camera.setEVBias(Self.evStops[index])
-        case .focus:
-            if index == 0 { camera.resetAutoFocus(); return }
-            let stops = Self.focusStops
-            guard stops.indices.contains(index - 1) else { return }
-            camera.setManualFocus(stops[index - 1])
-        }
+        flash("\(target.spoken) back to auto")
     }
 }
 
@@ -2767,39 +2784,104 @@ struct CameraLiveLookView: View {
 /// One of the camera's dialable values: the chips, Pro's readouts and the
 /// sideways readouts all pick from these.
 private enum DialTarget: Hashable, CaseIterable {
-    case look, lens, aperture, shutter, iso, ev, wb, focus
+    case lens, aperture, shutter, iso, ev, wb, focus
 
-    /// The chip and readout name.
-    var title: String {
+    /// On its chip.
+    var chip: String {
         switch self {
-        case .look:     return "Look"
         case .lens:     return "Lens"
         case .aperture: return "Aperture"
         case .shutter:  return "Shutter"
         case .iso:      return "ISO"
-        case .ev:       return "EV"
+        case .ev:       return "Exposure"
         case .wb:       return "WB"
         case .focus:    return "Focus"
         }
     }
 
-    /// The name under the dial's value.
-    var longName: String {
+    /// Under the dial's value.
+    var caption: String {
         switch self {
-        case .look: return "Look strength"
-        case .ev:   return "Exposure"
-        case .wb:   return "White balance"
-        default:    return title
+        case .lens:     return "LENS"
+        case .aperture: return "APERTURE"
+        case .shutter:  return "SHUTTER"
+        case .iso:      return "ISO"
+        case .ev:       return "EXPOSURE"
+        case .wb:       return "WHITE BAL."
+        case .focus:    return "FOCUS"
+        }
+    }
+
+    /// Under a readout.
+    var short: String {
+        switch self {
+        case .lens:     return "LENS"
+        case .aperture: return "APERTURE"
+        case .shutter:  return "SS"
+        case .iso:      return "ISO"
+        case .ev:       return "EV"
+        case .wb:       return "WB"
+        case .focus:    return "FOCUS"
+        }
+    }
+
+    /// In a sentence.
+    var spoken: String {
+        switch self {
+        case .lens:     return "Lens"
+        case .aperture: return "Aperture"
+        case .shutter:  return "Shutter"
+        case .iso:      return "ISO"
+        case .ev:       return "Exposure"
+        case .wb:       return "White balance"
+        case .focus:    return "Focus"
+        }
+    }
+
+    /// Points between stops on a ruler, as the lab spaces each one.
+    var spacing: CGFloat {
+        switch self {
+        case .lens:     return 34
+        case .aperture: return 40
+        case .shutter:  return 46
+        case .iso:      return 42
+        case .ev:       return 34
+        case .wb:       return 48
+        case .focus:    return 42
+        }
+    }
+
+    /// For the preview's seed, e.g. LUMA_SEED_CAMPRO=shutter.
+    static func named(_ raw: String) -> DialTarget? {
+        switch raw.lowercased() {
+        case "lens":            return .lens
+        case "aperture":        return .aperture
+        case "shutter", "ss":   return .shutter
+        case "iso":             return .iso
+        case "ev", "exposure":  return .ev
+        case "wb":              return .wb
+        case "focus":           return .focus
+        default:                return nil
         }
     }
 }
 
 // MARK: - A finger on the picture
 
+/// The square on the picture: where it is, what it says, and whether it
+/// stays (a lock) or fades (a tap).
+private struct FocusMark: Equatable {
+    let id: Int
+    let point: CGPoint
+    let label: String
+    let hold: Bool
+}
+
 /// A tap, a swipe through looks, or a hold for the fan.
 private struct TouchState {
     enum Mode { case pending, swipe, fan, ignored }
     var mode: Mode
+    let start: CGPoint
     var last: CGPoint
     let token: Int
 }
@@ -2825,236 +2907,19 @@ private struct SwipeState: Equatable {
 /// The thumb fan, open.
 private struct FanState {
     var touch: CGPoint
+    /// Where the finger went down.
+    let origin: CGPoint
     let centre: CGPoint
     let positions: [CGPoint]
     var hot: Int?
-}
 
-// MARK: - Monochrome camera chrome
-//
-// The screen's own parts. They use the same LumaTheme values and type voice
-// as the rest of the app.
-
-/// The armed tally: the one colour this screen allows itself, breathing so
-/// "am I rolling?" is answered from across the room.
-private struct RecordTally: View {
-    @State private var pulse = false
-
-    var body: some View {
-        Circle()
-            .fill(LumaTheme.recordRed)
-            .frame(width: 8, height: 8)
-            .opacity(pulse ? 0.35 : 1)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
-            }
+    /// Still where it pressed, on no tool: letting go here locks AE/AF.
+    var resting: Bool {
+        hot == nil && hypot(touch.x - origin.x, touch.y - origin.y) < 30
     }
 }
 
-/// One of Pro's readouts. Tapping it re-targets the shared ruler; the name
-/// is plain type, only the value speaks mono.
-private struct CameraProReadout: View {
-    let title: String
-    let value: String
-    /// True when the camera is choosing this value itself. The concrete value
-    /// is still shown (it is what the ruler points at), dimmed and tagged.
-    var auto: Bool = false
-    let active: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 3) {
-                HStack(spacing: 3) {
-                    Text(title)
-                        .font(.luma(size: 11, weight: .medium))
-                        .foregroundStyle(active ? LumaTheme.signal : .white.opacity(0.45))
-                    if auto {
-                        Text("auto")
-                            .font(.luma(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.35))
-                    }
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-                Text(value)
-                    .font(.luma(size: 15, weight: active ? .bold : .medium, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(active ? 1 : (auto ? 0.42 : 0.62)))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(minWidth: 50)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityAddTraits(active ? .isSelected : [])
-    }
-}
-
-/// Detented ruler. One ruler, re-targeted by the readouts above it; the
-/// current stop sits under the caret at the row's own centre.
-private struct CameraRulerDial: View {
-    /// Tick labels, in order. Index based, so any parameter (ISO stops,
-    /// shutter angles, kelvin, EV thirds) uses the same widget.
-    let ticks: [String]
-    let index: Int
-    let onChange: (Int) -> Void
-
-    /// Drag distance that advances one detent.
-    private let stride: CGFloat = 46
-    @State private var dragBase: Int?
-
-    var body: some View {
-        // No GeometryReader: the caret is the ZStack's own centre and the tick
-        // rail is offset relative to that same centre.
-        ZStack {
-            HStack(spacing: 0) {
-                ForEach(ticks.indices, id: \.self) { i in
-                    let current = i == index
-                    VStack(spacing: 5) {
-                        Rectangle()
-                            .fill(current ? LumaTheme.signal : .white.opacity(0.20))
-                            .frame(width: current ? 2 : 1, height: current ? 15 : 9)
-                        Text(ticks[i])
-                            .font(.luma(size: current ? 12 : 10,
-                                        weight: current ? .bold : .regular,
-                                        design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(current ? LumaTheme.signal : .white.opacity(0.32))
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                    .frame(width: stride)
-                }
-            }
-            .offset(x: stride * (CGFloat(ticks.count) / 2 - CGFloat(index) - 0.5))
-            .animation(.snappy(duration: 0.14), value: index)
-
-            Rectangle()
-                .fill(.white)
-                .frame(width: 2, height: 8)
-                .frame(maxHeight: .infinity, alignment: .top)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 38)
-        .clipped()
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 2)
-                .onChanged { value in
-                    let base = dragBase ?? index
-                    if dragBase == nil { dragBase = index }
-                    let steps = Int((-value.translation.width / stride).rounded())
-                    let target = min(max(base + steps, 0), max(ticks.count - 1, 0))
-                    if target != index { onChange(target) }
-                }
-                .onEnded { _ in dragBase = nil }
-        )
-        .sensoryFeedback(.selection, trigger: index)
-    }
-}
-
-/// White ring. Video mode has a red core that squares off while rolling;
-/// photo mode has a white core, or a signal-yellow frame counter while a
-/// roll is loaded.
-private struct CameraShutterButton: View {
-    let isRecording: Bool
-    var photoMode: Bool = false
-    /// Frames left on the roll; nil when no roll is loaded.
-    var rollCount: Int? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .stroke(.white, lineWidth: 3)
-                    .frame(width: 70, height: 70)
-                if photoMode, let rollCount {
-                    rollCore(rollCount)
-                } else {
-                    RoundedRectangle(cornerRadius: isRecording ? 8 : 28)
-                        .fill(photoMode ? Color.white : LumaTheme.recordRed)
-                        .frame(width: isRecording ? 28 : 56, height: isRecording ? 28 : 56)
-                }
-            }
-            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isRecording)
-            .animation(.easeOut(duration: 0.18), value: photoMode)
-            .animation(.snappy(duration: 0.2), value: rollCount)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private func rollCore(_ count: Int) -> some View {
-        ZStack {
-            Circle()
-                .fill(LumaTheme.signal)
-                .frame(width: 56, height: 56)
-            Text("\(count)")
-                .font(.luma(size: 22, weight: .bold))
-                .kerning(-0.6)
-                .monospacedDigit()
-                .foregroundStyle(LumaTheme.onSignal)
-                .contentTransition(.numericText(countsDown: true))
-        }
-    }
-
-    private var accessibilityText: String {
-        if photoMode, let rollCount { return "Take photo, \(rollCount) frames left" }
-        if photoMode { return "Take photo" }
-        return isRecording ? "Stop recording" : "Record"
-    }
-}
-
-/// One of the dock's two grey pills: round at the outer end, and at the
-/// inner end a notch that hugs the shutter's ring with a 6 pt gap. The
-/// notch is a circle of radius 41 round the shutter's centre, which sits
-/// 29 pt past the pill's inner edge (where that circle meets the pill's top
-/// and bottom edges on a 58 pt pill).
-private struct CameraDockPill: Shape {
-    var notchLeading: Bool
-
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width, h = rect.height
-        let r = h / 2
-        let notch: CGFloat = 41
-        let reach = sqrt(max(notch * notch - r * r, 0))
-        var path = Path()
-        path.move(to: CGPoint(x: r, y: 0))
-        path.addLine(to: CGPoint(x: w, y: 0))
-        // The notch, from the top edge round to the bottom edge, through
-        // the side of the circle that faces the pill.
-        let centre = CGPoint(x: w + reach, y: r)
-        let top = atan2(Double(-r), Double(-reach))
-        let sweep = 2 * atan2(Double(r), Double(reach))
-        for step in 1...24 {
-            let a = top - sweep * Double(step) / 24
-            path.addLine(to: CGPoint(x: centre.x + notch * CGFloat(cos(a)),
-                                     y: centre.y + notch * CGFloat(sin(a))))
-        }
-        path.addLine(to: CGPoint(x: r, y: h))
-        // The round outer end.
-        for step in 1...24 {
-            let a = Double.pi / 2 + Double.pi * Double(step) / 24
-            path.addLine(to: CGPoint(x: r + r * CGFloat(cos(a)), y: r + r * CGFloat(sin(a))))
-        }
-        path.closeSubpath()
-        var transform = CGAffineTransform(translationX: rect.minX, y: rect.minY)
-        if notchLeading {
-            transform = transform.translatedBy(x: w, y: 0).scaledBy(x: -1, y: 1)
-        }
-        return path.applying(transform)
-    }
-}
-
-/// The newest capture for the button by the shutter, and what tapping it
-/// opens.
+/// The newest capture for the tile on the plate, and what tapping it opens.
 private struct LastShot {
     enum Source {
         /// A still from this session, kept as a file for the grade room.
@@ -3070,8 +2935,14 @@ private struct LastShot {
     let source: Source
 }
 
+private extension View {
+    /// The sideways readouts' glass.
+    func landscapeGlass(opacity: Double) -> some View {
+        camGlass(RoundedRectangle(cornerRadius: 18), tint: Color(hex: 0x0C0D0F), opacity: opacity)
+    }
+}
+
 /// The take returns a result: the clip is written, now choose where it goes.
-/// A dialogue on black, three plain words, the recommended step filled.
 private struct CameraHandOffCard: View {
     let url: URL
     let onRetake: () -> Void
@@ -3088,30 +2959,28 @@ private struct CameraHandOffCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    LumaTheme.surfaceStrong
+                    CamLab.raised
                 }
             }
             .frame(height: 150)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
             // clipShape clips pixels, NOT touches.
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
 
             Text("Clip saved · look baked in")
-                .font(.luma(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: 0xC9CBD0))
 
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 handButton("Retake", solid: false, action: onRetake)
                 handButton("Grade", solid: false, action: onGrade)
                 handButton("Edit", solid: true, action: onEdit)
             }
         }
-        .padding(16)
-        .background(Color.black, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.6), radius: 24, y: 8)
+        .padding(18)
+        .background(Color(hex: 0x0C0D0F).opacity(0.95), in: RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.5), radius: 24, y: 8)
         .task {
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
             generator.appliesPreferredTrackTransform = true
@@ -3124,14 +2993,14 @@ private struct CameraHandOffCard: View {
     private func handButton(_ title: String, solid: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(solid ? .black : .white.opacity(0.72))
+                .font(.luma(size: 14, weight: .bold))
+                .foregroundStyle(solid ? CamLab.ink : CamLab.text)
                 .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(solid ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.clear),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(height: 44)
+                .background(solid ? CamLab.sig : Color.white.opacity(0.09),
+                            in: RoundedRectangle(cornerRadius: 14))
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.lumaPress)
+        .buttonStyle(CamPressStyle())
     }
 }

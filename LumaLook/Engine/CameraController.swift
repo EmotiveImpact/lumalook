@@ -154,6 +154,9 @@ final class CameraController: NSObject, ObservableObject {
 
     /// Live zoom readout for the HUD (1.0x / 2.0x / 3.0x cycle).
     @Published var zoomFactor: CGFloat = 1
+    /// The display zooms this camera can reach (0.5 where there is an
+    /// ultra-wide). The lens dial offers only the stops inside it.
+    @Published private(set) var zoomRange: ClosedRange<CGFloat> = 0.5...10
     /// Which camera feeds the session (flip toggles it).
     @Published var cameraPosition: AVCaptureDevice.Position = .back
 
@@ -867,7 +870,13 @@ final class CameraController: NSObject, ObservableObject {
             device.videoZoomFactor = wideBaseline
             device.unlockForConfiguration()
         } catch {}
-        DispatchQueue.main.async { self.zoomFactor = 1 }
+        let baseline = wideBaseline
+        let lowest = device.minAvailableVideoZoomFactor / baseline
+        let highest = min(device.maxAvailableVideoZoomFactor, baseline * 10) / baseline
+        DispatchQueue.main.async {
+            self.zoomFactor = 1
+            self.zoomRange = lowest...max(highest, lowest)
+        }
     }
 
     /// Cycles 0.5x (if the ultra-wide exists) → 1x → 2x → 3x →, clamped.
@@ -1492,9 +1501,14 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 
 struct FilteredCameraPreview: View {
     @ObservedObject var camera: CameraController
+    /// True fills the view edge to edge, cropping the frame's sides on a
+    /// screen taller than 9:16 (the camera screen draws its controls over
+    /// the picture). False fits the whole frame inside the view.
+    var fill = false
     /// C1 — tap-to-focus: called with (unit point in IMAGE space, raw view
     /// point). Unit accounts for how the frame is fitted, so the sensor is
-    /// focused where the user actually touched the picture.
+    /// focused where the user actually touched the picture. Fitted only; a
+    /// filled preview leaves touches to whoever draws over it.
     var onTapUnit: ((CGPoint, CGPoint) -> Void)? = nil
     /// C1 — long-press AE/AF lock.
     var onLongPress: (() -> Void)? = nil
@@ -1502,44 +1516,50 @@ struct FilteredCameraPreview: View {
     var body: some View {
         GeometryReader { geo in
             if let frame = camera.previewImage {
-                // WYSIWYG: capture is 9:16 and the screen is taller, so
-                // aspect-FILL cropped ~18% off each side of the frame that was
-                // actually being recorded — you framed a shot and the file
-                // contained more than you saw. FIT letterboxes instead, so the
-                // viewfinder is the recording. Chrome then sits on the mattes
-                // rather than over the picture, which is the whole point of a
-                // clean viewfinder.
-                let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
-                let s = min(geo.size.width / iw, geo.size.height / ih)
-                let fitted = CGSize(width: iw * s, height: ih * s)
-                let originX = (geo.size.width - fitted.width) / 2
-                let originY = (geo.size.height - fitted.height) / 2
-
-                Image(decorative: frame, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        // Long-press wins over tap; tap fires on release.
-                        LongPressGesture(minimumDuration: 0.5)
-                            .onEnded { _ in onLongPress?() }
-                            .exclusively(before: SpatialTapGesture()
-                                .onEnded { value in
-                                    let p = value.location
-                                    // Invert the FIT mapping: taps on a matte
-                                    // clamp to the nearest edge of the image
-                                    // rather than focusing off-frame.
-                                    let unit = CGPoint(
-                                        x: min(max((p.x - originX) / fitted.width, 0), 1),
-                                        y: min(max((p.y - originY) / fitted.height, 0), 1))
-                                    onTapUnit?(unit, p)
-                                })
-                    )
+                if fill {
+                    Image(decorative: frame, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .allowsHitTesting(false)
+                } else {
+                    fitted(frame, in: geo.size)
+                }
             } else {
                 Color.black
             }
         }
+    }
+
+    /// The whole frame, letterboxed: what you see is what is written.
+    private func fitted(_ frame: CGImage, in size: CGSize) -> some View {
+        let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
+        let s = min(size.width / iw, size.height / ih)
+        let fitted = CGSize(width: iw * s, height: ih * s)
+        let originX = (size.width - fitted.width) / 2
+        let originY = (size.height - fitted.height) / 2
+        return Image(decorative: frame, scale: 1)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .gesture(
+                // Long-press wins over tap; tap fires on release.
+                LongPressGesture(minimumDuration: 0.5)
+                    .onEnded { _ in onLongPress?() }
+                    .exclusively(before: SpatialTapGesture()
+                        .onEnded { value in
+                            let p = value.location
+                            // Invert the FIT mapping: taps on a matte clamp
+                            // to the nearest edge of the image rather than
+                            // focusing off-frame.
+                            let unit = CGPoint(
+                                x: min(max((p.x - originX) / fitted.width, 0), 1),
+                                y: min(max((p.y - originY) / fitted.height, 0), 1))
+                            onTapUnit?(unit, p)
+                        })
+            )
     }
 }
 
