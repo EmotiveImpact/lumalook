@@ -39,8 +39,10 @@ final class PackThumbs: ObservableObject {
         task = Task.detached(priority: .userInitiated) { [weak self] in
             for (packID, look, frame) in jobs {
                 if Task.isCancelled { return }
-                guard let cg = PackThumbs.grade(look, on: frame,
-                                                maxDimension: maxDimension) else { continue }
+                // Each grade runs off the shared task pool (`GradeQueue`).
+                guard let cg = await GradeQueue.packs.run({
+                    PackThumbs.grade(look, on: frame, maxDimension: maxDimension)
+                }) else { continue }
                 await MainActor.run { self?.images[packID] = cg }
             }
         }

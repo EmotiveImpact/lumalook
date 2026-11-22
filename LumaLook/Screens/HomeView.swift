@@ -753,7 +753,8 @@ struct HomeGradedPhoto: View {
         }
         let source = photo
         let size = maxDimension
-        let image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+        // One grade at a time, off the shared task pool (`GradeQueue`).
+        let image = await GradeQueue.home.run { () -> CGImage? in
             guard let ci = source.ciImage else { return nil }
             let state = LookState()
             state.recipe = recipe
@@ -761,7 +762,7 @@ struct HomeGradedPhoto: View {
             settings.intensity = 100
             state.settings = settings
             return LookPipeline.shared.gradedStill(ci, state: state, maxDimension: size)
-        }.value
+        }
         guard let image else { return }
         HomeGradeCache.images[key] = image
         // A newer look may have been asked for while this one rendered (a
@@ -1920,18 +1921,20 @@ private final class HomeLookTileRender: ObservableObject {
         task = Task.detached(priority: .utility) { [weak self] in
             for job in jobs {
                 if Task.isCancelled { return }
-                guard let photo = job.photo.ciImage else { continue }
-                let source = homeScaled(photo, longest: 720)
-                let state = LookState()
-                if let recipe = job.recipe { state.recipe = recipe }
-                state.settings = job.settings
-                if let url = job.lutURL {
-                    guard let lut = try? LookPipeline.shared.loadLUT(at: url) else { continue }
-                    state.lut = lut
+                // Each grade runs off the shared task pool (`GradeQueue`).
+                let graded = await GradeQueue.tiles.run { () -> CGImage? in
+                    guard let photo = job.photo.ciImage else { return nil }
+                    let source = homeScaled(photo, longest: 720)
+                    let state = LookState()
+                    if let recipe = job.recipe { state.recipe = recipe }
+                    state.settings = job.settings
+                    if let url = job.lutURL {
+                        guard let lut = try? LookPipeline.shared.loadLUT(at: url) else { return nil }
+                        state.lut = lut
+                    }
+                    return LookPipeline.shared.gradedStill(source, state: state, maxDimension: 420)
                 }
-                guard let cg = LookPipeline.shared.gradedStill(source, state: state, maxDimension: 420) else {
-                    continue
-                }
+                guard let cg = graded else { continue }
                 await MainActor.run {
                     HomeLookTileRender.cache[job.key] = cg
                     self?.images[job.id] = cg
