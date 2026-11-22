@@ -1185,7 +1185,17 @@ private struct ViewfinderReel: View {
         shown?.preset.signature ?? LumaTheme.signal
     }
 
-    private var isPaused: Bool { reduceMotion || pick != nil }
+    private var isPaused: Bool { reduceMotion || pick != nil || Self.heldForPreview }
+
+    /// LUMA_SEED_REELHOLD=1 holds the reel on its first look, so a simulator
+    /// screenshot never lands mid-crossfade between two slides.
+    private static let heldForPreview: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["LUMA_SEED_REELHOLD"] == "1"
+        #else
+        return false
+        #endif
+    }()
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
