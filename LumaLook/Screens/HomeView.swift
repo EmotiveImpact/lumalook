@@ -516,46 +516,51 @@ private enum HomeClock {
     }
 }
 
-/// The wordmark over the greeting (the first run says "Welcome to lumalook"
-/// instead), then search and the avatar (which opens You).
+/// The wordmark on its own top row with search and the avatar (which opens
+/// You), and the greeting under it. The first run keeps "Welcome to lumalook"
+/// beside search and the avatar instead.
 private struct HomeHeader: View {
     let isFirstRun: Bool
     let onSearch: () -> Void
     let onAvatar: () -> Void
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            TimelineView(.everyMinute) { context in
-                greeting(at: context.date)
+        if isFirstRun {
+            HStack(alignment: .bottom, spacing: 4) {
+                welcome
+                Spacer(minLength: 8)
+                searchButton
+                avatarButton
             }
-            Spacer(minLength: 8)
-            searchButton
-            avatarButton
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    LumaWordmark(size: 20)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("lumalook")
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    searchButton
+                    avatarButton
+                }
+                TimelineView(.everyMinute) { context in
+                    LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(context.date), size: 34)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
         }
     }
 
-    @ViewBuilder
-    private func greeting(at date: Date) -> some View {
-        if isFirstRun {
-            VStack(alignment: .leading, spacing: 5) {
-                LumaHeadline(light: "Welcome to", heavy: "lumalook", size: 30)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text("Shoot or edit your first clip")
-                    .font(.luma(size: 14))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .lineLimit(1)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                LumaWordmark(size: 18)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("lumalook")
-                    .accessibilityAddTraits(.isHeader)
-                LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(date), size: 34)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
+    private var welcome: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            LumaHeadline(light: "Welcome to", heavy: "lumalook", size: 30)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text("Shoot or edit your first clip")
+                .font(.luma(size: 14))
+                .foregroundStyle(LumaTheme.textSecondary)
+                .lineLimit(1)
         }
     }
 
@@ -1165,7 +1170,7 @@ private struct ViewfinderReel: View {
     static let dwell: Double = 4.2
     /// Where the brackets start below the safe area (under the greeting),
     /// and what the copy and strip need beneath them.
-    private static let bracketTop: CGFloat = 118
+    private static let bracketTop: CGFloat = 126
     private static let copyRoom: CGFloat = 312
 
     private var safeIndex: Int {
