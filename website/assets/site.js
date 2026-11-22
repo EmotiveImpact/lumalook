@@ -78,6 +78,59 @@
     seg.forEach(function (b) { b.addEventListener("click", function () { set(b.dataset.period); }); });
   }
 
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Hero timecode: runs at 24 frames a second while the frame is on screen
+  var tc = document.querySelector("[data-timecode]");
+  if (tc && !still && window.requestAnimationFrame) {
+    var t0 = performance.now(), visible = true, raf = 0, last = "";
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    var tick = function (now) {
+      var f = Math.floor((now - t0) / (1000 / 24));
+      var s = Math.floor(f / 24);
+      var text = pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60) + ":" + pad(f % 24);
+      if (text !== last) { tc.textContent = text; last = text; }
+      raf = visible ? requestAnimationFrame(tick) : 0;
+    };
+    raf = requestAnimationFrame(tick);
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        if (visible && !raf) raf = requestAnimationFrame(tick);
+      }).observe(tc.closest(".frame") || tc);
+    }
+  }
+
+  // Phones develop when they scroll into view
+  var reveal = document.querySelectorAll("[data-reveal]");
+  if (reveal.length) {
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.25 });
+      reveal.forEach(function (el) { io.observe(el); });
+    } else {
+      reveal.forEach(function (el) { el.classList.add("in"); });
+    }
+  }
+
+  // Look cards: touch and hold (or hold Space) to see the photo before the look
+  document.querySelectorAll("[data-compare]").forEach(function (card) {
+    var on = function () { card.classList.add("orig"); };
+    var off = function () { card.classList.remove("orig"); };
+    card.setAttribute("aria-describedby", "compare-hint");
+    card.addEventListener("pointerdown", function (e) { if (e.pointerType !== "mouse") on(); });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { card.addEventListener(ev, off); });
+    card.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    card.addEventListener("keydown", function (e) {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); on(); }
+    });
+    card.addEventListener("keyup", off);
+    card.addEventListener("blur", off);
+  });
+
   // Year in the footer
   document.querySelectorAll("[data-year]").forEach(function (el) { el.textContent = String(new Date().getFullYear()); });
 })();

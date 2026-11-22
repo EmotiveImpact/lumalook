@@ -18,6 +18,10 @@ website/
     fonts/        Inter, self-hosted (SIL Open Font Licence, OFL.txt)
     img/screens/  screenshots from the app's simulator preview (CI)
     img/photos/   the app's bundled Unsplash sample photos
+    img/hero/     the hero portrait, graded with the app's CP3513 look
+    img/looks/    sample photos graded with the app's real film LUTs,
+                  each beside its original for the hold-to-compare cards
+    img/faces/    small face crops for the statement line
 ```
 
 ## Run it locally
@@ -60,6 +64,11 @@ app's Info.plist (see `LumaLegal` in `Screens/MoreScreens.swift`) to
   and $3.99. Change `index.html` and `terms.html` together if they move.
 - Look and pack counts (123 looks, 11 packs) come from
   `LumaLook/Engine/LookPacks.swift`.
+- The graded photos in `img/hero` and `img/looks` were made by applying the
+  app's own `.cube` files (`LumaLook/Resources/FilmLUTs`) to the sample
+  photos, so each card shows exactly what that look does. If a look's LUT
+  changes, regrade its card. The hero's wide version extends the red wall
+  of the original portrait so it fills a landscape frame.
 - Screens come from the Preview workflow (`.github/workflows/preview.yml`),
   converted to WebP. Re-take them when the app's look changes.
 - The privacy policy describes what the app does today: on-device editing,
