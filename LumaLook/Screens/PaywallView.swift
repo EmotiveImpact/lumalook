@@ -387,7 +387,7 @@ private struct LockedLookPresenter: ViewModifier {
                             onUseFreeLook: { choseFreeLook = true })
                 // Fitted to the three choices; it can still be pulled up if
                 // a large text size needs the room.
-                .presentationDetents([.height(context == .export ? 448 : 424), .large])
+                .presentationDetents([.height(context == .export ? 400 : 376), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color.black)
         }
