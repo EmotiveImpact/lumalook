@@ -175,7 +175,15 @@ struct CameraLiveLookView: View {
             }
             .onChange(of: showHistogram, initial: true) { _, on in
                 camera.histogramOn = on
+                #if DEBUG
+                print("[LUMA] HIST pill \(on ? "on" : "off")")
+                #endif
             }
+            #if DEBUG
+            .onChange(of: camera.histogram == nil) { _, isNil in
+                print("[LUMA] HIST view has histogram=\(!isNil)")
+            }
+            #endif
             .task { await loadLibraryThumb() }
     }
 

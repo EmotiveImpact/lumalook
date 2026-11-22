@@ -762,10 +762,12 @@ struct HomeGradedPhoto: View {
             state.settings = settings
             return LookPipeline.shared.gradedStill(ci, state: state, maxDimension: size)
         }.value
-        if let image {
-            HomeGradeCache.images[key] = image
-            graded = image
-        }
+        guard let image else { return }
+        HomeGradeCache.images[key] = image
+        // A newer look may have been asked for while this one rendered (a
+        // quick tap in the reel's strip): only the latest may land, or a
+        // slow earlier grade would paint over it.
+        if !Task.isCancelled { graded = image }
     }
 }
 

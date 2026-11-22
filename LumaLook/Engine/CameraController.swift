@@ -29,6 +29,9 @@ final class CameraController: NSObject, ObservableObject {
     var histogramOn = true
     /// Frames since the last histogram sample (preview queue only).
     private var histogramTick = 0
+    #if DEBUG
+    private var histogramLogged = false
+    #endif
 
     /// Injected from AppModel so camera, preview and export share one grade.
     var lookState: LookState?
@@ -1366,6 +1369,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
             if histogramTick >= 8 {
                 histogramTick = 0
                 sampled = CameraHistogram.analyse(cg)
+                #if DEBUG
+                if !histogramLogged {
+                    histogramLogged = true
+                    print("[LUMA] HIST sample \(sampled == nil ? "nil" : "ok") frame=\(cg.width)x\(cg.height) bpc=\(cg.bitsPerComponent) alpha=\(cg.alphaInfo.rawValue) peak=\(sampled?.luma.firstIndex(of: 1) ?? -1)")
+                }
+                #endif
             }
         }
         DispatchQueue.main.async { [weak self] in
