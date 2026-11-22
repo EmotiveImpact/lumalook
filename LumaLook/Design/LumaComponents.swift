@@ -236,6 +236,78 @@ struct LumaMark: View {
     }
 }
 
+// MARK: - Tab top bar
+
+/// Where the shared top row sits on every tab, so switching tabs never moves
+/// it.
+enum LumaTabMetrics {
+    /// The row's top below the safe area at rest. Home's story bars use the
+    /// space above it; the other tabs leave it as air.
+    static let restTop: CGFloat = 21
+    /// Where Home's row rises to once it has become the top bar.
+    static let compactTop: CGFloat = 2
+    static let rowHeight: CGFloat = 40
+    static let sideInset: CGFloat = 16
+}
+
+/// The top row every tab shares (Home, Looks, Projects, You): the title on
+/// the left, Home's being the wordmark, and the tab's actions on the right as
+/// plain glyphs, all at one height and one inset.
+struct LumaTabHeader<Leading: View, Trailing: View>: View {
+    /// How far the row has tightened into a top bar on scroll (Home), 0 to 1.
+    var collapse: CGFloat = 0
+    private let leading: Leading
+    private let trailing: Trailing
+
+    init(collapse: CGFloat = 0,
+         @ViewBuilder leading: () -> Leading,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.collapse = collapse
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            leading
+                .scaleEffect(1 - 0.15 * collapse, anchor: .leading)
+            Spacer(minLength: 8)
+            trailing
+        }
+        .frame(height: LumaTabMetrics.rowHeight)
+        .padding(.horizontal, LumaTabMetrics.sideInset)
+    }
+}
+
+/// A tab's title in the shared top row.
+struct LumaTabTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.luma(size: 26, weight: .bold))
+            .kerning(-1)
+            .foregroundStyle(LumaTheme.textPrimary)
+            .lineLimit(1)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// One action in the shared top row: a plain glyph on a 40 pt target, grey
+/// at rest and white while it is on (search open, say). No circle behind it.
+struct LumaTabGlyph: View {
+    let systemName: String
+    var active: Bool = false
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(active ? LumaTheme.textPrimary : LumaTheme.textSecondary)
+            .frame(width: 40, height: 40)
+            .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Buttons
 
 /// The one main action on a screen: signal yellow, ink text.

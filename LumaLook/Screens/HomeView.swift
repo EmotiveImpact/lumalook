@@ -83,6 +83,7 @@ struct HomeView: View {
                     .coordinateSpace(name: HomeView.scrollSpace)
                     // The reel runs up under the status bar.
                     .ignoresSafeArea(.container, edges: .top)
+                    .modifier(HomeScrollTracker(scroll: scroll))
                     .task {
                         // Preview: scroll to Cut to the beat so a screenshot
                         // shows the collapsed top bar.
@@ -99,6 +100,9 @@ struct HomeView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onPreferenceChange(HomeScrollOffsetKey.self) { offset in
+            // iOS 17 only: from iOS 18 the scroll view reports its own offset
+            // (HomeScrollTracker), which also catches programmatic scrolls.
+            if #available(iOS 18.0, *) { return }
             scroll.follow(offset)
         }
         .onAppear { renderLookTiles() }
@@ -127,6 +131,9 @@ struct HomeView: View {
                          onTemplates: scrollToBeat)
                 .padding(.horizontal, 12)
                 .padding(.top, resume == nil ? 4 : 12)
+                // Gives back the room Cut to the beat's heading reaches up
+                // into (see beatSection), so the visible gap is unchanged.
+                .padding(.bottom, beatTemplates.isEmpty ? 0 : -Self.beatReach(safeTop: safeTop))
 
             beatSection(safeTop: safeTop)
             looksSection
@@ -162,21 +169,25 @@ struct HomeView: View {
         return TonightsLook(preset: picked.preset, photo: base.photo, line: picked.line)
     }
 
+    /// How far Cut to the beat's heading reaches up behind the top bar, so
+    /// that with its 30 pt gap the words land just clear of the bar's soft
+    /// edge. Kept under the Shoot row's height, which gives the room back.
+    private static func beatReach(safeTop: CGFloat) -> CGFloat {
+        safeTop + HomeTopBar.compactBottom - 14
+    }
+
     @ViewBuilder
     private func beatSection(safeTop: CGFloat) -> some View {
         let templates = beatTemplates
         if !templates.isEmpty {
-            // "Templates" scrolls here. The anchor reaches up behind the top
-            // bar, so the heading lands just below the bar, not under it.
-            let barRoom = safeTop + HomeTopBar.compactBottom - 16
-            Color.clear
-                .frame(height: barRoom)
-                .id(HomeView.beatAnchor)
-                .padding(.top, -barRoom)
-                .accessibilityHidden(true)
+            // "Templates" scrolls this heading's frame to the top. Its top
+            // padding reaches up behind the top bar by `beatReach` (the Shoot
+            // row gives that room back), so the words land just below the
+            // bar rather than under it.
             HomeSectionHeader(title: "Cut to the beat")
                 .padding(.horizontal, 16)
-                .padding(.top, 30)
+                .padding(.top, 30 + Self.beatReach(safeTop: safeTop))
+                .id(HomeView.beatAnchor)
             Spacer(minLength: 0).frame(height: 12)
             BeatTemplateRail(templates: templates) { startTemplate($0) }
         }
@@ -558,7 +569,30 @@ private final class HomeScrollProgress: ObservableObject {
     func follow(_ offset: CGFloat) {
         let raw = min(1, max(0, -offset / HomeTopBar.collapseDistance))
         let stepped = (raw * 40).rounded() / 40
-        if stepped != collapse { collapse = stepped }
+        guard stepped != collapse else { return }
+        #if DEBUG
+        if stepped == 1 || stepped == 0 { print("[LUMA] HOMEBAR collapse=\(stepped) offset=\(offset)") }
+        #endif
+        collapse = stepped
+    }
+}
+
+/// Feeds the scroll position to the top bar. From iOS 18 it comes straight
+/// from the scroll view; iOS 17 falls back to the page's frame preference
+/// (HomeScrollOffsetKey).
+private struct HomeScrollTracker: ViewModifier {
+    let scroll: HomeScrollProgress
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, scrolled in
+                scroll.follow(-scrolled)
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -577,34 +611,27 @@ private struct HomeTopBar: View {
 
     /// Scroll distance over which the row turns into the bar.
     static let collapseDistance: CGFloat = 56
-    /// The row's top below the safe area: at rest (under the reel's story
-    /// bars) and as the bar.
-    static let restTop: CGFloat = 21
-    static let compactTop: CGFloat = 2
-    static let rowHeight: CGFloat = 40
     /// The bar's bottom edge below the safe area once it has collapsed.
-    static let compactBottom: CGFloat = compactTop + rowHeight + 4
+    static let compactBottom: CGFloat = LumaTabMetrics.compactTop + LumaTabMetrics.rowHeight + 4
 
     var body: some View {
         let p = scroll.collapse
-        let top = safeTop + Self.restTop + (Self.compactTop - Self.restTop) * p
+        let rest = LumaTabMetrics.restTop, compact = LumaTabMetrics.compactTop
+        let top = safeTop + rest + (compact - rest) * p
         ZStack(alignment: .top) {
-            backing(height: top + Self.rowHeight + 4)
+            backing(height: top + LumaTabMetrics.rowHeight + 4)
                 .opacity(p)
                 .allowsHitTesting(p > 0.6)
-            HStack(spacing: 4) {
+            LumaTabHeader(collapse: p) {
                 LumaWordmark(size: 20)
-                    .scaleEffect(1 - 0.15 * p, anchor: .leading)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("lumalook")
                     .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
+            } trailing: {
                 searchButton
                 avatarButton
                     .scaleEffect(1 - 0.16 * p, anchor: .trailing)
             }
-            .frame(height: Self.rowHeight)
-            .padding(.horizontal, 16)
             .padding(.top, top)
         }
         .frame(maxWidth: .infinity, alignment: .top)
@@ -629,11 +656,7 @@ private struct HomeTopBar: View {
 
     private var searchButton: some View {
         Button(action: onSearch) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(LumaTheme.textSecondary)
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle())
+            LumaTabGlyph(systemName: "magnifyingglass")
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Search looks")
@@ -1390,7 +1413,7 @@ private struct ViewfinderReel: View {
             .frame(height: 3)
             .allowsHitTesting(false)
             HomeGreeting(isFirstRun: isFirstRun, scroll: scroll)
-                .padding(.top, HomeTopBar.rowHeight + 4)
+                .padding(.top, LumaTabMetrics.rowHeight + 4)
                 .allowsHitTesting(false)
         }
         .padding(.horizontal, 16)
