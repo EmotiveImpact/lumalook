@@ -412,6 +412,11 @@ final class AppModel: ObservableObject {
                 print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
             }
         }
+        // Still cell: load a photo as it is, without the auto grade, for
+        // screens that only need a picture to work on (the export lock).
+        if let path = env["LUMA_SEED_STILL"], FileManager.default.fileExists(atPath: path) {
+            selectedImage = CIImage(contentsOf: URL(fileURLWithPath: path))
+        }
         // Per-LUT strength round-trip: set 62%, wait debounce, read back.
         if env["LUMA_SEED_LUTSTRENGTH"] == "1", let lut = lutRepository.luts.first {
             selectedLUT = lut

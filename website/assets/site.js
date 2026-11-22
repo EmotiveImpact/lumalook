@@ -101,20 +101,24 @@
     }
   }
 
-  // Phones develop when they scroll into view
-  var reveal = document.querySelectorAll("[data-reveal]");
-  if (reveal.length) {
-    if ("IntersectionObserver" in window) {
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-        });
-      }, { threshold: 0.25 });
-      reveal.forEach(function (el) { io.observe(el); });
-    } else {
-      reveal.forEach(function (el) { el.classList.add("in"); });
-    }
-  }
+  // Phones develop once the centre phone is half on screen and its picture has
+  // loaded, so the change from black and white is seen rather than scrolled past.
+  // It plays again each time the phone comes back after leaving the screen.
+  document.querySelectorAll("[data-reveal]").forEach(function (stage) {
+    var phone = stage.querySelector(".develop") || stage;
+    var img = phone.querySelector("img");
+    var play = function () { stage.classList.add("in"); };
+    if (!("IntersectionObserver" in window)) { play(); return; }
+    new IntersectionObserver(function (entries) {
+      var e = entries[entries.length - 1];
+      if (e.intersectionRatio >= 0.5) {
+        if (!img || img.complete) play();
+        else { img.addEventListener("load", play, { once: true }); img.addEventListener("error", play, { once: true }); }
+      } else if (!e.isIntersecting) {
+        stage.classList.remove("in");
+      }
+    }, { threshold: [0, 0.5] }).observe(phone);
+  });
 
   // Look cards: touch and hold (or hold Space) to see the photo before the look
   document.querySelectorAll("[data-compare]").forEach(function (card) {

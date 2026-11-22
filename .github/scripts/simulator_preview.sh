@@ -135,7 +135,8 @@ shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
 # The export lock with its three ways on, one of them free.
-shot 16-locked-look 10 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_party.jpg" \
+# The photo loads without the auto grade, so the sheet never waits behind it.
+shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party.jpg" \
   "${P}SEED_LOCK=Night Drive"
 
 # Home again, last, so no first-boot system banner covers it: the reel held
@@ -161,7 +162,7 @@ kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
 
 # The app's own log lines for the picked Home and the camera.
-for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log"; do
+for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/16-locked-look.out.log"; do
   [ -f "$f" ] && { echo "== $(basename "$f")"; grep -a '\[LUMA\]' "$f" | tail -20; }
 done
 

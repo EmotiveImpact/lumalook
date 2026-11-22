@@ -217,8 +217,9 @@ struct BeforeAfterView: View {
                    let look = MockData.looks.first(where: { $0.name == name }) {
                     app.select(look: LibraryLook(builtIn: look))
                     Task {
-                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
                         lookLock = app.lockedLookInGrade(storeService)
+                        print("[LUMA] LOCK \(name) -> \(lookLock?.pack?.name ?? "no lock")")
                     }
                 }
                 #endif
