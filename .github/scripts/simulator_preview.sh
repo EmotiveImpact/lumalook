@@ -139,6 +139,12 @@ shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
 shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party.jpg" \
   "${P}SEED_LOCK=Night Drive"
 
+# Home again, last, so no first-boot system banner covers it: the reel held
+# on Neon Nights, the same woman as the editor shots (the website uses it).
+shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
+# Home scrolled to Cut to the beat: the top row has become the top bar.
+shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
+
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.
 xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/lumalook-preview.mp4" \
@@ -156,7 +162,7 @@ kill -INT "$RECORDER" 2>/dev/null
 wait "$RECORDER" 2>/dev/null || true
 
 # The app's own log lines for the picked Home and the camera.
-for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/16-locked-look.out.log"; do
+for f in "$OUT/logs/02c-home-picked.out.log" "$OUT/logs/02e-home-scrolled.out.log" "$OUT/logs/11-camera.out.log" "$OUT/logs/16-locked-look.out.log"; do
   [ -f "$f" ] && { echo "== $(basename "$f")"; grep -a '\[LUMA\]' "$f" | tail -20; }
 done
 

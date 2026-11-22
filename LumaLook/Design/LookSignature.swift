@@ -359,7 +359,7 @@ extension View {
             .padding(.vertical, 6)
             .background(.ultraThinMaterial, in: Capsule())
             .background(Color(hex: 0x0C0C0E).opacity(0.45), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 }
 

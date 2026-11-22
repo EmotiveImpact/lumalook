@@ -145,8 +145,13 @@ enum CaptionEngine {
             throw CaptionEngineError.notAuthorized
         }
 
+        // Set when the Captions panel told the user their audio stays on the
+        // phone (the on-device model has this language): the fallback must
+        // then stay on the phone too, or fail.
+        var promisedOnDevice = false
         if #available(iOS 26.0, *) {
             if let matched = await analyzerLocale(for: locale) {
+                promisedOnDevice = true
                 do {
                     let words = try await transcribeWithAnalyzer(url: url, locale: matched,
                                                                  totalDuration: totalDuration,
@@ -169,7 +174,8 @@ enum CaptionEngine {
         }
 
         onProgress?(.listening(nil))
-        let result = try await transcribeWithRecognizer(url: url, locale: locale)
+        let result = try await transcribeWithRecognizer(url: url, locale: locale,
+                                                        onDeviceOnly: promisedOnDevice)
         guard !result.words.isEmpty else { throw CaptionEngineError.noSpeech }
         let segments = group(result.words, maxWords: maxWords, maxDuration: maxDuration,
                              maxCharacters: maxCharacters)
@@ -178,9 +184,13 @@ enum CaptionEngine {
 
     // MARK: SFSpeechRecognizer
 
-    private static func transcribeWithRecognizer(url: URL, locale: Locale) async throws
+    private static func transcribeWithRecognizer(url: URL, locale: Locale,
+                                                 onDeviceOnly: Bool = false) async throws
         -> (words: [CaptionWord], onDevice: Bool) {
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw CaptionEngineError.recognizerUnavailable
+        }
+        if onDeviceOnly && !recognizer.supportsOnDeviceRecognition {
             throw CaptionEngineError.recognizerUnavailable
         }
 

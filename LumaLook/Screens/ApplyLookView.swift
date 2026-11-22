@@ -450,7 +450,7 @@ struct ApplyLookView: View {
                 .padding(.vertical, 11)
                 .background(LumaTheme.bar, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 76)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -510,7 +510,7 @@ struct ApplyLookView: View {
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(.black.opacity(0.45), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .contentShape(Circle())
             }
             .buttonStyle(.lumaPress)

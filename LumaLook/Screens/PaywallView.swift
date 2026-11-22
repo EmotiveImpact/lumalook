@@ -85,7 +85,7 @@ struct PaywallView: View {
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
                         .background(.ultraThinMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                        .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                 }
                 .buttonStyle(.lumaPress)
                 .accessibilityLabel("Close")
@@ -326,7 +326,7 @@ private struct PaywallPlanRow: View {
             .background(selected ? LumaTheme.signal.opacity(0.06) : LumaTheme.panel,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.hairline,
+                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.edge,
                               lineWidth: selected ? 1.5 : 1))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -582,8 +582,8 @@ struct LockedLookSheet: View {
         .disabled(storeService.purchaseInFlight)
     }
 
-    /// The free way out, set apart as an outline so it never competes with
-    /// the purchase, and naming the exact look it swaps in.
+    /// The free way out, on a quieter fill than the purchase buttons so it
+    /// never competes with them, and naming the exact look it swaps in.
     private func freeLookButton(_ look: LookPreset) -> some View {
         Button {
             LumaHaptics.shared.tap()
@@ -605,7 +605,7 @@ struct LockedLookSheet: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .background(LumaTheme.chip, in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)

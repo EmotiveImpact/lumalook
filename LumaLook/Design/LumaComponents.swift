@@ -21,8 +21,8 @@ extension ButtonStyle where Self == LumaPressStyle {
 
 // MARK: - Card depth
 
-/// Night Lab panels: one value step above the canvas plus a hairline border,
-/// the structure you can feel in a well-made software product. No drop
+/// Night Lab panels: one value step above the canvas and no border, so the
+/// fill alone carries the structure. No drop
 /// shadow on ink; shadows are kept for things that float over footage.
 struct LumaCardChrome: ViewModifier {
     var cornerRadius: CGFloat = 14
@@ -37,7 +37,7 @@ struct LumaCardChrome: ViewModifier {
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(LumaTheme.hairline, lineWidth: 1)
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1)
             )
     }
 }
@@ -47,19 +47,19 @@ extension View {
         modifier(LumaCardChrome(cornerRadius: cornerRadius, raised: raised, shadow: shadow))
     }
 
-    /// A hairline-bordered panel in any shape colour (default: panel).
+    /// A borderless panel in any shape colour (default: panel).
     func lumaPanel(_ fill: Color = LumaTheme.card, cornerRadius: CGFloat = 14) -> some View {
         background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
-    /// Glass pill over footage: dark translucent fill, blur, faint rim.
+    /// Glass pill over footage: dark translucent fill and blur.
     func lumaGlass(cornerRadius: CGFloat = 999) -> some View {
         background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .background(Color(hex: 0x0C0C0E, opacity: 0.45), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.09), lineWidth: 1))
+                .strokeBorder(LumaTheme.edge, lineWidth: 1))
             .environment(\.colorScheme, .dark)
     }
 }
@@ -236,6 +236,73 @@ struct LumaMark: View {
     }
 }
 
+// MARK: - Tab top bar
+
+/// Where the shared top row sits on every tab, so switching tabs never moves
+/// it.
+enum LumaTabMetrics {
+    /// The row's top below the safe area, on every tab.
+    static let top: CGFloat = 6
+    static let rowHeight: CGFloat = 40
+    static let sideInset: CGFloat = 16
+    /// The bar's bottom edge below the safe area: the row plus a little air.
+    /// Home's story bars start here at rest.
+    static let barBottom: CGFloat = top + rowHeight + 8
+}
+
+/// The top row every tab shares (Home, Looks, Projects, You): the title on
+/// the left, Home's being the wordmark, and the tab's actions on the right as
+/// plain glyphs, all at one height and one inset.
+struct LumaTabHeader<Leading: View, Trailing: View>: View {
+    private let leading: Leading
+    private let trailing: Trailing
+
+    init(@ViewBuilder leading: () -> Leading,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            leading
+            Spacer(minLength: 8)
+            trailing
+        }
+        .frame(height: LumaTabMetrics.rowHeight)
+        .padding(.horizontal, LumaTabMetrics.sideInset)
+    }
+}
+
+/// A tab's title in the shared top row.
+struct LumaTabTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.luma(size: 26, weight: .bold))
+            .kerning(-1)
+            .foregroundStyle(LumaTheme.textPrimary)
+            .lineLimit(1)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// One action in the shared top row: a plain glyph on a 40 pt target, grey
+/// at rest and white while it is on (search open, say). No circle behind it.
+struct LumaTabGlyph: View {
+    let systemName: String
+    var active: Bool = false
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(active ? LumaTheme.textPrimary : LumaTheme.textSecondary)
+            .frame(width: 40, height: 40)
+            .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Buttons
 
 /// The one main action on a screen: signal yellow, ink text.
@@ -325,14 +392,14 @@ struct Chip: View {
             .foregroundStyle(selected ? LumaTheme.onLight : LumaTheme.textSecondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(selected ? LumaTheme.textPrimary : Color.clear))
-            .overlay(Capsule().strokeBorder(selected ? Color.clear : LumaTheme.hairline, lineWidth: 1))
+            .background(Capsule().fill(selected ? LumaTheme.textPrimary : LumaTheme.chip))
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : LumaTheme.edge, lineWidth: 1))
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
-/// Segmented control in a hairline panel. The selected segment is one step
-/// lighter with a stronger rim, and slides between options.
+/// Segmented control on a raised panel. The selected segment is one step
+/// lighter and slides between options.
 struct SegmentPills: View {
     let options: [String]
     @Binding var selection: String
@@ -358,7 +425,7 @@ struct SegmentPills: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(LumaTheme.control)
                                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .strokeBorder(LumaTheme.border, lineWidth: 1))
+                                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
                                     .matchedGeometryEffect(id: "segment.pill", in: ns)
                             }
                         }
@@ -448,7 +515,7 @@ struct ToolTile: View {
             VStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(selected ? AnyShapeStyle(LumaTheme.accentSoft) : AnyShapeStyle(LumaTheme.card))
-                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .frame(height: 62)
                     .overlay(Image(systemName: icon)
                         .font(.luma(size: 21, weight: .medium))
@@ -572,8 +639,7 @@ struct LumaTabBar: View {
             app.tab = tab
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20, weight: .regular))
+                tabGlyph(tab)
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if tab == .profile && storeService.isPro {
@@ -596,6 +662,56 @@ struct LumaTabBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
+    }
+
+    /// Home wears our own house; the other tabs use SF Symbols.
+    @ViewBuilder
+    private func tabGlyph(_ tab: LumaTab) -> some View {
+        if tab == .home {
+            LumaHomeGlyph()
+        } else {
+            Image(systemName: tab.icon)
+                .font(.system(size: 20, weight: .regular))
+        }
+    }
+}
+
+/// The Home tab icon: a house drawn in Night Lab shapes, rounded walls with
+/// the logo mark's square as its window. Strokes match SF Symbols Regular at
+/// 20 pt and take the foreground colour, so it greys out off the tab like
+/// the symbols beside it.
+struct LumaHomeGlyph: View {
+    var size: CGFloat = 24
+
+    var body: some View {
+        let s = size / 24
+        ZStack {
+            HouseOutline()
+                .stroke(style: StrokeStyle(lineWidth: 1.7 * s, lineCap: .round, lineJoin: .round))
+            RoundedRectangle(cornerRadius: 1.3 * s, style: .continuous)
+                .frame(width: 5 * s, height: 5 * s)
+                .position(x: 12 * s, y: 14.9 * s)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    /// Drawn on a 24 x 24 grid and scaled to the frame.
+    private struct HouseOutline: Shape {
+        func path(in rect: CGRect) -> Path {
+            let s = min(rect.width, rect.height) / 24
+            func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: rect.minX + x * s, y: rect.minY + y * s)
+            }
+            var path = Path()
+            path.move(to: pt(3.8, 10.4))
+            path.addLine(to: pt(12, 3.6))
+            path.addLine(to: pt(20.2, 10.4))
+            path.addArc(tangent1End: pt(20.2, 21), tangent2End: pt(18, 21), radius: 2.2 * s)
+            path.addArc(tangent1End: pt(3.8, 21), tangent2End: pt(3.8, 10.4), radius: 2.2 * s)
+            path.closeSubpath()
+            return path
+        }
     }
 }
 

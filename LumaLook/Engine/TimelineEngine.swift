@@ -3667,8 +3667,11 @@ final class EditorState: ObservableObject {
                                                 lane: overlay.lane))
                 continue
             }
-            // Styled captions: their own fixed-width layout and word timings
-            // (a caption hidden from the picture adds no spec at all).
+            // A caption hidden from the picture adds no spec at all, styled or
+            // not (captions from before styles have none); the SRT still
+            // reads its text from the project.
+            if overlay.kind == "caption", overlay.captionHidden { continue }
+            // Styled captions: their own fixed-width layout and word timings.
             if overlay.text != nil, overlay.captionStyle != nil {
                 if let captionSpec = CaptionLayout.overlaySpec(for: overlay, start: start,
                                                                end: start + playable) {

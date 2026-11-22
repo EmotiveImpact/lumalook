@@ -333,7 +333,7 @@ struct CaptionsPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     private var progressTitle: String {
@@ -397,7 +397,7 @@ struct CaptionsPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     // MARK: Style, position, size
@@ -476,7 +476,7 @@ struct CaptionsPanel: View {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(Color.white.opacity(0.05))
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(LumaTheme.border, lineWidth: 1))
+                            .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 }
             }
             .contentShape(Rectangle())
@@ -522,7 +522,7 @@ struct CaptionsPanel: View {
                 .padding(.vertical, 10)
                 .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(LumaTheme.border, lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
             HStack(spacing: 8) {
                 timeNudger("Start", value: line.timelineOffset) { newStart in
                     editor.updateCaptionLine(id: line.id, text: line.text ?? "",
@@ -568,7 +568,7 @@ struct CaptionsPanel: View {
         .padding(10)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .strokeBorder(LumaTheme.border, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     private func timeNudger(_ label: String, value: Double,
@@ -718,7 +718,7 @@ struct CaptionsPanel: View {
         .background(emphasised ? LumaTheme.signal.opacity(0.1) : LumaTheme.surface,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(emphasised ? LumaTheme.signal.opacity(0.45) : LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(emphasised ? LumaTheme.signal.opacity(0.45) : LumaTheme.edge, lineWidth: 1))
         .contentShape(Rectangle())
     }
 
@@ -742,9 +742,18 @@ struct CaptionsPanel: View {
         let onProgress: CaptionProgressHandler = { progress in
             Task { @MainActor in job.progress = progress }
         }
+        // The editor object is shared across projects: remember which one
+        // was transcribed so a late result never lands in another project
+        // opened from the title menu meanwhile.
+        let projectID = editor.projectID
         Task { @MainActor in
             do {
                 let transcript = try await editor.transcribeCaptions(locale: locale, onProgress: onProgress)
+                guard editor.projectID == projectID else {
+                    job.progress = nil
+                    isCaptioning = false
+                    return
+                }
                 let added = editor.replaceCaptions(transcript.segments, style: style,
                                                    position: position, size: size, hidden: hidden)
                 job.lastRunOnDevice = transcript.onDevice
@@ -807,7 +816,7 @@ private struct CaptionStyleTile: View {
                     .frame(width: 58, height: 44)
                     .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(isOn ? LumaTheme.signal : LumaTheme.hairline,
+                        .strokeBorder(isOn ? LumaTheme.signal : LumaTheme.edge,
                                       lineWidth: isOn ? 1.5 : 1))
                 Text(style.label)
                     .font(.luma(size: 10.5, weight: .medium))
@@ -872,7 +881,7 @@ private struct CaptionSegmented: View {
         .padding(2)
         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
 
     private func segment(_ index: Int) -> some View {
@@ -892,7 +901,7 @@ private struct CaptionSegmented: View {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(LumaTheme.control)
                             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .strokeBorder(LumaTheme.border, lineWidth: 1))
+                                .strokeBorder(LumaTheme.edge, lineWidth: 1))
                     }
                 }
                 .contentShape(Rectangle())

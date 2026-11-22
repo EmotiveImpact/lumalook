@@ -84,6 +84,10 @@ final class AppModel: ObservableObject {
     /// exports with the SAME grade.
     @Published var batchItems: [PhotosPickerItem] = []
     @Published var batchStatus: String?
+    /// The batch item previewed in the grade room. Its working pixels may
+    /// carry a crop or mask, so batch export keeps them rather than
+    /// reloading the library original.
+    var batchPreviewItemID: String?
 
     /// Select clips hand-off (see `openSelectClips(_:templateID:)` in
     /// SelectClipsLibrary.swift): what the picker was opened for, and a template
@@ -96,10 +100,13 @@ final class AppModel: ObservableObject {
     func runBatchExport(spec: ExportSpec) async -> Int {
         let items = batchItems
         guard !items.isEmpty else { return 0 }
+        let previewID = batchPreviewItemID
         var succeeded = 0
         for (index, item) in items.enumerated() {
             batchStatus = "PROCESSING \(index + 1) OF \(items.count)"
-            if let video = try? await item.loadTransferable(type: PickedVideo.self) {
+            if index == 0, let previewID, item.itemIdentifier == previewID {
+                // Already loaded, with any photo edit applied.
+            } else if let video = try? await item.loadTransferable(type: PickedVideo.self) {
                 selectedVideoURL = video.url
             } else if let data = try? await item.loadTransferable(type: Data.self),
                       let image = CIImage(data: data, options: [.applyOrientationProperty: true]) {
@@ -111,6 +118,7 @@ final class AppModel: ObservableObject {
         }
         batchStatus = nil
         batchItems = []
+        batchPreviewItemID = nil
         return succeeded
     }
 

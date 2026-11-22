@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Night Lab: the Lumalook design system (V2, approved 21 Nov 2026).
 ///
-/// Neutral near-black chrome with hairline panels, one typeface (Inter, see
+/// Neutral near-black chrome with borderless panels, one typeface (Inter, see
 /// `LumaType.swift`) and a single signal yellow for the brand and the one main
 /// action on each screen. Everything else that carries colour is a LOOK: each
 /// look has a signature colour (`LookSignature`) that tints its chip, tile ring
@@ -15,12 +15,12 @@ enum LumaTheme {
 
     /// Ink: the canvas. #08090A
     static let ink = Color(hex: 0x08090A)
-    /// Panel: cards and sheets, one step above ink. #0E0F11
-    static let panel = Color(hex: 0x0E0F11)
-    /// Raised: controls sitting on a panel. #151619
-    static let raised = Color(hex: 0x151619)
-    /// Control: the selected segment of a segmented control. #1C1D21
-    static let control = Color(hex: 0x1C1D21)
+    /// Panel: cards and sheets, one step above ink. #121316
+    static let panel = Color(hex: 0x121316)
+    /// Raised: controls sitting on a panel. #18191D
+    static let raised = Color(hex: 0x18191D)
+    /// Control: the selected segment of a segmented control. #232429
+    static let control = Color(hex: 0x232429)
 
     static let background = ink
     /// Tab bar, docks and tool trays: solid ink with a hairline on top.
@@ -28,19 +28,25 @@ enum LumaTheme {
     /// Translucent fills so the same token works over ink and over footage.
     static let surface = Color.white.opacity(0.045)
     static let surfaceStrong = Color.white.opacity(0.085)
-    /// Borders and dividers: white at 7.5%.
+    /// Dividers between rows and along docks: white at 7.5%.
     static let hairline = Color.white.opacity(0.075)
-    /// The stronger line for selected segments and sheet edges: white at 13%.
+    /// The stronger divider and dashed "add" outlines: white at 13%.
     static let border = Color.white.opacity(0.13)
+    /// Outline around pills, chips, cards and panels: none. Shapes separate by
+    /// their fill, one step lighter than what they sit on (22 Nov 2026). Rings
+    /// that carry meaning keep their colour: the yellow picked ring, look
+    /// colours, signal and status. Set this back to `hairline` to bring the
+    /// grey outlines back everywhere at once.
+    static let edge = Color.clear
 
     // MARK: Elevation
-    // Panels one step lighter than the background, each with a hairline border.
-    /// Default card fill (reads as #0E0F11 on ink, still works over footage).
-    static let card = Color.white.opacity(0.03)
-    /// A card on a card (reads as #151619 on ink).
-    static let cardRaised = Color.white.opacity(0.058)
-    /// Unselected chip / pill fill.
-    static let chip = Color.white.opacity(0.055)
+    // Panels one step lighter than the background, with no border.
+    /// Default card fill (reads as #121316 on ink, still works over footage).
+    static let card = Color.white.opacity(0.042)
+    /// A card on a card (reads as #18191D on ink).
+    static let cardRaised = Color.white.opacity(0.068)
+    /// Unselected chip / pill fill (reads as #17181C on ink).
+    static let chip = Color.white.opacity(0.062)
     /// Shadows are reserved for things floating over footage.
     static let cardShadow = Color.black.opacity(0.4)
 

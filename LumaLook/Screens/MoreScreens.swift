@@ -198,7 +198,7 @@ struct PackStatePill: View {
                 .lineLimit(1)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                .background(Color.white.opacity(0.13), in: Capsule())
         }
     }
 }
@@ -684,7 +684,7 @@ struct BackArrow: View {
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
                     .frame(width: 40, height: 40, alignment: .leading)
             } else {
                 Image(systemName: "chevron.left")
@@ -1529,10 +1529,11 @@ struct ProjectLibraryView: View {
     var body: some View {
         ZStack {
             LumaTheme.background.ignoresSafeArea()
-            if app.store.projects.isEmpty {
-                emptyState
-            } else {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                header
+                if app.store.projects.isEmpty {
+                    emptyState
+                } else {
                     hero
                         .frame(height: 196)
                     drawer
@@ -1542,6 +1543,27 @@ struct ProjectLibraryView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: Top row
+
+    /// The shared top row, in the same spot as every tab's: the title, and +
+    /// for a new video. It stays put while the list scrolls under it.
+    private var header: some View {
+        LumaTabHeader {
+            LumaTabTitle(text: "Projects")
+        } trailing: {
+            Button {
+                app.openSelectClips(.edit)
+                LumaHaptics.shared.tap()
+            } label: {
+                LumaTabGlyph(systemName: "plus")
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("New video")
+        }
+        .padding(.top, LumaTabMetrics.top)
+        .padding(.bottom, 2)
     }
 
     // MARK: Empty state (Night Lab)
@@ -1556,17 +1578,13 @@ struct ProjectLibraryView: View {
                 .frame(height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
                 .padding(.horizontal, 10)
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Projects")
-                    .font(.luma(size: 13, weight: .medium))
-                    .foregroundStyle(LumaTheme.textMuted)
                 LumaHeadline(light: "No projects", heavy: "yet", size: 32)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .padding(.top, 6)
                 Text("Every edit saves here as you work.")
                     .font(.luma(size: 14))
                     .foregroundStyle(LumaTheme.textSecondary)
@@ -2282,9 +2300,20 @@ struct SettingsSubscriptionView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // The You tab sits on the page's ink like every other tab.
+            (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
             VStack(spacing: 0) {
-                header
+                if isRoot {
+                    LumaTabHeader {
+                        LumaTabTitle(text: "You")
+                    } trailing: {
+                        EmptyView()
+                    }
+                    .padding(.top, LumaTabMetrics.top)
+                    .padding(.bottom, 4)
+                } else {
+                    header
+                }
                 settingsList
             }
         }

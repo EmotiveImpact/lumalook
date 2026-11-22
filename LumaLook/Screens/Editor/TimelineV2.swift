@@ -440,7 +440,7 @@ struct TimelineAddRow: View {
             .padding(.horizontal, 9)
             .frame(height: 24)
             .background(LumaTheme.raised, in: Capsule())
-            .overlay(Capsule().strokeBorder(LumaTheme.hairline, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
             .fixedSize()
             .contentShape(HitSlop(horizontal: 3, vertical: 4))
         }
