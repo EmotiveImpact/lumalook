@@ -24,8 +24,9 @@ final class CameraController: NSObject, ObservableObject {
     /// The histogram pill's data, sampled from the graded preview about four
     /// times a second while `histogramOn`.
     @Published private(set) var histogram: CameraHistogram?
-    /// Set by the camera screen while its histogram pill shows.
-    var histogramOn = false
+    /// Whether the histogram pill shows. On by default, like the pill, so
+    /// sampling never waits on the screen to switch it on.
+    var histogramOn = true
     /// Frames since the last histogram sample (preview queue only).
     private var histogramTick = 0
 

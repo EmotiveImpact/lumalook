@@ -173,7 +173,9 @@ struct CameraLiveLookView: View {
             .onChange(of: camera.isConformingSlowMo) { _, conforming in
                 if conforming { flash("Slowing the clip down") }
             }
-            .task(id: showHistogram) { await runHistogramLoop() }
+            .onChange(of: showHistogram, initial: true) { _, on in
+                camera.histogramOn = on
+            }
             .task { await loadLibraryThumb() }
     }
 
@@ -355,12 +357,6 @@ struct CameraLiveLookView: View {
         }
     }
 
-    /// The controller samples a ~4 Hz histogram from a 64 px copy of the
-    /// graded preview on its own queue while the pill shows, so it never
-    /// costs the viewfinder a frame.
-    private func runHistogramLoop() async {
-        camera.histogramOn = showHistogram
-    }
 
     // MARK: - Top matte
     //
@@ -1861,18 +1857,20 @@ struct CameraLiveLookView: View {
     /// when Photos access is already granted; the camera never asks).
     private func loadLibraryThumb() async {
         guard lastShot == nil else { return }
+        #if DEBUG
+        // The simulator preview shows the seeded frame by the shutter (its
+        // library can be empty, and a library request there may never
+        // answer).
+        if let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
+           let image = UIImage(contentsOfFile: path) {
+            lastShot = LastShot(thumbnail: image, source: .library)
+            return
+        }
+        #endif
         if let image = await CameraLibraryThumb.latest(side: 160) {
             if lastShot == nil { lastShot = LastShot(thumbnail: image, source: .library) }
             return
         }
-        #if DEBUG
-        // The simulator's library can be empty: show the seeded frame.
-        if lastShot == nil,
-           let path = ProcessInfo.processInfo.environment["LUMA_SEED_CAMFRAME"],
-           let image = UIImage(contentsOfFile: path) {
-            lastShot = LastShot(thumbnail: image, source: .library)
-        }
-        #endif
     }
 
     // MARK: - Dial stops (cine practice: discrete, repeatable between takes)
