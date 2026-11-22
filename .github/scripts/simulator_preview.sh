@@ -149,6 +149,8 @@ shot 11g-camera-locked 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golde
 shot 11h-camera-swipe 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMSWIPE=1"
 shot 11i-camera-hint 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMHINT=1"
 shot 11j-camera-locked-land 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1"
+shot 11k-camera-format 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg" "${P}SEED_CAMFORMAT=1"
+shot 11l-camera-format-land 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_neon.jpg" "${P}SEED_CAMLAND=ccw" "${P}SEED_CAMMODE=portrait" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFORMAT=1"
 shot 12-filter-pack 10 "${P}ROUTE=filterPack" "${P}SEED_PACK=after-dark"
 # A film archive, now sold on its own as well as with Pro.
 shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"

@@ -434,6 +434,10 @@ struct CameraLiveLookView: View {
         if env["LUMA_SEED_CAMHINT"] == "1" {
             presentHint(for: nil)
         }
+        // The format card open.
+        if env["LUMA_SEED_CAMFORMAT"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { formatOpen = true }
+        }
         #endif
         // The first visit explains itself once (never in the preview's shots).
         if !hintSeen && !showsAllModesForPreview {
@@ -1012,6 +1016,16 @@ struct CameraLiveLookView: View {
     private func moveFan(to point: CGPoint) {
         guard var state = fan else { return }
         state.touch = point
+        // Near the screen's edge a bubble can land right under the hold.
+        // Nothing is picked until the finger has left where it went down, so
+        // a steady hold still ends in the AE/AF lock.
+        if !state.armed, hypot(point.x - state.origin.x, point.y - state.origin.y) >= 12 {
+            state.armed = true
+        }
+        guard state.armed else {
+            fan = state
+            return
+        }
         var best: Int?
         var bestDistance: CGFloat = 44
         for (index, position) in state.positions.enumerated() {
@@ -1878,7 +1892,37 @@ struct CameraLiveLookView: View {
     // A card under the format chip: resolution, frame rate and codec; the
     // photo modes swap those for the still format, size and the roll.
 
-    private var formatCard: some View {
+    private var formatCard: some View { formatGlass(formatRows) }
+
+    /// The card where its height is capped: sideways, the mode, a loaded roll
+    /// or a note can make it taller than the phone is wide. Past `maxHeight`
+    /// it scrolls instead of running off the edge.
+    private func cappedFormatCard(maxHeight: CGFloat) -> some View {
+        ViewThatFits(in: .vertical) {
+            formatGlass(formatRows)
+            formatGlass(ScrollView(.vertical) { formatRows })
+        }
+        .frame(maxHeight: maxHeight, alignment: .top)
+    }
+
+    private func formatGlass<Content: View>(_ content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22)
+        return content
+            .clipShape(shape)
+            .background {
+                ZStack {
+                    shape
+                        .fill(Color.black.opacity(0.4))
+                        .blur(radius: 20)
+                        .offset(y: 18)
+                    CamBackdrop().clipShape(shape).allowsHitTesting(false)
+                    shape.fill(Color(hex: 0x0E0F12).opacity(0.78))
+                }
+            }
+            .contentShape(shape)
+    }
+
+    private var formatRows: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Format")
                 .font(.luma(size: 13, weight: .bold))
@@ -1907,17 +1951,6 @@ struct CameraLiveLookView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(Color.black.opacity(0.4))
-                    .blur(radius: 20)
-                    .offset(y: 18)
-                CamBackdrop().clipShape(RoundedRectangle(cornerRadius: 22)).allowsHitTesting(false)
-                RoundedRectangle(cornerRadius: 22).fill(Color(hex: 0x0E0F12).opacity(0.78))
-            }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 22))
     }
 
     private var videoFormatRows: some View {
@@ -2232,8 +2265,8 @@ struct CameraLiveLookView: View {
         if formatOpen {
             let cardX = layout.islandLeading ? layout.islandInset + 50
                                              : layout.long - layout.islandInset - 372
-            formatCard
-                .frame(width: 322, alignment: .leading)
+            cappedFormatCard(maxHeight: max(layout.short - 64, 120))
+                .frame(width: 322, alignment: .topLeading)
                 .offset(x: cardX, y: 56)
                 .transition(.opacity)
         }
@@ -3089,6 +3122,8 @@ private struct FanState {
     let centre: CGPoint
     let positions: [CGPoint]
     var hot: Int?
+    /// The finger has moved off where it went down, so a bubble can be picked.
+    var armed = false
 
     /// Still where it pressed, on no tool: letting go here locks AE/AF.
     var resting: Bool {

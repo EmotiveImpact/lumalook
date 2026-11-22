@@ -363,6 +363,7 @@ final class CameraController: NSObject, ObservableObject {
                 DispatchQueue.main.async { self?.activeSpec = newSpec }
                 return
             }
+            let display = self.zoomFactor
             self.session.beginConfiguration()
             // Slo-mo keeps its own size and rate (only the codec follows);
             // the rest of the new spec applies once it ends.
@@ -370,6 +371,10 @@ final class CameraController: NSObject, ObservableObject {
                 self.publishDeliveredFormat(requested: newSpec, on: device)
             } else {
                 self.applyFormat(newSpec, on: device)
+                // A format change can reset the zoom; keep the lens you
+                // framed on, inside what the new format can reach.
+                self.applyDisplayZoom(display, on: device, ramped: false)
+                self.publishZoomRange(for: device)
             }
             self.session.commitConfiguration()
             self.refreshPhotoCapabilities(on: device)
@@ -481,6 +486,7 @@ final class CameraController: NSObject, ObservableObject {
             self.applyCurrentFormat(on: device)
             // A format change can reset the zoom; keep the lens you framed on.
             self.applyDisplayZoom(display, on: device, ramped: false)
+            self.publishZoomRange(for: device)
             self.session.commitConfiguration()
             self.refreshPhotoCapabilities(on: device)
         }
@@ -870,13 +876,19 @@ final class CameraController: NSObject, ObservableObject {
             device.videoZoomFactor = wideBaseline
             device.unlockForConfiguration()
         } catch {}
-        let baseline = wideBaseline
+        DispatchQueue.main.async { self.zoomFactor = 1 }
+        publishZoomRange(for: device)
+    }
+
+    /// sessionQueue only. The display zooms the device can reach on its
+    /// active format. A format change can move them (a high-frame-rate
+    /// format may zoom less far), so they are read again after each one.
+    private func publishZoomRange(for device: AVCaptureDevice) {
+        let baseline = max(wideBaseline, 0.01)
         let lowest = device.minAvailableVideoZoomFactor / baseline
         let highest = min(device.maxAvailableVideoZoomFactor, baseline * 10) / baseline
-        DispatchQueue.main.async {
-            self.zoomFactor = 1
-            self.zoomRange = lowest...max(highest, lowest)
-        }
+        let range = lowest...max(highest, lowest)
+        DispatchQueue.main.async { self.zoomRange = range }
     }
 
     /// Cycles 0.5x (if the ultra-wide exists) → 1x → 2x → 3x →, clamped.
