@@ -8,13 +8,18 @@ import CoreImage
 /// and regrades whoever is on screen; tapping the picture goes back to the
 /// reel.
 ///
-/// Top to bottom: the reel (story bars, the wordmark and greeting, search and avatar on it),
-/// the Resume pill straddling its bottom edge, Shoot and Edit a clip with the
+/// Top to bottom: the reel (story bars and the greeting on it), the Resume
+/// pill straddling its bottom edge, Shoot and Edit a clip with the
 /// quick starts, Cut to the beat templates, Looks (For you | Recents),
 /// Continue editing, and the pack spotlight.
 ///
-/// First run (no projects): "Welcome to lumalook" on the reel, no Resume pill
-/// and no Continue editing.
+/// The top row (the wordmark, search and the avatar) is pinned. At rest it
+/// sits on the reel above the greeting; as the page scrolls it rises, tightens
+/// and gains the page's ink behind it, becoming the top bar that everything
+/// scrolls under.
+///
+/// First run (no projects): "Shoot or edit your first clip" under the
+/// greeting, no Resume pill and no Continue editing.
 ///
 /// The avatar opens You; there is no crown or gear here any more. The Store
 /// is folded into Looks, so Home links to the pack page and the Looks tab,
@@ -29,11 +34,22 @@ struct HomeView: View {
     /// A look picked in the reel's strip (preset name). It pauses the reel
     /// and regrades the frame on screen; nil lets the reel cycle.
     @State private var reelPick: String? = nil
-    /// Scrolled off the top: the status bar backing turns solid.
-    @State private var scrolled = false
+    /// How far the top row has turned into the top bar (0 at rest, 1 once
+    /// the greeting has scrolled away). Held in @State, not @StateObject, so
+    /// HomeView doesn't observe it: only the bar and the greeting do, and
+    /// scrolling never redraws the rest of the page.
+    @State private var scroll = HomeScrollProgress()
 
     /// Scroll target for the "Templates" quick start.
     static let beatAnchor = "home.cutToTheBeat"
+    /// LUMA_SEED_HOMESCROLL (Debug): open Home scrolled down to Cut to the beat.
+    private static let seedScroll: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["LUMA_SEED_HOMESCROLL"] == "1"
+        #else
+        return false
+        #endif
+    }()
     private static let scrollSpace = "home.scroll"
 
     /// About three quarters of the screen, like the mock.
@@ -67,14 +83,23 @@ struct HomeView: View {
                     .coordinateSpace(name: HomeView.scrollSpace)
                     // The reel runs up under the status bar.
                     .ignoresSafeArea(.container, edges: .top)
+                    .task {
+                        // Preview: scroll to Cut to the beat so a screenshot
+                        // shows the collapsed top bar.
+                        guard HomeView.seedScroll else { return }
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        proxy.scrollTo(HomeView.beatAnchor, anchor: .top)
+                    }
                 }
-                HomeStatusScrim(solid: scrolled, height: safeTop)
+                HomeStatusScrim(height: safeTop)
+                HomeTopBar(scroll: scroll, safeTop: safeTop,
+                           onSearch: { openLooks() }, onAvatar: { openYou() })
+                    .accessibilitySortPriority(1)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onPreferenceChange(HomeScrollOffsetKey.self) { offset in
-            let past = offset < -12
-            if past != scrolled { scrolled = past }
+            scroll.follow(offset)
         }
         .onAppear { renderLookTiles() }
         .onChange(of: tileStamp) { _, _ in renderLookTiles() }
@@ -103,7 +128,7 @@ struct HomeView: View {
                 .padding(.horizontal, 12)
                 .padding(.top, resume == nil ? 4 : 12)
 
-            beatSection
+            beatSection(safeTop: safeTop)
             looksSection
             continueSection(Array(works.dropFirst().prefix(8)))
             packSection
@@ -122,8 +147,7 @@ struct HomeView: View {
                        height: height,
                        pillRoom: pillRoom,
                        reduceMotion: reduceMotion,
-                       onSearch: { openLooks() },
-                       onAvatar: { openYou() })
+                       scroll: scroll)
     }
 
     private var reelLooks: [TonightsLook] { TonightsLook.reel() }
@@ -139,13 +163,20 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private var beatSection: some View {
+    private func beatSection(safeTop: CGFloat) -> some View {
         let templates = beatTemplates
         if !templates.isEmpty {
+            // "Templates" scrolls here. The anchor reaches up behind the top
+            // bar, so the heading lands just below the bar, not under it.
+            let barRoom = safeTop + HomeTopBar.compactBottom - 16
+            Color.clear
+                .frame(height: barRoom)
+                .id(HomeView.beatAnchor)
+                .padding(.top, -barRoom)
+                .accessibilityHidden(true)
             HomeSectionHeader(title: "Cut to the beat")
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
-                .id(HomeView.beatAnchor)
             Spacer(minLength: 0).frame(height: 12)
             BeatTemplateRail(templates: templates) { startTemplate($0) }
         }
@@ -516,52 +547,84 @@ private enum HomeClock {
     }
 }
 
-/// The wordmark on its own top row with search and the avatar (which opens
-/// You), and the greeting under it. The first run keeps "Welcome to lumalook"
-/// beside search and the avatar instead.
-private struct HomeHeader: View {
-    let isFirstRun: Bool
+/// The scroll position, kept apart from HomeView so that only the views
+/// that change as you scroll (the top bar and the greeting) redraw.
+private final class HomeScrollProgress: ObservableObject {
+    /// 0 at rest, 1 once the page has scrolled `HomeTopBar.collapseDistance`.
+    @Published private(set) var collapse: CGFloat = 0
+
+    /// `offset` is the page's top edge in the scroll view (negative once
+    /// scrolled). Steps of 1/40 keep it smooth without publishing every point.
+    func follow(_ offset: CGFloat) {
+        let raw = min(1, max(0, -offset / HomeTopBar.collapseDistance))
+        let stepped = (raw * 40).rounded() / 40
+        if stepped != collapse { collapse = stepped }
+    }
+}
+
+/// The wordmark with search and the avatar (which opens You), pinned above
+/// the page. At rest it sits on the reel, with no backing, where the reel
+/// leaves room for it above the greeting. As the page scrolls it rises to just
+/// under the status bar, the wordmark and avatar tighten, and the page's ink
+/// fades in behind it, so it becomes the top bar and everything scrolls
+/// underneath, the way Spotify's does.
+private struct HomeTopBar: View {
+    @ObservedObject var scroll: HomeScrollProgress
+    /// The top safe area inset.
+    let safeTop: CGFloat
     let onSearch: () -> Void
     let onAvatar: () -> Void
 
+    /// Scroll distance over which the row turns into the bar.
+    static let collapseDistance: CGFloat = 56
+    /// The row's top below the safe area: at rest (under the reel's story
+    /// bars) and as the bar.
+    static let restTop: CGFloat = 21
+    static let compactTop: CGFloat = 2
+    static let rowHeight: CGFloat = 40
+    /// The bar's bottom edge below the safe area once it has collapsed.
+    static let compactBottom: CGFloat = compactTop + rowHeight + 4
+
     var body: some View {
-        if isFirstRun {
-            HStack(alignment: .bottom, spacing: 4) {
-                welcome
+        let p = scroll.collapse
+        let top = safeTop + Self.restTop + (Self.compactTop - Self.restTop) * p
+        ZStack(alignment: .top) {
+            backing(height: top + Self.rowHeight + 4)
+                .opacity(p)
+                .allowsHitTesting(p > 0.6)
+            HStack(spacing: 4) {
+                LumaWordmark(size: 20)
+                    .scaleEffect(1 - 0.15 * p, anchor: .leading)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("lumalook")
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
                 searchButton
                 avatarButton
+                    .scaleEffect(1 - 0.16 * p, anchor: .trailing)
             }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    LumaWordmark(size: 20)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("lumalook")
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 8)
-                    searchButton
-                    avatarButton
-                }
-                TimelineView(.everyMinute) { context in
-                    LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(context.date), size: 34)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
+            .frame(height: Self.rowHeight)
+            .padding(.horizontal, 16)
+            .padding(.top, top)
         }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(edges: .top)
     }
 
-    private var welcome: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            LumaHeadline(light: "Welcome to", heavy: "lumalook", size: 30)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-            Text("Shoot or edit your first clip")
-                .font(.luma(size: 14))
-                .foregroundStyle(LumaTheme.textSecondary)
-                .lineLimit(1)
+    /// The page's ink from the top of the screen to the bar's bottom, then a
+    /// short fade, so what scrolls under it dissolves rather than meeting a
+    /// line.
+    private func backing(height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            LumaTheme.background
+                .frame(height: height)
+            LinearGradient(colors: [LumaTheme.background, LumaTheme.background.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 14)
+                .allowsHitTesting(false)
         }
+        .contentShape(Rectangle())
     }
 
     private var searchButton: some View {
@@ -590,27 +653,45 @@ private struct HomeHeader: View {
     }
 }
 
+/// "Good evening" on the reel, under the pinned top row. It fades as it
+/// scrolls up towards the bar, so it never shows through the bar's backing.
+/// The first run adds a line on what to do first.
+private struct HomeGreeting: View {
+    let isFirstRun: Bool
+    @ObservedObject var scroll: HomeScrollProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            TimelineView(.everyMinute) { context in
+                LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(context.date), size: 34)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            if isFirstRun {
+                Text("Shoot or edit your first clip")
+                    .font(.luma(size: 14))
+                    .foregroundStyle(LumaTheme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .opacity(max(0, 1 - scroll.collapse * 1.4))
+    }
+}
+
 /// The reel runs under the status bar. At the top a soft shade keeps the
-/// clock legible on the photo; once the page scrolls, the backing turns solid
-/// like a navigation bar, so text never slides under the clock.
+/// clock legible on the photo. Once the page scrolls, the top bar's backing
+/// covers the status bar too (see HomeTopBar).
 private struct HomeStatusScrim: View {
-    let solid: Bool
     /// The top safe area inset.
     let height: CGFloat
 
     var body: some View {
-        ZStack(alignment: .top) {
-            LinearGradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0)],
-                           startPoint: .top, endPoint: .bottom)
-                .frame(height: height + 26)
-            LumaTheme.background
-                .frame(height: height)
-                .opacity(solid ? 1 : 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.easeOut(duration: 0.18), value: solid)
-        .ignoresSafeArea(edges: .top)
-        .allowsHitTesting(false)
+        LinearGradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0)],
+                       startPoint: .top, endPoint: .bottom)
+            .frame(height: height + 26)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
     }
 }
 
@@ -1162,15 +1243,16 @@ private struct ViewfinderReel: View {
     /// Room at the bottom for the Resume pill that rises into the reel.
     let pillRoom: CGFloat
     let reduceMotion: Bool
-    let onSearch: () -> Void
-    let onAvatar: () -> Void
+    /// Fades the greeting as it scrolls up under the pinned top bar.
+    let scroll: HomeScrollProgress
 
     @State private var started = Date()
 
     static let dwell: Double = 4.2
-    /// Where the brackets start below the safe area (under the greeting),
-    /// and what the copy and strip need beneath them.
-    private static let bracketTop: CGFloat = 126
+    /// Where the brackets start below the safe area (under the greeting, and
+    /// on the first run its extra line), and what the copy and strip need
+    /// beneath them.
+    private var bracketTop: CGFloat { isFirstRun ? 146 : 126 }
     private static let copyRoom: CGFloat = 312
 
     private var safeIndex: Int {
@@ -1284,12 +1366,12 @@ private struct ViewfinderReel: View {
 
     private var brackets: some View {
         GeometryReader { geo in
-            let boxHeight = max(90, height - safeTop - Self.bracketTop - Self.copyRoom)
+            let boxHeight = max(90, height - safeTop - bracketTop - Self.copyRoom)
             ViewfinderBrackets()
                 .stroke(Color.white.opacity(0.88),
                         style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 .frame(width: geo.size.width * 0.6, height: boxHeight)
-                .position(x: geo.size.width / 2, y: safeTop + Self.bracketTop + boxHeight / 2)
+                .position(x: geo.size.width / 2, y: safeTop + bracketTop + boxHeight / 2)
         }
         .frame(height: height)
         .allowsHitTesting(false)
@@ -1298,6 +1380,8 @@ private struct ViewfinderReel: View {
 
     // MARK: Chrome
 
+    /// The story bars, then room for the pinned top row (HomeView draws it
+    /// above the page), then the greeting.
     private var top: some View {
         VStack(alignment: .leading, spacing: 12) {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
@@ -1305,7 +1389,9 @@ private struct ViewfinderReel: View {
             }
             .frame(height: 3)
             .allowsHitTesting(false)
-            HomeHeader(isFirstRun: isFirstRun, onSearch: onSearch, onAvatar: onAvatar)
+            HomeGreeting(isFirstRun: isFirstRun, scroll: scroll)
+                .padding(.top, HomeTopBar.rowHeight + 4)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, 16)
         .padding(.top, safeTop + 6)
