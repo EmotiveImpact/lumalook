@@ -572,8 +572,7 @@ struct LumaTabBar: View {
             app.tab = tab
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20, weight: .regular))
+                tabGlyph(tab)
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if tab == .profile && storeService.isPro {
@@ -596,6 +595,56 @@ struct LumaTabBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
+    }
+
+    /// Home wears our own house; the other tabs use SF Symbols.
+    @ViewBuilder
+    private func tabGlyph(_ tab: LumaTab) -> some View {
+        if tab == .home {
+            LumaHomeGlyph()
+        } else {
+            Image(systemName: tab.icon)
+                .font(.system(size: 20, weight: .regular))
+        }
+    }
+}
+
+/// The Home tab icon: a house drawn in Night Lab shapes, rounded walls with
+/// the logo mark's square as its window. Strokes match SF Symbols Regular at
+/// 20 pt and take the foreground colour, so it greys out off the tab like
+/// the symbols beside it.
+struct LumaHomeGlyph: View {
+    var size: CGFloat = 24
+
+    var body: some View {
+        let s = size / 24
+        ZStack {
+            HouseOutline()
+                .stroke(style: StrokeStyle(lineWidth: 1.7 * s, lineCap: .round, lineJoin: .round))
+            RoundedRectangle(cornerRadius: 1.3 * s, style: .continuous)
+                .frame(width: 5 * s, height: 5 * s)
+                .position(x: 12 * s, y: 14.9 * s)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    /// Drawn on a 24 x 24 grid and scaled to the frame.
+    private struct HouseOutline: Shape {
+        func path(in rect: CGRect) -> Path {
+            let s = min(rect.width, rect.height) / 24
+            func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: rect.minX + x * s, y: rect.minY + y * s)
+            }
+            var path = Path()
+            path.move(to: pt(3.8, 10.4))
+            path.addLine(to: pt(12, 3.6))
+            path.addLine(to: pt(20.2, 10.4))
+            path.addArc(tangent1End: pt(20.2, 21), tangent2End: pt(18, 21), radius: 2.2 * s)
+            path.addArc(tangent1End: pt(3.8, 21), tangent2End: pt(3.8, 10.4), radius: 2.2 * s)
+            path.closeSubpath()
+            return path
+        }
     }
 }
 

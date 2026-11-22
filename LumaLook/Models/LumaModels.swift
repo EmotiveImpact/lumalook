@@ -418,6 +418,8 @@ enum LumaTab: String, CaseIterable {
         }
     }
 
+    /// SF Symbol for the tab. The tab bar draws Home with `LumaHomeGlyph`
+    /// instead; "house" stays as the fallback anywhere else.
     var icon: String {
         switch self {
         case .home: return "house"
