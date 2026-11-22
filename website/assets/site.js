@@ -22,6 +22,7 @@
       if (label) label.textContent = "Download on the App Store";
       else if (a.textContent.trim() === "Get the app") a.textContent = "Download";
     });
+    document.querySelectorAll("[data-soon]").forEach(function (el) { el.hidden = true; });
   }
 
   // Support address
