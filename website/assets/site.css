@@ -499,3 +499,32 @@ h2.lh { font-size: var(--step-h2); }
 .skin-photo .scope span { font-size: 12px; line-height: 1.45; color: var(--tx2); }
 .skin-photo .scope b { display: block; color: var(--tx); font-weight: 600; font-size: 12.5px; margin-bottom: 2px; }
 @media (max-width: 480px) { .skin-photo .scope span { display: none; } .skin-photo .scope { width: 132px; padding: 8px; } }
+
+/* ---------- Lifetime fine print and waitlist ---------- */
+.plan-fine { margin: 12px 0 0; color: var(--tx3); font-size: 12.5px; text-align: center; }
+.waitlist { max-width: 460px; margin: 56px auto 0; padding: 26px 24px 22px; border-radius: 20px; background: rgba(14, 15, 17, .78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); text-align: left; }
+.waitlist[hidden] { display: none; }
+.wl-title { margin: 0; font-size: 17px; font-weight: 640; letter-spacing: -.025em; }
+.wl-sub { margin: 6px 0 0; color: var(--tx2); font-size: 14px; }
+.wl-row { display: flex; gap: 8px; margin-top: 18px; }
+.wl-row input[type=email] { flex: 1; min-width: 0; height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid transparent; background: var(--control); color: var(--tx); font: 500 15px/1 var(--font); letter-spacing: -.01em; }
+.wl-row input[type=email]::placeholder { color: var(--tx3); }
+.wl-row input[type=email]:focus { outline: none; border-color: rgba(255, 197, 61, .6); box-shadow: 0 0 0 3px rgba(255, 197, 61, .16); }
+.wl-row .btn { flex: none; }
+.wl-row .btn:disabled { opacity: .6; cursor: progress; }
+.hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; }
+.wl-msg { margin: 10px 0 0; min-height: 20px; font-size: 13.5px; color: var(--tx2); }
+.wl-msg[data-kind="ok"] { color: var(--signal); }
+.wl-msg[data-kind="error"] { color: #ff8a80; }
+.wl-legal { margin: 4px 0 0; font-size: 12px; color: var(--tx3); }
+.wl-legal a { color: var(--tx2); }
+@media (max-width: 480px) { .waitlist { padding: 22px 18px 18px; } }
+
+/* thanks page */
+.thanks { min-height: calc(100svh - 260px); display: grid; place-items: center; text-align: center; padding-block: 120px 100px; }
+.thanks h1 { font-size: var(--step-hero); margin: 0; }
+.thanks p { color: var(--tx2); font-size: 17px; max-width: 52ch; margin: 18px auto 0; }
+.thanks ol { text-align: left; max-width: 480px; margin: 34px auto 0; padding: 22px 22px 22px 44px; border-radius: 18px; background: var(--surface); color: var(--tx2); font-size: 15px; display: grid; gap: 10px; }
+.thanks ol b { color: var(--tx); font-weight: 600; }
+.thanks .btn { margin-top: 30px; }
+.thanks .kicker { justify-content: center; color: var(--signal); }
