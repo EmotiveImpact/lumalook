@@ -29,16 +29,16 @@ struct TemplateLibraryView: View {
                     } label: {
                         HStack(spacing: 14) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(LumaTheme.surfaceStrong)
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(hex: 0x232429))
                                     .frame(width: 54, height: 54)
                                 Image(systemName: t.icon)
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(LumaTheme.signal)
+                                    .font(.system(size: 22, weight: .regular))
+                                    .foregroundStyle(Color.white.opacity(0.88))
                             }
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(t.name)
-                                    .font(.luma(size: 16, weight: .bold))
+                                    .font(.luma(size: 15, weight: .semibold))
                                     .foregroundStyle(.white)
                                 Text(t.blurb)
                                     .font(.luma(size: 12))
@@ -52,7 +52,7 @@ struct TemplateLibraryView: View {
                                 .foregroundStyle(LumaTheme.textMuted)
                         }
                         .padding(12)
-                        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .buttonStyle(.lumaPress)
                     .disabled(editor.clips.isEmpty)

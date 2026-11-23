@@ -2,23 +2,29 @@ import SwiftUI
 import AVKit
 
 // =============================================================================
-// C2 — PHOTO EDIT (the compare and confirm screen), Night Lab layout.
+// C2 — BEFORE AND AFTER (the compare and confirm screen), calm layout
+// (mock v2, 06-editor, "Before and after").
 //
-// Original against Edited down the middle, a strip of look codes under it,
-// three slim sliders, and a bottom bar of tools: Looks, Adjust, Crop, Mask.
-// Save chains straight into the export sheet with the grade applied. The grade
-// room's Compare tool and its Apply button both land here (LUMA_ROUTE=
+// Original against Graded down the middle with a straight white wipe, Split
+// wipe / Side by side / Flip as text tabs under the picture, then the tools
+// (Looks, Adjust, Crop, Mask) as quiet tabs over their panel, and a bottom row
+// with the look in its own colour and "Apply and export", the one main action,
+// which chains straight into the export sheet with the grade applied. The
+// grade room's Compare tool and its Apply button both land here (LUMA_ROUTE=
 // beforeAfter).
 //
 // FEATURE INVENTORY — nothing is dropped.
-//   ✓ Split view: draggable vertical divider, Original left, Edited right
-//   ✓ Original | Edited switch in the top bar (latches the original)
+//   ✓ Split wipe: draggable vertical divider, Original left, Graded right
+//   ✓ Flip: the graded picture whole; "Show original" latches the original
+//     (the old Original | Edited switch), hold flips it while held
 //   ✓ Hold to flip: press and hold the picture to see the original
 //   ✓ Side by side: two panes off ONE reference frame, stacked or beside each
-//     other according to the source aspect (corner button on the picture)
+//     other according to the source aspect
 //   ✓ Look codes strip: every chip is the real grade of the user's frame,
-//     the applied look wears the picked ring; All opens the full browser
-//   ✓ Strength stays live inside compare (slider, plus the ruler in Looks)
+//     each code in its look's colour, the applied look wears the picked ring;
+//     All opens the full browser
+//   ✓ Strength stays live inside compare (the ruler or the dial in Looks, as
+//     the Sliders setting says, and the slim slider in Adjust)
 //   ✓ Exposure and warmth, and the colour panels (curves, wheels, HSL, split
 //     tone) from ColorGradingViews
 //   ✓ Crop (centre crops at fixed ratios) and Mask (blur, mosaic or fill over
@@ -40,23 +46,37 @@ struct BeforeAfterView: View {
     @StateObject private var thumbs = LookThumbs()
 
     enum CompareMode: String, CaseIterable, Identifiable {
-        case split, side
+        case split, side, flip
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .split: return "Split wipe"
+            case .side:  return "Side by side"
+            case .flip:  return "Flip"
+            }
+        }
     }
 
     private static var seededMode: CompareMode {
-        ProcessInfo.processInfo.environment["LUMA_SEED_COMPARE"] == "side" ? .side : .split
+        CompareMode(rawValue: ProcessInfo.processInfo.environment["LUMA_SEED_COMPARE"] ?? "") ?? .split
+    }
+
+    /// LUMA_SEED_PHOTOTOOL still picks the opening tool; otherwise Looks, so
+    /// the screen opens on the strength slider like the mock.
+    private static var seededTool: PhotoTool {
+        PhotoTool(rawValue: ProcessInfo.processInfo.environment["LUMA_SEED_PHOTOTOOL"] ?? "") ?? .looks
     }
 
     @State private var mode: CompareMode = BeforeAfterView.seededMode
     @State private var splitFraction: CGFloat = 0.5
-    /// The Original segment: the untouched picture until Edited is tapped.
+    /// Flip's latch: the untouched picture until it is tapped again.
     @State private var showOriginal = false
     @State private var holdingOriginal = false
     @State private var stashedIntensity: Double?
 
     // Tools
-    @State private var tool: PhotoTool = PhotoTool.seeded
+    @State private var tool: PhotoTool = BeforeAfterView.seededTool
     @State private var showLookBrowser = false
     @State private var proPanel: PhotoProPanel?
     @State private var cropRatio: PhotoCropRatio = .original
@@ -84,7 +104,9 @@ struct BeforeAfterView: View {
     /// Set when the grade uses a premium look this user has not unlocked.
     @State private var lookLock: LookLock?
 
-    private static let panelHeight: CGFloat = 252
+    /// Fixed, so the picture does not jump between tools. Fits the tallest
+    /// panel (Looks with the dial, Adjust, Mask).
+    private static let panelHeight: CGFloat = 204
 
     /// Same detents as the grade room's browser: opens at medium so the
     /// picture stays live above it.
@@ -186,10 +208,16 @@ struct BeforeAfterView: View {
                     transport
                         .padding(.top, 10)
                 }
+                compareTabs
+                    .padding(.top, 14)
+                compareNote
+                    .padding(.top, 6)
+                toolBar
+                    .padding(.top, 12)
                 toolPanel
                     .frame(height: Self.panelHeight, alignment: .top)
-                    .padding(.top, 14)
-                toolBar
+                    .padding(.top, 12)
+                bottomRow
             }
         }
         .navigationBarBackButtonHidden()
@@ -300,9 +328,7 @@ struct BeforeAfterView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
-                .background(LumaTheme.bar, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
+                .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 76)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -319,6 +345,8 @@ struct BeforeAfterView: View {
     /// a stale wipe or a stashed strength behind.
     private func applyMode(_ new: CompareMode) {
         releaseHold()
+        // The latch belongs to Flip; the other modes always start graded.
+        if new != .flip, showOriginal { showOriginal = false }
         syncVideoSplit()
     }
 
@@ -380,75 +408,134 @@ struct BeforeAfterView: View {
 
     // MARK: - Top bar
 
+    /// Back on a glass circle. The compare modes sit under the picture and
+    /// the main action in the bottom row, so nothing else lives up here.
     private var topBar: some View {
-        ZStack {
-            HStack(spacing: 10) {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(LumaTheme.textPrimary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Back to looks")
-                Spacer(minLength: 0)
-                saveButton
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .frame(width: 40, height: 40)
+                    .background(Color.white.opacity(0.08), in: Circle())
+                    .contentShape(Circle())
             }
-            compareSwitch
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Back to looks")
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 14)
         .frame(height: 48)
     }
 
-    private var compareSwitch: some View {
-        HStack(spacing: 2) {
-            compareSegment("Original", on: showOriginal) { showOriginal = true }
-            compareSegment("Edited", on: !showOriginal) { showOriginal = false }
+    // MARK: - Compare modes
+
+    /// Split wipe, Side by side and Flip as text tabs: the picked one white
+    /// with a short white rule under it, the others grey.
+    private var compareTabs: some View {
+        HStack(spacing: 22) {
+            ForEach(CompareMode.allCases) { item in
+                compareTab(item)
+            }
         }
-        .padding(2)
-        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .frame(maxWidth: .infinity)
     }
 
-    private func compareSegment(_ title: String, on: Bool,
-                                action: @escaping () -> Void) -> some View {
-        Button {
+    private func compareTab(_ item: CompareMode) -> some View {
+        let on = mode == item
+        return Button {
             guard !on else { return }
             LumaHaptics.shared.tap()
-            withAnimation(.easeOut(duration: 0.15)) { action() }
+            withAnimation(.snappy(duration: 0.22)) { mode = item }
         } label: {
-            Text(title)
-                .font(.luma(size: 13, weight: on ? .semibold : .medium))
-                .foregroundStyle(on ? LumaTheme.textPrimary : LumaTheme.textMuted)
-                .padding(.horizontal, 12)
-                .frame(height: 28)
-                .background(on ? LumaTheme.control : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(on ? Color.white.opacity(0.12) : Color.clear, lineWidth: 1))
+            Text(item.title)
+                .font(.luma(size: 14.5, weight: .semibold))
+                .foregroundStyle(on ? Color.white : Color.white.opacity(0.42))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.bottom, 8)
+                .overlay(alignment: .bottom) {
+                    if on {
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(height: 2)
+                    }
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// The one filled button on the screen.
-    private var saveButton: some View {
-        Button { save() } label: {
-            Text(isVideo ? "Export" : "Save")
-                .font(.luma(size: 14, weight: .semibold))
-                .foregroundStyle(LumaTheme.onLight)
-                .padding(.horizontal, 14)
-                .frame(height: 32)
-                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    /// One quiet line on how to use the mode; Flip carries its latch.
+    @ViewBuilder
+    private var compareNote: some View {
+        switch mode {
+        case .split:
+            noteText("Drag the line across the frame, or hold to flip.")
+        case .side:
+            noteText("The same frame, before and after.")
+        case .flip:
+            HStack(spacing: 10) {
+                noteText("Hold the picture to flip it.")
+                Button {
+                    LumaHaptics.shared.tap()
+                    withAnimation(.easeOut(duration: 0.15)) { showOriginal.toggle() }
+                } label: {
+                    Text(showOriginal ? "Show graded" : "Show original")
+                        .font(.luma(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(Color.white.opacity(0.09), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityAddTraits(showOriginal ? .isSelected : [])
+            }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.lumaPress)
-        .disabled(isApplyingEdit)
-        .opacity(isApplyingEdit ? 0.5 : 1)
-        .accessibilityLabel(isVideo ? "Export with this look" : "Save with this look")
+    }
+
+    private func noteText(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.42))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(minHeight: 24)
+    }
+
+    // MARK: - Bottom row
+
+    /// The look in its own colour on the left, and "Apply and export", the
+    /// one main action, on the right.
+    private var bottomRow: some View {
+        HStack(spacing: 10) {
+            Group {
+                if app.settings.intensity.rounded() == 0 {
+                    Text("Original")
+                        .font(.luma(size: 13, weight: .medium))
+                        .foregroundStyle(LumaTheme.textMuted)
+                } else {
+                    LookNameText(lookName, colour: lookColour, size: 13)
+                }
+            }
+            .lineLimit(1)
+            .allowsHitTesting(false)
+            Spacer(minLength: 8)
+            saveButton
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 50)
+    }
+
+    /// The one main action on the screen. Follows the Main buttons setting.
+    private var saveButton: some View {
+        LumaMainPill(title: "Apply and export", height: 36) { save() }
+            .disabled(isApplyingEdit)
+            .opacity(isApplyingEdit ? 0.5 : 1)
+            .accessibilityLabel(isVideo ? "Export with this look" : "Save with this look")
     }
 
     // MARK: - Stage
@@ -459,43 +546,25 @@ struct BeforeAfterView: View {
             if mode == .side {
                 sideStage
             } else {
+                // Split wipe draws the divider; Flip shows the graded picture
+                // whole (or the original while latched or held).
                 PhotoSplitStage(aspect: stageAspect,
                                 still: stageStill,
                                 split: $splitFraction,
                                 originalOnly: showOriginal || (holdingOriginal && !isVideo),
-                                fullFrame: tool == .crop || tool == .mask,
+                                fullFrame: mode == .flip || tool == .crop || tool == .mask,
                                 mask: tool == .mask ? maskDraft : nil,
                                 maskScale: maskScale,
-                                code: LookCode.short(lookName),
-                                signature: lookColour,
+                                code: "Graded",
+                                signature: LookNameColour.forText(lookColour),
                                 onHold: { pressing in setHold(pressing) },
                                 onMaskMove: { point in maskDraft?.center = point })
-                    .overlay(alignment: .bottomTrailing) { sideToggle }
                     .overlay(alignment: .bottomLeading) { sampleHint }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
         .animation(.easeInOut(duration: 0.25), value: stageAspect)
-    }
-
-    /// Side by side lives on the picture's corner, out of the way.
-    private var sideToggle: some View {
-        Button {
-            LumaHaptics.shared.tap()
-            withAnimation(.snappy(duration: 0.22)) { mode = mode == .side ? .split : .side }
-        } label: {
-            Image(systemName: mode == .side ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(.black.opacity(0.5), in: Circle())
-                .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.lumaPress)
-        .padding(10)
-        .accessibilityLabel(mode == .side ? "Back to the split view" : "Side by side")
     }
 
     @ViewBuilder
@@ -506,7 +575,7 @@ struct BeforeAfterView: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .lumaGlassPill()
+                .modifier(StageGlassLabel())
                 .padding(10)
                 .allowsHitTesting(false)
         }
@@ -533,7 +602,6 @@ struct BeforeAfterView: View {
                 .aspectRatio(sourceAspect * 2, contentMode: .fit)
             }
         }
-        .overlay(alignment: .bottomTrailing) { sideToggle }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -541,16 +609,15 @@ struct BeforeAfterView: View {
         pane(originalPane) {
             Text("Original")
                 .font(.luma(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.white.opacity(0.92))
         }
     }
 
     private var gradedPaneView: some View {
         pane(gradedPane) {
             HStack(spacing: 6) {
-                Text(LookCode.short(lookName))
-                    .font(.luma(size: 12, weight: .semibold))
-                    .foregroundStyle(lookColour)
+                LookNameText(LookCode.short(lookName), colour: lookColour, size: 12,
+                             alwaysDot: true, quietColour: Color.white.opacity(0.92))
                 Text("\(Int(app.settings.intensity.rounded()))%")
                     .font(.luma(size: 11, weight: .medium))
                     .monospacedDigit()
@@ -576,9 +643,7 @@ struct BeforeAfterView: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(alignment: .topLeading) {
             label()
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.55), in: Capsule())
+                .modifier(StageGlassLabel())
                 .padding(8)
                 .allowsHitTesting(false)
         }
@@ -621,25 +686,19 @@ struct BeforeAfterView: View {
         }
     }
 
+    /// The look strip (its All chip opens the full browser) and the strength
+    /// slider: the ruler with its "Strength 75%" line, or the dial.
     private var looksPanel: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             codeStrip
             GradeOpacityRow(value: $app.settings.intensity)
-                .padding(.horizontal, 18)
-            Button {
-                showLookBrowser = true
-                LumaHaptics.shared.tap()
-            } label: {
-                panelButtonLabel("All looks", icon: "square.grid.2x2")
-            }
-            .buttonStyle(.lumaPress)
-            .padding(.horizontal, 16)
         }
     }
 
+    /// The look strip lives in Looks; Adjust keeps strength, exposure and
+    /// warmth together with the colour panels.
     private var adjustPanel: some View {
         VStack(spacing: 12) {
-            codeStrip
             VStack(spacing: 10) {
                 SlimSlider(title: "Strength", value: $app.settings.intensity,
                            range: 0...100, bipolar: false,
@@ -667,8 +726,7 @@ struct BeforeAfterView: View {
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
-                        .background(LumaTheme.raised, in: Capsule())
-                        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
+                        .background(Color.white.opacity(0.07), in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.lumaPress)
@@ -687,9 +745,7 @@ struct BeforeAfterView: View {
         .foregroundStyle(LumaTheme.textPrimary)
         .frame(maxWidth: .infinity)
         .frame(height: 40)
-        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
@@ -718,10 +774,10 @@ struct BeforeAfterView: View {
                     }
                     allLooksChip
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 3)
             }
-            .lumaEdgeFade(leading: 12, trailing: 12)
+            .lumaEdgeFade(leading: 20, trailing: 20)
             .sensoryFeedback(.selection, trigger: app.selectedLook.id)
             .onAppear {
                 guard let id = stripLooks.first(where: { app.isCurrent($0) })?.id else { return }
@@ -749,11 +805,8 @@ struct BeforeAfterView: View {
                     .overlay(alignment: .topTrailing) {
                         if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                     }
-                Text(LookCode.short(look))
-                    .font(.luma(size: 11, weight: .semibold))
-                    .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                LookNameText(LookCode.short(look), colour: look.signature,
+                             size: 11, weight: .bold)
                     .frame(width: 52)
             }
         }
@@ -780,16 +833,16 @@ struct BeforeAfterView: View {
         } label: {
             VStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LumaTheme.raised)
+                    .fill(Color.white.opacity(0.055))
                     .frame(width: 48, height: 48)
                     .overlay {
                         Image(systemName: "square.grid.3x3")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(LumaTheme.textSecondary)
+                            .foregroundStyle(Color.white.opacity(0.6))
                     }
                 Text("All")
-                    .font(.luma(size: 11, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(size: 11, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.9))
                     .frame(width: 52)
             }
         }
@@ -873,11 +926,10 @@ struct BeforeAfterView: View {
                     .minimumScaleFactor(0.8)
             }
             .frame(width: 64, height: 66)
-            .background(on ? LumaTheme.control : LumaTheme.raised,
+            .background(Color.white.opacity(on ? 0.12 : 0.055),
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(on ? Color.white.opacity(0.3) : LumaTheme.edge, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .pickedRing(on, cornerRadius: 12)
         }
         .buttonStyle(.lumaPress)
         .disabled(isApplyingEdit)
@@ -1012,10 +1064,8 @@ struct BeforeAfterView: View {
                     .foregroundStyle(LumaTheme.textPrimary)
                     .padding(.horizontal, 14)
                     .frame(height: 32)
-                    .background(LumaTheme.control, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(Color.white.opacity(0.12), in: Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.lumaPress)
             .disabled(isApplyingEdit || !maskPending)
@@ -1106,16 +1156,16 @@ struct BeforeAfterView: View {
 
     // MARK: - Tool bar
 
+    /// Looks, Adjust, Crop and Mask as quiet tabs over their panel: the
+    /// picked one white on light glass, the rest grey.
     private var toolBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(PhotoTool.allCases) { item in
                 toolButton(item)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.top, 6)
-        .overlay(alignment: .top) {
-            Rectangle().fill(LumaTheme.hairline).frame(height: 1)
-        }
+        .padding(.horizontal, 16)
     }
 
     private func toolButton(_ item: PhotoTool) -> some View {
@@ -1125,17 +1175,15 @@ struct BeforeAfterView: View {
             LumaHaptics.shared.tap()
             withAnimation(.easeOut(duration: 0.18)) { tool = item }
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 18, weight: .regular))
-                    .frame(height: 22)
-                Text(item.title)
-                    .font(.luma(size: 11, weight: .medium))
-            }
-            .foregroundStyle(on ? LumaTheme.textPrimary : LumaTheme.textMuted)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .contentShape(Rectangle())
+            Text(item.title)
+                .font(.luma(size: 12.5, weight: .semibold))
+                .foregroundStyle(on ? Color.white : Color.white.opacity(0.5))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+                .background(on ? Color.white.opacity(0.13) : Color.clear, in: Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
         .accessibilityAddTraits(on ? .isSelected : [])

@@ -118,6 +118,8 @@ launch warmup 12 "${P}ROUTE=none" || true
 shot 00-launch 5 "${P}ROUTE=launch"
 # Any LUMA_ROUTE value skips onboarding, so "none" gives the plain tab.
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
+shot 01b-onboarding-try 9 "${P}SEED_ONBOARDING=1" "${P}ONBOARDING_STEP=2"
+shot 01c-onboarding-style 7 "${P}SEED_ONBOARDING=1" "${P}ONBOARDING_STEP=3"
 shot 02-home 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1"
 shot 02b-home-first-run 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEEMPTY=1" "${P}SEED_REELHOLD=1"
 shot 02c-home-picked 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEPICK=BW32"
@@ -165,14 +167,20 @@ shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
+# You › Appearance, with the defaults and with the other three choices.
+shot 14b-appearance 6 "${P}ROUTE=appearance" "${P}APPEARANCE=default"
+shot 14c-appearance-alt 6 "${P}ROUTE=appearance" "${P}APPEARANCE=dial,dot,white"
+# The grade room and the editor with Dial, Dot and code, Quiet white.
+shot 08b-grade-room-alt 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg" "${P}APPEARANCE=dial,dot,white"
+shot 10j-editor-quiet 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}APPEARANCE=dial,dot,white"
 # The export lock with its three ways on, one of them free.
 # The photo loads without the auto grade, so the sheet never waits behind it.
 shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party.jpg" \
-  "${P}SEED_LOCK=Night Drive"
+  "${P}SEED_LOCK=Night Drive" "${P}APPEARANCE=default"
 
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).
-shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
+shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon" "${P}APPEARANCE=default"
 # Home scrolled to the template rail: the top row has become the top bar.
 shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
 # Seeds five photo projects that stay in the app data, so it runs after

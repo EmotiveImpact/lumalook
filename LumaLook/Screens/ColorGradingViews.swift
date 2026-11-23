@@ -37,15 +37,17 @@ struct CurveEditorPanel: View {
                         channel = i
                         LumaHaptics.shared.tap()
                     } label: {
+                        // Quiet text tabs: the picked channel white on
+                        // light glass. The curve itself keeps its channel
+                        // colour, because that is the data.
                         Text(channelNames[i])
-                            .font(.luma(size: 13, weight: .bold))
-                            .foregroundStyle(channel == i ? .white : LumaTheme.textSecondary)
+                            .font(.luma(size: 13, weight: .semibold))
+                            .foregroundStyle(channel == i ? Color.white : Color.white.opacity(0.5))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 38)
-                            .background(channel == i ? channelTints[i].opacity(0.28) : LumaTheme.surface,
-                                        in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10)
-                                .stroke(channel == i ? channelTints[i] : .clear, lineWidth: 1.5))
+                            .frame(height: 34)
+                            .background(channel == i ? Color.white.opacity(0.13) : Color.clear,
+                                        in: Capsule())
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -62,7 +64,7 @@ struct CurveEditorPanel: View {
                 Spacer()
                 Button("Reset") { setPoints([]) }
                     .font(.luma(.footnote, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
+                    .foregroundStyle(LumaTheme.textSecondary)
                     .disabled(points.isEmpty)
             }
         }
@@ -184,7 +186,7 @@ struct ColorWheelsPanel: View {
             }
             Button("Reset wheels") { wheels = nil }
                 .font(.luma(.footnote, weight: .semibold))
-                .foregroundStyle(LumaTheme.accentBright)
+                .foregroundStyle(LumaTheme.textSecondary)
                 .disabled(wheels?.isIdentity ?? true)
         }
     }
@@ -368,7 +370,7 @@ struct SplitTonePanel: View {
             }
             Button("Reset split tone") { tone = nil }
                 .font(.luma(.footnote, weight: .semibold))
-                .foregroundStyle(LumaTheme.accentBright)
+                .foregroundStyle(LumaTheme.textSecondary)
                 .disabled(tone?.isIdentity ?? true)
         }
     }
@@ -446,7 +448,7 @@ struct HSLPanel: View {
 
             Button("Reset HSL") { hsl = nil }
                 .font(.luma(.footnote, weight: .semibold))
-                .foregroundStyle(LumaTheme.accentBright)
+                .foregroundStyle(LumaTheme.textSecondary)
                 .disabled(hsl?.isIdentity ?? true)
         }
     }

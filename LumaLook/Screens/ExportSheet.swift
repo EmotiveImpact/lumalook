@@ -110,10 +110,11 @@ enum GradeCubeBaker {
 /// calm instruction bar. Reads and writes the same `lumalook.exportSpec` store
 /// the Settings "Export Quality" default writes, so the two never disagree.
 ///
-/// Chrome is monochrome — black, near-black, white, grey. Mono type is for
-/// NUMBERS ONLY (resolutions, frame rates, sizes, cube grids); every label is
-/// the system face in sentence case. Selection is one thin white ring and
-/// nothing else is ringed; unselected options separate by surface value.
+/// Chrome is monochrome — black, near-black, white, grey — and quiet (calm mock
+/// v2). Mono type is for NUMBERS ONLY (resolutions, frame rates, sizes, cube
+/// grids); every label is sentence case. The picked resolution wears the pale
+/// picked ring; the picked option in a row is white on a little glass, the
+/// rest grey. Export is the one main action (`LumaMainButton`).
 struct ExportSpecSheet: View {
     let durationSeconds: Double
     let gradeCubeTitle: String?        // nil = editor flow (no cube row)
@@ -281,10 +282,7 @@ struct ExportSpecSheet: View {
     /// NAME, so it is set as one; the duration and the batch count are numbers.
     private var sourceLine: some View {
         HStack(spacing: 8) {
-            Text(sourceTitle)
-                .font(.luma(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            sourceTitleView
             if durationSeconds > 0 {
                 Text(clock(durationSeconds))
                     .font(.luma(size: 13, weight: .medium, design: .monospaced))
@@ -306,6 +304,20 @@ struct ExportSpecSheet: View {
 
     private var sourceTitle: String {
         gradeCubeTitle == nil ? app.editor.projectTitle : app.selectedLook.name
+    }
+
+    /// The project's name in white, or (grade flow) the look's name in its
+    /// own colour, as the Names choice says.
+    @ViewBuilder
+    private var sourceTitleView: some View {
+        if gradeCubeTitle == nil {
+            Text(sourceTitle)
+                .font(.luma(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        } else {
+            LookNameText(sourceTitle, colour: app.selectedLook.signature, size: 16)
+        }
     }
 
     private func clock(_ seconds: Double) -> String {
@@ -351,19 +363,14 @@ struct ExportSpecSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            // Unselected cards separate by SURFACE VALUE. Only the chosen one
-            // wears a stroke — that is what a stroke is for here.
-            .background(selected ? LumaTheme.cardRaised : LumaTheme.card,
+            // Quiet glass cards; the chosen one wears the pale picked ring.
+            .background(selected ? LPanelStyle.glassStrong : LPanelStyle.glass,
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.white, lineWidth: 1)
-                }
-            }
+            .pickedRing(selected, cornerRadius: 12)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: Option rows — five discrete values, five taps
@@ -398,17 +405,15 @@ struct ExportSpecSheet: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .overlay {
-                            if on {
-                                Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 1)
-                            }
-                        }
+                        .frame(height: 30)
+                        // The picked option: white on a little glass, no ring.
+                        .background(on ? Color.white.opacity(0.13) : Color.clear, in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.lumaPress)
                 .disabled(!usable)
                 .opacity(usable ? 1 : 0.25)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .sensoryFeedback(.selection, trigger: options.first { isOn($0) })
@@ -515,7 +520,7 @@ struct ExportSpecSheet: View {
 
     private var cubePanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Bake this grade as a .cube — LUT, curves, wheels, HSL, split.")
+            Text("Bake this grade as a .cube: LUT, curves, wheels, HSL and split.")
                 .font(.luma(size: 12))
                 .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(2)
@@ -533,12 +538,9 @@ struct ExportSpecSheet: View {
                                           design: .monospaced))
                             .foregroundStyle(.white.opacity(cubeSize == size ? 1 : 0.5))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .overlay {
-                                if cubeSize == size {
-                                    Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 1)
-                                }
-                            }
+                            .frame(height: 32)
+                            .background(cubeSize == size ? Color.white.opacity(0.13) : Color.clear,
+                                        in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.lumaPress)
@@ -547,10 +549,10 @@ struct ExportSpecSheet: View {
                     ShareLink(item: cubeURL) {
                         Text("Share")
                             .font(.luma(size: 13, weight: .semibold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(LPanelStyle.onText)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.white, in: Capsule())
+                            .frame(height: 32)
+                            .background(LPanelStyle.onFill, in: Capsule())
                             .contentShape(Capsule())
                     }
                 } else {
@@ -568,8 +570,8 @@ struct ExportSpecSheet: View {
                             .font(.luma(size: 13, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(LumaTheme.cardRaised, in: Capsule())
+                            .frame(height: 32)
+                            .background(LPanelStyle.glass, in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.lumaPress)
@@ -622,7 +624,7 @@ struct ExportSpecSheet: View {
             Spacer(minLength: 8)
             Toggle(title, isOn: isOn)
                 .labelsHidden()
-                .tint(LumaTheme.signal)
+                .tint(LPanelStyle.toggleTint)
         }
         .padding(.vertical, 9)
     }
@@ -717,7 +719,7 @@ struct ExportSpecSheet: View {
     /// there is no duration to estimate against — a still has no size tier.
     private var estimateValue: String? {
         if spec.audioOnly {
-            guard durationSeconds > 0 else { return "—" }
+            guard durationSeconds > 0 else { return "-" }
             // AAC stereo at the M4A preset's 128 kbps.
             return String(format: "%.0f MB", durationSeconds * 0.128 / 8)
         }
@@ -769,7 +771,7 @@ struct ExportSpecSheet: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .frame(height: 30)
-                    .background(LumaTheme.surfaceStrong, in: Capsule())
+                    .background(LPanelStyle.glassStrong, in: Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -785,7 +787,7 @@ struct ExportSpecSheet: View {
             .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         guard let free = values?.volumeAvailableCapacityForImportantUsage else { return nil }
         if free < Int64(needed) * 1_000_000 {
-            return "Not enough free space — this export needs about \(needed) MB. Try a lower resolution or bitrate."
+            return "Not enough free space. This export needs about \(needed) MB, so try a lower resolution or bitrate."
         }
         return nil
     }
@@ -800,14 +802,17 @@ struct ExportSpecSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(LumaTheme.surfaceStrong,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(LPanelStyle.glass,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: The calm instruction bar
 
+    /// Close on the left, Export filling the rest: the one main action on
+    /// the sheet (`LumaMainButton`, signal yellow or quiet white as You ›
+    /// Appearance says). Every option above it stays quiet.
     private var instructionBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .medium))
@@ -817,32 +822,17 @@ struct ExportSpecSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
-            Spacer(minLength: 8)
-            Text(spec.audioOnly ? "Set the audio delivery" : "Set the delivery")
-                .font(.luma(size: 14, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-            Spacer(minLength: 8)
-            // The one filled button in the language: the irreversible, long,
-            // expensive action at the end of a tool.
-            Button {
+            LumaMainButton(title: spec.audioOnly ? "Export audio" : "Export",
+                           icon: spec.audioOnly ? "waveform" : nil,
+                           height: 50) {
                 storedSpec = spec.rawValue
                 app.exportError = nil
-                LumaHaptics.shared.tap()
                 onExport(deliverySpec)
-            } label: {
-                Text(spec.audioOnly ? "Export audio" : "Export")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 18)
-                    .frame(height: 40)
-                    .background(Color.white, in: Capsule())
-                    .contentShape(Capsule())
             }
-            .buttonStyle(.lumaPress)
+            .accessibilityHint(spec.audioOnly ? "Sets the audio delivery and exports" : "Sets the delivery and exports")
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, 8)
+        .padding(.trailing, 18)
         .padding(.bottom, 8)
     }
 }

@@ -58,6 +58,8 @@ struct LumaLookApp: App {
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)
                         .environmentObject(storeService)
+                        // Step 2's "Keep <look>" makes the tried look the camera's look.
+                        .environmentObject(app)
                         .onAppear { onboardingDidAppear = true }
                 }
                 .onChange(of: showOnboarding) { _, showing in
