@@ -337,8 +337,26 @@ struct CameraLiveLookView: View {
     }
 
     /// Upright, the picture stops at the dock; sideways it fills the screen.
+    /// On a short screen (an iPhone SE) the space above the dock is wider
+    /// than the 9:16 take, so filling it would hide the top and bottom of
+    /// what gets recorded. There the picture keeps its full 9:16 height and
+    /// runs under the dock, which gets a scrim, so the viewfinder still shows
+    /// the whole take.
     private func pictureHeight(_ size: CGSize) -> CGFloat {
-        isLandscapeLayout ? size.height : max(size.height - CamLab.dockHeight, 0)
+        if isLandscapeLayout { return size.height }
+        let aboveDock = max(size.height - CamLab.dockHeight, 0)
+        return max(aboveDock, min(size.height, size.width * 16 / 9))
+    }
+
+    /// Where the controls over the picture stop: the top of the dock, even
+    /// when a short screen runs the picture under it.
+    private func chromeBottom(_ size: CGSize) -> CGFloat {
+        isLandscapeLayout ? size.height : min(pictureHeight(size), max(size.height - CamLab.dockHeight, 0))
+    }
+
+    /// True when the picture runs under the dock (short screens only).
+    private func pictureUnderDock(_ size: CGSize) -> Bool {
+        !isLandscapeLayout && pictureHeight(size) > size.height - CamLab.dockHeight + 1
     }
 
     /// Whatever sits over everything: the caption, the fan, and the cards a
@@ -349,8 +367,8 @@ struct CameraLiveLookView: View {
             CamToast(text: statusCaption)
                 .id(statusCaption)
                 .frame(width: size.width)
-                .offset(y: proOpen ? pictureHeight(size) - Self.proHeight - 44
-                         : (showLookBrowser ? size.height - 640 : pictureHeight(size) - 170))
+                .offset(y: proOpen ? chromeBottom(size) - Self.proHeight - 44
+                         : (showLookBrowser ? size.height - 640 : chromeBottom(size) - 170))
                 .transition(.opacity)
         }
         if let fan {
@@ -629,7 +647,7 @@ struct CameraLiveLookView: View {
                     .allowsHitTesting(false)
             }
             bigName(width: size.width)
-                .offset(y: pictureHeight(size) - 330)
+                .offset(y: chromeBottom(size) - 330)
         }
     }
 
@@ -730,7 +748,7 @@ struct CameraLiveLookView: View {
               frame.width > 0, frame.height > 0 else { return nil }
         let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
         // Upright the picture fills its frame above the dock.
-        let ph = isLandscapeLayout ? screenSize.height : max(screenSize.height - CamLab.dockHeight, 1)
+        let ph = max(pictureHeight(screenSize), 1)
         let scale = max(screenSize.width / iw, ph / ih)
         let shownW = iw * scale, shownH = ih * scale
         let x = (point.x - (screenSize.width - shownW) / 2) / shownW
@@ -1120,7 +1138,7 @@ struct CameraLiveLookView: View {
     @ViewBuilder
     private func uprightChrome(size: CGSize, top: CGFloat) -> some View {
         let w = size.width
-        let bottom = pictureHeight(size)
+        let bottom = chromeBottom(size)
         calmCloseButton
             .offset(x: 16, y: top + 1)
         lookTitle
@@ -1958,6 +1976,14 @@ struct CameraLiveLookView: View {
         let h = CamLab.dockHeight
         let half = CamShutter.size / 2
         return ZStack(alignment: .topLeading) {
+            if pictureUnderDock(size) {
+                // Short screens: the picture runs under the dock, so give the
+                // modes, counter and shutter something dark to read against.
+                LinearGradient(colors: [CamLab.ink.opacity(0), CamLab.ink.opacity(0.82), CamLab.ink.opacity(0.92)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(width: w, height: h)
+                    .allowsHitTesting(false)
+            }
             Color.clear
                 .frame(width: w, height: h)
                 .contentShape(Rectangle())
@@ -1987,6 +2013,8 @@ struct CameraLiveLookView: View {
         .onChange(of: lastShot?.id) { _, _ in
             guard let image = lastShot?.thumbnail else { return }
             recentShots = Array((recentShots + [image]).suffix(3))
+            // A saved photo also uses space: keep "photos left" honest.
+            refreshFreeSpace()
         }
     }
 
@@ -2150,7 +2178,12 @@ struct CameraLiveLookView: View {
     /// The last three shots, fanned a little; a plain stack until there are
     /// any. Tap for the newest.
     private var shotStack: some View {
-        let shots = recentShots.isEmpty ? (lastShot.map { [$0.thumbnail] } ?? []) : recentShots
+        // The front card is always the shot the button opens: a take made
+        // sideways (no dock mounted to record it) still comes first.
+        var shots = recentShots
+        if let front = lastShot?.thumbnail, shots.last !== front {
+            shots = Array((shots + [front]).suffix(3))
+        }
         let angles: [Double] = [-9, -2, 6]
         let spots: [CGPoint] = [CGPoint(x: 2, y: 6), CGPoint(x: 8, y: 3), CGPoint(x: 12, y: 2)]
         return Button {
@@ -2363,7 +2396,7 @@ struct CameraLiveLookView: View {
             }
         }
         .contentShape(Rectangle())
-        .offset(y: pictureHeight(size) - Self.proHeight)
+        .offset(y: chromeBottom(size) - Self.proHeight)
     }
 
     private var proDismissDrag: some Gesture {

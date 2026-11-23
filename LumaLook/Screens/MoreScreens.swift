@@ -1584,6 +1584,11 @@ struct ProjectLibraryView: View {
                             titleVisibility: .visible,
                             presenting: pendingDelete) { project in
             Button("Delete \(project.title)", role: .destructive) {
+                // If the editor still holds this edit, let it go without
+                // saving, or the next save would bring it back.
+                if app.editor.projectID == project.id {
+                    app.editor.startNewProject(saving: false)
+                }
                 app.store.deleteProject(project.id)
                 pendingDelete = nil
             }
@@ -1889,6 +1894,7 @@ struct ProjectLibraryView: View {
 
     private func blankProject() {
         app.editor.startNewProject()
+        app.editor.opensBlank = true
         app.path.append(.editor)
     }
 
@@ -2129,6 +2135,7 @@ struct ProjectThumb: View {
     /// the full-width hero at the top of the Projects screen.
     var radius: CGFloat = 14
     @State private var thumbnail: CGImage?
+    @State private var loadedID: UUID?
 
     var body: some View {
         Color.clear
@@ -2145,8 +2152,13 @@ struct ProjectThumb: View {
             // Thumb sits inside the project row's Button — the overflowing fill
             // must not extend the row's touch target past its artwork.
             .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .task {
-            guard thumbnail == nil, let first = project.clips.first else { return }
+        // Keyed on the project, so a reused view (the hero after the newest
+        // project is deleted) loads the new first frame.
+        .task(id: project.id) {
+            guard loadedID != project.id else { return }
+            thumbnail = nil
+            loadedID = project.id
+            guard let first = project.clips.first else { return }
             let url = store.clipURL(for: first)
             guard FileManager.default.fileExists(atPath: url.path) else { return }
             // A photo clip has no video track to grab a frame from.
