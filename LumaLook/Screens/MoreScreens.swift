@@ -2138,6 +2138,11 @@ struct ProjectThumb: View {
             guard thumbnail == nil, let first = project.clips.first else { return }
             let url = store.clipURL(for: first)
             guard FileManager.default.fileExists(atPath: url.path) else { return }
+            // A photo clip has no video track to grab a frame from.
+            if first.isImage == true {
+                thumbnail = EditorState.imageThumbnail(at: url, maxDimension: 900)
+                return
+            }
             thumbnail = await EditorState.thumbnail(for: AVURLAsset(url: url),
                                                     at: first.trimStart + 0.02)
         }

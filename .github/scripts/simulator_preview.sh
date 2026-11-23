@@ -170,6 +170,9 @@ shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party
 shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
 # Home scrolled to the template rail: the top row has become the top bar.
 shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
+# Seeds five photo projects that stay in the app data, so it runs after
+# every other shot that would otherwise show them.
+shot 04b-projects-full 10 "${P}ROUTE=none" "${P}TAB=Projects" "${P}SEED_PROJECTS=1"
 
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.
