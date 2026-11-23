@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Founding Creators · LumaLook</title>
+<meta name="description" content="Apply to be a LumaLook Founding Creator: test the app first, shape how it renders skin, and get Lifetime free.">
+<meta name="theme-color" content="#08090a">
+<link rel="canonical" href="https://lumalook.app/founders">
+<meta property="og:title" content="Become a LumaLook Founding Creator">
+<meta property="og:description" content="Test the app first, shape how it renders skin, and get Lifetime free.">
+<meta property="og:url" content="https://lumalook.app/founders">
+<meta property="og:image" content="https://lumalook.app/assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css?v=c10">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="mark" href="./" aria-label="LumaLook home"><i></i>lumalook</a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="./#how">How it works</a>
+      <a href="./#skin">Skin-true</a>
+      <a href="./#looks">Looks</a>
+      <a href="./#pricing">Pricing</a>
+      <a href="support.html">Support</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-y btn-sm" href="#apply">Apply</a>
+    </div>
+  </div>
+</header>
+<main id="main">
+  <section class="doc-hero">
+    <div class="wrap">
+      <p class="kicker y">Founding Creators</p>
+      <h1 class="lh grad"><span class="l">Help us get</span> <span class="h">your skin right.</span></h1>
+      <p>For decades, cameras and filters were tuned on light skin, and deep skin came out grey, orange or lost in shadow. LumaLook is built the other way round. We're looking for creators to test it first, push it hard and tell us where it still gets you wrong.</p>
+    </div>
+  </section>
+
+  <div class="wrap fc">
+    <div class="fc-info">
+      <h2>What you get</h2>
+      <ul class="fc-list">
+        <li><b>Lifetime, free.</b> Every look and every pack, now and in future.</li>
+        <li><b>First access.</b> New builds on your iPhone through TestFlight before anyone else.</li>
+        <li><b>A real say.</b> Vote on new looks and features, and suggest your own.</li>
+        <li><b>Credit.</b> Your name on our Founding Creators page, if you'd like it there.</li>
+      </ul>
+
+      <h2>What we ask</h2>
+      <ul class="fc-list">
+        <li>Try to break the looks: backlit, neon, night, indoor light, and group shots with lighter and deeper skin together.</li>
+        <li>A two-minute form after each new build, with before-and-after frames if you're happy to share them.</li>
+        <li>For some, two short video calls over six weeks, so we can see how you edit.</li>
+      </ul>
+
+      <h2>Who it's for</h2>
+      <p>Anyone 18 or over who shoots photos or video on an iPhone, from beauty and fashion to music, weddings, street and everyday life. Everyone is welcome to apply. We especially want to hear from Black and brown creators and people with deep skin, because that's where most tools still fall short.</p>
+      <p class="fc-fine">The first group is small, about 30 people, and we choose for a spread of skin tones, styles and places. If you aren't picked this round, we'll keep your application for the next one unless you tell us not to.</p>
+    </div>
+
+    <form class="fc-form" id="apply" action="/api/founders" method="post" data-founders novalidate>
+      <p class="fc-title">Apply</p>
+      <p class="fc-sub">Takes about three minutes.</p>
+
+      <div class="fc-grid">
+        <label class="fc-field">
+          <span>Your name</span>
+          <input type="text" name="name" autocomplete="name" maxlength="80" required>
+        </label>
+        <label class="fc-field">
+          <span>Email</span>
+          <input type="email" name="email" autocomplete="email" maxlength="254" required>
+        </label>
+        <label class="fc-field">
+          <span>Where you're based</span>
+          <input type="text" name="location" autocomplete="country-name" maxlength="80" placeholder="City, country" required>
+        </label>
+        <label class="fc-field">
+          <span>Your iPhone</span>
+          <input type="text" name="phone" maxlength="60" placeholder="e.g. iPhone 15 Pro" required>
+        </label>
+      </div>
+
+      <label class="fc-field">
+        <span>Where we can see your work</span>
+        <input type="text" name="links" maxlength="300" placeholder="Instagram, TikTok, YouTube or a website" required>
+      </label>
+
+      <fieldset class="fc-field fc-chips">
+        <legend>What you make</legend>
+        <label><input type="checkbox" name="makes" value="Photos"><span>Photos</span></label>
+        <label><input type="checkbox" name="makes" value="Video"><span>Video</span></label>
+        <label><input type="checkbox" name="makes" value="Beauty"><span>Beauty</span></label>
+        <label><input type="checkbox" name="makes" value="Fashion"><span>Fashion</span></label>
+        <label><input type="checkbox" name="makes" value="Music"><span>Music</span></label>
+        <label><input type="checkbox" name="makes" value="Weddings and events"><span>Weddings and events</span></label>
+        <label><input type="checkbox" name="makes" value="Street"><span>Street</span></label>
+        <label><input type="checkbox" name="makes" value="Everyday life"><span>Everyday life</span></label>
+      </fieldset>
+
+      <label class="fc-field">
+        <span>What do photo and video apps get wrong about your skin, or the skin of people you film?</span>
+        <textarea name="wrong" rows="4" maxlength="1500" required></textarea>
+      </label>
+
+      <label class="fc-field">
+        <span>What would you want LumaLook to do for you? <em>Optional</em></span>
+        <textarea name="want" rows="3" maxlength="1500"></textarea>
+      </label>
+
+      <fieldset class="fc-field fc-monk">
+        <legend>Which tone is closest to your skin? <em>Optional</em></legend>
+        <p class="fc-help">This helps us test across every skin tone. It's the <a href="https://skintone.google" rel="noopener">Monk Skin Tone Scale</a>, 1 lightest to 10 deepest. Skip it if you'd rather not say.</p>
+        <div class="fc-swatches">
+          <label><input type="radio" name="monk" value="1"><i style="--c:#f6ede4"></i><span>1</span></label>
+          <label><input type="radio" name="monk" value="2"><i style="--c:#f3e7db"></i><span>2</span></label>
+          <label><input type="radio" name="monk" value="3"><i style="--c:#f7ead0"></i><span>3</span></label>
+          <label><input type="radio" name="monk" value="4"><i style="--c:#eadaba"></i><span>4</span></label>
+          <label><input type="radio" name="monk" value="5"><i style="--c:#d7bd96"></i><span>5</span></label>
+          <label><input type="radio" name="monk" value="6"><i style="--c:#a07e56"></i><span>6</span></label>
+          <label><input type="radio" name="monk" value="7"><i style="--c:#825c43"></i><span>7</span></label>
+          <label><input type="radio" name="monk" value="8"><i style="--c:#604134"></i><span>8</span></label>
+          <label><input type="radio" name="monk" value="9"><i style="--c:#3a312a"></i><span>9</span></label>
+          <label><input type="radio" name="monk" value="10"><i style="--c:#292420"></i><span>10</span></label>
+        </div>
+      </fieldset>
+
+      <label class="fc-check">
+        <input type="checkbox" name="consent_tone" value="yes">
+        <span>If I picked a tone, I agree LumaLook can use it only to choose a balanced group of testers.</span>
+      </label>
+      <label class="fc-check">
+        <input type="checkbox" name="adult" value="yes" required>
+        <span>I'm 18 or over, and I've read the <a href="privacy.html#founders">privacy policy</a>.</span>
+      </label>
+
+      <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <button class="btn btn-y btn-lg" type="submit">Send application</button>
+      <p class="fc-msg" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</main>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="mark" href="./"><i></i>lumalook</a>
+        <p class="tag">Film looks true to every skin. Shoot, grade and edit on iPhone.</p>
+      </div>
+      <div>
+        <h4>App</h4>
+        <ul>
+          <li><a href="./#how">How it works</a></li>
+          <li><a href="./#looks">Looks and packs</a></li>
+          <li><a href="./#pricing">Pricing</a></li>
+          <li><a href="founders.html">Founding Creators</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Help</h4>
+        <ul>
+          <li><a href="support.html">Support</a></li>
+          <li><a href="support.html#restore">Restore purchases</a></li>
+          <li><a href="./#faq">Questions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="privacy.html">Privacy</a></li>
+          <li><a href="terms.html">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <p>&copy; 2026 Emotive Impact. Monk Skin Tone Scale by Ellis Monk, used under <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>.</p>
+      <p>Apple, iPhone, TestFlight and App Store are trademarks of Apple Inc.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js?v=c9" defer></script>
+<script src="assets/founders.js?v=1" defer></script>
+</body>
+</html>

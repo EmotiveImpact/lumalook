@@ -361,6 +361,7 @@ final class AppModel: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(true)
         syncLookState()
         applyDebugRoute()
+        rebakeRecipeLooksIfNeeded()
 
         for publisher in [lutRepository.objectWillChange,
                           store.objectWillChange,
@@ -572,6 +573,29 @@ final class AppModel: ObservableObject {
             path = target
         }
         #endif
+    }
+
+    /// Installed recipe looks live as cubes baked at install time. When the
+    /// engine that baked them (or the True Colour switch) has changed, bake
+    /// them again, off the main thread, so they match the live looks. Runs at
+    /// launch and whenever the switch flips.
+    func rebakeRecipeLooksIfNeeded() {
+        let stamp = TrueColour.bakeStamp
+        guard UserDefaults.standard.string(forKey: TrueColour.bakedKey) != stamp else { return }
+        UserDefaults.standard.set(stamp, forKey: TrueColour.bakedKey)
+        let jobs = PackInstaller.recipeBakeJobs(in: lutRepository)
+        guard !jobs.isEmpty else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            for job in jobs {
+                guard let text = PackInstaller.cubeText(for: job.recipe, title: job.title) else { continue }
+                try? text.write(to: job.url, atomically: true, encoding: .utf8)
+            }
+            await MainActor.run {
+                LookPipeline.shared.clearLUTCache()
+                self?.syncLookState()
+                self?.objectWillChange.send()
+            }
+        }
     }
 
     private func syncLookState() {

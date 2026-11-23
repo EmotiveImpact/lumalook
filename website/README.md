@@ -13,6 +13,7 @@ website/
   privacy.html    privacy policy (the app's privacy link points here)
   terms.html      terms of use, including the subscription disclosure
   support.html    help and contact (the App Store support URL)
+  founders.html   Founding Creators application form (posts to /api/founders)
   404.html
   assets/
     site.css      Night Lab tokens and every style
@@ -119,3 +120,20 @@ as a Resend contact in the "LumaLook waitlist" segment and sends one
 confirmation from `hello@lumalook.app`. A repeat signup gets no second email.
 The form hides itself once `APP_STORE_URL` is set in `site.js`.
 Vercel env: `RESEND_API_KEY`, `RESEND_WAITLIST_SEGMENT_ID`, `WAITLIST_REPLY_TO`.
+
+## Founding Creators applications
+
+`/founders` is an application form for the Founding Creators test group
+(people who test builds first, shape how skin renders, and get Lifetime free).
+It posts to `/api/founders` (`api/founders.js`), which:
+
+1. emails the whole application to `FOUNDERS_NOTIFY_TO` (falls back to
+   `WAITLIST_REPLY_TO`), with reply-to set to the applicant;
+2. saves the applicant as a Resend contact, in the "LumaLook Founding
+   Creators" segment when `RESEND_FOUNDERS_SEGMENT_ID` is set;
+3. sends the applicant one copy of what they sent, only the first time that
+   address is seen, so the form can't be used to flood an inbox.
+
+The Monk skin-tone answer is optional and is dropped unless its consent box is
+ticked (see `privacy.html#founders`). The swatches are the Monk Skin Tone
+Scale by Ellis Monk, CC BY 4.0, credited in the page footer.
