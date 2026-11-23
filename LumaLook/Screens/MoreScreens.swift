@@ -2696,9 +2696,31 @@ struct SettingsSubscriptionView: View {
             if ProcessInfo.processInfo.environment["LUMA_SEED_PAYWALL"] == "1" {
                 showPaywall = true
             }
+            seedAppearanceRoute()
+            #endif
+        }
+        .onChange(of: app.path) { _, _ in
+            #if DEBUG
+            seedAppearanceRoute()
             #endif
         }
     }
+
+    #if DEBUG
+    /// LUMA_ROUTE=appearance seeds [.settings, .appearance], but the root view
+    /// turns any pushed .settings into a switch to this tab and clears the
+    /// whole path, Appearance with it. Push Appearance again from here, once,
+    /// after that switch, so the screenshot route really opens the page.
+    private static var seededAppearanceRoute = false
+
+    private func seedAppearanceRoute() {
+        guard isRoot, !Self.seededAppearanceRoute,
+              ProcessInfo.processInfo.environment["LUMA_ROUTE"] == "appearance",
+              app.path.isEmpty else { return }
+        Self.seededAppearanceRoute = true
+        app.path.append(.appearance)
+    }
+    #endif
 
     /// Only when You is pushed rather than shown as the tab (the root view
     /// normally turns a pushed You into a tab switch).
@@ -3053,22 +3075,23 @@ struct SettingsSubscriptionView: View {
             planIsLifetime = false
             return
         }
-        var detail: String?
+        var subscriptionDetail: String?
         var lifetime = false
+        var hasSubscription = false
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
             let productID = transaction.productID
             if productID == StoreService.ProductID.proLifetime {
-                detail = "Lifetime · yours for good"
                 lifetime = true
-                break
+                continue
             }
             guard productID == StoreService.ProductID.proYearly
                     || productID == StoreService.ProductID.proMonthly else { continue }
+            hasSubscription = true
             let plan = productID == StoreService.ProductID.proYearly ? "Yearly" : "Monthly"
             guard let end = transaction.expirationDate else {
-                detail = plan
+                subscriptionDetail = plan
                 continue
             }
             var renews = true
@@ -3077,10 +3100,13 @@ struct SettingsSubscriptionView: View {
                 renews = renewal.willAutoRenew
             }
             let date = Self.planDateFormatter.string(from: end)
-            detail = "\(plan) · \(renews ? "renews" : "ends") \(date)"
+            subscriptionDetail = "\(plan) · \(renews ? "renews" : "ends") \(date)"
         }
-        planDetail = detail
-        planIsLifetime = lifetime
+        planDetail = lifetime ? "Lifetime · yours for good" : subscriptionDetail
+        // Manage plan only hides when there is truly nothing to manage: a
+        // Lifetime buyer whose yearly or monthly plan is still running must
+        // still be able to reach it and cancel.
+        planIsLifetime = lifetime && !hasSubscription
     }
 
     // MARK: Restore / support

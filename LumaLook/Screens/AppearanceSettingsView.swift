@@ -296,7 +296,9 @@ private struct MiniRulerPreview: View {
             var minor = Path()
             var major = Path()
             for k in 0...28 {
-                let x = 6 + CGFloat(k) * 4.6 + 0.5
+                // Tick 14 sits exactly under the needle on 75, and ticks 7
+                // and 21 over the 50 and 100 labels.
+                let x = 70 + CGFloat(k - 14) * 4.6
                 if k % 7 == 0 {
                     major.move(to: CGPoint(x: x, y: base))
                     major.addLine(to: CGPoint(x: x, y: base - 13))
