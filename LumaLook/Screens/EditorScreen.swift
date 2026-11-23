@@ -683,7 +683,10 @@ struct EditorTimelineView: View {
         .onAppear {
             app.library.settleOrder()
             // Continuity: seed the timeline with the Apply-a-Look clip.
-            if editor.isEmpty, let url = app.selectedVideoURL {
+            if editor.opensBlank {
+                // Blank project asked for an empty timeline: keep it.
+                editor.opensBlank = false
+            } else if editor.isEmpty, let url = app.selectedVideoURL {
                 Task { await editor.addClip(from: url) }
             } else if editor.isEmpty,
                       ProcessInfo.processInfo.environment["LUMA_SEED_CLIP"] == nil,
@@ -5749,7 +5752,7 @@ private struct LDMusicCard: View {
     private var generated: GeneratedTrack? { MusicBeatGrid.track(for: track.url) }
 
     private var source: String {
-        if generated != nil { return "LumaLook library" }
+        if generated != nil { return "Lumalook library" }
         if BundledAudioLibrary.all.contains(where: { $0.title == track.title }) { return "Sound library" }
         switch track.kind {
         case .voice: return "Voiceover"

@@ -389,7 +389,7 @@ private struct LUTRow: View {
         formatter.unitsStyle = .full
         let ago = formatter.localizedString(for: lut.importedAt, relativeTo: Date())
         guard let packID = lut.packID else { return "Imported \(ago)" }
-        if packID == LUTRepository.bundledBasicsPackID { return "Included with LumaLook" }
+        if packID == LUTRepository.bundledBasicsPackID { return "Included with Lumalook" }
         if let name = LookLibraryStore.packDisplayName(id: packID) { return "From \(name)" }
         return "Installed \(ago)"
     }

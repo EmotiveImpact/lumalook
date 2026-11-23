@@ -253,7 +253,7 @@ struct ExportCompleteView: View {
         } else if !app.lastExportSavedToPhotos, photosEligible {
             // The export itself succeeded; only the library hand-off was
             // refused. Explain it, and put the fix in the row below.
-            noticeBar("LumaLook couldn't add this to your photo library. In Settings choose \"Add Photos Only\" — that's the only access it ever asks for, so iOS won't offer Full Access.")
+            noticeBar("Lumalook couldn't add this to your photo library. In Settings choose \"Add Photos Only\" — that's the only access it ever asks for, so iOS won't offer Full Access.")
                 .padding(.horizontal, 18)
                 .padding(.bottom, 12)
         } else if shareableURL == nil {

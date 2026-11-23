@@ -116,7 +116,7 @@ enum CaptionFailure: Equatable {
     func message(language: String) -> String {
         switch self {
         case .permission:
-            return "LumaLook needs speech recognition to hear your video. Turn it on in Settings, then try again."
+            return "Lumalook needs speech recognition to hear your video. Turn it on in Settings, then try again."
         case .noSpeech:
             return "Check the clips' sound is on, or pick the language people speak in."
         case .noAudio:

@@ -658,7 +658,7 @@ struct CameraLooksSheet: View {
                             .foregroundStyle(on ? CamLab.ink : Color(hex: 0xD9DADE))
                             .padding(.horizontal, 12)
                             .frame(height: 30)
-                            .background(on ? CamLab.sig : Color.white.opacity(0.08), in: Capsule())
+                            .background(on ? Color(hex: 0xF4F5F6) : Color.white.opacity(0.08), in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(CamPressStyle())
@@ -768,8 +768,8 @@ struct CameraLooksSheet: View {
             fill = Color.white.opacity(0.09)
         case .pro:
             text = "With Pro"
-            ink = CamLab.sig
-            fill = CamLab.sig.opacity(0.16)
+            ink = Color.white
+            fill = Color.white.opacity(0.14)
         case .price(let price):
             text = price
             ink = Color(hex: 0xD9DADE)
@@ -854,11 +854,11 @@ struct CameraLooksSheet: View {
             tile(look)
                 .frame(width: 76, height: 95)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                // Calm: the app's pale picked ring, no glow in the look's colour.
                 .overlay {
                     if wearing {
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(look.signature, lineWidth: 2.5)
-                            .shadow(color: look.signature, radius: 7)
+                            .strokeBorder(LumaTheme.pickedRing, lineWidth: 2.5)
                     }
                 }
                 .overlay(alignment: .topTrailing) {
@@ -874,7 +874,7 @@ struct CameraLooksSheet: View {
                     if favourite {
                         Text("★")
                             .font(.luma(size: 13))
-                            .foregroundStyle(CamLab.sig)
+                            .foregroundStyle(Color.white.opacity(0.92))
                             .shadow(color: .black.opacity(0.7), radius: 1.5, y: 1)
                             .padding(.top, 4)
                             .padding(.leading, 6)

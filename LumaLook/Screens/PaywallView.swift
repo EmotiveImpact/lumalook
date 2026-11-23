@@ -108,7 +108,7 @@ struct PaywallView: View {
     /// Kicker and headline, sitting low on the cover portrait.
     private var hero: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("LumaLook Pro")
+            Text("Lumalook Pro")
                 .font(.luma(size: 14, weight: .semibold))
                 .foregroundStyle(LumaTheme.signal)
             LumaHeadline(light: "Every look.", heavy: "Every pack.", size: 34)
@@ -758,7 +758,7 @@ struct OnboardingView: View {
                     }
                 } label: {
                     let last = page == pages.count - 1
-                    Text(last ? "Try LumaLook Pro" : (page == 0 ? "Get started" : "Continue"))
+                    Text(last ? "Try Lumalook Pro" : (page == 0 ? "Get started" : "Continue"))
                         .font(.luma(size: 16, weight: .semibold))
                         .foregroundStyle(last ? LumaTheme.onSignal : LumaTheme.onLight)
                         .frame(maxWidth: .infinity)

@@ -1524,25 +1524,76 @@ struct ProjectLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     var isRoot: Bool = false
 
-    /// The newest project, which is what the hero shows and what tapping the
-    /// hero opens. Nil while the library is empty.
+    @State private var filter: ProjectFilter = .all
+    @State private var showTemplates = false
+    @State private var pendingDelete: StoredProject?
+
+    /// The calm Projects page (23 Nov 2026): the newest edit over its own
+    /// faded frame, quiet pills, text tabs and a two-column grid.
+    enum ProjectFilter: String, CaseIterable {
+        case all = "All", videos = "Videos", photos = "Photos"
+    }
+
+    /// The newest project, which is what the hero shows and what Resume
+    /// opens. Nil while the library is empty.
     private var newest: StoredProject? {
         app.store.projects.max(by: { $0.updatedAt < $1.updatedAt })
     }
 
     var body: some View {
-        ZStack {
-            LumaTheme.background.ignoresSafeArea()
-            VStack(spacing: 0) {
-                header
-                if app.store.projects.isEmpty {
-                    emptyState
-                } else {
-                    hero
-                        .frame(height: 196)
-                    drawer
+        GeometryReader { geo in
+            let safeTop = geo.safeAreaInsets.top
+            ZStack(alignment: .top) {
+                LumaTheme.background.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let newest {
+                            heroBlock(newest, safeTop: safeTop)
+                            filterTabs
+                            projectSections
+                        } else {
+                            emptyHero(safeTop: safeTop)
+                            templateGrid(Array(TemplateLibrary.shown.prefix(4)),
+                                         title: "Or start from a template")
+                        }
+                        Color.clear.frame(height: 130)
+                    }
                 }
+                .ignoresSafeArea(edges: .top)
+                header
+                    .background(alignment: .top) {
+                        LinearGradient(colors: [LumaTheme.background.opacity(0.85),
+                                                LumaTheme.background.opacity(0)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: safeTop + 70)
+                            .offset(y: -safeTop)
+                            .allowsHitTesting(false)
+                    }
+                if !isRoot { backButton }
             }
+        }
+        .sheet(isPresented: $showTemplates) {
+            ProjectTemplatesSheet { template in
+                showTemplates = false
+                startTemplate(template)
+            }
+        }
+        .confirmationDialog("Delete this project?",
+                            isPresented: Binding(get: { pendingDelete != nil },
+                                                 set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible,
+                            presenting: pendingDelete) { project in
+            Button("Delete \(project.title)", role: .destructive) {
+                // If the editor still holds this edit, let it go without
+                // saving, or the next save would bring it back.
+                if app.editor.projectID == project.id {
+                    app.editor.startNewProject(saving: false)
+                }
+                app.store.deleteProject(project.id)
+                pendingDelete = nil
+            }
+        } message: { _ in
+            Text("The edit goes; your clips stay in Photos.")
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -1577,277 +1628,501 @@ struct ProjectLibraryView: View {
         .padding(.bottom, 2)
     }
 
-    // MARK: Empty state (Night Lab)
+    // MARK: Hero
 
-    /// No projects yet: a face in frame (cropped around the subject with
-    /// `HomeGradedPhoto`, so a wide box no longer lands on the top of a
-    /// head), a light + bold title, one line and the one main action.
-    private var emptyState: some View {
+    /// The newest edit: its first frame faded behind the top bar, with its
+    /// name, length, clips and look over it, then the pills.
+    private func heroBlock(_ project: StoredProject, safeTop: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HomeGradedPhoto(photo: .campaign, lookName: "CN93 · Luxury Campaign", maxDimension: 1100)
-                .frame(maxWidth: .infinity)
-                .frame(height: 320)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                .padding(.horizontal, 10)
+            Text("MOST RECENT · \(Self.ago(project.updatedAt))")
+                .font(.luma(size: 11, weight: .bold))
+                .kerning(1.3)
+                .foregroundStyle(.white.opacity(0.55))
+            Text(project.title)
+                .font(.luma(size: 31, weight: .bold))
+                .kerning(-0.9)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .padding(.top, 6)
-            VStack(alignment: .leading, spacing: 0) {
-                LumaHeadline(light: "No projects", heavy: "yet", size: 32)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text("Every edit saves here as you work.")
-                    .font(.luma(size: 14))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .padding(.top, 6)
-                newVideoButton
-                    .padding(.top, 20)
+            Text(Self.meta(project, withLook: true))
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .padding(.top, 6)
+            pills([
+                Pill(title: "Resume", icon: "play.fill", solid: true) { open(project) },
+                Pill(title: "New video", icon: "plus") { newVideo() },
+                Pill(title: "Templates", icon: "rectangle.split.2x1") { showTemplates = true },
+                Pill(title: "Blank project", icon: "square.dashed") { blankProject() },
+            ])
+            .padding(.top, 18)
+        }
+        .padding(.top, safeTop + 88)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(alignment: .top) {
+            fadedBackdrop(height: safeTop + 298) {
+                ProjectThumb(project: project, store: app.store, radius: 0)
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 22)
-            Spacer(minLength: 0)
-            if !isRoot { emptyBackRow }
+            .onTapGesture { open(project) }
         }
     }
 
-    /// Same door as Home's New video: Select clips for a new edit.
-    private var newVideoButton: some View {
-        Button {
-            app.openSelectClips(.edit)
-            LumaHaptics.shared.tap()
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: "film")
-                    .font(.system(size: 17, weight: .medium))
-                Text("New video")
-                    .font(.luma(size: 16, weight: .semibold))
-                    .kerning(-0.3)
-            }
-            .foregroundStyle(LumaTheme.onSignal)
-            .padding(.horizontal, 22)
-            .frame(height: 52)
-            .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("New video")
-    }
-
-    private var emptyBackRow: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
-    }
-
-    // MARK: Hero — the most recent edit's own first frame
-
-    @ViewBuilder
-    private var hero: some View {
-        let content = Group {
-            if let newest {
-                ProjectThumb(project: newest, store: app.store, radius: 22)
-            } else {
-                HeroImage(photo: .campaign, radius: 22)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
-
-        if let newest {
-            Button {
-                app.editor.load(project: newest)
-                app.path.append(.editor)
-                LumaHaptics.shared.tap()
-            } label: { content }
-            .buttonStyle(.lumaPress)
-        } else {
-            content
-        }
-    }
-
-    // MARK: Drawer
-
-    private var drawer: some View {
-        VStack(spacing: 0) {
-            caption
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 10)
-            ProjectList(store: app.store)
-            instructionBar
+    /// A picture faded into the page: dimmed, a little less saturated, and
+    /// run into ink at the bottom.
+    private func fadedBackdrop<Picture: View>(height: CGFloat,
+                                              @ViewBuilder picture: () -> Picture) -> some View {
+        ZStack {
+            picture()
+                .opacity(0.62)
+                .saturation(0.8)
+            LinearGradient(stops: [
+                .init(color: LumaTheme.background.opacity(0.55), location: 0),
+                .init(color: LumaTheme.background.opacity(0.2), location: 0.26),
+                .init(color: LumaTheme.background.opacity(0.5), location: 0.58),
+                .init(color: LumaTheme.background.opacity(0.94), location: 0.86),
+                .init(color: LumaTheme.background, location: 1),
+            ], startPoint: .top, endPoint: .bottom)
         }
         .frame(maxWidth: .infinity)
-        .background(LumaTheme.background)
+        .frame(height: height)
+        .clipped()
+        .contentShape(Rectangle())
     }
 
-    /// The hero's name lives here, under the picture, never over it.
-    private var caption: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(newest == nil ? "Projects" : "Most recent")
-                    .font(.luma(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(newest?.title ?? "Nothing here yet")
-                    .font(.luma(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                if let newest {
-                    ProjectMeta.line(newest).lineLimit(1)
-                } else {
-                    Text("Edits auto-save here as you work.")
-                        .font(.luma(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
+    // MARK: Pills
+
+    private struct Pill: Identifiable {
+        var id: String { title }
+        let title: String
+        let icon: String
+        var solid: Bool = false
+        let action: () -> Void
+    }
+
+    /// Quiet glass pills; the one solid white pill is the main action.
+    private func pills(_ items: [Pill]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(items) { item in
+                    Button {
+                        item.action()
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(item.title)
+                                .font(.luma(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(item.solid ? Color(hex: 0x0B0C0E) : .white.opacity(0.92))
+                        .padding(.leading, 12)
+                        .padding(.trailing, 15)
+                        .frame(height: 38)
+                        .background(item.solid ? AnyShapeStyle(Color(hex: 0xF4F5F6))
+                                               : AnyShapeStyle(Color.white.opacity(0.11)),
+                                    in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.lumaPress)
                 }
             }
-            Spacer(minLength: 8)
-            if newest != nil {
-                (numText("\(app.store.projects.count)", 15, 0.85)
-                 + wordText(app.store.projects.count == 1 ? " project" : " projects", 13, 0.55))
-                    .lineLimit(1)
+            .padding(.horizontal, 20)
+        }
+        .padding(.horizontal, -20)
+    }
+
+    // MARK: Tabs and the grid
+
+    private var filterTabs: some View {
+        HStack(spacing: 22) {
+            ForEach(ProjectFilter.allCases, id: \.self) { item in
+                let on = filter == item
+                Button {
+                    filter = item
+                    LumaHaptics.shared.tap()
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 4) {
+                            Text(item.rawValue)
+                                .font(.luma(size: 14.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(on ? 1 : 0.42))
+                            if item == .all {
+                                Text("\(app.store.projects.count)")
+                                    .font(.luma(size: 14.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.35))
+                            }
+                        }
+                        Capsule()
+                            .fill(on ? Color.white : Color.clear)
+                            .frame(height: 2)
+                    }
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+    }
+
+    private var filtered: [StoredProject] {
+        let sorted = app.store.projects.sorted { $0.updatedAt > $1.updatedAt }
+        switch filter {
+        case .all:    return sorted
+        case .videos: return sorted.filter { !Self.isPhoto($0) }
+        case .photos: return sorted.filter { Self.isPhoto($0) }
+        }
+    }
+
+    @ViewBuilder
+    private var projectSections: some View {
+        let groups = Self.sections(filtered)
+        if groups.isEmpty {
+            Text(filter == .photos ? "No photo edits yet." : "No video edits yet.")
+                .font(.luma(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .padding(.horizontal, 20)
+                .padding(.top, 28)
+        }
+        ForEach(groups, id: \.title) { group in
+            Text(group.title)
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 10)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                      spacing: 8) {
+                ForEach(group.items) { project in
+                    ProjectGridTile(project: project, store: app.store) { open(project) }
+                        .contextMenu {
+                            Button { open(project) } label: { Label("Open", systemImage: "play") }
+                            Button(role: .destructive) { pendingDelete = project } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    // MARK: Empty state
+
+    /// No projects yet: a face faded into the page, the light and bold
+    /// headline, and the pills. Templates to start from sit below.
+    private func emptyHero(safeTop: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            LumaHeadline(light: "No projects", heavy: "yet", size: 31)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text("Every edit saves here as you work.")
+                .font(.luma(size: 14))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .padding(.top, 8)
+            pills([
+                Pill(title: "New video", icon: "plus", solid: true) { newVideo() },
+                Pill(title: "Templates", icon: "rectangle.split.2x1") { showTemplates = true },
+                Pill(title: "Blank project", icon: "square.dashed") { blankProject() },
+            ])
+            .padding(.top, 18)
+        }
+        .padding(.top, safeTop + 200)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(alignment: .top) {
+            fadedBackdrop(height: safeTop + 358) {
+                HomeGradedPhoto(photo: .campaign, lookName: "CN93 · Luxury Campaign", maxDimension: 1100)
             }
         }
     }
 
-    // MARK: Instruction bar
+    private func templateGrid(_ templates: [VideoTemplate], title: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 10)
+            ProjectTemplateGrid(templates: templates) { startTemplate($0) }
+                .padding(.horizontal, 12)
+        }
+    }
 
-    private var instructionBar: some View {
-        HStack(spacing: 8) {
-            if !isRoot {
+    // MARK: Doors
+
+    private var backButton: some View {
+        VStack {
+            Spacer()
+            HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(.white.opacity(0.85))
                         .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
+                Spacer()
             }
-            Text(app.store.projects.isEmpty
-                 ? "Nothing to open yet"
-                 : "Swipe a project to delete it")
-                .font(.luma(size: 14))
-                .foregroundStyle(.white.opacity(0.5))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.leading, isRoot ? 8 : 0)
-            Spacer(minLength: 8)
-            // Pick clips first (up to 30 at once), the same door as the empty
-            // state's New video and Home's Edit a clip. A blank timeline is
-            // still one tap away in the editor's own menu.
-            Button {
-                app.openSelectClips(.edit)
-                LumaHaptics.shared.tap()
-            } label: {
-                Text("New video")
-                    .font(.luma(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(height: 36)
-                    .background(Color(white: 0.15), in: Capsule())
-            }
-            .buttonStyle(.lumaPress)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
+    }
+
+    private func open(_ project: StoredProject) {
+        app.editor.load(project: project)
+        app.path.append(.editor)
+    }
+
+    /// Same door as Home's New video: Select clips for a new edit.
+    private func newVideo() {
+        app.openSelectClips(.edit)
+    }
+
+    private func blankProject() {
+        app.editor.startNewProject()
+        app.editor.opensBlank = true
+        app.path.append(.editor)
+    }
+
+    private func startTemplate(_ template: VideoTemplate) {
+        app.openSelectClips(.edit, templateID: template.id)
+    }
+
+    // MARK: Words
+
+    /// "2 H AGO", "12 MIN AGO", "YESTERDAY", "12 NOV".
+    static func ago(_ date: Date) -> String {
+        let seconds = max(0, Date().timeIntervalSince(date))
+        if seconds < 60 { return "JUST NOW" }
+        if seconds < 3600 { return "\(Int(seconds / 60)) MIN AGO" }
+        if seconds < 86_400 { return "\(Int(seconds / 3600)) H AGO" }
+        if Calendar.current.isDateInYesterday(date) { return "YESTERDAY" }
+        return date.formatted(.dateTime.day().month(.abbreviated)).uppercased()
+    }
+
+    /// "0:12 · 6 clips · KD2 Golden Hour" (the look when a clip carries one).
+    static func meta(_ project: StoredProject, withLook: Bool) -> String {
+        let seconds = Int(project.duration.rounded())
+        var parts = [String(format: "%d:%02d", seconds / 60, seconds % 60),
+                     "\(project.clips.count) \(project.clips.count == 1 ? "clip" : "clips")"]
+        if withLook, let look = lookName(project) { parts.append(look) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The first clip grade's look, "KD2 · Golden Hour" shown as "KD2 Golden Hour".
+    static func lookName(_ project: StoredProject) -> String? {
+        guard let name = project.clips.lazy.compactMap({ $0.grade?.baseLookName }).first,
+              !name.isEmpty else { return nil }
+        return name.replacingOccurrences(of: " · ", with: " ")
+    }
+
+    static func isPhoto(_ project: StoredProject) -> Bool {
+        !project.clips.isEmpty && project.clips.allSatisfy { $0.isImage == true }
+    }
+
+    struct ProjectSection {
+        let title: String
+        let items: [StoredProject]
+    }
+
+    /// Today, Yesterday, This week, then by month.
+    static func sections(_ projects: [StoredProject]) -> [ProjectSection] {
+        let calendar = Calendar.current
+        var order: [String] = []
+        var buckets: [String: [StoredProject]] = [:]
+        for project in projects {
+            let date = project.updatedAt
+            let title: String
+            if calendar.isDateInToday(date) {
+                title = "Today"
+            } else if calendar.isDateInYesterday(date) {
+                title = "Yesterday"
+            } else if let days = calendar.dateComponents([.day], from: date, to: Date()).day, days < 7 {
+                title = "This week"
+            } else {
+                title = date.formatted(.dateTime.month(.wide).year())
+            }
+            if buckets[title] == nil { order.append(title) }
+            buckets[title, default: []].append(project)
+        }
+        return order.map { ProjectSection(title: $0, items: buckets[$0] ?? []) }
     }
 }
 
-/// A project's metadata line: dates and words in the reading face, counts and
-/// running times in the instrument face, because those are numbers.
-private enum ProjectMeta {
-    static func line(_ project: StoredProject) -> Text {
-        var text = wordText(project.updatedAt.formatted(date: .abbreviated, time: .omitted),
-                            12, 0.55)
-            + wordText(" · ", 12, 0.4)
-            + numText(time(project.duration), 12, 0.72)
-            + wordText(" · ", 12, 0.4)
-            + numText("\(project.clips.count)", 12, 0.72)
-            + wordText(project.clips.count == 1 ? " clip" : " clips", 12, 0.55)
-        let audio = project.audioTracks?.count ?? 0
-        if audio > 0 {
-            text = text
-                + wordText(" · ", 12, 0.4)
-                + numText("\(audio)", 12, 0.72)
-                + wordText(" audio", 12, 0.55)
-        }
-        return text
-    }
-
-    static func time(_ seconds: Double) -> String {
-        String(format: "%02d:%02d", Int(seconds) / 60, Int(seconds) % 60)
-    }
-}
-
-private struct ProjectList: View {
-    @EnvironmentObject private var app: AppModel
-    @ObservedObject var store: PersistenceStore
+/// One project in the grid: its first frame, the length on a small glass
+/// tag (videos), and the name and look on the picture.
+private struct ProjectGridTile: View {
+    let project: StoredProject
+    let store: PersistenceStore
+    let action: () -> Void
 
     var body: some View {
-        List {
-            Section {
-                ForEach(Array(store.projects.enumerated()), id: \.element.id) { index, project in
-                    Button {
-                        app.editor.load(project: project)
-                        app.path.append(.editor)
-                    } label: {
-                        HStack(spacing: 14) {
-                            ProjectThumb(project: project, store: store,
-                                         fallback: MockScene.allCases[index % MockScene.allCases.count],
-                                         radius: 10)
-                                // 92x58 + a wrapping subtitle pushed rows past
-                                // 120pt — a project list that showed four items
-                                // per screen. 72x44 with a single-line subtitle
-                                // lands the row at ~60pt.
-                                .frame(width: 72, height: 44)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(project.title)
-                                    .font(.luma(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                // Metadata is a glanceable single line;
-                                // wrapping it doubled every row's height.
-                                ProjectMeta.line(project).lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.35))
-                        }
+        Button(action: action) {
+            ProjectThumb(project: project, store: store, radius: 15)
+                .frame(height: 232)
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [.black.opacity(0), .black.opacity(0.62)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 96)
+                        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 15, bottomTrailingRadius: 15,
+                                                          style: .continuous))
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(project.title)
+                            .font(.luma(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(ProjectLibraryView.lookName(project)
+                             ?? "\(project.clips.count) \(project.clips.count == 1 ? "clip" : "clips")")
+                            .font(.luma(size: 11.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.66))
+                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(LumaTheme.card)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            store.deleteProject(project.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 11)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if !ProjectLibraryView.isPhoto(project) {
+                        ProjectDurationTag(seconds: project.duration, play: true)
+                            .padding(9)
                     }
                 }
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("\(project.title), \(ProjectLibraryView.meta(project, withLook: true))")
+    }
+}
+
+/// "▶ 0:12" on dark glass.
+private struct ProjectDurationTag: View {
+    let seconds: Double
+    var play: Bool = false
+
+    var body: some View {
+        let total = Int(seconds.rounded())
+        HStack(spacing: 4) {
+            if play {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 7, weight: .bold))
+            }
+            Text(String(format: "%d:%02d", total / 60, total % 60))
+                .font(.luma(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(.ultraThinMaterial.opacity(0.9), in: Capsule())
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// Templates as two columns of posters: length, name and clip count.
+private struct ProjectTemplateGrid: View {
+    let templates: [VideoTemplate]
+    let onPick: (VideoTemplate) -> Void
+
+    private static let fallback: [HeroPhoto] = [.skate, .golden, .bridge, .gig, .party, .campaign]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                  spacing: 8) {
+            ForEach(Array(templates.enumerated()), id: \.element.id) { item in
+                let template = item.element
+                let photo = template.poster.flatMap(HeroPhoto.init(rawValue:))
+                    ?? Self.fallback[item.offset % Self.fallback.count]
+                Button {
+                    onPick(template)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    HeroImage(photo: photo, radius: 15)
+                        .frame(height: 196)
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(colors: [.black.opacity(0), .black.opacity(0.66)],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: 96)
+                                .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 15,
+                                                                  bottomTrailingRadius: 15,
+                                                                  style: .continuous))
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(template.name)
+                                    .font(.luma(size: 14, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Text("\(template.clipCount) \(template.clipCount == 1 ? "clip" : "clips")")
+                                    .font(.luma(size: 11.5, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.66))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 11)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            ProjectDurationTag(seconds: template.totalDuration)
+                                .padding(9)
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Template \(template.name)")
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        // Match Settings: tight section gaps, no cavernous inset above the
-        // first section. See the note there.
-        .listSectionSpacing(12)
-        .contentMargins(.top, 2, for: .scrollContent)
-        .environment(\.defaultMinListRowHeight, 56)
+    }
+}
+
+/// Every template, from the Templates pill.
+private struct ProjectTemplatesSheet: View {
+    let onPick: (VideoTemplate) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Templates")
+                    .font(.luma(size: 22, weight: .bold))
+                    .kerning(-0.5)
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .frame(width: 32, height: 32)
+                        .background(Color.white.opacity(0.09), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 14)
+            ScrollView(showsIndicators: false) {
+                ProjectTemplateGrid(templates: TemplateLibrary.shown, onPick: onPick)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 30)
+            }
+        }
+        .background(LumaTheme.background.ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -1860,6 +2135,7 @@ struct ProjectThumb: View {
     /// the full-width hero at the top of the Projects screen.
     var radius: CGFloat = 14
     @State private var thumbnail: CGImage?
+    @State private var loadedID: UUID?
 
     var body: some View {
         Color.clear
@@ -1876,10 +2152,20 @@ struct ProjectThumb: View {
             // Thumb sits inside the project row's Button — the overflowing fill
             // must not extend the row's touch target past its artwork.
             .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .task {
-            guard thumbnail == nil, let first = project.clips.first else { return }
+        // Keyed on the project, so a reused view (the hero after the newest
+        // project is deleted) loads the new first frame.
+        .task(id: project.id) {
+            guard loadedID != project.id else { return }
+            thumbnail = nil
+            loadedID = project.id
+            guard let first = project.clips.first else { return }
             let url = store.clipURL(for: first)
             guard FileManager.default.fileExists(atPath: url.path) else { return }
+            // A photo clip has no video track to grab a frame from.
+            if first.isImage == true {
+                thumbnail = EditorState.imageThumbnail(at: url, maxDimension: 900)
+                return
+            }
             thumbnail = await EditorState.thumbnail(for: AVURLAsset(url: url),
                                                     at: first.trimStart + 0.02)
         }
@@ -2380,7 +2666,7 @@ struct SettingsSubscriptionView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("iOS keeps per-app language under Settings › LumaLook. This will leave LumaLook.")
+            Text("iOS keeps per-app language under Settings › Lumalook. This will leave Lumalook.")
         }
         // Plain facts about what the LUT library costs on disk — no "clean up"
         // button, because every byte here is a look the user chose to keep and
@@ -2390,7 +2676,7 @@ struct SettingsSubscriptionView: View {
             Button("Manage Imported LUTs") { app.path.append(.lutManager) }
             Button("Done", role: .cancel) { }
         } message: {
-            Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in LumaLook's documents folder. Removing a LUT frees its space immediately.")
+            Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in Lumalook's documents folder. Removing a LUT frees its space immediately.")
         }
         .task {
             lutBytes = await Self.directorySize(of: app.lutRepository.lutFolderURL)
@@ -2527,7 +2813,7 @@ struct SettingsSubscriptionView: View {
                             opensExternally: true) {
                     openSupportMail()
                 }
-                settingsRow(icon: "star", title: "Rate LumaLook",
+                settingsRow(icon: "star", title: "Rate Lumalook",
                             opensExternally: true) {
                     requestReview()
                 }
@@ -2544,7 +2830,7 @@ struct SettingsSubscriptionView: View {
                 settingsRow(icon: "photo.on.rectangle", title: "Photo credits") {
                     showPhotoCredits = true
                 }
-                settingsRow(icon: "info.circle", title: "About LumaLook",
+                settingsRow(icon: "info.circle", title: "About Lumalook",
                             value: "v\(Self.appVersion)", valueIsNumber: true) {
                     showAbout = true
                 }
@@ -2635,8 +2921,8 @@ struct SettingsSubscriptionView: View {
     /// Gated on canOpenURL and on the open callback: the simulator, and any
     /// device with Mail removed or unconfigured, silently swallowed this.
     private func openSupportMail() {
-        let subject = "LumaLook Support".addingPercentEncoding(
-            withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+        let subject = "Lumalook Support".addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? "Lumalook%20Support"
         guard let url = URL(string: "mailto:\(Self.supportAddress)?subject=\(subject)"),
               UIApplication.shared.canOpenURL(url) else {
             showSupportFallback = true
@@ -2729,7 +3015,7 @@ struct SettingsSubscriptionView: View {
                     .font(.luma(size: 34, weight: .medium))
                     .foregroundStyle(.white))
                 .padding(.top, 30)
-            Text("LumaLook")
+            Text("Lumalook")
                 .font(.luma(size: 24, weight: .bold))
                 .foregroundStyle(.white)
             // A version and a build are numbers.
@@ -2740,8 +3026,8 @@ struct SettingsSubscriptionView: View {
                 .foregroundStyle(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
             Button {
-                let subject = "LumaLook Support".addingPercentEncoding(
-                    withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+                let subject = "Lumalook Support".addingPercentEncoding(
+                    withAllowedCharacters: .urlQueryAllowed) ?? "Lumalook%20Support"
                 if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
                     UIApplication.shared.open(url)
                 }
@@ -2774,7 +3060,7 @@ struct SettingsSubscriptionView: View {
                     .font(.luma(size: storeService.isPro ? 22 : 26))
                     .foregroundStyle(.white.opacity(0.85)))
             VStack(alignment: .leading, spacing: 4) {
-                Text(storeService.isPro ? "LumaLook Pro" : "LumaLook Free")
+                Text(storeService.isPro ? "Lumalook Pro" : "Lumalook Free")
                     .font(.luma(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)

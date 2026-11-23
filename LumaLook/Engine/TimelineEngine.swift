@@ -610,6 +610,9 @@ final class EditorState: ObservableObject {
     let clipTransformLayout = ClipTransformLayout()
     private let store: PersistenceStore
     private(set) var projectID = UUID()
+    /// Set by Blank project so the editor's cold-start fallbacks (seed the
+    /// grading clip, resume the newest edit) leave the empty timeline alone.
+    var opensBlank = false
     private var projectCreatedAt = Date()
     @Published var projectTitle = "New Project"
     private var undoStack: [Snapshot] = []
@@ -926,8 +929,10 @@ final class EditorState: ObservableObject {
         refreshOverlayThumbnails()
     }
 
-    func startNewProject() {
-        saveProject()
+    /// Clears the timeline for a fresh project. `saving: false` is for when
+    /// the loaded project has just been deleted, so it is not written back.
+    func startNewProject(saving: Bool = true) {
+        if saving { saveProject() }
         projectID = UUID()
         projectCreatedAt = Date()
         projectTitle = "New Project"

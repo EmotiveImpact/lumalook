@@ -503,6 +503,33 @@ final class AppModel: ObservableObject {
             for id in ids.dropFirst(4).prefix(5) { lutRepository.addLook(id: id, to: night.id) }
             lutRepository.setPinnedCollection(night.id)
         }
+        // Projects cell: LUMA_SEED_PROJECTS=1 adds five photo projects from the
+        // bundled hero photos (once), so the populated Projects page (hero,
+        // tabs, grid) can be screenshotted headlessly with some variety.
+        if env["LUMA_SEED_PROJECTS"] == "1",
+           !store.projects.contains(where: { $0.title == "Golden hour walk" }) {
+            let seeds: [(String, String, String, Double, Int)] = [
+                ("hero_golden", "Golden hour walk", "CN44 · Anamorphic Dusk", -2 * 3600, 6),
+                ("hero_neon", "Neon after party", "AD2 · Neon Nights", -5 * 3600, 9),
+                ("hero_campaign", "Spring campaign", "CN93 · Luxury Campaign", -26 * 3600, 4),
+                ("hero_rain", "London rain", "AD5 · London Rain", -28 * 3600, 3),
+                ("hero_gig", "Friday gig", "BW32 · Documentary Grit", -3 * 86_400, 7)
+            ]
+            for (resource, title, look, offset, count) in seeds {
+                guard let source = Bundle.main.url(forResource: resource, withExtension: "jpg"),
+                      let copied = store.importClipFile(from: source) else { continue }
+                let date = Date().addingTimeInterval(offset)
+                let clips = (0..<count).map { _ in
+                    StoredClip(id: UUID(), fileName: copied.lastPathComponent, assetDuration: 3,
+                               trimStart: 0, trimEnd: 3, speed: 1, isImage: true,
+                               grade: ClipGrade(baseLookName: look, lutID: nil, settings: LookSettings()))
+                }
+                store.upsert(project: StoredProject(
+                    id: UUID(), title: title, createdAt: date, updatedAt: date, clips: clips,
+                    format: "9:16", zoom: 1, volume: 1, fadeIn: 0, fadeOut: 0, muteAudio: false,
+                    duration: Double(count) * 3))
+            }
+        }
         // Headless open-in-place check: LUMA_OPEN_FILE=<host path>.
         if let openPath = env["LUMA_OPEN_FILE"], FileManager.default.fileExists(atPath: openPath) {
             handleIncomingFile(url: URL(fileURLWithPath: openPath))
