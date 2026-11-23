@@ -579,24 +579,52 @@ final class AppModel: ObservableObject {
     /// engine that baked them (or the True Colour switch) has changed, bake
     /// them again, off the main thread, so they match the live looks. Runs at
     /// launch and whenever the switch flips.
+    ///
+    /// The stamp is saved only once every cube is back on disk, so closing
+    /// the app half way through means the next launch bakes again instead of
+    /// leaving half the looks on the old engine. One bake runs at a time; if
+    /// the switch moves while it runs, it runs once more for the new setting.
     func rebakeRecipeLooksIfNeeded() {
         let stamp = TrueColour.bakeStamp
         guard UserDefaults.standard.string(forKey: TrueColour.bakedKey) != stamp else { return }
-        UserDefaults.standard.set(stamp, forKey: TrueColour.bakedKey)
+        guard !rebakeInFlight else { return }
         let jobs = PackInstaller.recipeBakeJobs(in: lutRepository)
-        guard !jobs.isEmpty else { return }
+        guard !jobs.isEmpty else {
+            UserDefaults.standard.set(stamp, forKey: TrueColour.bakedKey)
+            // Nothing installed to bake, but every live look just changed.
+            objectWillChange.send()
+            return
+        }
+        rebakeInFlight = true
         Task.detached(priority: .utility) { [weak self] in
+            var allWritten = true
             for job in jobs {
-                guard let text = PackInstaller.cubeText(for: job.recipe, title: job.title) else { continue }
-                try? text.write(to: job.url, atomically: true, encoding: .utf8)
+                guard let text = PackInstaller.cubeText(for: job.recipe, title: job.title) else {
+                    allWritten = false
+                    continue
+                }
+                do {
+                    try text.write(to: job.url, atomically: true, encoding: .utf8)
+                } catch {
+                    allWritten = false
+                }
             }
+            let finished = allWritten
             await MainActor.run {
+                guard let self else { return }
+                self.rebakeInFlight = false
+                let current = TrueColour.bakeStamp
+                if finished && current == stamp {
+                    UserDefaults.standard.set(stamp, forKey: TrueColour.bakedKey)
+                }
                 LookPipeline.shared.clearLUTCache()
-                self?.syncLookState()
-                self?.objectWillChange.send()
+                self.syncLookState()
+                self.objectWillChange.send()
+                if current != stamp { self.rebakeRecipeLooksIfNeeded() }
             }
         }
     }
+    private var rebakeInFlight = false
 
     private func syncLookState() {
         lookState.recipe = selectedLook.recipe

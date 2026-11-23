@@ -1,22 +1,36 @@
-# Skin test: the Mac half of tools/skin-test.
+# Skin test: the check every look and the True Colour engine go through.
 #
-# Core Image only exists on Apple platforms, so this job bakes every look
-# through the app's own True Colour engine on real Core Image (TrueColour.swift
-# compiled in, the same code path as LookPipeline) into small colour cubes,
-# and fetches the licensed test portraits listed in
-# tools/skin-test/candidates.txt. It commits the results back to the branch
-# (tools/skin-test/out) so the rest of the test, which is plain Python, can
-# run anywhere. It only runs when the skin-test inputs change.
+# 1. bake (Mac). Core Image only exists on Apple platforms, so this job first
+#    runs the engine's own checks (tools/skin-test/check_truecolour.swift,
+#    compiled together with the app's TrueColour.swift, LUTParser.swift and
+#    LUTDensifier.swift), then bakes every look through that same engine on
+#    real Core Image into small colour cubes, and fetches the licensed test
+#    portraits listed in tools/skin-test/candidates.txt. It commits the
+#    results back to the branch (tools/skin-test/out).
+# 2. gate (Linux). Judges every look on the test portraits and the Monk
+#    skin-tone chart (tools/skin-test/gate.py) and fails if a look needs
+#    rework, got worse than tools/skin-test/baseline.json, or is new and not
+#    skin-true at the app's 75% default.
+#
+# It runs when a look, a film LUT, the engine or the test itself changes.
 name: Skin test bake
 
 on:
   push:
     branches: ['claude/**']
     paths:
-      - 'tools/skin-test/bake_recipes.swift'
-      - 'tools/skin-test/bake_truecolour.swift'
+      # the looks
+      - 'LumaLook/Data/MockData.swift'
+      - 'LumaLook/Engine/LookPacks.swift'
+      - 'LumaLook/Resources/FilmLUTs/**'
+      # the engine
       - 'LumaLook/Engine/TrueColour.swift'
-      - 'tools/skin-test/extract_looks.py'
+      - 'LumaLook/Engine/LUTParser.swift'
+      - 'LumaLook/Engine/LUTDensifier.swift'
+      # the test
+      - 'tools/skin-test/*.swift'
+      - 'tools/skin-test/*.py'
+      - 'tools/skin-test/*.json'
       - 'tools/skin-test/candidates.txt'
       - '.github/workflows/skin-test.yml'
   workflow_dispatch:
@@ -42,6 +56,16 @@ jobs:
       # before the True Colour fix (bake_recipes.swift, the old linear-light
       # CIColorControls path). They are the "before" of the skin test, so they
       # are kept, not baked again. Run bake_recipes.swift by hand to redo them.
+
+      # Before anything is baked: does the engine keep its promises on looks
+      # built to be hard on skin? Stops the job if any check fails.
+      - name: Check the True Colour engine itself
+        run: |
+          mkdir -p /tmp/tc-check
+          cp tools/skin-test/check_truecolour.swift /tmp/tc-check/main.swift
+          swiftc -O -o /tmp/tc-check/check /tmp/tc-check/main.swift LumaLook/Engine/TrueColour.swift \
+            LumaLook/Engine/LUTParser.swift LumaLook/Engine/LUTDensifier.swift
+          /tmp/tc-check/check
 
       - name: Bake every look through the app's True Colour engine
         run: |
@@ -85,3 +109,31 @@ jobs:
             sleep 5
           done
           exit 1
+
+  # The Linux half: judge every look on the portraits. Reads the bake the job
+  # above just committed, so it checks out the branch, not the pushed commit.
+  gate:
+    needs: bake
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Pinned, so a look near a threshold reads the same here as on the
+      # machine that recorded baseline.json.
+      - name: Install the measuring tools
+        run: pip install numpy==2.5.3 pillow==12.3.0 scipy==1.18.1
+
+      - name: Prepare the test portraits
+        run: python3 tools/skin-test/prep_portraits.py
+
+      - name: Every look has to pass the gate
+        run: python3 tools/skin-test/gate.py

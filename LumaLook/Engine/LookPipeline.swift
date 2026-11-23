@@ -314,10 +314,15 @@ final class LookPipeline: @unchecked Sendable {
         case .plastic:
             // Toy camera: popped saturation, crushed corner falloff, and a
             // cheap-lens softness ramp toward the edges.
-            let popped = image.applyingFilter("CIColorControls", parameters: [
-                kCIInputSaturationKey: 1 + 0.35 * a,
-                kCIInputContrastKey: 1 + 0.12 * a,
-            ])
+            // Through True Colour like every other contrast in the app:
+            // CIColorControls works in linear light and crushed deep skin.
+            var popped = image
+            if let pop = TrueColour.toneFilter(contrast: Float(1 + 0.12 * a),
+                                               saturation: Float(1 + 0.35 * a),
+                                               brightness: 0) {
+                pop.setValue(image, forKey: kCIInputImageKey)
+                popped = pop.outputImage ?? image
+            }
             let radial = CIFilter(name: "CIRadialGradient", parameters: [
                 kCIInputCenterKey: CIVector(x: center.x, y: center.y),
                 "inputRadius0": min(extent.width, extent.height) * 0.30,

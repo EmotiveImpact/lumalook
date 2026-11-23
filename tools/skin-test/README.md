@@ -25,8 +25,10 @@ It measures looks, tries fixes, and verifies the True Colour engine
   (`out/film_tc`). `verify.py` judges those and `after_sheets.py` draws the
   before and after. `out/luts` keeps the bake of the looks as they shipped
   before the fix (the "before").
-- **Film looks** are the app's own `.cube` files, sampled tetrahedrally (what
-  the app's 64-point densify comes to).
+- **Film looks** are the app's own `.cube` files, sampled tetrahedrally, which
+  is what the app's 64-point densify (`LUTDensifier.swift`) does. Until
+  23 Nov 2026 the densify had one of its six cases missing and was up to 29
+  of 255 off on a sixth of each cell; `check_truecolour.swift` now checks it.
 - **Portraits**: 16 photos from Pexels (Pexels Licence), four per light
   (daylight, warm indoor, night and neon, backlit), listed with credits, crops
   and skin areas in `portraits.json`. The Mac runner downloads them
@@ -53,6 +55,95 @@ python3 try_photos.py OUT.jpg PHOTO...      # any photo: as shipped, True Colour
 ```
 
 Needs numpy, scipy and Pillow.
+
+## When a new look comes in
+
+True Colour protects skin on every look without anyone doing anything: recipe
+looks get lightness-only tone, and any LUT the app did not make itself gets
+the skin guard. The gate checks that the protection was enough for this look.
+
+**The rule a new look has to pass** (`gate.py`):
+
+1. Skin-true at 75%, the strength the app opens every look at.
+2. Never "needs rework", not even at full strength.
+3. The deepest skin tone (Monk 10) keeps at least 0.20 lightness (Oklab L).
+4. No look already in the app gets worse than its line in `baseline.json`.
+
+**A film LUT (.cube file)**
+
+```sh
+python3 tools/skin-test/check_look.py NEW.cube --sheet new.jpg   # no Mac needed
+```
+
+It prints PASS or FAIL with the reason and what to change, and saves a
+picture on four test portraits. If it passes, put the file in
+`LumaLook/Resources/FilmLUTs/`, add the look to its pack in `LookPacks.swift`
+and push to a `claude/` branch. The Mac runner bakes it through the app's own
+code and the gate has the last word.
+
+**A recipe look (warmth, contrast and so on)**
+
+Add it to `LookPacks.swift` (or `MockData.swift` for a Signature look) and
+push to a `claude/` branch; the Mac runner tests it, because warmth runs
+through Core Image. Where recipes pass, from `sweep.py` (True Colour on;
+"passes" means skin-true at 75%):
+
+| Setting | Comfortable | The edge | Fails |
+|---|---|---|---|
+| Saturation | 0.85 to 1.15 | 0.70 (only with brightness below 0) and 1.30 | 1.45 and up: skin turns orange |
+| Contrast | 0.90 to 1.40, the whole range in use | | no longer the risk it was |
+| Brightness | -0.04 to +0.06 | -0.06 | |
+| Warmth | 5000 to 7000 K | 7600 K (goes ashy) | warmer than about 4600 K (orange, green), cooler than about 8300 K (ashy) |
+| Tint | -6 to +10 | +11 to +14 (goes magenta) | +15 and up; +20 and up needs rework |
+
+Settings add up. Low saturation with a cool white balance, or with low
+contrast and raised brightness (0.85, 0.90 and +0.06 together), washes skin
+out. High saturation with a warm white balance turns it orange. A look on the
+edge in one setting should sit in the comfortable column for the others. At
+full strength the picture is stricter: saturation 0.85 to 1.15 with
+brightness at 0 or above stays skin-true at any contrast. The table is a
+guide to where to start; the gate decides. Black-and-white recipes
+(saturation 0) are judged on tone alone; the ones in the app go up to
+contrast 1.40 and pass.
+
+**When a look fails**
+
+The gate names the problem and the remedy. In short: ashy, raise saturation
+or warm it; orange or red, lower saturation or cool it; magenta, move tint
+towards green; green, move tint towards magenta; too dark or crushed, raise
+brightness or lower contrast. For a film cube the same changes go into the
+cube itself. A look that cannot pass at 75% does not ship.
+
+**Things not to do**
+
+- No `CIColorControls` for contrast or brightness anywhere. It works in
+  linear light and crushes deep skin to black; that was the original bug.
+  Tone goes through `TrueColour.toneFilter`.
+- No new colour filter that skips `TrueColour`. If a look needs something
+  new, add it there, with a check in `check_truecolour.swift`.
+- No `gate.py --accept` to make a failure go away. It records a decision
+  that somebody made on purpose, and the baseline change shows in the pull
+  request.
+
+**When the engine itself changes** (`TrueColour.swift`, `LUTParser.swift`,
+`LUTDensifier.swift`)
+
+1. `check_truecolour.swift` has to pass (the Mac runner runs it before it
+   bakes). Add a check for whatever changed.
+2. If the tone maths changed, bump the stamp in `TrueColour.bakeStamp`
+   (`tone2` today), so pack looks already installed on phones are baked again.
+3. The gate has to pass on the new bake, then
+   `python3 tools/skin-test/check_look.py --self-test` has to pass, which
+   proves the Python copy of the guard (`fixes.skin_guard`) still matches.
+
+**What the skin guard cannot do**
+
+It judges skin by colour alone. The deepest skin tones sit a few steps from
+neutral grey, so on the most extreme looks (the Instant Lab cold looks at
+full strength) the edge between protected skin and the look's own colour can
+still show as a hard line in dark hair and shadow. A guard that knows where
+the people are in the picture (Apple's Vision person segmentation) would not
+have that limit; that is the next step if it matters on real photos.
 
 ## How a look is judged
 

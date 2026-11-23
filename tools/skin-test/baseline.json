@@ -1,0 +1,773 @@
+{
+ "what": "The skin test result of every look, True Colour on. gate.py fails a change that makes any of these worse. Rewritten only with `gate.py --accept`.",
+ "looks": {
+  "after-dark-ad1": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.254
+  },
+  "after-dark-ad2": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.217
+  },
+  "after-dark-ad3": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.216
+  },
+  "after-dark-ad4": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.31
+  },
+  "after-dark-ad5": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.223
+  },
+  "bw-set-01-bw16": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
+  "bw-set-01-bw32": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.224
+  },
+  "bw-set-01-bw4": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.267
+  },
+  "cine-print-set-01-cn12": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.225
+  },
+  "cine-print-set-01-cn44": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.226
+  },
+  "cine-print-set-01-cn71": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.216
+  },
+  "cine-print-set-01-cn83": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.219
+  },
+  "cine-print-set-01-cn93": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.224
+  },
+  "film-instant-lab-fp100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.27
+  },
+  "film-instant-lab-fp100c": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.267
+  },
+  "film-instant-lab-fp100n": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.243
+  },
+  "film-instant-lab-fp3000": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.281
+  },
+  "film-instant-lab-fp3000n": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.242
+  },
+  "film-instant-lab-pl665": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.245
+  },
+  "film-instant-lab-pl690": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.243
+  },
+  "film-instant-lab-pl690w": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.295
+  },
+  "film-instant-lab-px100c": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.414
+  },
+  "film-instant-lab-px100w": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.429
+  },
+  "film-instant-lab-px680": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.304
+  },
+  "film-instant-lab-px680c": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.336
+  },
+  "film-instant-lab-px680w": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.358
+  },
+  "film-instant-lab-px70c": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 2,
+   "monk10": 0.291
+  },
+  "film-instant-lab-px70w": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.276
+  },
+  "film-mirrorless-sims-ms1": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.225
+  },
+  "film-mirrorless-sims-ms10": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-mirrorless-sims-ms11": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.236
+  },
+  "film-mirrorless-sims-ms12": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.238
+  },
+  "film-mirrorless-sims-ms13": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.236
+  },
+  "film-mirrorless-sims-ms14": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-mirrorless-sims-ms15": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 1,
+   "monk10": 0.238
+  },
+  "film-mirrorless-sims-ms2": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.223
+  },
+  "film-mirrorless-sims-ms3": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.207
+  },
+  "film-mirrorless-sims-ms4": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.215
+  },
+  "film-mirrorless-sims-ms5": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.252
+  },
+  "film-mirrorless-sims-ms6": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 1,
+   "monk10": 0.213
+  },
+  "film-mirrorless-sims-ms7": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-mirrorless-sims-ms8": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.238
+  },
+  "film-mirrorless-sims-ms9": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-mono-archive-apx100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.366
+  },
+  "film-mono-archive-apx25": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.255
+  },
+  "film-mono-archive-bw400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.277
+  },
+  "film-mono-archive-dl100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.266
+  },
+  "film-mono-archive-dl3200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.237
+  },
+  "film-mono-archive-dl400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.246
+  },
+  "film-mono-archive-fp125": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.319
+  },
+  "film-mono-archive-hps800": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
+  "film-mono-archive-ir840": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.338
+  },
+  "film-mono-archive-np100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.237
+  },
+  "film-mono-archive-np1600": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.227
+  },
+  "film-mono-archive-pf50": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.271
+  },
+  "film-mono-archive-pl664": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.311
+  },
+  "film-mono-archive-pl667": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.267
+  },
+  "film-mono-archive-pl672": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
+  "film-mono-archive-rir400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.236
+  },
+  "film-mono-archive-ro25": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 1,
+   "monk10": 0.269
+  },
+  "film-mono-archive-rr80": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.225
+  },
+  "film-mono-archive-tm100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.237
+  },
+  "film-mono-archive-tm3200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-mono-archive-tm400": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 1,
+   "monk10": 0.234
+  },
+  "film-mono-archive-xp2": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.235
+  },
+  "film-neg-archive-cp2393": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.179
+  },
+  "film-neg-archive-cp3510": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.201
+  },
+  "film-neg-archive-fn160": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.275
+  },
+  "film-neg-archive-fn400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.276
+  },
+  "film-neg-archive-fn800": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.288
+  },
+  "film-neg-archive-pt160n": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.253
+  },
+  "film-neg-archive-pt160v": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.233
+  },
+  "film-neg-archive-pt400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.262
+  },
+  "film-neg-archive-pt400n": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.252
+  },
+  "film-neg-archive-pt400u": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.266
+  },
+  "film-neg-archive-pt400v": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.265
+  },
+  "film-neg-archive-pt800": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.258
+  },
+  "film-neg-archive-pt800h": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.226
+  },
+  "film-neg-archive-sp100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.258
+  },
+  "film-neg-archive-sp1600": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.278
+  },
+  "film-neg-archive-sp400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.263
+  },
+  "film-neg-archive-sp800": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.255
+  },
+  "film-slide-archive-ap100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.248
+  },
+  "film-slide-archive-as100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.283
+  },
+  "film-slide-archive-ec100g": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.259
+  },
+  "film-slide-archive-ec100v": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.218
+  },
+  "film-slide-archive-el100x": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.255
+  },
+  "film-slide-archive-el200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.242
+  },
+  "film-slide-archive-el400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.236
+  },
+  "film-slide-archive-kc200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.241
+  },
+  "film-slide-archive-kc25": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.236
+  },
+  "film-slide-archive-pc35": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.241
+  },
+  "film-slide-archive-pr400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.233
+  },
+  "film-slide-archive-pr400x": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.279
+  },
+  "film-slide-archive-sn100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.302
+  },
+  "film-slide-archive-vv100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.232
+  },
+  "film-stocks-01-av200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.214
+  },
+  "film-stocks-01-cp2383": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.188
+  },
+  "film-stocks-01-cp3513": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.191
+  },
+  "film-stocks-01-ek100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.283
+  },
+  "film-stocks-01-hp400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
+  "film-stocks-01-in669": {
+   "full": "tweak",
+   "default": "tweak",
+   "bad_frames": 1,
+   "monk10": 0.311
+  },
+  "film-stocks-01-kc64": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.239
+  },
+  "film-stocks-01-pr100": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.267
+  },
+  "film-stocks-01-pt160": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.251
+  },
+  "film-stocks-01-rs100": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.205
+  },
+  "film-stocks-01-sp200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.271
+  },
+  "film-stocks-01-tx400": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.272
+  },
+  "film-stocks-01-vv50": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.207
+  },
+  "film-stocks-01-xp200": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.25
+  },
+  "negative-set-01-ag20": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.338
+  },
+  "negative-set-01-fj4": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.267
+  },
+  "negative-set-01-kd2": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.264
+  },
+  "negative-set-01-kd4": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.265
+  },
+  "negative-set-01-kd52": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.221
+  },
+  "originals-01-ll1": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.218
+  },
+  "originals-01-ll2": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.215
+  },
+  "originals-01-ll3": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.261
+  },
+  "sig-afrobeats-glow": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.229
+  },
+  "sig-ag60-london-rain": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
+  "sig-bw32-documentary-grit": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.224
+  },
+  "sig-cn83-teal-orange": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.233
+  },
+  "sig-cn93-luxury-campaign": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.233
+  },
+  "sig-kd2-golden-hour": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.275
+  },
+  "sig-kd4-clean-neutral": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.257
+  },
+  "sig-kd52-cine-negative": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.24
+  },
+  "sig-neon-nights": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.222
+  },
+  "sig-night-drive": {
+   "full": "tweak",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.216
+  }
+ }
+}

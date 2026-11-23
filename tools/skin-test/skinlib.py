@@ -90,7 +90,24 @@ def read_baked(path: Path, n: int = 25) -> np.ndarray:
     return raw.reshape(n, n, n, 3)
 
 
-def sample_tetra(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+def sample_trilinear(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+    """Trilinear interpolation of `cube` ([b][g][r] -> rgb) at sRGB `rgb`, which
+    is how Core Image's colour cube reads a cube in the app."""
+    n = cube.shape[0]
+    p = np.clip(rgb.reshape(-1, 3), 0, 1) * (n - 1)
+    i0 = np.clip(np.floor(p).astype(np.int32), 0, n - 2)
+    f = p - i0
+    out = 0
+    for db in (0, 1):
+        for dg in (0, 1):
+            for dr in (0, 1):
+                w = ((f[:, 0] if dr else 1 - f[:, 0]) * (f[:, 1] if dg else 1 - f[:, 1])
+                     * (f[:, 2] if db else 1 - f[:, 2]))
+                out = out + cube[i0[:, 2] + db, i0[:, 1] + dg, i0[:, 0] + dr] * w[:, None]
+    return np.clip(out, 0, 1).reshape(rgb.shape).astype(np.float32)
+
+
+def sample_tetra(cube: np.ndarray, rgb: np.ndarray, clip: bool = True) -> np.ndarray:
     """Tetrahedral interpolation of `cube` ([b][g][r] -> rgb) at sRGB `rgb`."""
     n = cube.shape[0]
     shp = rgb.shape
@@ -110,7 +127,7 @@ def sample_tetra(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
         v = v.copy()
         v[rows, order[:, k]] += 1
         out += at(v) * w[:, k + 1:k + 2]
-    return np.clip(out, 0, 1).reshape(shp)
+    return (np.clip(out, 0, 1) if clip else out).reshape(shp)
 
 
 def identity_cube(n: int) -> np.ndarray:

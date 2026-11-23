@@ -64,6 +64,17 @@ extension ParsedLUT {
                         rr = (1 - dg) * c000.0 + (dg - db) * cA.0 + (db - dr) * cB.0 + dr * c111.0
                         gg = (1 - dg) * c000.1 + (dg - db) * cA.1 + (db - dr) * cB.1 + dr * c111.1
                         bb = (1 - dg) * c000.2 + (dg - db) * cA.2 + (db - dr) * cB.2 + dr * c111.2
+                    } else if dr >= db {               // dr ≥ db > dg
+                        // This case was missing: its colours fell through to
+                        // the next one, whose weights go negative here, so a
+                        // sixth of every cell was pushed past its own corners
+                        // (up to 29 of 255 on the 13-point film cubes).
+                        // tools/skin-test/check_truecolour.swift checks all six.
+                        let cA = sample(r0 + 1, g0, b0)
+                        let cB = sample(r0 + 1, g0, b0 + 1)
+                        rr = (1 - dr) * c000.0 + (dr - db) * cA.0 + (db - dg) * cB.0 + dg * c111.0
+                        gg = (1 - dr) * c000.1 + (dr - db) * cA.1 + (db - dg) * cB.1 + dg * c111.1
+                        bb = (1 - dr) * c000.2 + (dr - db) * cA.2 + (db - dg) * cB.2 + dg * c111.2
                     } else if dr >= dg {               // db > dr ≥ dg
                         let cA = sample(r0, g0, b0 + 1)
                         let cB = sample(r0 + 1, g0, b0 + 1)
