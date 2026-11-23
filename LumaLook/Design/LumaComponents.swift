@@ -225,14 +225,10 @@ struct LumaMark: View {
     var size: CGFloat = 13
 
     var body: some View {
-        // White since the calm round: the yellow stays with the shutter.
+        // A white outlined frame since the calm round (the same mark as
+        // Home's): the yellow stays with the shutter.
         RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-            .fill(LumaTheme.textPrimary)
-            .overlay(
-                RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
-                    .fill(LumaTheme.ink)
-                    .padding(size * 0.21)
-            )
+            .strokeBorder(Color.white.opacity(0.92), lineWidth: max(1.5, size * 0.17))
             .frame(width: size, height: size)
     }
 }
