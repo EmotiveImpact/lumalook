@@ -26,6 +26,12 @@ enum CamLab {
     static let plateHeight: CGFloat = 100
     /// The shutter's centre, up from the bottom edge. The dial turns on it.
     static let shutterRise: CGFloat = 74
+
+    /// Calm camera (23 Nov 2026): upright, the picture sits in its own frame
+    /// and the controls live on ink below it. The dock's height, from the
+    /// bottom edge, and the frame's lower corners.
+    static let dockHeight: CGFloat = 158
+    static let frameRadius: CGFloat = 34
 }
 
 extension View {
@@ -390,9 +396,10 @@ struct CamPlate: View {
     }
 }
 
-/// White ring on a dark well. Video has a red core that squares off while
-/// rolling; the photo modes have a signal-yellow core, with the frames left
-/// on it while a roll is loaded.
+/// Calm shutter: a white ring round a white disc. Video (and slo-mo) carry
+/// a red record dot; while a take rolls the disc fills red with a white stop
+/// square, so the red only ever means recording. The photo modes are plain
+/// white, with the frames left on it while a roll is loaded.
 struct CamShutter: View {
     let isRecording: Bool
     var photoMode: Bool = false
@@ -400,14 +407,26 @@ struct CamShutter: View {
     var rollCount: Int? = nil
     let action: () -> Void
 
+    static let size: CGFloat = 74
+
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle().fill(Color.black.opacity(0.35))
-                Circle().strokeBorder(Color.white, lineWidth: 3)
-                RoundedRectangle(cornerRadius: isRecording ? 7 : 28)
-                    .fill(photoMode ? CamLab.sig : CamLab.rec)
-                    .frame(width: isRecording ? 28 : 56, height: isRecording ? 28 : 56)
+                Circle().strokeBorder(Color.white.opacity(0.95), lineWidth: 3.5)
+                Circle()
+                    .fill(isRecording ? CamLab.rec : Color(hex: 0xF4F5F6))
+                    .frame(width: 59, height: 59)
+                if isRecording {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.white)
+                        .frame(width: 20, height: 20)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                } else if !photoMode {
+                    Circle()
+                        .fill(CamLab.rec)
+                        .frame(width: 20, height: 20)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
                 if photoMode, let rollCount {
                     Text("\(rollCount)")
                         .font(.luma(size: 22, weight: .bold))
@@ -417,7 +436,7 @@ struct CamShutter: View {
                         .contentTransition(.numericText(countsDown: true))
                 }
             }
-            .frame(width: 70, height: 70)
+            .frame(width: Self.size, height: Self.size)
             .animation(.easeInOut(duration: 0.2), value: isRecording)
             .animation(.easeInOut(duration: 0.2), value: photoMode)
             .animation(.snappy(duration: 0.2), value: rollCount)
@@ -858,20 +877,20 @@ private struct CamRulerFace: View, Animatable {
                     let x = mid + CGFloat(Double(i) - position) * spacing
                     context.fill(Path(roundedRect: CGRect(x: x - 0.75, y: 4, width: 1.5, height: 14),
                                       cornerRadius: 0.75),
-                                 with: .color(.white.opacity(0.92)))
+                                 with: .color(.white.opacity(0.45)))
                     if i < ticks.count - 1 {
                         for m in 1..<4 {
                             let mx = x + CGFloat(m) / 4 * spacing
                             context.fill(Path(roundedRect: CGRect(x: mx - 0.75, y: 4, width: 1.5, height: 7),
                                               cornerRadius: 0.75),
-                                         with: .color(.white.opacity(0.5)))
+                                         with: .color(.white.opacity(0.22)))
                         }
                     }
                     if i % labelEvery == 0 {
                         let on = i == current
                         let label = Text(ticks[i])
                             .font(.luma(size: 12, weight: on ? .semibold : .medium))
-                            .foregroundColor(on ? CamLab.sig : .white.opacity(0.55))
+                            .foregroundColor(on ? .white : .white.opacity(0.5))
                         context.draw(label, at: CGPoint(x: x, y: 25), anchor: .top)
                     }
                 }
@@ -879,7 +898,7 @@ private struct CamRulerFace: View, Animatable {
             let needle = Path(roundedRect: CGRect(x: mid - 1.25, y: 0, width: 2.5, height: 22),
                               cornerRadius: 1.25)
             context.drawLayer { layer in
-                layer.addFilter(.shadow(color: CamLab.sig.opacity(0.7), radius: 4))
+                layer.addFilter(.shadow(color: CamLab.sig.opacity(0.35), radius: 3))
                 layer.fill(needle, with: .color(CamLab.sig))
             }
         }
@@ -901,9 +920,9 @@ struct CamReadout: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.luma(size: 15.5, weight: .medium))
+                    .font(.luma(size: 15.5, weight: .semibold))
                     .kerning(-0.3)
-                    .foregroundStyle(CamLab.text)
+                    .foregroundStyle(active ? CamLab.text : Color.white.opacity(0.6))
                     .lineLimit(1)
                     .fixedSize()
                     .frame(height: 15.5)
@@ -912,14 +931,14 @@ struct CamReadout: View {
                     Text(name)
                         .font(.luma(size: 9, weight: .semibold))
                         .kerning(0.7)
-                        .foregroundStyle(active ? CamLab.text : CamLab.label)
+                        .foregroundStyle(active ? Color.white.opacity(0.85) : CamLab.grey3)
                     if auto {
                         Text("A")
                             .font(.luma(size: 8.5, weight: .bold))
-                            .foregroundStyle(CamLab.ink)
+                            .foregroundStyle(Color.white.opacity(0.75))
                             .padding(.horizontal, 3)
                             .frame(height: 12)
-                            .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 3))
+                            .background(Color.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 3))
                     }
                 }
                 .lineLimit(1)
@@ -928,11 +947,11 @@ struct CamReadout: View {
             }
             .frame(minWidth: 34, alignment: .leading)
             .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(active ? CamLab.sig : Color.white.opacity(0.16))
-                    .frame(height: 1.5)
-                    .shadow(color: active ? CamLab.sig.opacity(0.5) : .clear, radius: 3)
-                    .offset(y: 21.5)
+                // Calm: only the live readout carries a rule, in white.
+                Capsule()
+                    .fill(active ? Color.white : Color.clear)
+                    .frame(width: 26, height: 2)
+                    .offset(y: 45)
             }
             .contentShape(Rectangle())
         }
@@ -954,17 +973,17 @@ struct CamTile: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 CamGlyph(icon: icon, size: 22, weight: 1.6)
-                    .foregroundStyle(on ? CamLab.sig : Color.white.opacity(0.85))
+                    .foregroundStyle(on ? Color.white : Color.white.opacity(0.78))
                 Text(label)
                     .font(.luma(size: 11.5, weight: .medium))
-                    .foregroundStyle(on ? CamLab.sig : Color.white.opacity(0.62))
+                    .foregroundStyle(on ? Color.white : Color.white.opacity(0.58))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 62)
-            .background(on ? CamLab.sig.opacity(0.15) : Color.white.opacity(0.06),
-                        in: RoundedRectangle(cornerRadius: 16))
+            .background(on ? Color.white.opacity(0.14) : Color.white.opacity(0.055),
+                        in: RoundedRectangle(cornerRadius: 15))
             .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(CamPressStyle())
@@ -995,7 +1014,7 @@ struct CamMiniLabel: View {
             }
         }
         .foregroundStyle(lit ? CamLab.ink : CamLab.text)
-        .background(lit ? CamLab.sig : CamLab.raised, in: Capsule())
+        .background(lit ? Color(hex: 0xF4F5F6) : Color.white.opacity(0.09), in: Capsule())
         .contentShape(Capsule())
     }
 }

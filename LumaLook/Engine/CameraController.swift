@@ -66,6 +66,9 @@ final class CameraController: NSObject, ObservableObject {
     @Published private(set) var activePhotoMegapixels = PhotoCaptureSpec.load().size.rawValue
     /// True when this camera can deliver depth with a still (Portrait).
     @Published private(set) var depthSupported = false
+    /// The light (torch) on the back of the phone, for the calm camera's
+    /// light button. Goes off by itself on a flip and when the session stops.
+    @Published private(set) var torchOn = false
     /// sessionQueue only.
     private var wantsSlowMotion = false
     private var wantsDepth = false
@@ -983,6 +986,7 @@ final class CameraController: NSObject, ObservableObject {
             self.refreshPhotoCapabilities(on: device)
             DispatchQueue.main.async {
                 self.cameraPosition = target
+                self.torchOn = false
             }
         }
     }
@@ -991,6 +995,7 @@ final class CameraController: NSObject, ObservableObject {
         if isRecording || isPreparingRecording {
             stopRecording()
         }
+        if torchOn { setTorch(false) }
         #if DEBUG
         stubTimer?.cancel()
         stubTimer = nil
@@ -1065,6 +1070,33 @@ final class CameraController: NSObject, ObservableObject {
                 DispatchQueue.main.async { self.aeafLocked = true }
                 print("[LUMA] AEAF locked")
             } catch {}
+        }
+    }
+
+    /// Turns the light on or off. Calls back with false when this camera has
+    /// no light (the front camera, the simulator).
+    func setTorch(_ on: Bool, completion: ((Bool) -> Void)? = nil) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard let device = self.activeVideoDevice, device.hasTorch,
+                  device.isTorchModeSupported(on ? .on : .off) else {
+                DispatchQueue.main.async {
+                    self.torchOn = false
+                    completion?(!on)
+                }
+                return
+            }
+            do {
+                try device.lockForConfiguration()
+                device.torchMode = on ? .on : .off
+                device.unlockForConfiguration()
+                DispatchQueue.main.async {
+                    self.torchOn = on
+                    completion?(true)
+                }
+            } catch {
+                DispatchQueue.main.async { completion?(false) }
+            }
         }
     }
 

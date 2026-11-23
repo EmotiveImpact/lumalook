@@ -154,6 +154,12 @@ struct CameraLiveLookView: View {
     /// The ruler under the sideways readouts.
     @State private var landscapeDropOpen = false
 
+    // MARK: Calm dock
+    /// Free space on the phone, for the dock's time (or photos) left.
+    @State private var freeBytes: Int64?
+    /// The newest three shots, newest last, for the stack in the dock.
+    @State private var recentShots: [UIImage] = []
+
     // MARK: How-to
     /// The how-to card: once on the first visit, and from "?" after that.
     @State private var showHint = false
@@ -290,6 +296,7 @@ struct CameraLiveLookView: View {
             viewfinder(size: size, top: top)
                 .offset(y: pictureLift)
             touchSurface
+                .frame(width: size.width, height: pictureHeight(size))
             pictureMarks(size: size, top: top)
             if upright {
                 uprightChrome(size: size, top: top)
@@ -301,7 +308,11 @@ struct CameraLiveLookView: View {
                 proSheet(size: size)
                     .transition(.move(edge: .bottom))
             }
-            plate(size: size)
+            if upright {
+                dock(size: size)
+            } else {
+                plate(size: size)
+            }
             if showLookBrowser && upright {
                 looksLibrary(size: size, top: top, keyboard: keyboard)
                     .transition(.opacity.combined(with: .offset(y: 30)))
@@ -325,6 +336,11 @@ struct CameraLiveLookView: View {
         showLookBrowser && !isLandscapeLayout ? -104 : 0
     }
 
+    /// Upright, the picture stops at the dock; sideways it fills the screen.
+    private func pictureHeight(_ size: CGSize) -> CGFloat {
+        isLandscapeLayout ? size.height : max(size.height - CamLab.dockHeight, 0)
+    }
+
     /// Whatever sits over everything: the caption, the fan, and the cards a
     /// take or a finished roll returns.
     @ViewBuilder
@@ -333,7 +349,8 @@ struct CameraLiveLookView: View {
             CamToast(text: statusCaption)
                 .id(statusCaption)
                 .frame(width: size.width)
-                .offset(y: size.height - (proOpen ? 524 : (showLookBrowser ? 596 : 374)))
+                .offset(y: proOpen ? pictureHeight(size) - Self.proHeight - 44
+                         : (showLookBrowser ? size.height - 640 : pictureHeight(size) - 170))
                 .transition(.opacity)
         }
         if let fan {
@@ -373,6 +390,7 @@ struct CameraLiveLookView: View {
         formatOpen = false
         camera.lookState = app.lookState
         camera.requestAndStart()
+        refreshFreeSpace()
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         // Viewfinder assists at launch, e.g. LUMA_SEED_CAMASSIST=peak,zebra
@@ -487,32 +505,35 @@ struct CameraLiveLookView: View {
 
     private func viewfinder(size: CGSize, top: CGFloat) -> some View {
         let upright = !isLandscapeLayout
+        let pic = CGSize(width: size.width, height: pictureHeight(size))
+        let radius: CGFloat = upright ? CamLab.frameRadius : 0
         return ZStack(alignment: .topLeading) {
             livePicture
-            swipeRevealLayer(size: size)
+            swipeRevealLayer(size: pic)
             if showGrid {
                 CamGrid().transition(.opacity)
             }
             if showLevel {
                 LevelIndicator(restTurn: controlTurn)
                     .frame(width: size.width, height: 40)
-                    .offset(y: levelCentre(size: size) - 20)
+                    .offset(y: levelCentre(size: pic) - 20)
                     .transition(.opacity)
             }
             if upright, frameGuide != .off {
-                CamGuide(box: guideBox(size: size, top: top), label: frameGuide.label,
+                CamGuide(box: guideBox(size: pic, top: top), label: frameGuide.label,
                          safeZone: showSafeZone && frameGuide == .vertical)
                     .transition(.opacity)
             }
             if upright {
-                scrims(size: size)
+                scrims(size: pic)
             }
             if shutterFlash {
                 Color.white.opacity(0.8).transition(.opacity)
             }
         }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .clipped()
+        .frame(width: pic.width, height: pic.height, alignment: .topLeading)
+        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius,
+                                          style: .continuous))
         .allowsHitTesting(false)
     }
 
@@ -528,19 +549,17 @@ struct CameraLiveLookView: View {
         }
     }
 
-    /// The lab's two scrims: 170 pt down from the top, and the lower 404 pt.
+    /// Two light scrims inside the frame: 170 pt down from the top, and the
+    /// lower 200 pt under the readout and the lens.
     private func scrims(size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
-            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)],
+            LinearGradient(colors: [.black.opacity(0.5), .black.opacity(0)],
                            startPoint: .top, endPoint: .bottom)
                 .frame(width: size.width, height: 170)
-            LinearGradient(stops: [
-                .init(color: .black.opacity(0), location: 0),
-                .init(color: .black.opacity(0.55), location: 0.45),
-                .init(color: .black.opacity(0.82), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
-                .frame(width: size.width, height: 404)
-                .offset(y: size.height - 404)
+            LinearGradient(colors: [.black.opacity(0), .black.opacity(0.5)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(width: size.width, height: 200)
+                .offset(y: size.height - 200)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
@@ -556,7 +575,7 @@ struct CameraLiveLookView: View {
     private func guideBox(size: CGSize, top: CGFloat) -> CGRect {
         let aspect = CGFloat(frameGuide.aspect ?? 1)
         let top0 = top + 48
-        let clear = size.height - 124 - top0
+        let clear = size.height - (isLandscapeLayout ? 124 : 130) - top0
         var gw = size.width - 24
         var gh = gw / aspect
         if gh > clear - 20 {
@@ -604,13 +623,13 @@ struct CameraLiveLookView: View {
             if let swipe {
                 Rectangle()
                     .fill(Color.white.opacity(0.85))
-                    .frame(width: 2, height: size.height)
+                    .frame(width: 2, height: pictureHeight(size))
                     .shadow(color: .white.opacity(0.6), radius: 7)
                     .offset(x: swipe.edge(in: size.width) - 1)
                     .allowsHitTesting(false)
             }
             bigName(width: size.width)
-                .offset(y: size.height - 474)
+                .offset(y: pictureHeight(size) - 330)
         }
     }
 
@@ -710,10 +729,12 @@ struct CameraLiveLookView: View {
         guard let frame = camera.previewImage, screenSize.width > 0, screenSize.height > 0,
               frame.width > 0, frame.height > 0 else { return nil }
         let iw = CGFloat(frame.width), ih = CGFloat(frame.height)
-        let scale = max(screenSize.width / iw, screenSize.height / ih)
+        // Upright the picture fills its frame above the dock.
+        let ph = isLandscapeLayout ? screenSize.height : max(screenSize.height - CamLab.dockHeight, 1)
+        let scale = max(screenSize.width / iw, ph / ih)
         let shownW = iw * scale, shownH = ih * scale
         let x = (point.x - (screenSize.width - shownW) / 2) / shownW
-        let y = (point.y - pictureLift - (screenSize.height - shownH) / 2) / shownH
+        let y = (point.y - pictureLift - (ph - shownH) / 2) / shownH
         return CGPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1))
     }
 
@@ -1086,11 +1107,12 @@ struct CameraLiveLookView: View {
 
     // MARK: - Over the picture, upright
     //
-    // The lab's own positions: the top bar on the safe area's edge, the look
-    // 48 pt under it, the chips 314 pt up from the bottom, the dial turning
-    // on the shutter's centre.
+    // The calm camera (23 Nov 2026): close at top left, the look as the
+    // title, one glass rail of tools at top right; a quiet readout line, the
+    // light, the lens pill and flip along the bottom of the picture. Every
+    // pro control is one tap away in Pro.
 
-    /// The look, Pro, the chips and the dial step back while Pro is up and
+    /// The readout and the lens step back while Pro or the looks are up and
     /// while a look is being swiped in.
     private var chromeQuiet: Bool { proOpen || swipe != nil }
     private var dialQuiet: Bool { chromeQuiet || showLookBrowser }
@@ -1098,32 +1120,310 @@ struct CameraLiveLookView: View {
     @ViewBuilder
     private func uprightChrome(size: CGSize, top: CGFloat) -> some View {
         let w = size.width
-        topBar
-            .frame(width: max(w - 32, 0), height: 34)
-            .offset(x: 16, y: top)
-        lookTag(ring: 42)
-            .offset(x: 16, y: top + 48)
-            .opacity(chromeQuiet ? 0 : 1)
-            .allowsHitTesting(!chromeQuiet)
-            .animation(.easeOut(duration: 0.2), value: chromeQuiet)
-        proPill
-            .frame(width: max(w - 16, 0), alignment: .trailing)
-            .offset(y: top + 52)
-            .opacity(chromeQuiet ? 0 : 1)
-            .allowsHitTesting(!chromeQuiet)
-            .animation(.easeOut(duration: 0.2), value: chromeQuiet)
-        sideStack
-            .offset(x: 16, y: top + 98)
-        dialDeck(size: size)
-            .opacity(dialQuiet ? 0 : 1)
-            .allowsHitTesting(!dialQuiet)
-            .animation(.easeOut(duration: 0.2), value: dialQuiet)
-        if formatOpen {
-            formatCard
-                .frame(width: min(264, max(w - 76, 0)), alignment: .leading)
-                .offset(x: 60, y: top + 42)
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+        let bottom = pictureHeight(size)
+        calmCloseButton
+            .offset(x: 16, y: top + 1)
+        lookTitle
+            .frame(width: max(w - 150, 0))
+            .offset(x: 75, y: top)
+            .opacity(swipe != nil ? 0 : 1)
+            .allowsHitTesting(swipe == nil)
+            .animation(.easeOut(duration: 0.2), value: swipe != nil)
+        toolRail
+            .offset(x: w - 60, y: top - 1)
+        if camera.isRecording {
+            recordClock
+                .frame(width: w)
+                .offset(y: top + 66)
+                .transition(.opacity)
         }
+        sideStack
+            .offset(x: 16, y: top + 56)
+        Group {
+            readoutLine
+                .frame(width: w)
+                .offset(y: bottom - 126)
+            lightButton
+                .offset(x: 16, y: bottom - 75)
+            lensPill
+                .frame(width: w)
+                .offset(y: bottom - 76)
+            calmFlipButton
+                .offset(x: w - 58, y: bottom - 75)
+        }
+        .opacity(dialQuiet ? 0 : 1)
+        .allowsHitTesting(!dialQuiet)
+        .animation(.easeOut(duration: 0.2), value: dialQuiet)
+        if formatOpen {
+            let cardWidth = min(264, max(w - 76, 0))
+            formatCard
+                .frame(width: cardWidth, alignment: .leading)
+                .offset(x: max(w - 68 - cardWidth, 8), y: top + 42)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topTrailing)))
+        }
+    }
+
+    private var calmCloseButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            CamGlyph(icon: .close, size: 18)
+                .foregroundStyle(CamLab.text)
+                .frame(width: 42, height: 42)
+                .camGlass(Circle(), opacity: 0.58)
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Close camera")
+    }
+
+    /// The look on the picture as the title: a dot in its own colour, its
+    /// name, its code and strength, and a dot for each favourite in the
+    /// swipe. Tap for every look.
+    private var lookTitle: some View {
+        let worn = app.cameraWornLook
+        let strength = app.settings.intensity
+        let locked = app.lockedLookInGrade(storeService) != nil
+        return Button {
+            openLooks()
+        } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(worn.signature)
+                        .frame(width: 7, height: 7)
+                    Text(worn.title)
+                        .font(.luma(size: 17, weight: .semibold))
+                        .kerning(-0.25)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if locked {
+                        CamGlyph(icon: .lock, size: 12, weight: 2.2)
+                            .foregroundStyle(Color.white.opacity(0.85))
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                }
+                Text("\(worn.code) · \(Int(strength.rounded()))%")
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                    .lineLimit(1)
+                    .padding(.top, 3)
+                favouriteDots(worn)
+                    .padding(.top, 8)
+            }
+            .shadow(color: .black.opacity(0.4), radius: 6, y: 1)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Looks: \(app.cameraLookName)")
+        .accessibilityHint("Opens every look. Swipe the picture for your favourites")
+    }
+
+    /// One glass rail at top right: Pro, the format, the scope (drawn as the
+    /// live histogram) and the frame guides.
+    private var toolRail: some View {
+        VStack(spacing: 2) {
+            railButton(on: proOpen, label: "Pro controls") {
+                CamGlyph(icon: .pro, size: 20)
+            } action: {
+                if proOpen { proOpen = false } else { openPro() }
+            }
+            railButton(on: formatOpen, label: "Format, \(formatSummary)") {
+                Text(formatShort)
+                    .font(.luma(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 2)
+            } action: {
+                toggleFormat()
+            }
+            railButton(on: scopeMode != nil, label: "Scope") {
+                CamHistogramGlyph(bins: camera.histogram?.luma)
+                    .scaleEffect(0.48)
+                    .frame(width: 26, height: 12)
+            } action: {
+                cycleScope()
+            }
+            railButton(on: frameGuide != .off, label: "Guides") {
+                CamGlyph(icon: .guides, size: 20)
+            } action: {
+                useTool("guides")
+            }
+        }
+        .padding(.vertical, 5)
+        .frame(width: 46)
+        .camGlass(Capsule(), opacity: 0.58)
+    }
+
+    private func railButton<Label: View>(on: Bool, label: String,
+                                         @ViewBuilder content: () -> Label,
+                                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            content()
+                .foregroundStyle(on ? CamLab.ink : Color.white.opacity(0.92))
+                .frame(width: 38, height: on ? 38 : 42)
+                .background(on ? Color(hex: 0xF4F5F6) : Color.clear, in: Capsule())
+                .padding(.vertical, on ? 2 : 0)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// "4K", "1080", or the photo size, for the rail.
+    private var formatShort: String {
+        if captureMode.takesStills { return "\(camera.activePhotoMegapixels)MP" }
+        return camera.activeSpec.resolution.rawValue
+    }
+
+    /// The take's clock while it rolls, on red (red only means recording).
+    private var recordClock: some View {
+        TimelineView(.periodic(from: recordStart ?? Date(), by: 0.5)) { context in
+            Text("\u{25CF} " + Self.clock(context.date.timeIntervalSince(recordStart ?? context.date)))
+                .font(.luma(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(CamLab.rec.opacity(0.85), in: Capsule())
+        }
+        .accessibilityLabel("Recording")
+    }
+
+    /// ISO, shutter, white balance, exposure and focus on one quiet line.
+    /// Tap it for Pro.
+    private var readoutLine: some View {
+        Button {
+            openPro()
+        } label: {
+            HStack(spacing: 14) {
+                readoutPair("ISO", dialValue(for: .iso))
+                readoutPair("SS", dialValue(for: .shutter))
+                readoutPair("WB", dialValue(for: .wb))
+                readoutPair("EV", dialValue(for: .ev))
+                if captureMode == .portrait {
+                    readoutPair("", Self.fNumber(apertureIndex))
+                } else {
+                    readoutPair("AF", camera.manualFocus ? dialValue(for: .focus) : "Auto")
+                }
+            }
+            .lineLimit(1)
+            .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel("Exposure readout")
+        .accessibilityHint("Opens the pro controls")
+    }
+
+    private func readoutPair(_ name: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            if !name.isEmpty {
+                Text(name)
+                    .font(.luma(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.5))
+            }
+            Text(value)
+                .font(.luma(size: 12, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+        }
+        .fixedSize()
+    }
+
+    /// The light on the back of the phone.
+    private var lightButton: some View {
+        Button {
+            let wanted = !camera.torchOn
+            camera.setTorch(wanted) { ok in
+                if !ok { flash("This camera has no light") }
+            }
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: camera.torchOn ? "bolt.fill" : "bolt.slash")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(camera.torchOn ? CamLab.ink : Color.white.opacity(0.92))
+                .rotationEffect(.degrees(controlTurn))
+                .frame(width: 42, height: 42)
+                .background {
+                    if camera.torchOn {
+                        Circle().fill(Color(hex: 0xF4F5F6))
+                    }
+                }
+                .camGlass(Circle(), opacity: 0.58)
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .accessibilityLabel(camera.torchOn ? "Light on" : "Light off")
+    }
+
+    /// The familiar lens marks this camera can reach; the one in use shows
+    /// the focal length it is really at. Pinch, or Pro's ruler, for the rest.
+    private var lensPill: some View {
+        let stops = lensStops
+        let marks = [13, 24, 48, 77].filter { stops.contains($0) }
+        let mm = Self.millimetres(camera.zoomFactor)
+        let current = marks.min { abs($0 - mm) < abs($1 - mm) }
+        return HStack(spacing: 2) {
+            ForEach(marks, id: \.self) { mark in
+                let on = mark == current
+                Button {
+                    if let index = stops.firstIndex(of: mark) { applyDial(index, to: .lens) }
+                    LumaHaptics.shared.tap()
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        Text(on ? "\(mm)" : "\(mark)")
+                            .font(.luma(size: on ? 13 : 12.5, weight: .semibold))
+                            .monospacedDigit()
+                        if on {
+                            Text("mm")
+                                .font(.luma(size: 10, weight: .semibold))
+                                .opacity(0.7)
+                        }
+                    }
+                    .foregroundStyle(on ? Color.white : Color.white.opacity(0.72))
+                    .rotationEffect(.degrees(controlTurn))
+                    .padding(.horizontal, on ? 12 : 6)
+                    .frame(minWidth: 36)
+                    .frame(height: 36)
+                    .background(on ? Color.white.opacity(0.17) : Color.clear, in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(CamPressStyle())
+                .accessibilityLabel("\(mark) millimetre lens")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .camGlass(Capsule(), opacity: 0.58)
+        .fixedSize()
+    }
+
+    private var calmFlipButton: some View {
+        Button {
+            guard !camera.isRecording else {
+                flash("Stop recording first")
+                return
+            }
+            camera.flipCamera()
+            clearFocusMark()
+            LumaHaptics.shared.tap()
+        } label: {
+            CamGlyph(icon: .flip, size: 19)
+                .foregroundStyle(Color.white.opacity(0.92))
+                .rotationEffect(.degrees(controlTurn))
+                .frame(width: 42, height: 42)
+                .camGlass(Circle(), opacity: 0.58)
+                .contentShape(Circle())
+        }
+        .buttonStyle(CamPressStyle())
+        .opacity(camera.isRecording ? 0.4 : 1)
+        .accessibilityLabel("Flip camera")
     }
 
     // MARK: Top bar
@@ -1221,11 +1521,11 @@ struct CameraLiveLookView: View {
     private static let hintLines = [
         "Swipe across the picture to step through your favourite looks",
         "Tap the look name for every look in the app, by pack. Long-press one to add it to your swipe",
-        "Drag the dial to zoom. Tap a chip and the dial sets that instead",
-        "Pull the plate up, or tap Pro, for every pro control",
+        "Tap the lens pill to change lens, or pinch to zoom",
+        "Tap the sliders at the top right, the readout line, or pull the dock up, for every pro control",
         "Press and hold anywhere for quick tools",
         "Turn your phone sideways to film",
-        "Tap the shutter to record or take a photo. The switch on the right of the plate changes mode, and flip turns the camera round."
+        "Tap the shutter to record or take a photo. The words above it change mode, and flip sits at the bottom right of the picture."
     ]
 
     /// The how-to card: 188 pt under the safe area upright (250 on the lab's
@@ -1389,7 +1689,7 @@ struct CameraLiveLookView: View {
             HStack(spacing: 4) {
                 ForEach(Array(favourites.enumerated()), id: \.element.id) { index, _ in
                     Capsule()
-                        .fill(index == current ? worn.signature : Color.white.opacity(0.4))
+                        .fill(index == current ? Color.white.opacity(0.92) : Color.white.opacity(0.32))
                         .frame(width: index == current ? 12 : 4, height: 4)
                 }
             }
@@ -1511,10 +1811,10 @@ struct CameraLiveLookView: View {
                 Text("AE/AF locked")
                     .font(.luma(size: 12, weight: .semibold))
             }
-            .foregroundStyle(CamLab.ink)
+            .foregroundStyle(CamLab.text)
             .padding(.horizontal, 10)
             .frame(height: 26)
-            .background(CamLab.sig, in: Capsule())
+            .camGlass(Capsule(), opacity: 0.62)
             .contentShape(Capsule())
         }
         .buttonStyle(CamPressStyle())
@@ -1644,6 +1944,248 @@ struct CameraLiveLookView: View {
         .offset(y: size.height - CamLab.plateHeight)
         .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
         .sensoryFeedback(.success, trigger: stillSavedFlash)
+    }
+
+    // MARK: - The dock (calm, upright)
+    //
+    // Ink under the framed picture: the modes as words, the time (or
+    // photos) left on the phone at the left, the shutter with its centre
+    // 74 pt up from the bottom edge (where it has always been, in line with
+    // the tab bar's shutter), and the last three shots as a stack.
+
+    private func dock(size: CGSize) -> some View {
+        let w = size.width
+        let h = CamLab.dockHeight
+        let half = CamShutter.size / 2
+        return ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(width: w, height: h)
+                .contentShape(Rectangle())
+                .gesture(platePull)
+                .accessibilityHidden(true)
+            modeWords
+                .frame(width: w)
+                .offset(y: 7)
+            dockCounter
+                .offset(x: 24, y: h - 104)
+            CamShutter(isRecording: camera.isRecording,
+                       photoMode: captureMode.takesStills,
+                       rollCount: nil) {
+                shutterPressed()
+            }
+            .offset(x: w / 2 - half, y: h - CamLab.shutterRise - half)
+            shotStack
+                .offset(x: w - 26 - 56, y: h - 106)
+        }
+        .frame(width: w, height: h, alignment: .topLeading)
+        .offset(y: size.height - h)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: camera.isRecording)
+        .sensoryFeedback(.success, trigger: stillSavedFlash)
+        .onChange(of: camera.isRecording) { _, recording in
+            if !recording { refreshFreeSpace() }
+        }
+        .onChange(of: lastShot?.id) { _, _ in
+            guard let image = lastShot?.thumbnail else { return }
+            recentShots = Array((recentShots + [image]).suffix(3))
+        }
+    }
+
+    /// Photo, Video, Slo-mo and Portrait as words; the one in use in white.
+    /// The two a camera cannot do are dimmed, and say why when tapped.
+    private var modeWords: some View {
+        HStack(spacing: 22) {
+            ForEach(CaptureMode.allCases, id: \.self) { mode in
+                Button {
+                    pickMode(mode)
+                } label: {
+                    Text(mode.rawValue.uppercased())
+                        .font(.luma(size: 12, weight: .semibold))
+                        .kerning(1.2)
+                        .foregroundStyle(mode == captureMode ? Color.white
+                                         : Color.white.opacity(modeAvailable(mode) ? 0.38 : 0.18))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(CamPressStyle())
+                .accessibilityLabel(mode.rawValue)
+                .accessibilityAddTraits(mode == captureMode ? .isSelected : [])
+            }
+        }
+        .opacity(recordingBusy ? 0.5 : 1)
+    }
+
+    /// What is left: minutes (or hours) of video at the format in force, the
+    /// frames on a loaded roll, or how many photos the phone still holds.
+    private var dockCounter: some View {
+        let reading = counterReading
+        return ZStack(alignment: .topLeading) {
+            if let reading {
+                if let up = reading.above {
+                    Text(up)
+                        .font(.luma(size: 14, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.16))
+                        .offset(x: 1, y: -6)
+                }
+                Text(reading.value)
+                    .font(.luma(size: 32, weight: .bold))
+                    .kerning(-0.9)
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText(countsDown: true))
+                    .offset(y: 11)
+                if let down = reading.below {
+                    Text(down)
+                        .font(.luma(size: 14, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.16))
+                        .offset(x: 1, y: 50)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(reading.title)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                    Text(reading.detail)
+                        .foregroundStyle(Color.white.opacity(0.46))
+                }
+                .font(.luma(size: 10, weight: .bold))
+                .kerning(1.1)
+                .lineLimit(1)
+                .fixedSize()
+                .offset(x: reading.labelX, y: 15)
+            }
+        }
+        .frame(width: 120, height: 64, alignment: .topLeading)
+        .animation(.snappy(duration: 0.2), value: reading?.value)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(reading.map { "\($0.value) \($0.title.lowercased()), \($0.detail.lowercased())" } ?? "")
+    }
+
+    private struct CounterReading {
+        let value: String
+        let above: String?
+        let below: String?
+        let title: String
+        let detail: String
+        var labelX: CGFloat
+    }
+
+    private var counterReading: CounterReading? {
+        // A loaded roll counts its own frames.
+        if captureMode.takesStills, rollOn {
+            let left = rollLeft
+            return CounterReading(value: "\(left)", above: left < Self.rollLength ? "\(left + 1)" : nil,
+                                  below: left > 0 ? "\(left - 1)" : nil,
+                                  title: "FRAMES LEFT", detail: "ON THE ROLL",
+                                  labelX: Self.counterLabelX(for: "\(left)"))
+        }
+        guard let free = freeBytes, free > 0 else { return nil }
+        if captureMode.takesStills {
+            let count = Int(Double(free) / photoBytes)
+            let shown = count >= 10_000 ? "\(count / 1000)k" : "\(count)"
+            let mp = camera.activePhotoMegapixels
+            return CounterReading(value: shown, above: nil, below: nil,
+                                  title: "PHOTOS LEFT",
+                                  detail: "\(camera.photoSpec.format.rawValue) · \(mp) MP",
+                                  labelX: Self.counterLabelX(for: shown))
+        }
+        let minutes = Int(Double(free) / videoBytesPerMinute)
+        let spec = camera.activeSpec
+        let fps = captureMode == .slowMo ? (camera.slowMotionFPS ?? 120) : spec.fps
+        let detail = "AT \(spec.resolution.rawValue) · \(fps)"
+        if minutes >= 600 {
+            let hours = minutes / 60
+            return CounterReading(value: "\(hours)", above: "\(hours + 1)", below: "\(max(hours - 1, 0))",
+                                  title: "HRS LEFT", detail: detail,
+                                  labelX: Self.counterLabelX(for: "\(hours)"))
+        }
+        return CounterReading(value: "\(minutes)", above: "\(minutes + 1)",
+                              below: minutes > 0 ? "\(minutes - 1)" : nil,
+                              title: "MIN LEFT", detail: detail,
+                              labelX: Self.counterLabelX(for: "\(minutes)"))
+    }
+
+    /// The label sits just right of the big number.
+    private static func counterLabelX(for value: String) -> CGFloat {
+        CGFloat(value.count) * 19 + 6
+    }
+
+    /// Rough bytes a minute for the format in force (HEVC at 30 fps: 720p
+    /// 40 MB, 1080p 60 MB, 4K 170 MB; H.264 a little under twice that).
+    private var videoBytesPerMinute: Double {
+        let spec = camera.activeSpec
+        let base: Double
+        switch spec.resolution {
+        case .hd720:  base = 40
+        case .hd1080: base = 60
+        case .uhd4K:  base = 170
+        }
+        let fps = Double(captureMode == .slowMo ? (camera.slowMotionFPS ?? 120) : spec.fps)
+        let rate = pow(max(fps, 1) / 30, 0.85)
+        let codec = spec.codec == .h264 ? 1.9 : 1.0
+        return max(base * rate * codec, 1) * 1_000_000
+    }
+
+    /// Rough bytes for one graded still at the size and format in force.
+    private var photoBytes: Double {
+        let mb: Double
+        switch camera.activePhotoMegapixels {
+        case ..<18: mb = 2.6
+        case ..<36: mb = 4.8
+        default:    mb = 9.5
+        }
+        return mb * (camera.photoSpec.format == .jpeg ? 1.7 : 1) * 1_000_000
+    }
+
+    private func refreshFreeSpace() {
+        DispatchQueue.global(qos: .utility).async {
+            let url = URL(fileURLWithPath: NSHomeDirectory())
+            let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            let free = values?.volumeAvailableCapacityForImportantUsage
+            DispatchQueue.main.async { freeBytes = free }
+        }
+    }
+
+    /// The last three shots, fanned a little; a plain stack until there are
+    /// any. Tap for the newest.
+    private var shotStack: some View {
+        let shots = recentShots.isEmpty ? (lastShot.map { [$0.thumbnail] } ?? []) : recentShots
+        let angles: [Double] = [-9, -2, 6]
+        let spots: [CGPoint] = [CGPoint(x: 2, y: 6), CGPoint(x: 8, y: 3), CGPoint(x: 12, y: 2)]
+        return Button {
+            openLastShot()
+        } label: {
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<3, id: \.self) { slot in
+                    // Slot 2 is the front card: the newest shot.
+                    let index = shots.count - 3 + slot
+                    ZStack {
+                        CamLab.raised
+                        if index >= 0, index < shots.count {
+                            Image(uiImage: shots[index])
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else if slot == 2 {
+                            CamGlyph(icon: .photo, size: 18)
+                                .foregroundStyle(CamLab.grey)
+                        }
+                    }
+                    .frame(width: 44, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(CamLab.ink.opacity(0.9), lineWidth: 2))
+                    .shadow(color: .black.opacity(0.45), radius: 7, y: 3)
+                    .rotationEffect(.degrees(angles[slot] + controlTurn))
+                    .offset(x: spots[slot].x, y: spots[slot].y)
+                }
+            }
+            .frame(width: 56, height: 64, alignment: .topLeading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CamPressStyle())
+        .animation(.easeOut(duration: 0.25), value: lastShot?.id)
+        .accessibilityLabel("Last shot")
     }
 
     /// Dragging the plate up pulls up Pro.
@@ -1779,10 +2321,16 @@ struct CameraLiveLookView: View {
     // tool as a tile. The plate stays in front of it, so a take can start
     // (or stop) without putting Pro away.
 
+    /// Pro's height: it rises from the picture's bottom edge, over the
+    /// lower picture, and the dock stays in front of nothing.
+    static let proHeight: CGFloat = 338
+
     private func proSheet(size: CGSize) -> some View {
         let w = size.width
         let target = dialTarget
-        let shape = UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30)
+        let shape = UnevenRoundedRectangle(topLeadingRadius: 28, bottomLeadingRadius: CamLab.frameRadius,
+                                           bottomTrailingRadius: CamLab.frameRadius,
+                                           topTrailingRadius: 28, style: .continuous)
         return ZStack(alignment: .topLeading) {
             Color.clear
                 .frame(width: w, height: 56)
@@ -1794,28 +2342,28 @@ struct CameraLiveLookView: View {
                 .allowsHitTesting(false)
             proHeader
                 .frame(width: max(w - 36, 0), height: 32)
-                .offset(x: 20, y: 20)
+                .offset(x: 20, y: 18)
             proReadouts
                 .frame(width: max(w - 40, 0))
-                .offset(x: 20, y: 66)
+                .offset(x: 20, y: 62)
             CamRuler(ticks: dialTicks(for: target), index: dialPosition(for: target),
                      spacing: target.spacing) { applyDial($0, to: target) }
                 .id(target)
                 .frame(width: w)
-                .offset(y: 124)
+                .offset(y: 120)
             proTiles
-                .frame(width: max(w - 32, 0))
-                .offset(x: 16, y: 186)
+                .frame(width: max(w - 40, 0))
+                .offset(x: 20, y: 184)
         }
-        .frame(width: w, height: 476, alignment: .topLeading)
+        .frame(width: w, height: Self.proHeight, alignment: .topLeading)
         .background {
             ZStack {
                 CamBackdrop().clipShape(shape).allowsHitTesting(false)
-                shape.fill(Color(hex: 0x0C0D0F).opacity(0.84))
+                shape.fill(Color(hex: 0x0C0D0F).opacity(0.72))
             }
         }
         .contentShape(Rectangle())
-        .offset(y: size.height - 476)
+        .offset(y: pictureHeight(size) - Self.proHeight)
     }
 
     private var proDismissDrag: some Gesture {
@@ -1839,6 +2387,14 @@ struct CameraLiveLookView: View {
                 CamMiniLabel(title: autoTitle(for: target), lit: isAutoTarget(target))
             }
             .buttonStyle(CamPressStyle())
+            .padding(.trailing, 8)
+            Button {
+                if showHint { hideHint() } else { presentHint(for: 9) }
+            } label: {
+                CamMiniLabel(icon: .help)
+            }
+            .buttonStyle(CamPressStyle())
+            .accessibilityLabel("How to use the camera")
             .padding(.trailing, 8)
             Button {
                 proOpen = false
@@ -2113,8 +2669,8 @@ struct CameraLiveLookView: View {
 
     private func looksLibrary(size: CGSize, top: CGFloat, keyboard: CGFloat) -> some View {
         let typing = keyboard > 120
-        let y = typing ? top + 100 : max(size.height - 552, top + 44)
-        let below = typing ? keyboard + 8 : 112
+        let y = typing ? top + 100 : max(size.height - 610, top + 44)
+        let below = typing ? keyboard + 8 : CamLab.dockHeight + 8
         let height = max(size.height - y - below, 160)
         return CameraLooksSheet(frame: rawFrame, frameID: rawFrameID, compact: typing,
                                 onClose: { showLookBrowser = false },
