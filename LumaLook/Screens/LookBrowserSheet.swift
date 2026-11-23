@@ -1021,11 +1021,9 @@ struct LookBrowserSheet: View {
                             .font(.luma(size: compact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(active ? .white : .white.opacity(0.55))
                     }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
-                            .foregroundStyle(active ? .white : .white.opacity(0.18))
-                    }
+                    // Calm: no outline at rest; picked wears the pale ring
+                    // like every other tile.
+                    .pickedRing(active, cornerRadius: 12)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Original")
                         .font(.luma(size: 13, weight: active ? .semibold : .medium))
@@ -2518,23 +2516,26 @@ struct LooksTextTab: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 4) {
-                    Text(title)
-                        .font(.luma(size: size, weight: .semibold))
-                        .foregroundStyle(.white.opacity(on ? 1 : 0.42))
-                    if let count {
-                        Text("\(count)")
-                            .font(.luma(size: size, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.35))
-                    }
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.luma(size: size, weight: .semibold))
+                    .foregroundStyle(.white.opacity(on ? 1 : 0.42))
+                if let count {
+                    Text("\(count)")
+                        .font(.luma(size: size, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.35))
                 }
-                .lineLimit(1)
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.bottom, 10)
+            // The underline as an overlay, so it always spans the words
+            // (a bare Capsule in a fixed-size stack would shrink to 10 pt).
+            .overlay(alignment: .bottom) {
                 Capsule()
                     .fill(on ? Color.white : Color.clear)
                     .frame(height: 2)
             }
-            .fixedSize()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
