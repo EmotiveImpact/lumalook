@@ -2882,6 +2882,8 @@ struct SettingsSubscriptionView: View {
     /// The Appearance row's value follows the choices live.
     @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
     @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
+    /// True Colour, the skin protection switch (Engine/TrueColour.swift).
+    @AppStorage(TrueColour.key) private var trueColour = true
 
     var body: some View {
         ZStack {
@@ -3096,6 +3098,8 @@ struct SettingsSubscriptionView: View {
                 app.path.append(.appearance)
             }
             SettingsRowDivider()
+            trueColourRow
+            SettingsRowDivider()
             settingsRow(icon: "4k.tv", title: "Export quality",
                         value: ExportSpec.from(rawValue: storedSpec).resolution.rawValue) {
                 showExportQuality = true
@@ -3162,6 +3166,40 @@ struct SettingsSubscriptionView: View {
                     opensExternally: true) {
             LumaLegal.open(LumaLegal.terms)
         }
+    }
+
+    /// True Colour: on (the default), looks keep skin rich and true: tone
+    /// changes lightness only, and film and imported LUTs get the skin guard.
+    /// Off: classic per-channel contrast and every LUT exactly as authored.
+    /// Flipping it bakes installed recipe looks again to match.
+    private var trueColourRow: some View {
+        Toggle(isOn: $trueColour) {
+            HStack(spacing: 12) {
+                Image(systemName: "camera.filters")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("True Colour")
+                        .font(.luma(size: 15, weight: .medium))
+                        .tracking(-0.15)
+                        .foregroundStyle(LumaTheme.textPrimary)
+                        .lineLimit(1)
+                    Text("Keeps skin rich and true under every look")
+                        .font(.luma(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .lineLimit(2)
+                }
+            }
+        }
+        .tint(LumaTheme.signal)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(minHeight: 60)
+        .onChange(of: trueColour) { _, _ in
+            app.rebakeRecipeLooksIfNeeded()
+        }
+        .accessibilityHint("Keeps skin tones rich and true under every look")
     }
 
     /// One quiet row: glyph, title, the value in grey, then a chevron, or the

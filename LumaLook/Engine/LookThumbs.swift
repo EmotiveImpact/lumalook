@@ -61,6 +61,8 @@ final class LookThumbs: ObservableObject {
                                     jobs: [Job]) -> String {
         var hasher = Hasher()
         hasher.combine(isFallback)
+        // The True Colour switch changes every grade, so it re-renders them.
+        hasher.combine(TrueColour.isOn)
         // CGRect is only Hashable from iOS 18; hash its parts so iOS 17
         // devices never reach a conformance they don't have.
         let extent = frame.extent

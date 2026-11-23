@@ -83,6 +83,14 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - LUT loading with cache
 
+    /// Forget parsed cubes, after files were rewritten in place (installed
+    /// recipe looks baked again for True Colour).
+    func clearLUTCache() {
+        cacheLock.lock()
+        lutDataCache.removeAll()
+        cacheLock.unlock()
+    }
+
     func loadLUT(at url: URL) throws -> ParsedLUT {
         cacheLock.lock()
         if let cached = lutDataCache[url] {
@@ -118,12 +126,12 @@ final class LookPipeline: @unchecked Sendable {
             e.ev = Float(a.exposure)
             out = e.outputImage ?? out
         }
-        if a.contrast != 0 || a.saturation != 0 {
-            let c = CIFilter.colorControls()
-            c.inputImage = out
-            c.contrast = Float(1 + a.contrast * 0.5)
-            c.saturation = Float(1 + a.saturation)
-            out = c.outputImage ?? out
+        if a.contrast != 0 || a.saturation != 0,
+           let tone = TrueColour.toneFilter(contrast: Float(1 + a.contrast * 0.5),
+                                            saturation: Float(1 + a.saturation), brightness: 0) {
+            // True Colour tone, not CIColorControls (see TrueColour.swift).
+            tone.setValue(out, forKey: kCIInputImageKey)
+            out = tone.outputImage ?? out
         }
         if a.warmth != 0 {
             out = Self.shiftWhite(out, towards: 6500 - CGFloat(a.warmth) * 1500, tint: 0)
@@ -149,7 +157,8 @@ final class LookPipeline: @unchecked Sendable {
 
         // Slot 2 — creative: imported LUT or built-in recipe.
         if let lut = state.lut {
-            graded = applyLUT(lut, to: graded, opacity: state.lutOpacity, blend: state.lutBlend)
+            graded = applyLUT(lut, to: graded, opacity: state.lutOpacity, blend: state.lutBlend,
+                              protectSkin: true)
         } else {
             graded = applyRecipe(state.recipe, to: graded)
         }
@@ -358,8 +367,12 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - LUT application
 
+    /// `protectSkin` is for the creative slot only: with True Colour on, the
+    /// LUT runs with the skin guard baked in (TrueColour.lutData). Never for
+    /// the conversion slot, which must stay an exact log transform.
     func applyLUT(_ lut: ParsedLUT, to image: CIImage,
-                  opacity: Double = 1.0, blend: LUTBlendMode = .normal) -> CIImage {
+                  opacity: Double = 1.0, blend: LUTBlendMode = .normal,
+                  protectSkin: Bool = false) -> CIImage {
         // T2.6 — DOMAIN remap: CIColorCube samples inputs over [0,1], so a
         // custom domain becomes a per-channel affine remap in front.
         var cubeInput = image
@@ -379,7 +392,7 @@ final class LookPipeline: @unchecked Sendable {
         let filter = CIFilter.colorCubeWithColorSpace()
         filter.inputImage = cubeInput
         filter.cubeDimension = Float(lut.size)
-        filter.cubeData = lut.rgbaFloatData
+        filter.cubeData = protectSkin ? TrueColour.lutData(for: lut) : lut.rgbaFloatData
         filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         var out = filter.outputImage ?? image
         // Blend the LUT result over the slot's INPUT (so the original
@@ -429,13 +442,15 @@ final class LookPipeline: @unchecked Sendable {
                                      tint: CGFloat(recipe.tint))
         }
 
-        if recipe.contrast != 1 || recipe.saturation != 1 || recipe.brightness != 0 {
-            let controls = CIFilter.colorControls()
-            controls.inputImage = output
-            controls.contrast = recipe.contrast
-            controls.saturation = recipe.saturation
-            controls.brightness = recipe.brightness
-            output = controls.outputImage ?? output
+        // Saturation, contrast and brightness: the True Colour tone cube.
+        // This used to be CIColorControls, which works in linear light: its
+        // contrast pivots at a light grey and crushed deep skin to black, and
+        // its brightness greyed it. See TrueColour.swift.
+        if let tone = TrueColour.toneFilter(contrast: recipe.contrast,
+                                            saturation: recipe.saturation,
+                                            brightness: recipe.brightness) {
+            tone.setValue(output, forKey: kCIInputImageKey)
+            output = tone.outputImage ?? output
         }
 
         if recipe.bloom > 0 {
@@ -462,14 +477,16 @@ final class LookPipeline: @unchecked Sendable {
     private func applyUserAdjustments(_ settings: LookSettings, to image: CIImage) -> CIImage {
         var output = image
 
+        // Exposure, Contrast and Saturation sliders: the same True Colour
+        // tone as the looks, so the Contrast slider no longer crushes deep
+        // skin and Exposure no longer greys it.
         let hasColourChange = settings.exposure != 0 || settings.contrast != 10 || settings.saturation != 0
-        if hasColourChange {
-            let controls = CIFilter.colorControls()
-            controls.inputImage = output
-            controls.contrast = Float(1.0 + (settings.contrast - 10) / 200.0)
-            controls.saturation = Float(1.0 + settings.saturation / 100.0)
-            controls.brightness = Float(settings.exposure / 300.0)
-            output = controls.outputImage ?? output
+        if hasColourChange,
+           let tone = TrueColour.toneFilter(contrast: Float(1.0 + (settings.contrast - 10) / 200.0),
+                                            saturation: Float(1.0 + settings.saturation / 100.0),
+                                            brightness: Float(settings.exposure / 300.0)) {
+            tone.setValue(output, forKey: kCIInputImageKey)
+            output = tone.outputImage ?? output
         }
 
         if settings.warmth != 0 || settings.tint != 0 {

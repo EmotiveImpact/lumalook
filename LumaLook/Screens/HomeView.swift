@@ -626,6 +626,41 @@ private final class HomeScrollProgress: ObservableObject {
         if stepped == 1 || stepped == 0 { print("[LUMA] HOMEBAR collapse=\(stepped) offset=\(offset)") }
         #endif
         collapse = stepped
+        pull.follow(offset)
+    }
+
+    /// How far the page is pulled down past its top. Kept in its own object
+    /// so that only the reel's picture redraws while you pull.
+    let pull = HomePullAmount()
+}
+
+/// The distance the page is pulled down past its top (0 at rest).
+private final class HomePullAmount: ObservableObject {
+    @Published private(set) var amount: CGFloat = 0
+
+    func follow(_ offset: CGFloat) {
+        let next = (max(0, offset) * 2).rounded() / 2
+        guard next != amount else { return }
+        amount = next
+    }
+}
+
+/// Pull down at the top of Home and the reel's picture grows to fill the
+/// space, its top edge held at the top of the screen, so no empty band
+/// opens above it. It scales from its bottom edge, which moves down with
+/// the page.
+private struct HomeReelStretch<Content: View>: View {
+    @ObservedObject var pull: HomePullAmount
+    let height: CGFloat
+    @ViewBuilder let content: Content
+
+    private var scale: CGFloat {
+        guard height > 0 else { return 1 }
+        return 1 + pull.amount / height
+    }
+
+    var body: some View {
+        content.scaleEffect(scale, anchor: .bottom)
     }
 }
 
@@ -1434,14 +1469,22 @@ private struct ViewfinderReel: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            photos
-            scrim
+            // Clipped before it stretches, so a pull grows the picture
+            // upwards into the space above the page.
+            HomeReelStretch(pull: scroll.pull, height: height) {
+                ZStack {
+                    photos
+                    scrim
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .clipped()
+            }
             copy
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
         .overlay(alignment: .top) { bars }
-        .clipped()
         .task(id: "\(reduceMotion)-\(pick ?? "")") { await cycle() }
         .onAppear { seedPick() }
         .accessibilityElement(children: .contain)

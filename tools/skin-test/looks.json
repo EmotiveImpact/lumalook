@@ -1,0 +1,1530 @@
+[
+ {
+  "id": "sig-kd4-clean-neutral",
+  "code": "KD4",
+  "name": "Clean Neutral",
+  "section": "Signature",
+  "pack": "signature",
+  "free": true,
+  "recipe": {
+   "temperature": 6500.0,
+   "tint": 0.0,
+   "contrast": 1.02,
+   "saturation": 0.98,
+   "brightness": 0.0,
+   "vignette": 0.0,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-cn83-teal-orange",
+  "code": "CN83",
+  "name": "Teal & Orange",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 5850.0,
+   "tint": -10.0,
+   "contrast": 1.1,
+   "saturation": 1.18,
+   "brightness": 0.0,
+   "vignette": 0.4,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-neon-nights",
+  "code": "",
+  "name": "Neon Nights",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 7000.0,
+   "tint": 11.0,
+   "contrast": 1.18,
+   "saturation": 1.32,
+   "brightness": 0.0,
+   "vignette": 0.7,
+   "bloom": 0.35
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-night-drive",
+  "code": "",
+  "name": "Night Drive",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 7600.0,
+   "tint": 6.0,
+   "contrast": 1.2,
+   "saturation": 0.92,
+   "brightness": -0.04,
+   "vignette": 0.9,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-kd52-cine-negative",
+  "code": "KD52",
+  "name": "Cine Negative",
+  "section": "Signature",
+  "pack": "signature",
+  "free": true,
+  "recipe": {
+   "temperature": 5900.0,
+   "tint": 4.0,
+   "contrast": 1.08,
+   "saturation": 1.06,
+   "brightness": 0.0,
+   "vignette": 0.25,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-kd2-golden-hour",
+  "code": "KD2",
+  "name": "Golden Hour",
+  "section": "Signature",
+  "pack": "signature",
+  "free": true,
+  "recipe": {
+   "temperature": 5300.0,
+   "tint": 4.0,
+   "contrast": 1.06,
+   "saturation": 1.1,
+   "brightness": 0.03,
+   "vignette": 0.0,
+   "bloom": 0.3
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-ag60-london-rain",
+  "code": "AG60",
+  "name": "London Rain",
+  "section": "Signature",
+  "pack": "signature",
+  "free": true,
+  "recipe": {
+   "temperature": 7350.0,
+   "tint": -4.0,
+   "contrast": 1.05,
+   "saturation": 0.88,
+   "brightness": -0.02,
+   "vignette": 0.5,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-afrobeats-glow",
+  "code": "",
+  "name": "Afrobeats Glow",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 5450.0,
+   "tint": 8.0,
+   "contrast": 1.12,
+   "saturation": 1.1,
+   "brightness": 0.0,
+   "vignette": 0.0,
+   "bloom": 0.45
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-bw32-documentary-grit",
+  "code": "BW32",
+  "name": "Documentary Grit",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 6700.0,
+   "tint": 0.0,
+   "contrast": 1.22,
+   "saturation": 0.0,
+   "brightness": 0.0,
+   "vignette": 0.6,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "sig-cn93-luxury-campaign",
+  "code": "CN93",
+  "name": "Luxury Campaign",
+  "section": "Signature",
+  "pack": "signature",
+  "free": false,
+  "recipe": {
+   "temperature": 6100.0,
+   "tint": 2.0,
+   "contrast": 1.16,
+   "saturation": 1.04,
+   "brightness": 0.02,
+   "vignette": 0.55,
+   "bloom": 0.2
+  },
+  "cube": null
+ },
+ {
+  "id": "negative-set-01-kd2",
+  "code": "KD2",
+  "name": "Morning Gold",
+  "section": "Negative Set 01",
+  "pack": "negative-set-01",
+  "free": true,
+  "recipe": {
+   "temperature": 5600.0,
+   "tint": 4.0,
+   "contrast": 1.06,
+   "saturation": 1.08,
+   "brightness": 0.02,
+   "vignette": 0.2,
+   "bloom": 0.2
+  },
+  "cube": null
+ },
+ {
+  "id": "negative-set-01-kd4",
+  "code": "KD4",
+  "name": "Portrait Neutral",
+  "section": "Negative Set 01",
+  "pack": "negative-set-01",
+  "free": true,
+  "recipe": {
+   "temperature": 6200.0,
+   "tint": 2.0,
+   "contrast": 1.03,
+   "saturation": 1.02,
+   "brightness": 0.01,
+   "vignette": 0.1,
+   "bloom": 0.0
+  },
+  "cube": null
+ },
+ {
+  "id": "negative-set-01-kd52",
+  "code": "KD52",
+  "name": "Cine Negative",
+  "section": "Negative Set 01",
+  "pack": "negative-set-01",
+  "free": true,
+  "recipe": {
+   "temperature": 6100.0,
+   "tint": -2.0,
+   "contrast": 1.12,
+   "saturation": 0.94,
+   "brightness": -0.01,
+   "vignette": 0.3,
+   "bloom": 0.12
+  },
+  "cube": null
+ },
+ {
+  "id": "negative-set-01-fj4",
+  "code": "FJ4",
+  "name": "Meadow Green",
+  "section": "Negative Set 01",
+  "pack": "negative-set-01",
+  "free": true,
+  "recipe": {
+   "temperature": 6900.0,
+   "tint": -8.0,
+   "contrast": 1.05,
+   "saturation": 1.12,
+   "brightness": 0.02,
+   "vignette": 0.15,
+   "bloom": 0.15
+  },
+  "cube": null
+ },
+ {
+  "id": "negative-set-01-ag20",
+  "code": "AG20",
+  "name": "Faded Album",
+  "section": "Negative Set 01",
+  "pack": "negative-set-01",
+  "free": true,
+  "recipe": {
+   "temperature": 5400.0,
+   "tint": 6.0,
+   "contrast": 0.94,
+   "saturation": 0.85,
+   "brightness": 0.05,
+   "vignette": 0.35,
+   "bloom": 0.25
+  },
+  "cube": null
+ },
+ {
+  "id": "film-stocks-01-pt160",
+  "code": "PT160",
+  "name": "Portrait Neg",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_PT160.cube"
+ },
+ {
+  "id": "film-stocks-01-ek100",
+  "code": "EK100",
+  "name": "Vivid Neg",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_EK100.cube"
+ },
+ {
+  "id": "film-stocks-01-sp200",
+  "code": "SP200",
+  "name": "Drugstore Neg",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_SP200.cube"
+ },
+ {
+  "id": "film-stocks-01-av200",
+  "code": "AV200",
+  "name": "Street Neg",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_AV200.cube"
+ },
+ {
+  "id": "film-stocks-01-kc64",
+  "code": "KC64",
+  "name": "Chrome 64",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_KC64.cube"
+ },
+ {
+  "id": "film-stocks-01-vv50",
+  "code": "VV50",
+  "name": "Vivid Slide",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_VV50.cube"
+ },
+ {
+  "id": "film-stocks-01-pr100",
+  "code": "PR100",
+  "name": "Clean Slide",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_PR100.cube"
+ },
+ {
+  "id": "film-stocks-01-xp200",
+  "code": "XP200",
+  "name": "Cross Process",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_XP200.cube"
+ },
+ {
+  "id": "film-stocks-01-tx400",
+  "code": "TX400",
+  "name": "Reportage Mono",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_TX400.cube"
+ },
+ {
+  "id": "film-stocks-01-hp400",
+  "code": "HP400",
+  "name": "Classic Mono",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_HP400.cube"
+ },
+ {
+  "id": "film-stocks-01-in669",
+  "code": "IN669",
+  "name": "Instant Warm",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_IN669.cube"
+ },
+ {
+  "id": "film-stocks-01-rs100",
+  "code": "RS100",
+  "name": "Redscale",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_RS100.cube"
+ },
+ {
+  "id": "film-stocks-01-cp2383",
+  "code": "CP2383",
+  "name": "Cinema Print",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_CP2383.cube"
+ },
+ {
+  "id": "film-stocks-01-cp3513",
+  "code": "CP3513",
+  "name": "Cinema Print II",
+  "section": "Film Stocks 01",
+  "pack": "film-stocks-01",
+  "free": true,
+  "recipe": null,
+  "cube": "FS_CP3513.cube"
+ },
+ {
+  "id": "film-neg-archive-fn160",
+  "code": "FN160",
+  "name": "Pastel Neg 160",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FN160.cube"
+ },
+ {
+  "id": "film-neg-archive-fn400",
+  "code": "FN400",
+  "name": "Airy Neg 400",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FN400.cube"
+ },
+ {
+  "id": "film-neg-archive-fn800",
+  "code": "FN800",
+  "name": "Evening Neg 800",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FN800.cube"
+ },
+ {
+  "id": "film-neg-archive-pt160n",
+  "code": "PT160N",
+  "name": "Portrait Neg II",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT160N.cube"
+ },
+ {
+  "id": "film-neg-archive-pt400",
+  "code": "PT400",
+  "name": "Portrait Neg 400",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT400.cube"
+ },
+ {
+  "id": "film-neg-archive-pt800",
+  "code": "PT800",
+  "name": "Portrait Neg 800",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT800.cube"
+ },
+ {
+  "id": "film-neg-archive-pt800h",
+  "code": "PT800H",
+  "name": "Portrait Neg 800 HC",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT800H.cube"
+ },
+ {
+  "id": "film-neg-archive-sp100",
+  "code": "SP100",
+  "name": "Drugstore Neg 100",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_SP100.cube"
+ },
+ {
+  "id": "film-neg-archive-sp400",
+  "code": "SP400",
+  "name": "Drugstore Neg 400",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_SP400.cube"
+ },
+ {
+  "id": "film-neg-archive-sp800",
+  "code": "SP800",
+  "name": "Drugstore Neg 800",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_SP800.cube"
+ },
+ {
+  "id": "film-neg-archive-sp1600",
+  "code": "SP1600",
+  "name": "Drugstore Neg 1600",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_SP1600.cube"
+ },
+ {
+  "id": "film-neg-archive-pt160v",
+  "code": "PT160V",
+  "name": "Portrait Neg VC",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT160V.cube"
+ },
+ {
+  "id": "film-neg-archive-pt400n",
+  "code": "PT400N",
+  "name": "Portrait Neg NC",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT400N.cube"
+ },
+ {
+  "id": "film-neg-archive-pt400u",
+  "code": "PT400U",
+  "name": "Portrait Neg UC",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT400U.cube"
+ },
+ {
+  "id": "film-neg-archive-pt400v",
+  "code": "PT400V",
+  "name": "Portrait Neg VC 400",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PT400V.cube"
+ },
+ {
+  "id": "film-neg-archive-cp2393",
+  "code": "CP2393",
+  "name": "Cinema Print III",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_CP2393.cube"
+ },
+ {
+  "id": "film-neg-archive-cp3510",
+  "code": "CP3510",
+  "name": "Cinema Print IV",
+  "section": "Negative Archive",
+  "pack": "film-neg-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_CP3510.cube"
+ },
+ {
+  "id": "film-slide-archive-ap100",
+  "code": "AP100",
+  "name": "Euro Slide 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_AP100.cube"
+ },
+ {
+  "id": "film-slide-archive-as100",
+  "code": "AS100",
+  "name": "Soft Slide 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_AS100.cube"
+ },
+ {
+  "id": "film-slide-archive-pr400",
+  "code": "PR400",
+  "name": "Clean Slide 400",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PR400.cube"
+ },
+ {
+  "id": "film-slide-archive-pr400x",
+  "code": "PR400X",
+  "name": "Clean Slide 400X",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PR400X.cube"
+ },
+ {
+  "id": "film-slide-archive-sn100",
+  "code": "SN100",
+  "name": "Consumer Slide 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_SN100.cube"
+ },
+ {
+  "id": "film-slide-archive-vv100",
+  "code": "VV100",
+  "name": "Vivid Slide 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_VV100.cube"
+ },
+ {
+  "id": "film-slide-archive-ec100g",
+  "code": "EC100G",
+  "name": "Warm Chrome 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_EC100G.cube"
+ },
+ {
+  "id": "film-slide-archive-ec100v",
+  "code": "EC100V",
+  "name": "Vivid Chrome 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_EC100V.cube"
+ },
+ {
+  "id": "film-slide-archive-el200",
+  "code": "EL200",
+  "name": "Consumer Chrome 200",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_EL200.cube"
+ },
+ {
+  "id": "film-slide-archive-el400",
+  "code": "EL400",
+  "name": "Consumer Chrome 400",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_EL400.cube"
+ },
+ {
+  "id": "film-slide-archive-el100x",
+  "code": "EL100X",
+  "name": "Extra Chrome 100",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_EL100X.cube"
+ },
+ {
+  "id": "film-slide-archive-kc25",
+  "code": "KC25",
+  "name": "Chrome 25",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_KC25.cube"
+ },
+ {
+  "id": "film-slide-archive-kc200",
+  "code": "KC200",
+  "name": "Chrome 200",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_KC200.cube"
+ },
+ {
+  "id": "film-slide-archive-pc35",
+  "code": "PC35",
+  "name": "Instant Slide",
+  "section": "Slide Archive",
+  "pack": "film-slide-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PC35.cube"
+ },
+ {
+  "id": "film-mono-archive-apx100",
+  "code": "APX100",
+  "name": "Fine Mono 100",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_APX100.cube"
+ },
+ {
+  "id": "film-mono-archive-apx25",
+  "code": "APX25",
+  "name": "Glass Mono 25",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_APX25.cube"
+ },
+ {
+  "id": "film-mono-archive-np1600",
+  "code": "NP1600",
+  "name": "Night Mono 1600",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_NP1600.cube"
+ },
+ {
+  "id": "film-mono-archive-np100",
+  "code": "NP100",
+  "name": "Smooth Mono 100",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_NP100.cube"
+ },
+ {
+  "id": "film-mono-archive-dl100",
+  "code": "DL100",
+  "name": "Modern Mono 100",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_DL100.cube"
+ },
+ {
+  "id": "film-mono-archive-dl400",
+  "code": "DL400",
+  "name": "Modern Mono 400",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_DL400.cube"
+ },
+ {
+  "id": "film-mono-archive-dl3200",
+  "code": "DL3200",
+  "name": "Night Mono 3200",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_DL3200.cube"
+ },
+ {
+  "id": "film-mono-archive-fp125",
+  "code": "FP125",
+  "name": "Classic Mono 125",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP125.cube"
+ },
+ {
+  "id": "film-mono-archive-hps800",
+  "code": "HPS800",
+  "name": "Press Mono 800",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_HPS800.cube"
+ },
+ {
+  "id": "film-mono-archive-pf50",
+  "code": "PF50",
+  "name": "Glass Mono 50",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PF50.cube"
+ },
+ {
+  "id": "film-mono-archive-xp2",
+  "code": "XP2",
+  "name": "Lab Mono 400",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_XP2.cube"
+ },
+ {
+  "id": "film-mono-archive-bw400",
+  "code": "BW400",
+  "name": "Lab Mono CN",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_BW400.cube"
+ },
+ {
+  "id": "film-mono-archive-ir840",
+  "code": "IR840",
+  "name": "Infra Mono",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_IR840.cube"
+ },
+ {
+  "id": "film-mono-archive-tm100",
+  "code": "TM100",
+  "name": "Tabular Mono 100",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_TM100.cube"
+ },
+ {
+  "id": "film-mono-archive-tm400",
+  "code": "TM400",
+  "name": "Tabular Mono 400",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_TM400.cube"
+ },
+ {
+  "id": "film-mono-archive-tm3200",
+  "code": "TM3200",
+  "name": "Tabular Mono 3200",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_TM3200.cube"
+ },
+ {
+  "id": "film-mono-archive-pl664",
+  "code": "PL664",
+  "name": "Instant Mono 100",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL664.cube"
+ },
+ {
+  "id": "film-mono-archive-pl667",
+  "code": "PL667",
+  "name": "Instant Mono 3000",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL667.cube"
+ },
+ {
+  "id": "film-mono-archive-pl672",
+  "code": "PL672",
+  "name": "Instant Mono 400",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL672.cube"
+ },
+ {
+  "id": "film-mono-archive-rir400",
+  "code": "RIR400",
+  "name": "Infra Mono 400",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_RIR400.cube"
+ },
+ {
+  "id": "film-mono-archive-ro25",
+  "code": "RO25",
+  "name": "Ortho Mono 25",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_RO25.cube"
+ },
+ {
+  "id": "film-mono-archive-rr80",
+  "code": "RR80",
+  "name": "Retro Mono 80",
+  "section": "Mono Archive",
+  "pack": "film-mono-archive",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_RR80.cube"
+ },
+ {
+  "id": "film-instant-lab-px70w",
+  "code": "PX70W",
+  "name": "Integral Warm",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX70W.cube"
+ },
+ {
+  "id": "film-instant-lab-px70c",
+  "code": "PX70C",
+  "name": "Integral Cold",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX70C.cube"
+ },
+ {
+  "id": "film-instant-lab-px100w",
+  "code": "PX100W",
+  "name": "Silver Shade Warm",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX100W.cube"
+ },
+ {
+  "id": "film-instant-lab-px100c",
+  "code": "PX100C",
+  "name": "Silver Shade Cold",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX100C.cube"
+ },
+ {
+  "id": "film-instant-lab-px680",
+  "code": "PX680",
+  "name": "Integral 600",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX680.cube"
+ },
+ {
+  "id": "film-instant-lab-px680w",
+  "code": "PX680W",
+  "name": "Integral 600 Warm",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX680W.cube"
+ },
+ {
+  "id": "film-instant-lab-px680c",
+  "code": "PX680C",
+  "name": "Integral 600 Cold",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PX680C.cube"
+ },
+ {
+  "id": "film-instant-lab-fp100",
+  "code": "FP100",
+  "name": "Pack Film 100",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP100.cube"
+ },
+ {
+  "id": "film-instant-lab-fp100c",
+  "code": "FP100C",
+  "name": "Pack Film Cool",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP100C.cube"
+ },
+ {
+  "id": "film-instant-lab-fp100n",
+  "code": "FP100N",
+  "name": "Pack Film Negative",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP100N.cube"
+ },
+ {
+  "id": "film-instant-lab-fp3000",
+  "code": "FP3000",
+  "name": "Pack Mono 3000",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP3000.cube"
+ },
+ {
+  "id": "film-instant-lab-fp3000n",
+  "code": "FP3000N",
+  "name": "Pack Mono Negative",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_FP3000N.cube"
+ },
+ {
+  "id": "film-instant-lab-pl665",
+  "code": "PL665",
+  "name": "Pro Pack Mono",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL665.cube"
+ },
+ {
+  "id": "film-instant-lab-pl690",
+  "code": "PL690",
+  "name": "Pack Film 690",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL690.cube"
+ },
+ {
+  "id": "film-instant-lab-pl690w",
+  "code": "PL690W",
+  "name": "Pack Film Warm",
+  "section": "Instant Lab",
+  "pack": "film-instant-lab",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_PL690W.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms1",
+  "code": "MS1",
+  "name": "Standard Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS1.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms2",
+  "code": "MS2",
+  "name": "Soft Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS2.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms3",
+  "code": "MS3",
+  "name": "Vivid Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS3.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms4",
+  "code": "MS4",
+  "name": "Classic Chrome Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS4.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms5",
+  "code": "MS5",
+  "name": "Pro Neg Standard",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS5.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms6",
+  "code": "MS6",
+  "name": "Pro Neg High",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS6.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms7",
+  "code": "MS7",
+  "name": "Acros Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS7.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms8",
+  "code": "MS8",
+  "name": "Acros Red Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS8.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms9",
+  "code": "MS9",
+  "name": "Acros Yellow Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS9.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms10",
+  "code": "MS10",
+  "name": "Acros Green Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS10.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms11",
+  "code": "MS11",
+  "name": "Mono Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS11.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms12",
+  "code": "MS12",
+  "name": "Mono Red Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS12.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms13",
+  "code": "MS13",
+  "name": "Mono Yellow Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS13.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms14",
+  "code": "MS14",
+  "name": "Mono Green Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS14.cube"
+ },
+ {
+  "id": "film-mirrorless-sims-ms15",
+  "code": "MS15",
+  "name": "Sepia Sim",
+  "section": "Mirrorless Sims",
+  "pack": "film-mirrorless-sims",
+  "free": false,
+  "recipe": null,
+  "cube": "FS_MS15.cube"
+ },
+ {
+  "id": "cine-print-set-01-cn83",
+  "code": "CN83",
+  "name": "Hollywood Print",
+  "section": "Cine Print Set 01",
+  "pack": "cine-print-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 5550.0,
+   "tint": -7.0,
+   "contrast": 1.18,
+   "saturation": 1.05,
+   "brightness": -0.02,
+   "vignette": 0.4,
+   "bloom": 0.2
+  },
+  "cube": null
+ },
+ {
+  "id": "cine-print-set-01-cn93",
+  "code": "CN93",
+  "name": "Premiere Night",
+  "section": "Cine Print Set 01",
+  "pack": "cine-print-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 5000.0,
+   "tint": 2.0,
+   "contrast": 1.14,
+   "saturation": 0.98,
+   "brightness": 0.0,
+   "vignette": 0.45,
+   "bloom": 0.35
+  },
+  "cube": null
+ },
+ {
+  "id": "cine-print-set-01-cn71",
+  "code": "CN71",
+  "name": "Night Street",
+  "section": "Cine Print Set 01",
+  "pack": "cine-print-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 5400.0,
+   "tint": -3.0,
+   "contrast": 1.2,
+   "saturation": 1.1,
+   "brightness": -0.04,
+   "vignette": 0.5,
+   "bloom": 0.3
+  },
+  "cube": null
+ },
+ {
+  "id": "cine-print-set-01-cn12",
+  "code": "CN12",
+  "name": "Bleach Bypass",
+  "section": "Cine Print Set 01",
+  "pack": "cine-print-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 6300.0,
+   "tint": 0.0,
+   "contrast": 1.32,
+   "saturation": 0.75,
+   "brightness": -0.02,
+   "vignette": 0.3,
+   "bloom": 0.1
+  },
+  "cube": null
+ },
+ {
+  "id": "cine-print-set-01-cn44",
+  "code": "CN44",
+  "name": "Anamorphic Dusk",
+  "section": "Cine Print Set 01",
+  "pack": "cine-print-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 5100.0,
+   "tint": 10.0,
+   "contrast": 1.1,
+   "saturation": 1.02,
+   "brightness": -0.01,
+   "vignette": 0.35,
+   "bloom": 0.4
+  },
+  "cube": null
+ },
+ {
+  "id": "bw-set-01-bw32",
+  "code": "BW32",
+  "name": "Street Contrast",
+  "section": "B&W Set 01",
+  "pack": "bw-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 6500.0,
+   "tint": 0.0,
+   "contrast": 1.28,
+   "saturation": 0.0,
+   "brightness": 0.0,
+   "vignette": 0.4,
+   "bloom": 0.1
+  },
+  "cube": null
+ },
+ {
+  "id": "bw-set-01-bw4",
+  "code": "BW4",
+  "name": "Gallery Soft",
+  "section": "B&W Set 01",
+  "pack": "bw-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 6500.0,
+   "tint": 0.0,
+   "contrast": 1.08,
+   "saturation": 0.0,
+   "brightness": 0.03,
+   "vignette": 0.2,
+   "bloom": 0.2
+  },
+  "cube": null
+ },
+ {
+  "id": "bw-set-01-bw16",
+  "code": "BW16",
+  "name": "Push Process",
+  "section": "B&W Set 01",
+  "pack": "bw-set-01",
+  "free": false,
+  "recipe": {
+   "temperature": 6500.0,
+   "tint": 0.0,
+   "contrast": 1.4,
+   "saturation": 0.0,
+   "brightness": -0.02,
+   "vignette": 0.5,
+   "bloom": 0.15
+  },
+  "cube": null
+ },
+ {
+  "id": "originals-01-ll1",
+  "code": "LL1",
+  "name": "Neon Nights",
+  "section": "Originals 01",
+  "pack": "originals-01",
+  "free": false,
+  "recipe": {
+   "temperature": 6950.0,
+   "tint": 13.0,
+   "contrast": 1.15,
+   "saturation": 1.25,
+   "brightness": -0.02,
+   "vignette": 0.4,
+   "bloom": 0.45
+  },
+  "cube": null
+ },
+ {
+  "id": "originals-01-ll2",
+  "code": "LL2",
+  "name": "Night Drive",
+  "section": "Originals 01",
+  "pack": "originals-01",
+  "free": false,
+  "recipe": {
+   "temperature": 7600.0,
+   "tint": -3.0,
+   "contrast": 1.12,
+   "saturation": 0.95,
+   "brightness": -0.03,
+   "vignette": 0.45,
+   "bloom": 0.35
+  },
+  "cube": null
+ },
+ {
+  "id": "originals-01-ll3",
+  "code": "LL3",
+  "name": "Afrobeats Glow",
+  "section": "Originals 01",
+  "pack": "originals-01",
+  "free": false,
+  "recipe": {
+   "temperature": 5300.0,
+   "tint": 8.0,
+   "contrast": 1.1,
+   "saturation": 1.1,
+   "brightness": 0.03,
+   "vignette": 0.25,
+   "bloom": 0.4
+  },
+  "cube": null
+ },
+ {
+  "id": "after-dark-ad1",
+  "code": "AD1",
+  "name": "Afrobeats Glow",
+  "section": "After Dark",
+  "pack": "after-dark",
+  "free": false,
+  "recipe": {
+   "temperature": 5400.0,
+   "tint": 10.0,
+   "contrast": 1.12,
+   "saturation": 1.1,
+   "brightness": 0.03,
+   "vignette": 0.3,
+   "bloom": 0.4
+  },
+  "cube": null
+ },
+ {
+  "id": "after-dark-ad2",
+  "code": "AD2",
+  "name": "Neon Nights",
+  "section": "After Dark",
+  "pack": "after-dark",
+  "free": false,
+  "recipe": {
+   "temperature": 7100.0,
+   "tint": 14.0,
+   "contrast": 1.16,
+   "saturation": 1.3,
+   "brightness": -0.02,
+   "vignette": 0.45,
+   "bloom": 0.4
+  },
+  "cube": null
+ },
+ {
+  "id": "after-dark-ad3",
+  "code": "AD3",
+  "name": "Night Drive",
+  "section": "After Dark",
+  "pack": "after-dark",
+  "free": false,
+  "recipe": {
+   "temperature": 5450.0,
+   "tint": 6.0,
+   "contrast": 1.2,
+   "saturation": 1.12,
+   "brightness": -0.04,
+   "vignette": 0.55,
+   "bloom": 0.3
+  },
+  "cube": null
+ },
+ {
+  "id": "after-dark-ad4",
+  "code": "AD4",
+  "name": "Cine Negative",
+  "section": "After Dark",
+  "pack": "after-dark",
+  "free": false,
+  "recipe": {
+   "temperature": 5800.0,
+   "tint": 4.0,
+   "contrast": 0.96,
+   "saturation": 0.88,
+   "brightness": 0.03,
+   "vignette": 0.3,
+   "bloom": 0.35
+  },
+  "cube": null
+ },
+ {
+  "id": "after-dark-ad5",
+  "code": "AD5",
+  "name": "London Rain",
+  "section": "After Dark",
+  "pack": "after-dark",
+  "free": false,
+  "recipe": {
+   "temperature": 7600.0,
+   "tint": -6.0,
+   "contrast": 1.08,
+   "saturation": 0.9,
+   "brightness": -0.02,
+   "vignette": 0.45,
+   "bloom": 0.15
+  },
+  "cube": null
+ }
+]
