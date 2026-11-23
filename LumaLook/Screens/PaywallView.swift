@@ -184,6 +184,34 @@ struct PaywallView: View {
         return "\(offer.period.value)-\(unit) free trial"
     }
 
+    /// The same offer as the yearly row says it ("7 days free"), or nil when
+    /// this account cannot take it.
+    private var yearlyTrialShort: String? {
+        guard yearlyTrialLabel != nil,
+              let period = storeService.proYearly?.subscription?.introductoryOffer?.period
+        else { return nil }
+        let n = period.value
+        let unit: String
+        switch period.unit {
+        case .day:   unit = n == 1 ? "day" : "days"
+        case .week:  unit = n == 1 ? "week" : "weeks"
+        case .month: unit = n == 1 ? "month" : "months"
+        case .year:  unit = n == 1 ? "year" : "years"
+        @unknown default: return nil
+        }
+        return "\(n) \(unit) free"
+    }
+
+    /// The yearly row's price line: "7 days free, then $34.99 a year" while
+    /// this account can take the trial, otherwise the price and its monthly
+    /// equivalent.
+    private var yearlyDetail: String {
+        if let trial = yearlyTrialShort {
+            return "\(trial), then \(yearlyPrice) a year"
+        }
+        return "\(yearlyPrice) a year · \(yearlyPerMonth) a month"
+    }
+
     private var callToAction: String {
         switch plan {
         case .yearly:
@@ -209,10 +237,11 @@ struct PaywallView: View {
         VStack(spacing: 8) {
             PaywallPlanRow(
                 title: "Yearly",
-                detail: "\(yearlyPrice) a year · \(yearlyPerMonth) a month",
-                // The trial badge is a promise, so it shows only when StoreKit
-                // says THIS account can take the offer (same rule as the CTA).
-                badge: yearlyTrialLabel ?? "Best value",
+                // The trial is a promise, so the row names it only when
+                // StoreKit says THIS account can take the offer (same rule as
+                // the CTA).
+                detail: yearlyDetail,
+                badge: "Best value",
                 selected: plan == .yearly
             ) { plan = .yearly }
             PaywallPlanRow(
@@ -468,6 +497,7 @@ struct LockedLookSheet: View {
     @State private var restoring = false
     @State private var restoreFoundNothing = false
     @State private var errorMessage: String?
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
 
     private var preset: LookPreset? {
         guard lock.previewPackID == nil else { return nil }
@@ -651,10 +681,13 @@ struct LockedLookSheet: View {
         }
     }
 
-    /// "Buy After Dark · $2.99" in the pack's own colour.
+    /// "Buy After Dark · $2.99" in the pack's own colour. While a purchase
+    /// runs it reads "One moment", so the spinner never sits on a long title.
     private func buyPackButton(_ pack: LookPack) -> some View {
-        LumaColourButton(title: "Buy \(pack.name) · \(packPrice(pack))",
-                         colour: pack.colour, height: 54, fullWidth: true) {
+        let title = storeService.purchaseInFlight
+            ? "One moment" : "Buy \(pack.name) · \(packPrice(pack))"
+        return LumaColourButton(title: title, colour: pack.colour,
+                                height: 54, fullWidth: true) {
             buyPack()
         }
         .disabled(packProduct == nil || storeService.purchaseInFlight)
@@ -662,11 +695,18 @@ struct LockedLookSheet: View {
         .overlay(alignment: .trailing) {
             if storeService.purchaseInFlight {
                 ProgressView()
-                    .tint(.white)
+                    .tint(buyButtonText)
                     .padding(.trailing, 20)
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    /// The Buy button's text colour: ink on the pack colour, or white on
+    /// quiet glass when names are set to Dot and code (as `LumaColourButton`).
+    private var buyButtonText: Color {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+            ? Color(hex: 0x0B0B0C) : LumaTheme.textPrimary
     }
 
     /// Pro on quiet glass, under the pack's own button.
