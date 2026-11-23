@@ -89,13 +89,13 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.267
+   "monk10": 0.266
   },
   "film-instant-lab-fp100n": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.243
+   "monk10": 0.244
   },
   "film-instant-lab-fp3000": {
    "full": "true",
@@ -107,7 +107,7 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.242
+   "monk10": 0.241
   },
   "film-instant-lab-pl665": {
    "full": "true",
@@ -143,7 +143,7 @@
    "full": "tweak",
    "default": "tweak",
    "bad_frames": 1,
-   "monk10": 0.304
+   "monk10": 0.305
   },
   "film-instant-lab-px680c": {
    "full": "tweak",
@@ -161,19 +161,19 @@
    "full": "tweak",
    "default": "tweak",
    "bad_frames": 2,
-   "monk10": 0.291
+   "monk10": 0.293
   },
   "film-instant-lab-px70w": {
    "full": "tweak",
    "default": "tweak",
    "bad_frames": 1,
-   "monk10": 0.276
+   "monk10": 0.275
   },
   "film-mirrorless-sims-ms1": {
-   "full": "tweak",
+   "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.225
+   "monk10": 0.227
   },
   "film-mirrorless-sims-ms10": {
    "full": "true",
@@ -212,22 +212,22 @@
    "monk10": 0.238
   },
   "film-mirrorless-sims-ms2": {
-   "full": "tweak",
+   "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.223
+   "monk10": 0.225
   },
   "film-mirrorless-sims-ms3": {
    "full": "tweak",
-   "default": "tweak",
+   "default": "true",
    "bad_frames": 1,
-   "monk10": 0.207
+   "monk10": 0.212
   },
   "film-mirrorless-sims-ms4": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.215
+   "monk10": 0.219
   },
   "film-mirrorless-sims-ms5": {
    "full": "true",
@@ -238,8 +238,8 @@
   "film-mirrorless-sims-ms6": {
    "full": "tweak",
    "default": "true",
-   "bad_frames": 1,
-   "monk10": 0.213
+   "bad_frames": 0,
+   "monk10": 0.216
   },
   "film-mirrorless-sims-ms7": {
    "full": "true",
@@ -311,7 +311,7 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.338
+   "monk10": 0.337
   },
   "film-mono-archive-np100": {
    "full": "true",
@@ -353,7 +353,7 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.236
+   "monk10": 0.235
   },
   "film-mono-archive-ro25": {
    "full": "tweak",
@@ -395,13 +395,13 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.179
+   "monk10": 0.19
   },
   "film-neg-archive-cp3510": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.201
+   "monk10": 0.207
   },
   "film-neg-archive-fn160": {
    "full": "true",
@@ -419,7 +419,7 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.288
+   "monk10": 0.287
   },
   "film-neg-archive-pt160n": {
    "full": "true",
@@ -431,7 +431,7 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.233
+   "monk10": 0.234
   },
   "film-neg-archive-pt400": {
    "full": "true",
@@ -443,13 +443,13 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.252
+   "monk10": 0.253
   },
   "film-neg-archive-pt400u": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.266
+   "monk10": 0.265
   },
   "film-neg-archive-pt400v": {
    "full": "true",
@@ -461,25 +461,25 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.258
+   "monk10": 0.259
   },
   "film-neg-archive-pt800h": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.226
+   "monk10": 0.228
   },
   "film-neg-archive-sp100": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.258
+   "monk10": 0.259
   },
   "film-neg-archive-sp1600": {
-   "full": "tweak",
+   "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.278
+   "monk10": 0.277
   },
   "film-neg-archive-sp400": {
    "full": "true",
@@ -515,13 +515,13 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.218
+   "monk10": 0.221
   },
   "film-slide-archive-el100x": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.255
+   "monk10": 0.254
   },
   "film-slide-archive-el200": {
    "full": "true",
@@ -557,13 +557,13 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.233
+   "monk10": 0.234
   },
   "film-slide-archive-pr400x": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.279
+   "monk10": 0.28
   },
   "film-slide-archive-sn100": {
    "full": "true",
@@ -581,19 +581,19 @@
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.214
+   "monk10": 0.218
   },
   "film-stocks-01-cp2383": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.188
+   "monk10": 0.197
   },
   "film-stocks-01-cp3513": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.191
+   "monk10": 0.2
   },
   "film-stocks-01-ek100": {
    "full": "true",
@@ -609,15 +609,15 @@
   },
   "film-stocks-01-in669": {
    "full": "tweak",
-   "default": "tweak",
-   "bad_frames": 1,
-   "monk10": 0.311
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.312
   },
   "film-stocks-01-kc64": {
    "full": "true",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.239
+   "monk10": 0.238
   },
   "film-stocks-01-pr100": {
    "full": "true",
@@ -635,7 +635,7 @@
    "full": "tweak",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.205
+   "monk10": 0.211
   },
   "film-stocks-01-sp200": {
    "full": "true",
@@ -653,7 +653,7 @@
    "full": "tweak",
    "default": "true",
    "bad_frames": 0,
-   "monk10": 0.207
+   "monk10": 0.211
   },
   "film-stocks-01-xp200": {
    "full": "true",

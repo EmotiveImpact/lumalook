@@ -157,6 +157,9 @@ def main():
     print(f"  full strength: {full['true']} skin-true, {full['tweak']} near, {full['rework']} need rework")
     print(f"  75% default:   {default['true']} skin-true, {default['tweak']} near, {default['rework']} need rework")
     print(f"  deepest skin tone keeps at least {min(n['monk10'] for n in now.values()):.3f} lightness on every look")
+    edge = [names[i] for i in ids if now[i]["default"] != "true"]
+    if edge:
+        print(f"  still only near at 75% (allowed for looks already in the app, not for new ones): {', '.join(edge)}")
     if new:
         print(f"  new since the baseline: {', '.join(names[i] for i in new)}")
     gone = sorted(set(base) - {l["id"] for l in looks})

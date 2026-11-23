@@ -174,9 +174,16 @@ intensity unless stated. "Near" means mild flags only.
 | | Skin-true before | True Colour on | On at the 75% default | Bad main frames |
 |---|---|---|---|---|
 | Recipe looks (31) | 0 | 26 (5 near) | 31 | 219 to 0 |
-| Film looks (97) | 40 | 78 (19 near, none to rework) | 90 | 79 to 12 |
-| All looks (128) | 40 | 104 | 121 | 298 to 12 |
+| Film looks (97) | 40 | 81 (16 near, none to rework) | 92 | 79 to 10 |
+| All looks (128) | 40 | 107 | 123 | 298 to 10 |
 
 With True Colour off, 54 of 128 are skin-true: the linear-light bug stays
 fixed either way. Monk 10 keeps at least 0.20 Oklab L on 125 of 128 looks
-(CP2383, CP3513 and CP2393 sit at 0.18 to 0.19).
+(CP2383, CP3513 and CP2393 sit at 0.19 to 0.20).
+
+The film row read 78 and 90 in the first True Colour build. The smoother skin
+guard and the densify fix moved it to 81 and 92 with no look worse; these are
+the numbers in `baseline.json`. Five film looks are still only near at the 75%
+default (PX70W, PX70C, PX680, PX680W and PX680C, all instant films). They
+stay because they were already in the app; a new look that read the same
+would fail the gate.
