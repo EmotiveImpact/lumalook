@@ -120,7 +120,7 @@ struct MusicLibraryList: View {
                 }
             }
         }
-        Text("Every track is made by LumaLook, free to use in anything you post.")
+        Text("Every track is made by Lumalook, free to use in anything you post.")
             .font(.luma(size: 12))
             .foregroundStyle(LumaTheme.textMuted)
             .fixedSize(horizontal: false, vertical: true)

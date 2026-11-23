@@ -656,7 +656,7 @@ struct CameraLiveLookView: View {
                 Text("No camera on this device")
                     .font(.luma(size: 15, weight: .semibold))
                     .foregroundStyle(CamLab.text)
-                Text("Run LumaLook on an iPhone to shoot with live looks.")
+                Text("Run Lumalook on an iPhone to shoot with live looks.")
                     .font(.luma(size: 12))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.white.opacity(0.55))

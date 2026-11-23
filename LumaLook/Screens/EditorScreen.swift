@@ -5749,7 +5749,7 @@ private struct LDMusicCard: View {
     private var generated: GeneratedTrack? { MusicBeatGrid.track(for: track.url) }
 
     private var source: String {
-        if generated != nil { return "LumaLook library" }
+        if generated != nil { return "Lumalook library" }
         if BundledAudioLibrary.all.contains(where: { $0.title == track.title }) { return "Sound library" }
         switch track.kind {
         case .voice: return "Voiceover"

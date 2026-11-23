@@ -2654,7 +2654,7 @@ struct SettingsSubscriptionView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("iOS keeps per-app language under Settings › LumaLook. This will leave LumaLook.")
+            Text("iOS keeps per-app language under Settings › Lumalook. This will leave Lumalook.")
         }
         // Plain facts about what the LUT library costs on disk — no "clean up"
         // button, because every byte here is a look the user chose to keep and
@@ -2664,7 +2664,7 @@ struct SettingsSubscriptionView: View {
             Button("Manage Imported LUTs") { app.path.append(.lutManager) }
             Button("Done", role: .cancel) { }
         } message: {
-            Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in LumaLook's documents folder. Removing a LUT frees its space immediately.")
+            Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in Lumalook's documents folder. Removing a LUT frees its space immediately.")
         }
         .task {
             lutBytes = await Self.directorySize(of: app.lutRepository.lutFolderURL)
@@ -2801,7 +2801,7 @@ struct SettingsSubscriptionView: View {
                             opensExternally: true) {
                     openSupportMail()
                 }
-                settingsRow(icon: "star", title: "Rate LumaLook",
+                settingsRow(icon: "star", title: "Rate Lumalook",
                             opensExternally: true) {
                     requestReview()
                 }
@@ -2818,7 +2818,7 @@ struct SettingsSubscriptionView: View {
                 settingsRow(icon: "photo.on.rectangle", title: "Photo credits") {
                     showPhotoCredits = true
                 }
-                settingsRow(icon: "info.circle", title: "About LumaLook",
+                settingsRow(icon: "info.circle", title: "About Lumalook",
                             value: "v\(Self.appVersion)", valueIsNumber: true) {
                     showAbout = true
                 }
@@ -2909,8 +2909,8 @@ struct SettingsSubscriptionView: View {
     /// Gated on canOpenURL and on the open callback: the simulator, and any
     /// device with Mail removed or unconfigured, silently swallowed this.
     private func openSupportMail() {
-        let subject = "LumaLook Support".addingPercentEncoding(
-            withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+        let subject = "Lumalook Support".addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? "Lumalook%20Support"
         guard let url = URL(string: "mailto:\(Self.supportAddress)?subject=\(subject)"),
               UIApplication.shared.canOpenURL(url) else {
             showSupportFallback = true
@@ -3003,7 +3003,7 @@ struct SettingsSubscriptionView: View {
                     .font(.luma(size: 34, weight: .medium))
                     .foregroundStyle(.white))
                 .padding(.top, 30)
-            Text("LumaLook")
+            Text("Lumalook")
                 .font(.luma(size: 24, weight: .bold))
                 .foregroundStyle(.white)
             // A version and a build are numbers.
@@ -3014,8 +3014,8 @@ struct SettingsSubscriptionView: View {
                 .foregroundStyle(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
             Button {
-                let subject = "LumaLook Support".addingPercentEncoding(
-                    withAllowedCharacters: .urlQueryAllowed) ?? "LumaLook%20Support"
+                let subject = "Lumalook Support".addingPercentEncoding(
+                    withAllowedCharacters: .urlQueryAllowed) ?? "Lumalook%20Support"
                 if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
                     UIApplication.shared.open(url)
                 }
@@ -3048,7 +3048,7 @@ struct SettingsSubscriptionView: View {
                     .font(.luma(size: storeService.isPro ? 22 : 26))
                     .foregroundStyle(.white.opacity(0.85)))
             VStack(alignment: .leading, spacing: 4) {
-                Text(storeService.isPro ? "LumaLook Pro" : "LumaLook Free")
+                Text(storeService.isPro ? "Lumalook Pro" : "Lumalook Free")
                     .font(.luma(size: 19, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
