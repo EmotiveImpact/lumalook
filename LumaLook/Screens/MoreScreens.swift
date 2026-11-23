@@ -1832,8 +1832,10 @@ struct ProjectLibraryView: View {
                             projectSections
                         } else {
                             emptyHero(safeTop: safeTop)
-                            templateGrid(Array(TemplateLibrary.shown.prefix(4)),
-                                         title: "Or start from a template")
+                            if LumaFeatures.templates {
+                                templateGrid(Array(TemplateLibrary.shown.prefix(4)),
+                                             title: "Or start from a template")
+                            }
                         }
                         Color.clear.frame(height: 130)
                     }
@@ -1983,9 +1985,11 @@ struct ProjectLibraryView: View {
 
     /// Quiet glass pills; the one solid white pill is the main action.
     private func pills(_ items: [Pill]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // The Templates pill hides while LumaFeatures.templates is off.
+        let shown = items.filter { LumaFeatures.templates || $0.title != "Templates" }
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(items) { item in
+                ForEach(shown) { item in
                     Button {
                         item.action()
                         LumaHaptics.shared.tap()
