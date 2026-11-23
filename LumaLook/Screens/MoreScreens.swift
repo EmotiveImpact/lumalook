@@ -134,86 +134,180 @@ private func wordText(_ text: String, _ size: CGFloat, _ opacity: Double,
         .foregroundStyle(.white.opacity(opacity))
 }
 
-/// "12 looks · Measured slide films" — the count is data and keeps the mono
-/// voice; the words around it are plain type at a contrast you can actually
-/// read. The era tag is left exactly as the catalog wrote it: it is a phrase,
-/// not a code, and shouting it in tracked caps was the mistake.
-private func packMetaLine(_ pack: LookPack) -> Text {
-    numText("\(pack.looks.count)", 13, 0.72)
-        + wordText(" looks · \(pack.eraTag)", 12, 0.58)
+/// The pack name as a light part and a coloured heavy part. A trailing set
+/// number stays with the word before it, so "Cine Print Set 01" sets as
+/// "Cine Print" and "Set 01", "Negative Archive" as "Negative" and "Archive".
+private func storeTitleParts(_ pack: LookPack) -> (light: String, heavy: String) {
+    let words = pack.name.split(separator: " ").map(String.init)
+    if words.count > 2, let last = words.last, last.allSatisfy(\.isNumber) {
+        return (words.dropLast(2).joined(separator: " "),
+                words.suffix(2).joined(separator: " "))
+    }
+    return pack.titleParts
 }
 
-/// The one place the store says "owned" — and it says it WITHOUT hue, on a
-/// screen whose whole job is to show colour. Four states, none of them a
-/// tint: a filled white check disc plus a full-white label for owned, and
-/// readouts of decreasing weight for everything you could still get. Only the
-/// price is a number, so only the price stays mono.
-///
-/// (The teal "In Library" pill this replaces was the only colour on the store,
-/// and it died in greyscale. Value, weight and a mark survive it.)
+/// "Inspired by Hollywood release prints." → "inspired by Hollywood release
+/// prints", for the tail of a "5 looks · …" line. The app's name keeps its
+/// capital, and a closing full stop goes.
+private func storeSentenceTail(_ text: String) -> String {
+    let trimmed = text.hasSuffix(".") ? String(text.dropLast()) : text
+    guard let first = trimmed.first, !trimmed.hasPrefix("Lumalook") else { return trimmed }
+    return first.lowercased() + String(trimmed.dropFirst())
+}
+
+/// The one price style on every cover (calm mock v2): Free, a price or In
+/// library in the same small glass tag. A paid price takes the pack's own
+/// colour (or white with the pack's dot when names are set to Dot and code);
+/// everything else stays white.
 struct PackStatePill: View {
     let pack: LookPack
     let installed: Bool
-    /// The formatted StoreKit price. Only rendered in the `.buy` state.
+    /// The formatted StoreKit price. Only rendered for a paid pack.
     let price: String
 
     var body: some View {
+        content
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(Color(hex: 0x0A0B0D).opacity(0.5), in: Capsule())
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if installed {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .black))
-                    .foregroundStyle(.black)
-                    .frame(width: 18, height: 18)
-                    .background(.white, in: Circle())
+                    .font(.system(size: 8.5, weight: .bold))
                 Text("In library")
-                    .font(.luma(size: 13, weight: .semibold))
+                    .font(.luma(size: 11.5, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white)
+        } else if pack.isFree {
+            Text("Free")
+                .font(.luma(size: 11.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        } else if pack.isProIncluded {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(LumaTheme.signal)
+                Text("Pro")
+                    .font(.luma(size: 11.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
             }
-        } else if pack.isFree {
-            Text("Free")
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background(Color(white: 0.18), in: Capsule())
-        } else if pack.isProIncluded {
-            HStack(spacing: 5) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.9))
-                Text("Pro")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(Color(white: 0.18), in: Capsule())
         } else {
-            // A price is a number, and it is one of the two things on this
-            // screen that must read instantly from across the room.
-            Text(price)
-                .font(.luma(size: 14, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.13), in: Capsule())
+            LookNameText(price, colour: pack.colour, size: 11.5, weight: .semibold)
         }
+    }
+}
+
+/// A quiet glass pill (Preview free, Try on your clip): white at 11%, white
+/// words, no outline.
+private struct StoreGlassPill: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            action()
+            LumaHaptics.shared.tap()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title)
+                    .font(.luma(size: 14, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white.opacity(0.92))
+            .padding(.leading, 12)
+            .padding(.trailing, 15)
+            .frame(height: 38)
+            .background(Color.white.opacity(0.11), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .fixedSize()
+    }
+}
+
+/// A text tab: the word, white when picked with a short white bar under it,
+/// grey otherwise. An optional count sits after the word in a fainter grey.
+private struct StoreTextTab: View {
+    let title: String
+    var count: Int? = nil
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.luma(size: 14.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(isOn ? 1 : 0.42))
+                    if let count {
+                        Text("\(count)")
+                            .font(.luma(size: 14.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                }
+                Capsule()
+                    .fill(isOn ? Color.white : Color.clear)
+                    .frame(height: 2)
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// A picture faded into the page, the same way the Projects hero is: dimmed,
+/// a little less saturated, and run into ink at the bottom.
+private struct StoreFadedBackdrop<Picture: View>: View {
+    let height: CGFloat
+    @ViewBuilder let picture: () -> Picture
+
+    var body: some View {
+        ZStack {
+            picture()
+                .opacity(0.62)
+                .saturation(0.8)
+            LinearGradient(stops: [
+                .init(color: LumaTheme.background.opacity(0.55), location: 0),
+                .init(color: LumaTheme.background.opacity(0.2), location: 0.26),
+                .init(color: LumaTheme.background.opacity(0.5), location: 0.58),
+                .init(color: LumaTheme.background.opacity(0.94), location: 0.86),
+                .init(color: LumaTheme.background, location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .allowsHitTesting(false)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .clipped()
+        .contentShape(Rectangle())
     }
 }
 
 // MARK: - 09 Filter Store
 
-/// The Look Store in the shipping design language: the pack's own art on top,
-/// uncovered, every control in the drawer under it, and nothing on the screen
-/// tinted — ownership is said with a surface value step, a white check and a
-/// full-white label instead of a teal pill.
+/// The Store, calm (mock v2): the featured pack as a faded hero with its Buy
+/// button in the pack's own colour, text tabs for the categories, one quiet
+/// progress line, then every pack as a cover in a two-column grid, its name
+/// in its own colour and its price in one small glass tag.
 struct FilterStoreView: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
-    @Environment(\.dismiss) private var dismiss
     @StateObject private var thumbs = PackThumbs()
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
     var isRoot: Bool = false
 
     @State private var category: StoreCategory = {
@@ -235,6 +329,9 @@ struct FilterStoreView: View {
 
     private var isSearchActive: Bool { searching && !needle.isEmpty }
 
+    /// Browsing something narrower than the whole catalog.
+    private var isFiltered: Bool { isSearchActive || category != .all }
+
     /// The flagship recipe pack — looked up by id so catalog growth can't
     /// silently re-point the hero at a different pack.
     private var featured: LookPack {
@@ -245,7 +342,7 @@ struct FilterStoreView: View {
     /// browsing, the first result while filtering or searching — so the image
     /// on top always belongs to what is under it.
     private var heroPack: LookPack {
-        if isSearchActive || category != .all {
+        if isFiltered {
             return visiblePacks.first ?? featured
         }
         return featured
@@ -274,8 +371,6 @@ struct FilterStoreView: View {
         }
     }
 
-    private var categoryIndex: Int { activeCategories.firstIndex(of: category) ?? 0 }
-
     private var ownedLookCount: Int {
         PackCatalog.packs.reduce(0) { $0 + (app.packStore.isInstalled($1) ? $1.looks.count : 0) }
     }
@@ -284,175 +379,283 @@ struct FilterStoreView: View {
         PackCatalog.packs.filter { app.packStore.isInstalled($0) }.count
     }
 
+    /// A name's colour for the current Names choice.
+    private func nameColour(_ colour: Color, quiet: Color = LumaTheme.textPrimary) -> Color {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour ? colour : quiet
+    }
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 0) {
-                if isRoot {
-                    // Opened as a tab, it wears every tab's one row.
-                    LumaTopBar(title: LumaTab.store.title)
-                        .padding(.top, LumaTabMetrics.top)
-                        .padding(.bottom, 4)
+        GeometryReader { geo in
+            let safeTop = geo.safeAreaInsets.top
+            ZStack(alignment: .top) {
+                LumaTheme.background.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        heroBlock(safeTop: safeTop)
+                        categoryTabs
+                        progressRow
+                            .padding(.top, 12)
+                        if searching {
+                            searchField
+                                .padding(.top, 10)
+                        }
+                        grid
+                            .padding(.top, 12)
+                        disclaimer
+                        Color.clear.frame(height: isRoot ? 130 : 40)
+                    }
                 }
-                hero
-                    .frame(height: 214)
-                drawer
+                .ignoresSafeArea(edges: .top)
+                header
+                    .background(alignment: .top) {
+                        LinearGradient(colors: [LumaTheme.background.opacity(0.85),
+                                                LumaTheme.background.opacity(0)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: safeTop + 70)
+                            .offset(y: -safeTop)
+                            .allowsHitTesting(false)
+                    }
             }
         }
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: searching)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")") {
-            thumbs.render(packs: PackCatalog.packs, source: app.previewFrame)
+            thumbs.render(packs: PackCatalog.packs, source: app.previewFrame, maxDimension: 640)
         }
         .onAppear {
             // A seeded category the catalog cannot fill has no place on the
-            // bar, and the bar would then name a different category than the
-            // list is filtered by.
+            // tabs, and the tabs would then name a different category than
+            // the grid is filtered by.
             if !activeCategories.contains(category) { category = .all }
         }
     }
 
-    // MARK: Hero — pack art, uncovered
+    // MARK: Top row
 
-    private var hero: some View {
+    /// On the tab: Store, then Pro and You. Pushed from elsewhere: the way
+    /// back and the title.
+    private var header: some View {
+        Group {
+            if isRoot {
+                LumaTopBar(title: LumaTab.store.title)
+            } else {
+                LumaTabHeader {
+                    HStack(spacing: 2) {
+                        BackArrow()
+                            .accessibilityLabel("Back")
+                        LumaTabTitle(text: LumaTab.store.title)
+                    }
+                } trailing: {
+                    EmptyView()
+                }
+            }
+        }
+        .padding(.top, LumaTabMetrics.top)
+        .padding(.bottom, 2)
+    }
+
+    // MARK: Hero — the featured pack, faded into the page
+
+    private func heroBlock(safeTop: CGFloat) -> some View {
         let pack = heroPack
-        return Button {
-            StoreNav.open(pack, installed: app.packStore.isInstalled(pack), app: app)
-        } label: {
+        let parts = storeTitleParts(pack)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(isFiltered ? "FIRST RESULT" : "FEATURED PACK")
+                .font(.luma(size: 11, weight: .bold))
+                .kerning(1.3)
+                .foregroundStyle(nameColour(pack.colour, quiet: Color.white.opacity(0.55)))
+            LumaHeadline(light: parts.light, heavy: parts.heavy, size: 31,
+                         heavyColor: nameColour(pack.colour))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.top, 6)
+            Text("\(pack.looks.count) looks · \(storeSentenceTail(pack.eraTag))")
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .padding(.top, 6)
+            heroPills(pack)
+                .padding(.top, 18)
+        }
+        .padding(.top, safeTop + 88)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(alignment: .top) {
+            StoreFadedBackdrop(height: safeTop + 298) {
+                packArt(pack)
+            }
+            .onTapGesture {
+                StoreNav.open(pack, installed: app.packStore.isInstalled(pack), app: app)
+            }
+        }
+    }
+
+    /// Buy in the pack's own colour, and Preview free in quiet glass.
+    private func heroPills(_ pack: LookPack) -> some View {
+        let installed = app.packStore.isInstalled(pack)
+        return HStack(spacing: 8) {
+            LumaColourButton(title: heroBuyTitle(pack, installed: installed),
+                             colour: pack.colour, height: 38) {
+                heroBuy(pack)
+            }
+            .disabled(storeService.purchaseInFlight)
+            if !installed {
+                StoreGlassPill(title: "Preview free", icon: "wand.and.stars") {
+                    StoreNav.open(pack, installed: false, app: app)
+                }
+            }
+        }
+    }
+
+    private func heroBuyTitle(_ pack: LookPack, installed: Bool) -> String {
+        if installed { return "In library · Open" }
+        if storeService.purchaseInFlight { return "Buying" }
+        if storeService.ownsPack(pack.id) { return pack.isFree ? "Install free" : "Install" }
+        if pack.isProIncluded { return "Unlock with Pro" }
+        return "Buy · \(StoreNav.price(pack, storeService))"
+    }
+
+    /// A paid pack buys right here through StoreKit, exactly as the pack
+    /// page does, and installs once the purchase goes through. A pack you
+    /// already own (free, bought or with Pro) installs straight away, as its
+    /// "Install" label says. Everything else (Pro only, or no product from
+    /// the App Store yet) opens the pack page, where the full story is; an
+    /// installed pack opens the library.
+    private func heroBuy(_ pack: LookPack) {
+        let installed = app.packStore.isInstalled(pack)
+        if !installed, storeService.ownsPack(pack.id) {
+            if StoreNav.install(pack, app: app) > 0 {
+                LumaHaptics.shared.tap()
+            } else {
+                StoreNav.open(pack, installed: false, app: app)
+            }
+            return
+        }
+        guard !installed, !pack.isProIncluded,
+              let product = storeService.packProducts[pack.id] else {
+            StoreNav.open(pack, installed: installed, app: app)
+            return
+        }
+        Task { @MainActor in
+            if await storeService.purchase(product) {
+                StoreNav.install(pack, app: app)
+            }
+        }
+    }
+
+    /// A pack's cover: its graded frame once rendered, its photo until then.
+    @ViewBuilder
+    private func packArt(_ pack: LookPack) -> some View {
+        let photo = PackThumbs.previewPhoto(for: pack)
+        if let cg = thumbs.images[pack.id] {
             GeometryReader { geo in
+                Image(decorative: cg, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height,
+                           alignment: photo.cropAlignment)
+                    .clipped()
+            }
+        } else {
+            HeroImage(photo: photo, radius: 0)
+        }
+    }
+
+    // MARK: Tabs and the progress line
+
+    private var categoryTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                ForEach(activeCategories) { item in
+                    StoreTextTab(title: item.title,
+                                 count: item == .all ? PackCatalog.packs.count : nil,
+                                 isOn: category == item) {
+                        guard category != item else { return }
+                        withAnimation(.snappy(duration: 0.22)) { category = item }
+                        LumaHaptics.shared.tap()
+                    }
+                    .accessibilityLabel("\(item.title), \(PackCatalog.packs.filter(item.contains).count) packs")
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 4)
+    }
+
+    /// How many looks are yours and how many packs are free to start; while
+    /// narrowed, how many packs are showing. Search and restore sit at its
+    /// end as two quiet glass buttons.
+    private var progressText: String {
+        if searching || category != .all {
+            return "\(visiblePacks.count) of \(PackCatalog.packs.count) packs"
+        }
+        let looks = "\(ownedLookCount) of \(PackCatalog.totalLookCount) looks yours"
+        if ownedPackCount == 0 {
+            let free = PackCatalog.packs.filter(\.isFree).count
+            return "\(looks) · \(free) free \(free == 1 ? "pack" : "packs") to start"
+        }
+        return "\(looks) · \(ownedPackCount) of \(PackCatalog.packs.count) packs"
+    }
+
+    private var progressRow: some View {
+        HStack(spacing: 8) {
+            Text(progressText)
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    searching.toggle()
+                    if !searching { query = "" }
+                }
+                searchFocused = searching
+                LumaHaptics.shared.tap()
+            } label: {
+                quietCircle(searching ? "xmark" : "magnifyingglass")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(searching ? "Close search" : "Search the store")
+            Button {
+                guard !restoring else { return }
+                restoring = true
+                Task {
+                    await storeService.restorePurchases()
+                    restoring = false
+                }
+                LumaHaptics.shared.tap()
+            } label: {
                 Group {
-                    if let cg = thumbs.images[pack.id] {
-                        Image(decorative: cg, scale: 1)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
+                    if restoring {
+                        ProgressView().tint(.white).scaleEffect(0.7)
+                            .frame(width: 32, height: 32)
+                            .background(Color.white.opacity(0.1), in: Circle())
                     } else {
-                        HeroImage(photo: PackThumbs.previewPhoto(for: pack), radius: 0)
+                        quietCircle("arrow.clockwise")
                     }
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                // The fill overflows its frame; its invisible remainder would
-                // otherwise cover the drawer below and eat those taps.
-                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-        }
-        .buttonStyle(.lumaPress)
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
-    }
-
-    // MARK: Drawer
-
-    private var drawer: some View {
-        VStack(spacing: 0) {
-            heroCaption
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
-            categoryBar
-                .padding(.bottom, 12)
-            if searching {
-                searchField
-                    .padding(.bottom, 12)
-            }
-            list
-            instructionBar
-        }
-        .frame(maxWidth: .infinity)
-        .background(Color.black)
-        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: searching)
-    }
-
-    /// The hero's name lives here, under the picture, never over it.
-    private var heroCaption: some View {
-        let pack = heroPack
-        let installed = app.packStore.isInstalled(pack)
-        return HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(isSearchActive || category != .all ? "First result" : "Featured pack")
-                    .font(.luma(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(pack.name)
-                    .font(.luma(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                packMetaLine(pack)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            PackStatePill(pack: pack, installed: installed,
-                          price: StoreNav.price(pack, storeService))
-        }
-    }
-
-    /// Two-axis browsing: the current category centred, neighbours faded either
-    /// side, swipeable. Replaces the accent chip rail wholesale. Counts stay in
-    /// mono, because a count is a number.
-    private var categoryBar: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 0) {
-                neighbour(at: categoryIndex - 1, alignment: .leading)
-                Text(activeCategories[categoryIndex].title)
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                neighbour(at: categoryIndex + 1, alignment: .trailing)
-            }
-            // The collection the user grows: owned looks of the catalog total,
-            // owned packs of the catalog total. Numbers in the instrument
-            // voice, the words around them in plain type.
-            (numText("\(ownedLookCount)", 13, 0.8)
-             + wordText(" of ", 12, 0.5)
-             + numText("\(PackCatalog.totalLookCount)", 13, 0.8)
-             + wordText(" looks · ", 12, 0.5)
-             + numText("\(ownedPackCount)/\(PackCatalog.packs.count)", 13, 0.8)
-             + wordText(" packs", 12, 0.5))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 20)
-        .contentShape(Rectangle())
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    step(value.translation.width < 0 ? 1 : -1)
-                }
-        )
-    }
-
-    @ViewBuilder
-    private func neighbour(at index: Int, alignment: Alignment) -> some View {
-        if activeCategories.indices.contains(index) {
-            Button {
-                step(index - categoryIndex)
-            } label: {
-                VStack(spacing: 1) {
-                    Text(activeCategories[index].title)
-                        .font(.luma(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.42))
-                    // A count IS a number: it keeps the mono voice.
-                    Text("\(PackCatalog.packs.filter(activeCategories[index].contains).count)")
-                        .font(.luma(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.32))
-                }
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: alignment)
+                .frame(width: 40, height: 40)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        } else {
-            Color.clear.frame(height: 1).frame(maxWidth: .infinity)
+            .accessibilityLabel("Restore purchases")
         }
+        .padding(.leading, 20)
+        .padding(.trailing, 12)
     }
 
-    private func step(_ delta: Int) {
-        let next = categoryIndex + delta
-        guard activeCategories.indices.contains(next) else { return }
-        withAnimation(.snappy(duration: 0.22)) { category = activeCategories[next] }
-        LumaHaptics.shared.tap()
+    private func quietCircle(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.85))
+            .frame(width: 32, height: 32)
+            .background(Color.white.opacity(0.1), in: Circle())
+            .frame(width: 40, height: 40)
+            .contentShape(Rectangle())
     }
 
     private var searchField: some View {
@@ -483,169 +686,89 @@ struct FilterStoreView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
-        .background(Color(white: 0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 20)
     }
 
-    // MARK: The catalog
+    // MARK: The catalog — two columns of covers
 
-    private var list: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 8) {
+    @ViewBuilder
+    private var grid: some View {
+        if visiblePacks.isEmpty {
+            Text(needle.isEmpty
+                 ? "No packs in this category yet."
+                 : "No packs or looks match “\(query)”.")
+                .font(.luma(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 44)
+                .padding(.horizontal, 20)
+        } else {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                      spacing: 8) {
                 ForEach(visiblePacks) { pack in
-                    row(pack)
+                    tile(pack)
                 }
-                if visiblePacks.isEmpty {
-                    Text(needle.isEmpty
-                         ? "No packs in this category yet."
-                         : "No packs or looks match “\(query)”.")
-                        .font(.luma(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 44)
-                }
-                Text(MockData.namingDisclaimer)
-                    .font(.luma(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.42))
-                    .lineSpacing(2)
-                    .padding(.top, 14)
-                    .padding(.bottom, 8)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-        }
-        .frame(maxHeight: .infinity)
-        .mask {
-            VStack(spacing: 0) {
-                Rectangle().fill(.black)
-                LinearGradient(colors: [.black, .black.opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 22)
-            }
+            .padding(.horizontal, 12)
         }
     }
 
-    /// The pack tile IS its own art — each pack on its OWN hero photo, never
-    /// one shared sunset. Ownership separates by surface value, not by hue: an
-    /// owned pack sits on a lighter plate than one you could still buy.
-    private func row(_ pack: LookPack) -> some View {
+    /// The pack's cover with its name in its own colour, its count and kind
+    /// under it, and the one glass price tag in the corner.
+    private func tile(_ pack: LookPack) -> some View {
         let installed = app.packStore.isInstalled(pack)
+        let price = StoreNav.price(pack, storeService)
+        let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
         return Button {
             StoreNav.open(pack, installed: installed, app: app)
         } label: {
-            HStack(spacing: 12) {
-                Color.clear
-                    .frame(width: 60, height: 60)
-                    .overlay {
-                        if let cg = thumbs.images[pack.id] {
-                            Image(decorative: cg, scale: 1)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            HeroImage(photo: PackThumbs.previewPhoto(for: pack), radius: 0)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    // Art overflows the 60pt frame — keep its touches inside it
-                    // so it cannot swallow the state control to its right.
-                    .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(pack.name)
-                        .font(.luma(size: 16, weight: .semibold))
-                        .foregroundStyle(installed ? .white : .white.opacity(0.92))
-                        .lineLimit(1)
-                    packMetaLine(pack)
-                        .lineLimit(1)
+            packArt(pack)
+                .frame(maxWidth: .infinity)
+                .frame(height: 232)
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [.black.opacity(0), .black.opacity(0.62)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 90)
+                        .allowsHitTesting(false)
                 }
-                Spacer(minLength: 6)
-                PackStatePill(pack: pack, installed: installed,
-                              price: StoreNav.price(pack, storeService))
-            }
-            .padding(10)
-            .background(Color(white: installed ? 0.13 : 0.075),
-                        in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .background(Color(white: 0.07))
+                .clipShape(shape)
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        LookNameText(pack.name, colour: pack.colour, size: 14, weight: .semibold)
+                        Text("\(pack.looks.count) looks · \(storeSentenceTail(pack.eraTag))")
+                            .font(.luma(size: 11.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.66))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 11)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .overlay(alignment: .topTrailing) {
+                    PackStatePill(pack: pack, installed: installed, price: price)
+                        .padding(9)
+                }
+                .contentShape(shape)
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel("\(pack.name), \(pack.looks.count) looks, \(installed ? "In library" : price)")
     }
 
-    // MARK: Instruction bar — the way back, the search, and restore
-
-    private var instructionBar: some View {
-        HStack(spacing: 8) {
-            if !isRoot {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
-            }
-            Spacer(minLength: 0)
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    searching.toggle()
-                    if !searching { query = "" }
-                }
-                searchFocused = searching
-                LumaHaptics.shared.tap()
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: searching ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
-                    // A live value beats a slogan. The moment the catalog is
-                    // narrowed — by a query OR by the category bar — this bar
-                    // counts what is actually under it, which is where the
-                    // selected category's own count now lives.
-                    if searching || category != .all {
-                        (numText("\(visiblePacks.count)", 15, 0.8)
-                         + wordText(" of ", 15, 0.7)
-                         + numText("\(PackCatalog.packs.count)", 15, 0.8)
-                         + wordText(" packs", 15, 0.7))
-                    } else {
-                        Text("Tap a pack to preview it")
-                            .font(.luma(size: 15))
-                    }
-                }
-                .foregroundStyle(.white.opacity(0.75))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(searching ? "Close search" : "Search the store")
-            Spacer(minLength: 0)
-            Button {
-                guard !restoring else { return }
-                restoring = true
-                Task {
-                    await storeService.restorePurchases()
-                    restoring = false
-                }
-                LumaHaptics.shared.tap()
-            } label: {
-                Group {
-                    if restoring {
-                        ProgressView().tint(.white).scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Restore purchases")
-        }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
+    private var disclaimer: some View {
+        Text(MockData.namingDisclaimer)
+            .font(.luma(size: 11.5))
+            .foregroundStyle(.white.opacity(0.42))
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
     }
 }
 
-/// Store → rest-of-app navigation, shared by the list, the banner and the
+/// Store → rest-of-app navigation, shared by the grid, the hero and the
 /// detail screen so "owned" behaves identically wherever it is tapped.
 @MainActor
 enum StoreNav {
@@ -672,14 +795,29 @@ enum StoreNav {
             app.path.append(.filterPack)
         }
     }
+
+    /// Bakes the pack into the library and says where the looks landed.
+    /// Returns how many looks were added (0 if it was already installed).
+    @discardableResult
+    static func install(_ pack: LookPack, app: AppModel) -> Int {
+        guard !app.packStore.isInstalled(pack) else { return 0 }
+        let count = PackInstaller.install(pack, into: app.lutRepository)
+        if count > 0 {
+            app.packStore.markInstalled(pack)
+            // Post-install confirmation: tells the user where the looks
+            // landed instead of leaving them to hunt.
+            app.importToast = "\(pack.name) installed, \(count) looks in your library"
+        }
+        return count
+    }
 }
 
 
 struct BackArrow: View {
     @Environment(\.dismiss) private var dismiss
     /// Over photography the bare glyph can land on near-white sky, so the
-    /// media placements get the mockup's circular chip behind it. Chrome
-    /// placements keep the naked glyph.
+    /// media placements get the mockup's circular glass chip behind it.
+    /// Chrome placements keep the naked glyph.
     var onMedia: Bool = false
 
     var body: some View {
@@ -687,11 +825,10 @@ struct BackArrow: View {
             if onMedia {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .frame(width: 42, height: 42)
                     .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .frame(width: 40, height: 40, alignment: .leading)
+                    .background(Color(hex: 0x101114).opacity(0.58), in: Circle())
             } else {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .semibold))
@@ -724,16 +861,17 @@ enum LumaLegal {
 
 // MARK: - 10 Filter Pack Detail
 
-/// The pack page (Night Lab, "After Dark"): a full-bleed cover with people on
-/// it, graded in the look you are previewing; the name as a light word and a
-/// heavy word; then the pack's looks as a cast list, each one a face graded
-/// in that look with its colour dot, code and one line. One signal-yellow
-/// button at the bottom does the buying, unlocking or installing.
+/// The pack page, calm (mock v2): the cover faded into the page and graded
+/// in the look you are previewing; the kicker, the name's heavy word and the
+/// Buy pack button in the pack's own colour; text tabs; then the looks nine
+/// at a glance, each with its code in its own colour. The picked look keeps
+/// the pale ring. Pro is one quiet line with its spark at the foot.
 struct FilterPackDetailView: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
-    /// Row faces, keyed by look code.
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
+    /// Look tile faces, keyed by look code.
     @State private var previews: [String: CGImage] = [:]
     @State private var hero: CGImage?
     @State private var installing = false
@@ -745,6 +883,11 @@ struct FilterPackDetailView: View {
     @State private var tryOnSource: CIImage?
     @State private var tryOnIsUserMedia = false
     @State private var tryOnImage: CGImage?
+    @State private var tab: PackTab = .looks
+
+    private enum PackTab: String, CaseIterable {
+        case looks, about, data
+    }
 
     /// Free, individually bought, or unlocked by Pro.
     private var unlocked: Bool { storeService.ownsPack(pack.id) }
@@ -759,16 +902,16 @@ struct FilterPackDetailView: View {
         pack.looks.first { $0.code == selectedCode } ?? pack.looks[0]
     }
 
-    /// The cover photo: the same one the pack's store row and Looks tab cover
-    /// use, so tapping a cover never swaps the people out from under you.
+    /// The cover photo: the same one the pack's store cover and Looks tab
+    /// cover use, so tapping a cover never swaps the people out from under you.
     private var heroPhoto: HeroPhoto { PackThumbs.previewPhoto(for: pack) }
 
     private var heroSource: CIImage {
         heroPhoto.ciImage ?? LookThumbs.fallbackFrame
     }
 
-    /// One face per row, each look on the photo that suits it, spread so
-    /// neighbouring rows never show the same person.
+    /// One face per tile, each look on the photo that suits it, spread so
+    /// neighbouring tiles never show the same person.
     private func rowPhoto(for look: PackLook) -> HeroPhoto {
         let photos = rowPhotos
         guard let index = pack.looks.firstIndex(where: { $0.code == look.code }),
@@ -780,32 +923,57 @@ struct FilterPackDetailView: View {
         LookPhotos.spread(names: pack.looks.map(\.name), keys: pack.looks.map(\.code))
     }
 
-    /// The pack's family, for the glass pill on the cover.
+    /// The pack's family, for the About tab.
     private var familyTitle: String {
         StoreCategory.allCases.first { $0 != .all && $0 != .free && $0.contains(pack) }?.title ?? "Pack"
     }
 
+    /// Measured film stocks ship bundled film data; every other pack bakes
+    /// its looks from recipes.
+    private var isMeasured: Bool { pack.looks.contains { $0.cubeFile != nil } }
+
     /// What the pack technically is. A claim is a sentence, not a readout.
     private var techClaim: String {
-        pack.looks.contains { $0.cubeFile != nil } ? "Measured film data"
-                                                   : "Baked 33-point cubes"
+        isMeasured ? "Measured film data" : "Baked 33-point cubes"
+    }
+
+    /// "PACK · MEASURED COLOUR NEGATIVE STOCKS", or "NEW PACK · …".
+    private var kicker: String {
+        "\(pack.isNew ? "NEW PACK" : "PACK") · \(pack.eraTag.uppercased())"
+    }
+
+    private var hasCurrentMedia: Bool {
+        !app.editor.clips.isEmpty || app.selectedVideoURL != nil || app.selectedImage != nil
+    }
+
+    /// A name's colour for the current Names choice.
+    private func nameColour(_ colour: Color, quiet: Color = LumaTheme.textPrimary) -> Color {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour ? colour : quiet
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                cover
-                looksList
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                detailsBlock
-                    .padding(.horizontal, 20)
-                    .padding(.top, 22)
-                    .padding(.bottom, 16)
+        GeometryReader { geo in
+            let safeTop = geo.safeAreaInsets.top
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        heroBlock(safeTop: safeTop, proxy: proxy)
+                        tabBar
+                        tabContent
+                        Text(MockData.namingDisclaimer)
+                            .font(.luma(size: 11.5))
+                            .foregroundStyle(.white.opacity(0.42))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                            .padding(.bottom, 16)
+                    }
+                }
+                .ignoresSafeArea(edges: .top)
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
         .overlay(alignment: .top) { topBar }
         .background(LumaTheme.ink.ignoresSafeArea())
         .navigationBarBackButtonHidden()
@@ -821,6 +989,11 @@ struct FilterPackDetailView: View {
             selectedCode = seeded.flatMap { code in
                 pack.looks.first { $0.code == code }?.code
             } ?? pack.looks.first?.code
+            // LUMA_SEED_PACKTAB=looks|about|data opens a tab for screenshots.
+            if let raw = ProcessInfo.processInfo.environment["LUMA_SEED_PACKTAB"],
+               let seededTab = PackTab(rawValue: raw) {
+                tab = seededTab
+            }
             #else
             selectedCode = pack.looks.first?.code
             #endif
@@ -840,30 +1013,46 @@ struct FilterPackDetailView: View {
         }
     }
 
-    // MARK: Cover — people, graded in the look you are previewing
+    // MARK: Hero — the cover faded into the page, the name, the pills
 
-    private var cover: some View {
-        Color.clear
-            .frame(height: 430)
-            .frame(maxWidth: .infinity)
-            .overlay { coverArt }
-            .overlay {
-                LinearGradient(stops: [
-                    .init(color: .black.opacity(0.4), location: 0),
-                    .init(color: .clear, location: 0.28),
-                    .init(color: LumaTheme.ink.opacity(0.45), location: 0.62),
-                    .init(color: LumaTheme.ink, location: 1),
-                ], startPoint: .top, endPoint: .bottom)
-                .allowsHitTesting(false)
+    private func heroBlock(safeTop: CGFloat, proxy: ScrollViewProxy) -> some View {
+        let parts = storeTitleParts(pack)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(kicker)
+                .font(.luma(size: 11, weight: .bold))
+                .kerning(1.3)
+                .foregroundStyle(nameColour(pack.colour, quiet: Color.white.opacity(0.55)))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            LumaHeadline(light: parts.light, heavy: parts.heavy, size: 31,
+                         heavyColor: nameColour(pack.colour))
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .padding(.top, 6)
+            Text("\(pack.looks.count) looks · \(storeSentenceTail(pack.familyLine))")
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            HStack(spacing: 8) {
+                LumaColourButton(title: primaryTitle, colour: pack.colour, height: 38) {
+                    primaryAction()
+                }
+                .disabled(storeService.purchaseInFlight || installing)
+                secondaryPill(proxy: proxy)
             }
-            .overlay(alignment: .bottomLeading) {
-                titleBlock
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
+            .padding(.top, 18)
+        }
+        .padding(.top, safeTop + 70)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(alignment: .top) {
+            StoreFadedBackdrop(height: safeTop + 268) {
+                coverArt
             }
-            .clipped()
-            // The fill overflows its frame; keep its touches inside it.
-            .contentShape(Rectangle())
+        }
     }
 
     private var coverArt: some View {
@@ -884,95 +1073,172 @@ struct FilterPackDetailView: View {
         .animation(.easeOut(duration: 0.35), value: selectedCode)
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(pack.packLine)
-                .font(.luma(size: 13, weight: .semibold).monospacedDigit())
-                .foregroundStyle(LumaTheme.signal)
-                .lineLimit(1)
-            LumaHeadline(light: pack.titleParts.light, heavy: pack.titleParts.heavy, size: 40)
-                .lineLimit(2)
-                .minimumScaleFactor(0.6)
-            Text(pack.familyLine)
-                .font(.luma(size: 14))
-                .foregroundStyle(LumaTheme.textSecondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Back on the left, the pack's family on the right, both in glass so
-    /// they hold up over any cover.
+    /// Back on the left, share on the right, both round glass so they hold
+    /// up over any cover.
     private var topBar: some View {
         HStack {
             BackArrow(onMedia: true)
                 .accessibilityLabel("Back")
             Spacer()
-            Text(familyTitle)
-                .font(.luma(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
-                .lumaGlassPill()
+            ShareLink(item: Self.siteURL,
+                      subject: Text(pack.name),
+                      message: Text("\(pack.name) on Lumalook: \(pack.looks.count) looks.")) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .frame(width: 42, height: 42)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .background(Color(hex: 0x101114).opacity(0.58), in: Circle())
+            }
+            .accessibilityLabel("Share pack")
         }
         .padding(.horizontal, 16)
         .padding(.top, 2)
     }
 
-    // MARK: Looks — the cast list
+    private static let siteURL = URL(string: "https://lumalook.app")!
 
-    private var looksList: some View {
-        VStack(spacing: 0) {
-            ForEach(pack.looks.indices, id: \.self) { index in
-                lookRow(pack.looks[index],
-                        isLast: index == pack.looks.count - 1)
+    // MARK: The pills — Buy pack in the pack's colour, and one glass pill
+
+    private var primaryTitle: String {
+        if installing { return "Installing" }
+        if storeService.purchaseInFlight { return "Buying" }
+        if installed { return "In library · Open" }
+        if unlocked { return pack.isFree ? "Install free" : "Install" }
+        if pack.isProIncluded { return "Unlock with Pro" }
+        return "Buy pack · \(StoreNav.price(pack, storeService))"
+    }
+
+    private func primaryAction() {
+        if installed {
+            StoreNav.openInLibrary(pack, app: app)
+        } else {
+            buyOrInstall()
+        }
+    }
+
+    /// Installed with media open: grade it now. Otherwise, with footage of
+    /// your own: jump to the look previewed on it.
+    @ViewBuilder
+    private func secondaryPill(proxy: ScrollViewProxy) -> some View {
+        if installed, hasCurrentMedia {
+            StoreGlassPill(title: "Grade your media", icon: "wand.and.stars") {
+                if !app.editor.clips.isEmpty {
+                    app.path = [.editor]
+                } else {
+                    app.path.append(.applyLook)
+                }
+            }
+        } else if tryOnIsUserMedia {
+            StoreGlassPill(title: "Try on your clip", icon: "wand.and.stars") {
+                tab = .looks
+                // The panel lives on the Looks tab: let it appear first.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(60))
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(Self.tryOnID, anchor: .center)
+                    }
+                }
             }
         }
     }
 
-    private func lookRow(_ look: PackLook, isLast: Bool) -> some View {
+    private static let tryOnID = "pack-try-on"
+
+    // MARK: Tabs
+
+    private func tabTitle(_ item: PackTab) -> String {
+        switch item {
+        case .looks: return "Looks"
+        case .about: return "About"
+        case .data:  return isMeasured ? "Film data" : "Look notes"
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 22) {
+            ForEach(PackTab.allCases, id: \.self) { item in
+                StoreTextTab(title: tabTitle(item),
+                             count: item == .looks ? pack.looks.count : nil,
+                             isOn: tab == item) {
+                    guard tab != item else { return }
+                    tab = item
+                    LumaHaptics.shared.tap()
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case .looks: looksTab
+        case .about: aboutTab
+        case .data:  notesTab
+        }
+    }
+
+    // MARK: Looks — nine at a glance
+
+    private var looksTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(tryOnIsUserMedia ? "Tap a look to preview it on your last clip"
+                                  : "Tap a look to preview it")
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            if tryOnIsUserMedia {
+                tryOnPanel
+                    .id(Self.tryOnID)
+                    .padding(.top, 12)
+            }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)],
+                      alignment: .leading, spacing: 14) {
+                ForEach(pack.looks) { look in
+                    lookTile(look)
+                }
+            }
+            .padding(.top, 14)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+    }
+
+    private func lookTile(_ look: PackLook) -> some View {
         let active = look.code == activeLook.code
         return Button {
             selectedCode = look.code
             LumaHaptics.shared.tap()
         } label: {
-            HStack(spacing: 12) {
-                rowFace(look, active: active)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(look.title)
-                        .font(.luma(size: 15, weight: .semibold))
-                        .kerning(-0.2)
-                        .foregroundStyle(LumaTheme.textPrimary)
-                        .lineLimit(1)
-                    Text("\(look.code) · \(look.character)")
-                        .font(.luma(size: 12))
-                        .foregroundStyle(LumaTheme.textMuted)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Circle()
-                    .fill(look.signature)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: look.signature, radius: 4)
+            VStack(alignment: .leading, spacing: 0) {
+                lookFace(look, active: active)
+                LookNameText(look.code, colour: look.signature, size: 12.5, weight: .bold)
+                    .padding(.top, 7)
+                Text(look.title)
+                    .font(.luma(size: 11.5, weight: .medium))
+                    .foregroundStyle(active ? Color.white.opacity(0.7) : LumaTheme.textMuted)
+                    .lineLimit(1)
+                    .padding(.top, 1)
             }
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .overlay(alignment: .bottom) {
-                if !isLast {
-                    Rectangle()
-                        .fill(LumaTheme.hairline)
-                        .frame(height: 1)
-                }
-            }
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("\(look.title), \(look.code)")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    private func rowFace(_ look: PackLook, active: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+    private func lookFace(_ look: PackLook, active: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
         return Color.clear
-            .frame(width: 46, height: 46)
+            .aspectRatio(0.8, contentMode: .fit)
+            .frame(maxWidth: .infinity)
             .overlay {
                 if let cg = previews[look.code] {
                     Image(decorative: cg, scale: 1)
@@ -982,7 +1248,7 @@ struct FilterPackDetailView: View {
                 } else {
                     // The person shows straight away; the grade fades in
                     // over them once it is ready (a slow phone can take a
-                    // moment for five looks), so a row is never an empty box.
+                    // moment for twenty looks), so a tile is never an empty box.
                     HeroImage(photo: rowPhoto(for: look), radius: 0)
                         .opacity(0.7)
                 }
@@ -991,32 +1257,15 @@ struct FilterPackDetailView: View {
             .clipShape(shape)
             // clipShape clips pixels, not touches: confine the face.
             .contentShape(shape)
-            .pickedRing(active, cornerRadius: 10)
+            .pickedRing(active, cornerRadius: 13)
     }
 
-    // MARK: Details — your own footage, the claim, the small print
-
-    private var detailsBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if tryOnIsUserMedia {
-                tryOnPanel
-            }
-            (numText("\(pack.looks.count)", 13, 0.72)
-             + wordText(" looks · \(techClaim)", 12, 0.55))
-                .lineLimit(1)
-            Text(MockData.namingDisclaimer)
-                .font(.luma(size: 11.5))
-                .foregroundStyle(.white.opacity(0.42))
-                .lineSpacing(2)
-        }
-    }
-
-    /// Only when there is footage of the user's own: the rows already show
+    /// Only when there is footage of the user's own: the tiles already show
     /// every look on a face.
     private var tryOnPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             Color.clear
-                .frame(height: 140)
+                .frame(height: 150)
                 .frame(maxWidth: .infinity)
                 .overlay {
                     if let tryOnImage {
@@ -1029,73 +1278,130 @@ struct FilterPackDetailView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            (wordText("Your last clip · ", 13, 0.7, weight: .semibold)
-             + numText(activeLook.code, 12, 0.5))
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text("Your last clip ·")
+                    .font(.luma(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                LookNameText(activeLook.code, colour: activeLook.signature, size: 13, weight: .semibold)
+            }
+            .lineLimit(1)
         }
     }
 
-    // MARK: Action bar — one signal button, and what it means
+    // MARK: About — calm details
 
-    private var actionBar: some View {
-        VStack(spacing: 8) {
-            mainButton
+    private var priceWord: String {
+        if installed { return "In library" }
+        if unlocked { return pack.isFree ? "Free" : "Unlocked" }
+        if pack.isProIncluded { return "With Pro" }
+        return StoreNav.price(pack, storeService)
+    }
+
+    private var aboutTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(pack.familyLine)
+                .font(.luma(size: 15, weight: .regular))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 10)
+            detailRow("Looks", "\(pack.looks.count)")
+            detailRow("Family", familyTitle)
+            detailRow("Made from", techClaim)
+            detailRow("Price", priceWord)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.luma(size: 13.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+        }
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Film data / look notes — each look's code, name and character
+
+    private var notesTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(pack.looks) { look in
+                Button {
+                    selectedCode = look.code
+                    LumaHaptics.shared.tap()
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            LookNameText(look.code, colour: look.signature, size: 13, weight: .bold)
+                            Text(look.title)
+                                .font(.luma(size: 13.5, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineLimit(1)
+                        }
+                        Text(look.character)
+                            .font(.luma(size: 12.5))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(look.code == activeLook.code ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+
+    // MARK: Foot — the store logic in one line, and Pro with its spark
+
+    private var footer: some View {
+        VStack(spacing: 4) {
             Text(footnote)
                 .font(.luma(size: 12, weight: .medium))
                 .foregroundStyle(LumaTheme.textMuted)
                 .lineLimit(1)
-            secondaryDoor
+                .minimumScaleFactor(0.85)
+            if !unlocked && !pack.isProIncluded {
+                Button { showPaywall = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(LumaTheme.signal)
+                        Text("Or get every pack with Pro")
+                            .font(.luma(size: 13.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .frame(height: 32)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 26)
-        .padding(.bottom, 6)
+        .padding(.top, 34)
+        .padding(.bottom, 4)
         .frame(maxWidth: .infinity)
         .background {
             LinearGradient(stops: [
                 .init(color: LumaTheme.ink.opacity(0), location: 0),
-                .init(color: LumaTheme.ink.opacity(0.94), location: 0.38),
+                .init(color: LumaTheme.ink.opacity(0.94), location: 0.5),
                 .init(color: LumaTheme.ink, location: 1),
             ], startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea(edges: .bottom)
             .allowsHitTesting(false)
         }
-    }
-
-    private var mainButton: some View {
-        Button {
-            if installed {
-                StoreNav.openInLibrary(pack, app: app)
-            } else {
-                buyOrInstall()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                if installing || storeService.purchaseInFlight {
-                    ProgressView().tint(LumaTheme.onSignal)
-                } else if installed {
-                    Text("In library · Open")
-                    Image(systemName: "arrow.right")
-                } else if unlocked {
-                    Text(pack.isFree ? "Install free" : "Install")
-                } else if pack.isProIncluded {
-                    Text("Unlock with Pro")
-                } else {
-                    Text("Buy pack · \(StoreNav.price(pack, storeService))")
-                }
-            }
-            .font(.luma(size: 16, weight: .semibold))
-            // Buying, unlocking and installing are the page's one main
-            // action, so they speak signal; once installed it is a plain door.
-            .foregroundStyle(installed ? LumaTheme.onLight : LumaTheme.onSignal)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(installed ? LumaTheme.textPrimary : LumaTheme.signal,
-                        in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        }
-        .buttonStyle(.lumaPress)
-        .disabled(storeService.purchaseInFlight)
     }
 
     /// The store logic in one line: looks always preview for free here; a
@@ -1109,46 +1415,19 @@ struct FilterPackDetailView: View {
         return "Preview free · unlock to export"
     }
 
-    @ViewBuilder
-    private var secondaryDoor: some View {
-        if installed, !app.editor.clips.isEmpty || app.selectedVideoURL != nil || app.selectedImage != nil {
-            Button {
-                if !app.editor.clips.isEmpty {
-                    app.path = [.editor]
-                } else {
-                    app.path.append(.applyLook)
-                }
-                LumaHaptics.shared.tap()
-            } label: {
-                Text("Or grade your current media now")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-            .buttonStyle(.plain)
-        } else if !unlocked && !pack.isProIncluded {
-            Button { showPaywall = true } label: {
-                Text("Or get every pack with Pro")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     // MARK: Actions
 
     private func performInstall() {
         guard !app.packStore.isInstalled(pack), !installing else { return }
         installing = true
-        Task {
-            let count = PackInstaller.install(pack, into: app.lutRepository)
+        let target = pack
+        Task { @MainActor in
+            // Same install the Store hero uses after a purchase: bakes the
+            // looks, marks the pack installed and shows where they landed.
+            let count = StoreNav.install(target, app: app)
             installing = false
             if count > 0 {
-                app.packStore.markInstalled(pack)
                 installedFlash += 1
-                // Post-install confirmation: tells the user where the looks
-                // landed instead of leaving them to hunt.
-                app.importToast = "\(pack.name) installed, \(count) looks in your library"
             }
         }
     }
@@ -1181,7 +1460,7 @@ struct FilterPackDetailView: View {
 
     // MARK: Rendering
 
-    /// Each row's face: its own photo, cropped square around the person and
+    /// Each tile's face: its own photo, cropped 4:5 around the person and
     /// graded through the same entry point the installed look will use.
     private func renderPreviews() {
         let looks = pack.looks
@@ -1192,10 +1471,10 @@ struct FilterPackDetailView: View {
                 let look = looks[index]
                 let photo = index < photos.count ? photos[index] : HeroPhoto.golden
                 if frames[photo] == nil {
-                    frames[photo] = photo.posterFrame(aspect: 1, longest: 240)
+                    frames[photo] = photo.posterFrame(aspect: 0.8, longest: 400)
                 }
                 guard let frame = frames[photo],
-                      let cg = PackThumbs.grade(look, on: frame, maxDimension: 180) else { continue }
+                      let cg = PackThumbs.grade(look, on: frame, maxDimension: 360) else { continue }
                 await MainActor.run { previews[look.code] = cg }
             }
         }
