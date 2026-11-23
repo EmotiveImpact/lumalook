@@ -503,10 +503,11 @@ final class AppModel: ObservableObject {
             for id in ids.dropFirst(4).prefix(5) { lutRepository.addLook(id: id, to: night.id) }
             lutRepository.setPinnedCollection(night.id)
         }
-        // Projects cell: LUMA_SEED_PROJECTS=1 fills an empty library with five
-        // photo projects from the bundled hero photos, so the populated
-        // Projects page (hero, tabs, grid) can be screenshotted headlessly.
-        if env["LUMA_SEED_PROJECTS"] == "1", store.projects.isEmpty {
+        // Projects cell: LUMA_SEED_PROJECTS=1 adds five photo projects from the
+        // bundled hero photos (once), so the populated Projects page (hero,
+        // tabs, grid) can be screenshotted headlessly with some variety.
+        if env["LUMA_SEED_PROJECTS"] == "1",
+           !store.projects.contains(where: { $0.title == "Golden hour walk" }) {
             let seeds: [(String, String, String, Double, Int)] = [
                 ("hero_golden", "Golden hour walk", "CN44 · Anamorphic Dusk", -2 * 3600, 6),
                 ("hero_neon", "Neon after party", "AD2 · Neon Nights", -5 * 3600, 9),
