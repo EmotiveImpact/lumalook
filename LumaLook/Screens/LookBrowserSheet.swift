@@ -35,6 +35,18 @@ extension LibraryLook {
         else { return (name, nil) }
         return (rest, code)
     }
+
+    /// The short label at the top of a picture: the stock code; for looks
+    /// without one, the first word when it is short ("Neon"), else the
+    /// initials ("Documentary Grit" as DG).
+    var posterCode: String {
+        let split = nameSplit
+        if let code = split.code { return code }
+        let words = split.title.split(separator: " ")
+        if let first = words.first, first.count <= 9 { return String(first) }
+        let initials = words.prefix(3).compactMap(\.first)
+        return initials.isEmpty ? "?" : String(initials).uppercased()
+    }
 }
 
 // MARK: - Looks tab shelves
@@ -54,6 +66,18 @@ enum LooksShelf: String, CaseIterable, Identifiable {
         case .pro:    return "Pro"
         case .mine:   return "Mine"
         case .packs:  return "Packs"
+        }
+    }
+
+    /// The quiet line under the tabs (calm mock v2).
+    var subtitle: String {
+        switch self {
+        case .forYou: return "Picked for your skin and light"
+        case .film:   return "Film stocks: colour, slide, mono and instant"
+        case .night:  return "Neon, flash and street light"
+        case .pro:    return "Cinema prints, camera profiles and LUTs"
+        case .mine:   return "Looks you save and LUTs you import"
+        case .packs:  return "Every pack, free and paid"
         }
     }
 
@@ -247,10 +271,12 @@ extension AppModel {
 // and a single-row footer. The sheet confirms with Done in its header.
 //
 // THE LOOKS TAB (Night Lab)
-// Full screen is its own layout: title, shelf pills (For you, Film, Night,
-// Pro, Mine, Packs) and a clean two-column grid of posters, each look graded
-// on its own bundled person. Packs from the old Store sit in a rail and on
-// their own shelf. Nothing floats over the grid.
+// Full screen is its own layout (calm mock v2): title, a round search button
+// and text tabs (For you, Film, Night, Pro, Mine, Packs), a quiet line saying
+// what the shelf holds, and a two-column grid of posters, each look graded on
+// its own bundled person with its code and name in its own colour. Packs from
+// the old Store sit in a rail and on their own shelf. Tapping a poster opens
+// the look page (LookOpenedPage). Nothing floats over the grid.
 // =============================================================================
 
 struct LookBrowserSheet: View {
@@ -296,11 +322,16 @@ struct LookBrowserSheet: View {
     }()
     /// Looks tab only: pack covers, each pack's people in its lead look.
     @StateObject private var packThumbs = PackThumbs()
+    /// Looks tab only: the look page on show (calm mock v2, "A look opened").
+    @State private var openedLook: LibraryLook?
+    /// Looks tab only: the paywall, for a locked look that no pack sells.
+    @State private var showPaywall = false
 
     /// Square tiles mean the COLUMN COUNT carries the density difference
     /// between the half-sheet and the full screen, instead of the tile shape.
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: compact ? 4 : (isSheet ? 3 : 2))
+        Array(repeating: GridItem(.flexible(), spacing: isSheet ? 10 : 8),
+              count: compact ? 4 : (isSheet ? 3 : 2))
     }
 
     private var categories: [LookLibraryStore.Category] { LookLibraryStore.Category.allCases }
@@ -369,6 +400,15 @@ struct LookBrowserSheet: View {
             // Full screen only: as a sheet, the strip behind would reshuffle.
             if context == .library { app.library.settleOrder() }
             consumePackFilter()
+            #if DEBUG
+            // LUMA_SEED_LOOKOPEN=neon opens the look page for the first look
+            // whose name contains the word, for preview screenshots.
+            if context == .library, openedLook == nil,
+               let raw = ProcessInfo.processInfo.environment["LUMA_SEED_LOOKOPEN"], !raw.isEmpty,
+               let seeded = app.library.all.first(where: { $0.name.lowercased().contains(raw.lowercased()) }) {
+                openedLook = seeded
+            }
+            #endif
         }
         // The Looks tab stays mounted under a pushed store, so a hand-off
         // that arrives while it is already on screen is caught here.
@@ -473,7 +513,7 @@ struct LookBrowserSheet: View {
             }
             .padding(.top, LumaTabMetrics.top)
             .padding(.bottom, 12)
-            shelfPills
+            shelfTabs
                 .padding(.bottom, 14)
             if searchExpanded {
                 searchField
@@ -482,6 +522,14 @@ struct LookBrowserSheet: View {
             libraryScroll
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: searchExpanded)
+        .sheet(item: $openedLook) { look in
+            lookOpenedPage(look)
+                .environmentObject(app)
+                .environmentObject(storeService)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(LumaTheme.background)
+        }
     }
 
     // MARK: Header
@@ -549,24 +597,43 @@ struct LookBrowserSheet: View {
         }
     }
 
-    /// Looks tab: the shelves as pills, the current one filled white. On the
-    /// tab, search leads the row as a round pill (its header has no glyphs).
-    private var shelfPills: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if !showsBackButton {
-                    searchPill
+    /// Looks tab: the shelves as plain text tabs (calm mock v2), the current
+    /// one white with a short underline, the rest grey. On the tab, search is
+    /// the round glass button at their start (its header has no glyphs).
+    private var shelfTabs: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if !showsBackButton {
+                searchCircle
+                    .padding(.leading, 16)
+                    .padding(.trailing, 16)
+            }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 22) {
+                        ForEach(LooksShelf.allCases) { item in
+                            LooksTextTab(title: item.title, on: item == shelf) {
+                                withAnimation(.snappy(duration: 0.22)) { shelf = item }
+                                LumaHaptics.shared.tap()
+                            }
+                            .id(item)
+                        }
+                    }
+                    .padding(.leading, showsBackButton ? 20 : 0)
+                    .padding(.trailing, 20)
+                    .padding(.top, showsBackButton ? 0 : 8)
                 }
-                ForEach(LooksShelf.allCases) { item in
-                    shelfPill(item)
+                .onChange(of: shelf) { _, item in
+                    withAnimation(.snappy(duration: 0.22)) {
+                        proxy.scrollTo(item, anchor: .center)
+                    }
                 }
             }
-            .padding(.horizontal, 16)
         }
     }
 
-    /// Opens and closes the search field under the pills; white while open.
-    private var searchPill: some View {
+    /// Opens and closes the search field under the tabs: a 36 pt glass
+    /// circle, a little brighter while open.
+    private var searchCircle: some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 searchExpanded.toggle()
@@ -575,34 +642,14 @@ struct LookBrowserSheet: View {
             LumaHaptics.shared.tap()
         } label: {
             Image(systemName: searchExpanded ? "xmark" : "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(searchExpanded ? LumaTheme.onLight : LumaTheme.textSecondary)
-                .frame(width: 32, height: 32)
-                .background(searchExpanded ? LumaTheme.textPrimary : LumaTheme.chip, in: Circle())
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(searchExpanded ? 1 : 0.85))
+                .frame(width: 36, height: 36)
+                .background(Color.white.opacity(searchExpanded ? 0.16 : 0.08), in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel(searchExpanded ? "Close search" : "Search looks")
-    }
-
-    private func shelfPill(_ item: LooksShelf) -> some View {
-        let on = item == shelf
-        return Button {
-            withAnimation(.snappy(duration: 0.22)) { shelf = item }
-            LumaHaptics.shared.tap()
-        } label: {
-            Text(item.title)
-                .font(.luma(size: 14, weight: .medium))
-                .foregroundStyle(on ? LumaTheme.onLight : LumaTheme.textSecondary)
-                .padding(.horizontal, 14)
-                .frame(height: 32)
-                .background(on ? LumaTheme.textPrimary : LumaTheme.chip, in: Capsule())
-                .overlay(Capsule().strokeBorder(on ? LumaTheme.textPrimary : LumaTheme.edge,
-                                                lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private var header: some View {
@@ -684,12 +731,9 @@ struct LookBrowserSheet: View {
         let side: CGFloat = compact ? 30 : 34
         return Image(systemName: name)
             .font(.system(size: compact ? 13 : 14, weight: .medium))
-            .foregroundStyle(active ? LumaTheme.onLight : LumaTheme.textSecondary)
+            .foregroundStyle(Color.white.opacity(active ? 1 : 0.85))
             .frame(width: side, height: side)
-            .background {
-                Circle().fill(active ? AnyShapeStyle(LumaTheme.textPrimary) : AnyShapeStyle(LumaTheme.raised))
-            }
-            .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: active ? 0 : 1))
+            .background(Color.white.opacity(active ? 0.16 : 0.08), in: Circle())
     }
 
     /// Leave the sheet for the full Looks library. The push has to wait for the
@@ -715,62 +759,33 @@ struct LookBrowserSheet: View {
                             : app.library.looks(category: cat).count
     }
 
-    /// The current category centred with its neighbours faded either side, so
-    /// the swipe teaches itself. The count rides underneath in mono, which is
-    /// where the chip row's count badge went.
+    /// The categories as plain text tabs (calm mock v2): the current one white
+    /// with a short underline and its count beside it, the rest grey. The row
+    /// scrolls sideways and keeps the current tab in view.
     private var categoryBar: some View {
-        VStack(spacing: compact ? 2 : 4) {
-            HStack(spacing: 0) {
-                neighbour(at: categoryIndex - 1, alignment: .leading)
-                Text(title(categories[categoryIndex]))
-                    .font(.luma(size: compact ? 15 : 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                neighbour(at: categoryIndex + 1, alignment: .trailing)
-            }
-            countText(count(of: category),
-                      category == .collections ? "collections" : "looks",
-                      size: compact ? 11 : 12)
-                .foregroundStyle(.white.opacity(0.5))
-        }
-        .padding(.horizontal, 20)
-        .contentShape(Rectangle())
-        // Simultaneous, and horizontal-only: inside a sheet a plain .gesture
-        // here would swallow the vertical drag the detents are steered with.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    step(value.translation.width < 0 ? 1 : -1)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: compact ? 18 : 22) {
+                    ForEach(categories) { cat in
+                        LooksTextTab(title: title(cat),
+                                     count: cat == category ? count(of: cat) : nil,
+                                     on: cat == category,
+                                     size: compact ? 13.5 : 14.5) {
+                            withAnimation(.snappy(duration: 0.22)) { category = cat }
+                            LumaHaptics.shared.tap()
+                        }
+                        .id(cat)
+                    }
                 }
-        )
-    }
-
-    @ViewBuilder
-    private func neighbour(at index: Int, alignment: Alignment) -> some View {
-        if categories.indices.contains(index) {
-            Button {
-                step(index - categoryIndex)
-            } label: {
-                Text(title(categories[index]))
-                    .font(.luma(size: compact ? 12 : 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: alignment)
-                    .contentShape(Rectangle())
+                .padding(.horizontal, 20)
             }
-            .buttonStyle(.plain)
-        } else {
-            Color.clear.frame(height: 1).frame(maxWidth: .infinity)
+            .onAppear { proxy.scrollTo(category, anchor: .center) }
+            .onChange(of: category) { _, cat in
+                withAnimation(.snappy(duration: 0.22)) {
+                    proxy.scrollTo(cat, anchor: .center)
+                }
+            }
         }
-    }
-
-    private func step(_ delta: Int) {
-        let next = categoryIndex + delta
-        guard categories.indices.contains(next) else { return }
-        withAnimation(.snappy(duration: 0.22)) { category = categories[next] }
-        LumaHaptics.shared.tap()
     }
 
     // MARK: Search — folded away until asked for
@@ -800,8 +815,8 @@ struct LookBrowserSheet: View {
         }
         .padding(.horizontal, 12)
         .frame(height: compact ? 34 : 38)
-        .background(Color(white: 0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(.horizontal, 20)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, isSheet ? 20 : 16)
     }
 
     // MARK: Grid
@@ -856,22 +871,23 @@ struct LookBrowserSheet: View {
             // Manage only from the full-screen Looks tab: from a sheet a push
             // would land behind the sheet, which would be a dead tap.
             if context == .library {
-                HStack {
-                    // A section heading should read as a heading.
-                    Text("Collections")
-                        .font(.luma(size: 16, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.95))
+                HStack(alignment: .firstTextBaseline) {
+                    // A quiet group label, as in the calm Mine shelf.
+                    Text("Your collections")
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
                     Spacer()
                     Button {
                         app.path.append(.collections)
                         LumaHaptics.shared.tap()
                     } label: {
                         Text("Manage")
-                            .font(.luma(size: 13, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.75))
+                            .font(.luma(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.45))
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 4)
             }
             if groups.isEmpty {
                 emptyState
@@ -895,13 +911,15 @@ struct LookBrowserSheet: View {
                                     .foregroundStyle(.white.opacity(0.9))
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 2.5)
-                                    .background(Color(white: 0.16), in: Capsule())
+                                    .background(Color.white.opacity(0.1), in: Capsule())
                             }
                         }
+                        .padding(.horizontal, isSheet ? 0 : 4)
                         if group.looks.isEmpty {
                             Text("Long-press any look to add it here.")
                                 .font(.luma(size: 13))
                                 .foregroundStyle(.white.opacity(0.5))
+                                .padding(.horizontal, isSheet ? 0 : 4)
                         } else {
                             LazyVGrid(columns: columns, spacing: rowSpacing) {
                                 ForEach(group.looks) { look in
@@ -913,8 +931,8 @@ struct LookBrowserSheet: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, compact ? 18 : 44)
+        .padding(.horizontal, isSheet ? 20 : 12)
+        .padding(.bottom, compact ? 18 : (isSheet ? 44 : 20))
     }
 
     private var emptyState: some View {
@@ -945,18 +963,18 @@ struct LookBrowserSheet: View {
         }
     }
 
-    /// A Looks tab poster: the look graded on its own person.
+    /// A Looks tab poster: the look graded on its own person. Tapping it puts
+    /// the look on and opens its page, where Try on a clip carries on into
+    /// the grade flow.
     private func posterTile(for look: LibraryLook, photo: HeroPhoto) -> some View {
         LookPosterTile(look: look,
                        job: posterJob(for: look),
                        photo: photo,
+                       detail: posterDetail(for: look),
                        selected: isSelected(look),
                        isFavourite: app.library.isFavourite(look.id),
                        locked: storeService.isLocked(look)) {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                select(look, navigate: true)
-            }
-            LumaHaptics.shared.tap()
+            open(look)
         } onFavourite: {
             app.library.toggleFavourite(look)
             LumaHaptics.shared.tap()
@@ -995,7 +1013,7 @@ struct LookBrowserSheet: View {
             // baseline instead of centring the shorter cell.
             VStack(alignment: .leading, spacing: compact ? LookTile.compactSpacing : 7) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(white: 0.07))
+                    .fill(Color.white.opacity(0.045))
                     .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
                     .overlay {
@@ -1003,17 +1021,15 @@ struct LookBrowserSheet: View {
                             .font(.luma(size: compact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(active ? .white : .white.opacity(0.55))
                     }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(style: StrokeStyle(lineWidth: active ? 2 : 1, dash: [5, 4]))
-                            .foregroundStyle(active ? .white : .white.opacity(0.18))
-                    }
+                    // Calm: no outline at rest; picked wears the pale ring
+                    // like every other tile.
+                    .pickedRing(active, cornerRadius: 12)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Original")
                         .font(.luma(size: 13, weight: active ? .semibold : .medium))
                         .foregroundStyle(active ? .white : .white.opacity(0.72))
-                        .lineLimit(compact ? 1 : 2)
-                        .frame(height: compact ? LookTile.compactCaptionHeight : 32,
+                        .lineLimit(1)
+                        .frame(height: compact ? LookTile.compactCaptionHeight : LookTile.captionHeight,
                                alignment: .top)
                     if !compact {
                         Text("No look")
@@ -1100,7 +1116,7 @@ struct LookBrowserSheet: View {
     // MARK: Looks tab — shelves, posters and packs
 
     private var posterColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: 2)
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
     }
 
     private var trimmedSearch: String {
@@ -1110,6 +1126,9 @@ struct LookBrowserSheet: View {
     private var libraryScroll: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
+                if trimmedSearch.isEmpty {
+                    shelfSubtitle
+                }
                 libraryContent
             }
             .padding(.bottom, 24)
@@ -1118,6 +1137,22 @@ struct LookBrowserSheet: View {
         .scrollDismissesKeyboard(.immediately)
         // The last row fades into the tab bar instead of being cut by it.
         .lookGridBottomFade(22)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(app)
+                .environmentObject(storeService)
+        }
+    }
+
+    /// The quiet line under the tabs: what this shelf holds.
+    private var shelfSubtitle: some View {
+        Text(shelf.subtitle)
+            .font(.luma(size: 13, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.48))
+            .lineLimit(1)
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 10)
     }
 
     @ViewBuilder
@@ -1158,51 +1193,130 @@ struct LookBrowserSheet: View {
         packRail(for: shelf)
     }
 
-    /// Saved looks and imports, led by New look, then collections.
+    /// Mine (calm mock v2): New look and the saved looks first, then the
+    /// imported LUTs as quiet rows, then Import a LUT and Collections.
     @ViewBuilder
     private var mineShelf: some View {
         let looks = shelfLooks(.mine)
-        posterGrid(looks, photos: posterPhotos(for: looks), leadingNewLook: showsCreateCTA)
-        if looks.isEmpty {
-            Text("Looks you save and LUTs you import live here.")
-                .font(.luma(size: 13))
-                .foregroundStyle(LumaTheme.textMuted)
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
-        }
-        // Import lives here on the tab, next to the LUTs it brings in.
-        LUTImportButton { imported in
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                select(LibraryLook(lut: imported), navigate: false)
+        let saved = looks.filter { !isImport($0) }
+        let imports = looks.filter { isImport($0) }
+        posterGrid(saved, photos: posterPhotos(for: saved), leadingNewLook: showsCreateCTA)
+        if !imports.isEmpty {
+            groupLabel("Imported LUTs")
+            LooksQuietCard {
+                ForEach(Array(imports.enumerated()), id: \.element.id) { index, look in
+                    if index > 0 { LooksQuietDivider() }
+                    importRow(look)
+                }
             }
-        } label: {
-            linkRow(symbol: "square.and.arrow.down",
-                    title: "Import a LUT",
-                    detail: "A .cube file from Files")
+            .padding(.horizontal, 16)
         }
-        .accessibilityLabel("Import a LUT")
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
-        mineCollections
-            .padding(.top, 10)
-    }
-
-    @ViewBuilder
-    private var mineCollections: some View {
-        if app.lutRepository.collections.isEmpty {
+        LooksQuietCard {
+            // Import lives here on the tab, next to the LUTs it brings in.
+            LUTImportButton { imported in
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    select(LibraryLook(lut: imported), navigate: false)
+                }
+            } label: {
+                linkRow(symbol: "square.and.arrow.down",
+                        title: "Import a LUT",
+                        detail: "A .cube file from Files")
+            }
+            .accessibilityLabel("Import a LUT")
+            LooksQuietDivider()
             Button {
                 app.path.append(.collections)
                 LumaHaptics.shared.tap()
             } label: {
                 linkRow(symbol: "square.stack",
                         title: "Collections",
-                        detail: "Group the looks you shoot with")
+                        detail: collectionsDetail)
             }
             .buttonStyle(.lumaPress)
-            .padding(.horizontal, 16)
-        } else {
-            collectionsBody
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        if !app.lutRepository.collections.isEmpty {
+            collectionsBody
+                .padding(.top, 22)
+        }
+    }
+
+    private var collectionsDetail: String {
+        let n = app.lutRepository.collections.count
+        return n == 0 ? "Group the looks you shoot with" : "\(n) collection\(n == 1 ? "" : "s")"
+    }
+
+    /// A LUT the person brought in themselves (not one installed from a pack).
+    private func isImport(_ look: LibraryLook) -> Bool {
+        if case .lut(let file) = look.source { return file.packID == nil }
+        return false
+    }
+
+    /// ".cube · 33 point", the grey line under an imported LUT.
+    private func importDetail(_ look: LibraryLook) -> String {
+        guard case .lut(let file) = look.source else { return "" }
+        let ext = (file.originalFileName as NSString).pathExtension.lowercased()
+        var parts = [".\(ext.isEmpty ? "cube" : ext)"]
+        if let size = file.cubeSize { parts.append("\(size) point") }
+        if file.isLogTarget { parts.append("for log") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// A quiet group label over a set of rows ("Imported LUTs").
+    private func groupLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 13, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.45))
+            .padding(.horizontal, 32)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+    }
+
+    /// An imported LUT as a quiet row: its picture, its name and size, and
+    /// the look's actions behind the ellipsis (also on a long press).
+    private func importRow(_ look: LibraryLook) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                open(look)
+            } label: {
+                HStack(spacing: 12) {
+                    LookPosterArt(job: posterJob(for: look),
+                                  photo: LookPhotos.preferred(forName: photoName(look))
+                                      ?? LookPhotos.stable(forKey: look.id))
+                        .frame(width: 38, height: 38)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .pickedRing(isSelected(look), cornerRadius: 10)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(look.name)
+                            .font(.luma(size: 15, weight: .medium))
+                            .foregroundStyle(LumaTheme.textPrimary)
+                            .lineLimit(1)
+                        Text(importDetail(look))
+                            .font(.luma(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.45))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                }
+                .padding(.leading, 14)
+                .frame(height: 62)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel(look.name)
+            Menu {
+                contextMenu(for: look)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.3))
+                    .frame(width: 44, height: 62)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("More for \(look.name)")
+        }
+        .contextMenu { contextMenu(for: look) }
     }
 
     /// Search covers the whole library, whatever the shelf.
@@ -1213,8 +1327,9 @@ struct LookBrowserSheet: View {
             emptyState
         } else {
             countText(looks.count, looks.count == 1 ? "look" : "looks", size: 12)
-                .foregroundStyle(LumaTheme.textMuted)
-                .padding(.horizontal, 16)
+                .foregroundStyle(Color.white.opacity(0.48))
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
                 .padding(.bottom, 10)
             posterGrid(looks, photos: posterPhotos(for: looks))
         }
@@ -1231,22 +1346,24 @@ struct LookBrowserSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
         } else {
-            LazyVGrid(columns: posterColumns, spacing: 10) {
+            LazyVGrid(columns: posterColumns, spacing: 8) {
                 ForEach(packs) { pack in
                     packCover(pack)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
         }
-        Button {
-            app.path.append(.filterStore)
-            LumaHaptics.shared.tap()
-        } label: {
-            linkRow(symbol: "bag",
-                    title: "Browse the store",
-                    detail: "Search every pack and restore purchases")
+        LooksQuietCard {
+            Button {
+                app.path.append(.filterStore)
+                LumaHaptics.shared.tap()
+            } label: {
+                linkRow(symbol: "bag",
+                        title: "Browse the store",
+                        detail: "Search every pack and restore purchases")
+            }
+            .buttonStyle(.lumaPress)
         }
-        .buttonStyle(.lumaPress)
         .padding(.horizontal, 16)
         .padding(.top, 16)
     }
@@ -1266,7 +1383,7 @@ struct LookBrowserSheet: View {
     private func posterGrid(_ looks: [LibraryLook], photos: [String: HeroPhoto],
                             leadingNewLook: Bool = false) -> some View {
         if !looks.isEmpty || leadingNewLook {
-            LazyVGrid(columns: posterColumns, spacing: 10) {
+            LazyVGrid(columns: posterColumns, spacing: 8) {
                 if leadingNewLook {
                     NewLookTile {
                         app.path.append(.customLook)
@@ -1278,12 +1395,12 @@ struct LookBrowserSheet: View {
                                photo: photos[look.id] ?? LookPhotos.stable(forKey: look.id))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
     }
 
-    /// A rail of pack covers with a way to every pack.
+    /// A row of pack covers, three to a screen, with a way to every pack.
     @ViewBuilder
     private func packRail(for item: LooksShelf) -> some View {
         let packs = item.shelfPacks(from: PackCatalog.packs)
@@ -1292,7 +1409,7 @@ struct LookBrowserSheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(item.railTitle)
                         .font(.luma(size: 17, weight: .semibold))
-                        .kerning(-0.3)
+                        .kerning(-0.25)
                         .foregroundStyle(LumaTheme.textPrimary)
                     Spacer(minLength: 8)
                     Button {
@@ -1301,64 +1418,209 @@ struct LookBrowserSheet: View {
                     } label: {
                         Text("See all")
                             .font(.luma(size: 13, weight: .medium))
-                            .foregroundStyle(LumaTheme.textSecondary)
+                            .foregroundStyle(Color.white.opacity(0.45))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         ForEach(packs) { pack in
-                            packCover(pack)
-                                .frame(width: 138)
+                            packCover(pack, nameSize: 14, aspect: 0.62)
+                                .frame(width: 121)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 12)
                 }
             }
-            .padding(.top, 10)
+            .padding(.top, 14)
             .padding(.bottom, 20)
         }
     }
 
     /// A pack cover that opens the pack page (the Store's detail screen).
-    private func packCover(_ pack: LookPack) -> some View {
-        LookPackCover(pack: pack,
-                      image: packThumbs.images[pack.id],
-                      state: app.packStore.isInstalled(pack) ? "In library"
-                                                              : StoreNav.price(pack, storeService)) {
+    /// A paid price wears the pack's colour.
+    private func packCover(_ pack: LookPack, nameSize: CGFloat = 16,
+                           aspect: CGFloat = 0.8) -> some View {
+        let installed = app.packStore.isInstalled(pack)
+        let paid = !installed && !pack.isFree && !pack.isProIncluded
+        return LookPackCover(pack: pack,
+                             image: packThumbs.images[pack.id],
+                             state: installed ? "In library" : StoreNav.price(pack, storeService),
+                             paid: paid,
+                             nameSize: nameSize,
+                             aspect: aspect) {
             app.selectedPackID = pack.id
             app.path.append(.filterPack)
             LumaHaptics.shared.tap()
         }
     }
 
+    /// One quiet row (calm mock v2): a plain glyph, a title with a short grey
+    /// line under it, and a chevron. Sits inside a `LooksQuietCard`.
     private func linkRow(symbol: String, title: String, detail: String) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        return HStack(spacing: 12) {
+        HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(LumaTheme.textPrimary)
-                .frame(width: 36, height: 36)
-                .background(LumaTheme.control, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.72))
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.luma(size: 15, weight: .semibold))
+                    .font(.luma(size: 15, weight: .medium))
                     .foregroundStyle(LumaTheme.textPrimary)
+                    .lineLimit(1)
                 Text(detail)
-                    .font(.luma(size: 12))
-                    .foregroundStyle(LumaTheme.textMuted)
+                    .font(.luma(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.45))
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(LumaTheme.textMuted)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.3))
         }
-        .padding(12)
-        .background(LumaTheme.panel, in: shape)
-        .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
-        .contentShape(shape)
+        .padding(.horizontal, 14)
+        .frame(height: 62)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: Looks tab — the look page
+
+    /// Puts the look on, then opens its page.
+    private func open(_ look: LibraryLook) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+            select(look, navigate: false)
+        }
+        openedLook = look
+        LumaHaptics.shared.tap()
+    }
+
+    /// Closes the look page, then runs `then` once it has gone, so a push
+    /// never lands behind the closing sheet.
+    private func leaveOpened(_ then: @escaping () -> Void) {
+        openedLook = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            then()
+        }
+    }
+
+    /// Why this look would ask at export, or nil when it is free to use.
+    private func lockInfo(_ look: LibraryLook) -> LookLock? {
+        switch look.source {
+        case .builtIn(let preset):
+            return storeService.lock(forBuiltIn: preset)
+        case .saved(let saved):
+            return storeService.lock(for: ClipGrade(baseLookName: saved.baseLookName,
+                                                    lutID: saved.lutID,
+                                                    settings: saved.settings))
+        case .lut:
+            return nil
+        }
+    }
+
+    /// The grey line under a poster's name: "KD4 · Free", "LL1 · After Dark",
+    /// "Saved · from LL3".
+    private func posterDetail(for look: LibraryLook) -> String {
+        if case .saved(let saved) = look.source {
+            guard !saved.baseLookName.isEmpty else { return "Saved" }
+            let from = LookSignature.code(in: saved.baseLookName)
+                ?? LookSignature.title(in: saved.baseLookName)
+            return "Saved · from \(from)"
+        }
+        let source = look.packName ?? lockInfo(look)?.pack?.name ?? look.posterTag
+        if let code = look.nameSplit.code { return "\(code) · \(source)" }
+        return source
+    }
+
+    /// "AFTER DARK · LL1", the small line over the look page's title.
+    private func openedKicker(for look: LibraryLook, lock: LookLock?) -> String {
+        let source = look.packName ?? look.sourcePack?.name ?? lock?.pack?.name ?? look.posterTag
+        if let code = look.nameSplit.code { return "\(source) · \(code)".uppercased() }
+        return source.uppercased()
+    }
+
+    /// The price beside Try on a clip: the pack that sells the look, or Pro.
+    private func lockPrice(_ lock: LookLock?) -> String? {
+        guard let lock else { return nil }
+        if let pack = lock.pack { return StoreNav.price(pack, storeService) }
+        return "Pro"
+    }
+
+    private func lookOpenedPage(_ look: LibraryLook) -> some View {
+        let lock = lockInfo(look)
+        let strength = app.settings.intensity > 0 ? app.settings.intensity : LookSettings().intensity
+        var meta = "Strength \(Int(strength.rounded()))%"
+        if lock != nil { meta += " · free to try, unlocks at export" }
+        return LookOpenedPage(
+            look: look,
+            job: posterJob(for: look),
+            heroPhoto: LookPhotos.preferred(forName: photoName(look)) ?? LookPhotos.stable(forKey: look.id),
+            kicker: openedKicker(for: look, lock: lock),
+            meta: meta,
+            price: lockPrice(lock),
+            facts: recipeFacts(for: look),
+            isFavourite: app.library.isFavourite(look.id),
+            onTry: { leaveOpened { select(look, navigate: true) } },
+            onShoot: { leaveOpened { shoot(look) } },
+            onPrice: { leaveOpened { buy(lock) } },
+            onFavourite: {
+                app.library.toggleFavourite(look)
+                LumaHaptics.shared.tap()
+            })
+    }
+
+    /// Shoot with it: the look on the live camera.
+    private func shoot(_ look: LibraryLook) {
+        app.select(look: look)
+        app.path.append(.camera)
+        LumaHaptics.shared.tap()
+    }
+
+    /// The price: the pack page that sells the look, else the paywall.
+    private func buy(_ lock: LookLock?) {
+        if let pack = lock?.pack {
+            app.selectedPackID = pack.id
+            app.path.append(.filterPack)
+        } else {
+            showPaywall = true
+        }
+        LumaHaptics.shared.tap()
+    }
+
+    /// The Recipe tab: what the look does, in plain words and numbers.
+    private func recipeFacts(for look: LibraryLook) -> [LookRecipeFact] {
+        switch look.source {
+        case .builtIn(let preset):
+            return [LookRecipeFact(label: "Family", value: preset.category)]
+                + recipeFacts(preset.recipe)
+        case .lut(let file):
+            var out = [LookRecipeFact(label: "Type", value: importDetail(look))]
+            out.append(LookRecipeFact(label: "From",
+                                      value: look.packName ?? look.sourcePack?.name
+                                          ?? (file.packID == nil ? "Imported" : "A pack")))
+            return out
+        case .saved(let saved):
+            var out = [LookRecipeFact(label: "Built on",
+                                      value: saved.baseLookName.isEmpty ? "A LUT" : saved.baseLookName),
+                       LookRecipeFact(label: "Strength",
+                                      value: "\(Int(saved.settings.intensity.rounded()))%")]
+            if let base = MockData.looks.first(where: { $0.name == saved.baseLookName }) {
+                out += recipeFacts(base.recipe)
+            }
+            return out
+        }
+    }
+
+    private func recipeFacts(_ recipe: LookRecipe) -> [LookRecipeFact] {
+        let tint = Int(recipe.tint.rounded())
+        return [
+            LookRecipeFact(label: "White balance", value: "\(Int(recipe.temperature.rounded())) K"),
+            LookRecipeFact(label: "Tint", value: tint > 0 ? "+\(tint)" : "\(tint)"),
+            LookRecipeFact(label: "Contrast", value: String(format: "%.2f", Double(recipe.contrast))),
+            LookRecipeFact(label: "Saturation", value: "\(Int((recipe.saturation * 100).rounded()))%"),
+            LookRecipeFact(label: "Bloom", value: "\(Int((recipe.bloom * 100).rounded()))%"),
+            LookRecipeFact(label: "Vignette", value: String(format: "%.1f", Double(recipe.vignette))),
+        ]
     }
 
     /// For you: recently used, then favourites, then the picks (the
@@ -1453,7 +1715,7 @@ struct LookBrowserSheet: View {
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .frame(height: compact ? 32 : 38)
-                        .background(Color(white: 0.13),
+                        .background(Color.white.opacity(0.08),
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.lumaPress)
@@ -1500,7 +1762,7 @@ struct LookBrowserSheet: View {
             .frame(width: 84, height: compact ? 30 : 32)
             .background {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(comparing ? AnyShapeStyle(.white) : AnyShapeStyle(Color(white: 0.13)))
+                    .fill(comparing ? AnyShapeStyle(.white) : AnyShapeStyle(Color.white.opacity(0.08)))
             }
             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             .gesture(
@@ -1628,6 +1890,8 @@ struct LookTile: View {
     /// of truth, so the arithmetic and the layout can never disagree.
     static let compactCaptionHeight: CGFloat = 16
     static let compactSpacing: CGFloat = 4
+    /// The one-line name box at full size.
+    static let captionHeight: CGFloat = 18
 
     /// "LUT" stays upper — it is an acronym, not a shouted label.
     private var badge: String? {
@@ -1678,8 +1942,19 @@ struct LookTile: View {
                                 .foregroundStyle(.white.opacity(0.95))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2.5)
-                                .background(.black.opacity(0.6), in: Capsule())
+                                .background(Color(hex: 0x0A0B0D).opacity(0.5), in: Capsule())
                                 .padding(compact ? 4 : 5)
+                        } else {
+                            // The code in the look's colour at the top of
+                            // the picture (calm mock v2).
+                            LookNameText(look.posterCode, colour: look.signature,
+                                         size: compact ? 11 : 13, weight: .bold)
+                                .minimumScaleFactor(0.6)
+                                .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
+                                .padding(.leading, compact ? 5 : 7)
+                                .padding(.trailing, compact ? 24 : 30)
+                                .padding(.top, compact ? 4 : 6)
+                                .allowsHitTesting(false)
                         }
                     }
                     .overlay(alignment: .bottomTrailing) {
@@ -1688,17 +1963,17 @@ struct LookTile: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(split.title)
-                        .font(.luma(size: 13, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? .white : .white.opacity(0.8))
-                        .lineLimit(compact ? 1 : 2)
-                        .minimumScaleFactor(compact ? 0.82 : 0.85)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // The full name in the look's colour (or white with a
+                    // dot, as You › Appearance › Names says).
+                    LookNameText(split.title, colour: look.signature, size: 13,
+                                 weight: selected ? .semibold : .medium)
+                        .minimumScaleFactor(0.8)
                         // Fixed caption box keeps every grid row on the same
-                        // baseline whether a name wraps or not.
-                        .frame(height: compact ? Self.compactCaptionHeight : 32,
-                               alignment: .top)
+                        // baseline.
+                        .frame(maxWidth: .infinity,
+                               minHeight: compact ? Self.compactCaptionHeight : Self.captionHeight,
+                               maxHeight: compact ? Self.compactCaptionHeight : Self.captionHeight,
+                               alignment: .topLeading)
                     if !compact {
                         Text(subtitle)
                             .font(.luma(size: 11))
@@ -1714,10 +1989,10 @@ struct LookTile: View {
             if let onFavourite {
                 Button(action: onFavourite) {
                     Image(systemName: isFavourite ? "star.fill" : "star")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(isFavourite ? .white : .white.opacity(0.6))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
                         .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
-                        .background(.black.opacity(0.45), in: Circle())
+                        .background(Color(hex: 0x0A0B0D).opacity(0.42), in: Circle())
                         .padding(compact ? 3 : 4)
                 }
                 .buttonStyle(.plain)
@@ -1729,31 +2004,23 @@ struct LookTile: View {
 
 // MARK: - Poster tile (Looks tab)
 
-/// A look as a poster: graded on its own person, its code large in the
-/// look's signature colour, the name and its family along the bottom.
+/// A look as a poster (calm mock v2): graded on its own person, its code in
+/// the look's colour at the top a size smaller than before, the full name
+/// underneath in the same colour, then a grey line with the source and a
+/// small lock when it is paid. Favourites are a quiet star on glass.
 struct LookPosterTile: View {
     let look: LibraryLook
     let job: LookPosterJob
     let photo: HeroPhoto
+    /// The grey line under the name ("KD4 · Free", "LL1 · After Dark").
+    var detail: String = ""
     var selected: Bool = false
     var isFavourite: Bool = false
     var locked: Bool = false
     let action: () -> Void
     var onFavourite: (() -> Void)? = nil
 
-    private var split: (title: String, code: String?) { look.nameSplit }
-
-    /// The stock code; for looks without one, the first word when it is
-    /// short ("Neon"), else the initials ("Documentary Grit" as DG).
-    private var code: String {
-        if let code = split.code { return code }
-        let words = split.title.split(separator: " ")
-        if let first = words.first, first.count <= 9 { return String(first) }
-        let initials = words.prefix(3).compactMap(\.first)
-        return initials.isEmpty ? "?" : String(initials).uppercased()
-    }
-
-    private let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -1763,10 +2030,10 @@ struct LookPosterTile: View {
                     .overlay { LookPosterArt(job: job, photo: photo) }
                     .overlay {
                         LinearGradient(stops: [
-                            .init(color: .black.opacity(0.3), location: 0),
-                            .init(color: .clear, location: 0.3),
-                            .init(color: .clear, location: 0.55),
-                            .init(color: .black.opacity(0.82), location: 1),
+                            .init(color: .black.opacity(0.28), location: 0),
+                            .init(color: .clear, location: 0.26),
+                            .init(color: .clear, location: 0.58),
+                            .init(color: .black.opacity(0.66), location: 1),
                         ], startPoint: .top, endPoint: .bottom)
                     }
                     .overlay(alignment: .topLeading) { codeLabel }
@@ -1774,22 +2041,22 @@ struct LookPosterTile: View {
                     .clipShape(shape)
                     // scaledToFill overflows: confine touches to the tile.
                     .contentShape(shape)
-                    .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1).opacity(selected ? 0 : 1))
-                    .pickedRing(selected, cornerRadius: 16)
+                    .pickedRing(selected, cornerRadius: 15)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
             }
             .buttonStyle(.lumaPress)
-            .accessibilityLabel(look.name)
+            .accessibilityLabel(locked ? "\(look.name), locked" : look.name)
             .accessibilityAddTraits(selected ? .isSelected : [])
 
             if let onFavourite {
                 Button(action: onFavourite) {
                     Image(systemName: isFavourite ? "star.fill" : "star")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(isFavourite ? LumaTheme.signal : .white.opacity(0.75))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
                         .frame(width: 28, height: 28)
-                        .background(.black.opacity(0.4), in: Circle())
-                        .padding(7)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color(hex: 0x0A0B0D).opacity(0.42), in: Circle())
+                        .padding(9)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isFavourite ? "Unfavourite" : "Favourite")
@@ -1798,39 +2065,35 @@ struct LookPosterTile: View {
     }
 
     private var codeLabel: some View {
-        Text(code)
-            .font(.luma(size: 30, weight: .heavy))
-            .kerning(-1.4)
-            .foregroundStyle(look.signature)
-            .shadow(color: .black.opacity(0.4), radius: 10, y: 1)
-            .lineLimit(1)
-            .minimumScaleFactor(0.55)
-            .padding(.leading, 12)
-            .padding(.trailing, 44)
-            .padding(.top, 9)
+        LookNameText(look.posterCode, colour: look.signature, size: 27, weight: .bold)
+            .minimumScaleFactor(0.5)
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 2)
+            .padding(.leading, 11)
+            .padding(.trailing, 46)
+            .padding(.top, 8)
+            .allowsHitTesting(false)
     }
 
     private var caption: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 6) {
-            Text(split.title)
-                .font(.luma(size: 14, weight: .semibold))
-                .kerning(-0.2)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .layoutPriority(1)
-            Spacer(minLength: 4)
-            if locked {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .accessibilityLabel("Locked")
+        VStack(alignment: .leading, spacing: 2) {
+            LookNameText(look.nameSplit.title, colour: look.signature, size: 14, weight: .semibold)
+                .minimumScaleFactor(0.8)
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 1)
+            HStack(spacing: 4) {
+                if locked {
+                    Image(systemName: "lock")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                Text(detail.isEmpty ? look.posterTag : detail)
+                    .font(.luma(size: 11.5, weight: .medium))
+                    .lineLimit(1)
             }
-            Text(look.posterTag)
-                .font(.luma(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.62))
-                .lineLimit(1)
+            .foregroundStyle(.white.opacity(0.66))
         }
-        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 11)
+        .allowsHitTesting(false)
     }
 }
 
@@ -1955,35 +2218,42 @@ struct LookPosterArt: View {
 
 // MARK: - Pack cover (Looks tab)
 
-/// A pack as a cover: its people graded in the pack's lead look, the pack
-/// line in signal and the name as a light word and a heavy word.
+/// A pack as a cover (calm mock v2): its people graded in the pack's lead
+/// look, the pack's name in the pack's colour with a grey line under it,
+/// and Free, Pro, a price or In library in a small glass tag. A paid price
+/// takes the pack's colour.
 struct LookPackCover: View {
     let pack: LookPack
     var image: CGImage? = nil
     /// "Free", "Pro", a price, or "In library".
     let state: String
+    /// True when `state` is a price still to pay.
+    var paid: Bool = false
+    var nameSize: CGFloat = 16
+    /// Width over height: 0.8 in the packs grid, taller in the rail.
+    var aspect: CGFloat = 0.8
     let action: () -> Void
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
 
-    private let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
 
     var body: some View {
         Button(action: action) {
             Color.clear
-                .aspectRatio(0.8, contentMode: .fit)
+                .aspectRatio(aspect, contentMode: .fit)
                 .overlay { art }
                 .overlay {
                     LinearGradient(stops: [
-                        .init(color: .black.opacity(0.25), location: 0),
-                        .init(color: .clear, location: 0.3),
-                        .init(color: .clear, location: 0.45),
-                        .init(color: .black.opacity(0.86), location: 1),
+                        .init(color: .black.opacity(0.22), location: 0),
+                        .init(color: .clear, location: 0.26),
+                        .init(color: .clear, location: 0.5),
+                        .init(color: .black.opacity(0.72), location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 }
-                .overlay(alignment: .topTrailing) { statePill }
+                .overlay(alignment: .topTrailing) { stateTag }
                 .overlay(alignment: .bottomLeading) { caption }
                 .clipShape(shape)
                 .contentShape(shape)
-                .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("\(pack.name), \(pack.looks.count) looks, \(state)")
@@ -2006,64 +2276,66 @@ struct LookPackCover: View {
         }
     }
 
-    private var statePill: some View {
+    private var priceColour: Color {
+        let inColour = (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+        return paid && inColour ? pack.colour : .white
+    }
+
+    private var stateTag: some View {
         Text(state)
-            .font(.luma(size: 11, weight: .semibold).monospacedDigit())
-            .foregroundStyle(.white)
+            .font(.luma(size: 11.5, weight: .semibold).monospacedDigit())
+            .foregroundStyle(priceColour)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.black.opacity(0.45), in: Capsule())
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(Color(hex: 0x0A0B0D).opacity(0.5), in: Capsule())
             .padding(8)
     }
 
     private var caption: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(pack.packLine)
-                .font(.luma(size: 10.5, weight: .semibold).monospacedDigit())
-                .foregroundStyle(LumaTheme.signal)
+            LookNameText(pack.name, colour: pack.colour, size: nameSize, weight: .semibold)
+                .minimumScaleFactor(0.7)
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 1)
+            Text("\(pack.looks.count) looks")
+                .font(.luma(size: 11.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.66))
                 .lineLimit(1)
-            LumaHeadline(light: pack.titleParts.light, heavy: pack.titleParts.heavy, size: 20)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(.horizontal, 11)
+        .padding(.bottom, 10)
     }
 }
 
 // MARK: - New look tile (Looks tab, Mine)
 
-/// Mine's first tile: build a look from scratch.
+/// Mine's first tile: build a look from scratch. Quiet glass, no outline.
 struct NewLookTile: View {
     let action: () -> Void
 
-    private let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
 
     var body: some View {
         Button(action: action) {
             Color.clear
                 .aspectRatio(0.8, contentMode: .fit)
-                .background(LumaTheme.panel, in: shape)
+                .background(Color.white.opacity(0.045), in: shape)
                 .overlay {
                     VStack(spacing: 8) {
                         Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(LumaTheme.onLight)
-                            .frame(width: 42, height: 42)
+                            .frame(width: 40, height: 40)
                             .background(LumaTheme.textPrimary, in: Circle())
                         Text("New look")
-                            .font(.luma(size: 15, weight: .semibold))
+                            .font(.luma(size: 14.5, weight: .semibold))
                             .foregroundStyle(LumaTheme.textPrimary)
                         Text("Build one from scratch")
                             .font(.luma(size: 12))
-                            .foregroundStyle(LumaTheme.textMuted)
+                            .foregroundStyle(.white.opacity(0.5))
                     }
-                }
-                .overlay {
-                    shape
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                        .foregroundStyle(LumaTheme.border)
                 }
                 .contentShape(shape)
         }
@@ -2226,6 +2498,434 @@ struct LUTImportButton<Label: View>: View {
             case .failure(let error):
                 app.importToast = error.localizedDescription
             }
+        }
+    }
+}
+
+// MARK: - Text tabs
+
+/// A plain text tab (calm mock v2): the selected one white with a short
+/// underline, the rest grey, an optional count beside it. Replaces the boxed
+/// pills and segments on the Looks tab, the look browser and the look page.
+struct LooksTextTab: View {
+    let title: String
+    var count: Int? = nil
+    let on: Bool
+    var size: CGFloat = 14.5
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.luma(size: size, weight: .semibold))
+                    .foregroundStyle(.white.opacity(on ? 1 : 0.42))
+                if let count {
+                    Text("\(count)")
+                        .font(.luma(size: size, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.bottom, 10)
+            // The underline as an overlay, so it always spans the words
+            // (a bare Capsule in a fixed-size stack would shrink to 10 pt).
+            .overlay(alignment: .bottom) {
+                Capsule()
+                    .fill(on ? Color.white : Color.clear)
+                    .frame(height: 2)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+// MARK: - Quiet rows
+
+/// A quiet group of rows (calm mock v2): white at 4.5% on ink, 18 pt
+/// corners, no outline. Rows are separated by `LooksQuietDivider`.
+struct LooksQuietCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(Color.white.opacity(0.045),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+/// The hairline between two quiet rows, starting after the row's glyph.
+struct LooksQuietDivider: View {
+    var leading: CGFloat = 48
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.055))
+            .frame(height: 1)
+            .padding(.leading, leading)
+    }
+}
+
+// MARK: - Look page (Looks tab)
+
+/// One fact on the look page's Recipe tab.
+struct LookRecipeFact: Hashable {
+    let label: String
+    let value: String
+}
+
+/// One sample on the look page: the look graded on a bundled photo.
+private struct LookOpenedSample: Hashable {
+    let photo: HeroPhoto
+    let title: String
+    let detail: String
+}
+
+/// A look opened (calm mock v2): the look over its own faded picture, its
+/// name as a light word and a word in its colour, then Try on a clip in the
+/// look's own colour with Shoot with it and the price quiet beside it.
+/// Under that, text tabs: the look on skin, in places, and its recipe.
+struct LookOpenedPage: View {
+    let look: LibraryLook
+    let job: LookPosterJob
+    let heroPhoto: HeroPhoto
+    /// "AFTER DARK · LL1".
+    let kicker: String
+    /// "Strength 75%".
+    let meta: String
+    /// The price when the look asks at export, else nil.
+    let price: String?
+    let facts: [LookRecipeFact]
+    let onTry: () -> Void
+    let onShoot: () -> Void
+    let onPrice: () -> Void
+    let onFavourite: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
+    @State private var isFavourite: Bool
+    @State private var tab: Tab = .skin
+
+    private enum Tab: String, CaseIterable {
+        case skin = "On skin"
+        case places = "On places"
+        case recipe = "Recipe"
+    }
+
+    private static let skinSamples: [LookOpenedSample] = [
+        LookOpenedSample(photo: .campaign, title: "Studio red", detail: "Deep skin · flash"),
+        LookOpenedSample(photo: .bridge, title: "Overcast", detail: "Medium skin · daylight"),
+        LookOpenedSample(photo: .golden, title: "Golden hour", detail: "Portrait · low sun"),
+        LookOpenedSample(photo: .neon, title: "Neon", detail: "Portrait · coloured light"),
+    ]
+
+    private static let placeSamples: [LookOpenedSample] = [
+        LookOpenedSample(photo: .rain, title: "Rain", detail: "Street · wet light"),
+        LookOpenedSample(photo: .drive, title: "Dashboard", detail: "Car · mixed light"),
+        LookOpenedSample(photo: .gig, title: "Stage", detail: "Haze · coloured light"),
+        LookOpenedSample(photo: .party, title: "Party", detail: "Crowd · flash"),
+    ]
+
+    init(look: LibraryLook, job: LookPosterJob, heroPhoto: HeroPhoto, kicker: String,
+         meta: String, price: String?, facts: [LookRecipeFact], isFavourite: Bool,
+         onTry: @escaping () -> Void, onShoot: @escaping () -> Void,
+         onPrice: @escaping () -> Void, onFavourite: @escaping () -> Void) {
+        self.look = look
+        self.job = job
+        self.heroPhoto = heroPhoto
+        self.kicker = kicker
+        self.meta = meta
+        self.price = price
+        self.facts = facts
+        self.onTry = onTry
+        self.onShoot = onShoot
+        self.onPrice = onPrice
+        self.onFavourite = onFavourite
+        _isFavourite = State(initialValue: isFavourite)
+    }
+
+    private var inColour: Bool {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            LumaTheme.background.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    hero
+                    tabsRow
+                        .padding(.top, 26)
+                    tabContent
+                        .padding(.top, 16)
+                    Color.clear.frame(height: 40)
+                }
+            }
+            topButtons
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    // MARK: Hero
+
+    private var hero: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 380)
+            .overlay {
+                LookPosterArt(job: job, photo: heroPhoto)
+                    .opacity(0.7)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                LinearGradient(stops: [
+                    .init(color: LumaTheme.background.opacity(0.55), location: 0),
+                    .init(color: LumaTheme.background.opacity(0.2), location: 0.26),
+                    .init(color: LumaTheme.background.opacity(0.5), location: 0.58),
+                    .init(color: LumaTheme.background.opacity(0.94), location: 0.86),
+                    .init(color: LumaTheme.background, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
+            }
+            .clipped()
+            .overlay(alignment: .bottomLeading) {
+                heroText
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+            }
+    }
+
+    /// "Neon Nights" as a light "Neon" and "Nights" in the look's colour.
+    private var titleParts: (light: String, heavy: String) {
+        let full = look.nameSplit.title
+        let words = full.split(separator: " ").map(String.init)
+        guard words.count > 1, let last = words.last else { return ("", full) }
+        return (words.dropLast().joined(separator: " "), last)
+    }
+
+    private var title: Text {
+        let parts = titleParts
+        let heavy = Text(parts.heavy)
+            .font(.luma(size: 31, weight: .bold))
+            .foregroundColor(inColour ? look.signature : LumaTheme.textPrimary)
+        guard !parts.light.isEmpty else { return heavy }
+        let light = Text(parts.light + " ")
+            .font(.luma(size: 31, weight: .light))
+            .foregroundColor(LumaTheme.textPrimary)
+        return light + heavy
+    }
+
+    private var heroText: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(look.signature)
+                    .frame(width: 7, height: 7)
+                Text(kicker)
+                    .font(.luma(size: 11, weight: .bold))
+                    .tracking(1.3)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+            title
+                .kerning(-0.9)
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 6)
+                .accessibilityAddTraits(.isHeader)
+            Text(meta)
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(2)
+                .padding(.top, 6)
+            actions
+                .padding(.top, 18)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Try on a clip in the look's colour; Shoot with it and the price quiet
+    /// beside it. On a narrow screen Shoot with it drops its glyph.
+    private var actions: some View {
+        ViewThatFits(in: .horizontal) {
+            actionRow(shootIcon: "camera")
+            actionRow(shootIcon: nil)
+        }
+    }
+
+    private func actionRow(shootIcon: String?) -> some View {
+        HStack(spacing: 8) {
+            LumaColourButton(title: "Try on a clip", colour: look.signature,
+                             icon: "wand.and.stars", height: 38, action: onTry)
+                .fixedSize()
+            quietPill("Shoot with it", icon: shootIcon, action: onShoot)
+            if let price {
+                quietPill(price, icon: nil, action: onPrice)
+                    .accessibilityLabel("Buy, \(price)")
+            }
+        }
+    }
+
+    private func quietPill(_ title: String, icon: String?,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Text(title)
+                    .font(.luma(size: 14, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white.opacity(0.92))
+            .padding(.leading, icon == nil ? 15 : 12)
+            .padding(.trailing, 15)
+            .frame(height: 38)
+            .background(Color.white.opacity(0.1), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .fixedSize()
+    }
+
+    // MARK: Top buttons
+
+    private var topButtons: some View {
+        HStack(spacing: 10) {
+            circleButton("chevron.down", label: "Close") {
+                dismiss()
+            }
+            Spacer(minLength: 0)
+            circleButton(isFavourite ? "star.fill" : "star",
+                         label: isFavourite ? "Unfavourite" : "Favourite") {
+                isFavourite.toggle()
+                onFavourite()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+    }
+
+    private func circleButton(_ symbol: String, label: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 42, height: 42)
+                .background(.ultraThinMaterial, in: Circle())
+                .background(Color.white.opacity(0.06), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Tabs
+
+    private var tabsRow: some View {
+        HStack(spacing: 22) {
+            ForEach(Tab.allCases, id: \.self) { item in
+                LooksTextTab(title: item.rawValue, on: item == tab) {
+                    withAnimation(.snappy(duration: 0.22)) { tab = item }
+                    LumaHaptics.shared.tap()
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case .skin:
+            sampleGrid(Self.skinSamples, caption: "The same look on four kinds of light")
+        case .places:
+            sampleGrid(Self.placeSamples, caption: "The same look in four places")
+        case .recipe:
+            recipeList
+        }
+    }
+
+    private func sectionCaption(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 13, weight: .medium))
+            .foregroundStyle(.white.opacity(0.48))
+            .padding(.horizontal, 20)
+    }
+
+    private func sampleGrid(_ samples: [LookOpenedSample], caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionCaption(caption)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2),
+                      spacing: 8) {
+                ForEach(samples, id: \.self) { sample in
+                    sampleTile(sample)
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    private func sampleTile(_ sample: LookOpenedSample) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
+        return Color.clear
+            .aspectRatio(0.8, contentMode: .fit)
+            .overlay { LookPosterArt(job: job, photo: sample.photo) }
+            .overlay {
+                LinearGradient(stops: [
+                    .init(color: .clear, location: 0.6),
+                    .init(color: .black.opacity(0.62), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sample.title)
+                        .font(.luma(size: 14, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                    Text(sample.detail)
+                        .font(.luma(size: 11.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.66))
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 11)
+            }
+            .clipShape(shape)
+            .contentShape(shape)
+            .accessibilityElement(children: .combine)
+    }
+
+    private var recipeList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionCaption("What the look does")
+            LooksQuietCard {
+                ForEach(Array(facts.enumerated()), id: \.element.label) { index, fact in
+                    if index > 0 { LooksQuietDivider(leading: 14) }
+                    HStack(spacing: 8) {
+                        Text(fact.label)
+                            .font(.luma(size: 15, weight: .medium))
+                            .foregroundStyle(LumaTheme.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(fact.value)
+                            .font(.luma(size: 14, weight: .medium).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 52)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 }
