@@ -44,8 +44,10 @@ python3 -m http.server 8000
 **Vercel (recommended, and how it runs today).** The project `lumalook`
 imports `EmotiveImpact/lumalook` with the Root Directory left blank. The
 root `vercel.json` sets the output directory to `website`, with no install
-or build step. Its `ignoreCommand` (`test ! -d website`) skips any branch
-without the site, so app pull requests don't get a failed Vercel check. The
+or build step. Its `ignoreCommand` only builds when a push changes `website/`, `api/` or
+`vercel.json` (compared with the branch's last deployment, or the previous
+commit), so app-only pushes and bot commits don't use up the free plan's
+100 deployments a day. The
 same settings are saved in the Vercel project, because branches made before
 the site existed don't have the root `vercel.json`.
 Every push to `master` then redeploys, and pull requests get preview links.
