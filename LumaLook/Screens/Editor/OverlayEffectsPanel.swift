@@ -41,40 +41,23 @@ struct OverlayEffectsPanel: View {
                                 Image(systemName: preset.icon).font(.system(size: 17))
                                 Text(preset.name).font(.luma(size: 9)).lineLimit(1)
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.white.opacity(0.86))
                             .frame(width: 62, height: 52)
-                            .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                            .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.lumaPress)
                     }
                 }
             }
 
-            // Section chips.
+            // Sections as text tabs; a small white dot marks one in use.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 18) {
                     ForEach(Section.allCases, id: \.self) { s in
-                        Button {
-                            section = s
-                            LumaHaptics.shared.tap()
-                        } label: {
-                            Label(s.label, systemImage: s.icon)
-                                .font(.luma(size: 12, weight: .semibold))
-                                .foregroundStyle(section == s ? .black : .white)
-                                .padding(.horizontal, 11).padding(.vertical, 7)
-                                .background(section == s ? AnyShapeStyle(LumaTheme.accentBright)
-                                                         : AnyShapeStyle(LumaTheme.surface),
-                                            in: Capsule())
-                                .overlay(alignment: .topTrailing) {
-                                    if isActive(s) {
-                                        Circle().fill(LumaTheme.teal).frame(width: 7, height: 7)
-                                            .offset(x: 2, y: -2)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
+                        sectionTab(s)
                     }
                 }
+                .padding(.trailing, 16)
             }
 
             switch section {
@@ -85,6 +68,37 @@ struct OverlayEffectsPanel: View {
             case .border: borderControls
             }
         }
+    }
+
+    private func sectionTab(_ s: Section) -> some View {
+        let isOn = section == s
+        return Button {
+            section = s
+            LumaHaptics.shared.tap()
+        } label: {
+            HStack(spacing: 5) {
+                Text(s.label)
+                    .font(.luma(size: 13.5, weight: .semibold))
+                    .foregroundStyle(isOn ? LumaTheme.textPrimary : LPanelStyle.quietText)
+                    .lineLimit(1)
+                if isActive(s) {
+                    Circle()
+                        .fill(Color.white.opacity(isOn ? 0.9 : 0.55))
+                        .frame(width: 5, height: 5)
+                }
+            }
+            .padding(.top, 4)
+            .padding(.bottom, 8)
+            .overlay(alignment: .bottom) {
+                if isOn {
+                    Capsule().fill(Color.white).frame(height: 2)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(s.label)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     private func isActive(_ s: Section) -> Bool {
@@ -103,18 +117,10 @@ struct OverlayEffectsPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(OverlayBlendMode.allCases, id: \.self) { mode in
-                    Button {
+                    LPanelPill(title: mode.label, isOn: fx.blendMode == mode, height: 32) {
                         editor.setOverlayBlendMode(id: overlayID, mode)
                         LumaHaptics.shared.tap()
-                    } label: {
-                        Text(mode.label)
-                            .font(.luma(size: 12, weight: .semibold))
-                            .foregroundStyle(fx.blendMode == mode ? LumaTheme.onSignal : LumaTheme.textSecondary)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(fx.blendMode == mode ? LumaTheme.accent : LumaTheme.surface,
-                                        in: Capsule())
                     }
-                    .buttonStyle(.lumaPress)
                 }
             }
         }
@@ -132,7 +138,7 @@ struct OverlayEffectsPanel: View {
                     LumaHaptics.shared.tap()
                 }))
                 .font(.luma(size: 14, weight: .semibold))
-                .tint(LumaTheme.accentBright)
+                .tint(LPanelStyle.toggleTint)
 
             if let chroma {
                 HStack(spacing: 10) {
@@ -145,22 +151,22 @@ struct OverlayEffectsPanel: View {
                         } label: {
                             Circle().fill(Color(hex: hex)).frame(width: 22, height: 22)
                                 .overlay(Circle().stroke(chroma.colorHex.uppercased() == hex
-                                    ? LumaTheme.accentBright : .white.opacity(0.2),
+                                    ? LumaTheme.pickedRing : .white.opacity(0.2),
                                     lineWidth: chroma.colorHex.uppercased() == hex ? 2.5 : 1))
                         }
                         .buttonStyle(.lumaPress)
                     }
                 }
-                InlineSlider(title: "Tolerance", value: Binding(
+                LPanelAmount("Tolerance", value: Binding(
                     get: { chroma.tolerance * 100 },
                     set: { var c = chroma; c.tolerance = $0 / 100
                            editor.setOverlayChroma(id: overlayID, c, snapshot: false) }
-                ), range: 5...80) { "\(Int($0))" }
-                InlineSlider(title: "Softness", value: Binding(
+                ), range: 5...80) { "\(Int($0.rounded()))" }
+                LPanelAmount("Softness", value: Binding(
                     get: { chroma.softness * 100 },
                     set: { var c = chroma; c.softness = $0 / 100
                            editor.setOverlayChroma(id: overlayID, c, snapshot: false) }
-                ), range: 0...40) { "\(Int($0))" }
+                ), range: 0...40) { "\(Int($0.rounded()))" }
             }
         }
     }
@@ -184,25 +190,24 @@ struct OverlayEffectsPanel: View {
                             Image(systemName: icon).font(.system(size: 16))
                             Text(label).font(.luma(size: 10))
                         }
-                        .foregroundStyle(on ? .black : .white)
+                        .foregroundStyle(on ? LPanelStyle.onText : Color.white.opacity(0.86))
                         .frame(width: 56, height: 48)
-                        .background(on ? AnyShapeStyle(LumaTheme.accentBright)
-                                       : AnyShapeStyle(LumaTheme.surface),
-                                    in: RoundedRectangle(cornerRadius: 12))
+                        .background(on ? LPanelStyle.onFill : LPanelStyle.glass,
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             }
             if let mask {
-                InlineSlider(title: "Feather", value: Binding(
+                LPanelAmount("Feather", value: Binding(
                     get: { mask.feather * 100 },
                     set: { var m = mask; m.feather = $0 / 100
                            editor.setOverlayMask(id: overlayID, m, snapshot: false) }
-                ), range: 0...40) { "\(Int($0))" }
+                ), range: 0...40) { "\(Int($0.rounded()))" }
                 Toggle("Invert", isOn: Binding(
                     get: { mask.invert },
                     set: { var m = mask; m.invert = $0; editor.setOverlayMask(id: overlayID, m) }))
-                    .font(.luma(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+                    .font(.luma(size: 14, weight: .semibold)).tint(LPanelStyle.toggleTint)
             }
         }
     }
@@ -226,8 +231,7 @@ struct OverlayEffectsPanel: View {
                 set: { var a = adjust; a.warmth = $0 / 100; editor.setOverlayAdjustments(id: overlayID, a) }
             ), range: -100...100) { String(format: "%.1f", $0 / 100) }
             if !adjust.isIdentity {
-                Button("Reset") { editor.setOverlayAdjustments(id: overlayID, nil) }
-                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textSecondary)
+                LPanelPill(title: "Reset", height: 32) { editor.setOverlayAdjustments(id: overlayID, nil) }
             }
         }
     }
@@ -240,7 +244,7 @@ struct OverlayEffectsPanel: View {
                     editor.setOverlayBorder(id: overlayID, on ? OverlayBorderSettings() : nil)
                     LumaHaptics.shared.tap()
                 }))
-                .font(.luma(size: 14, weight: .semibold)).tint(LumaTheme.accentBright)
+                .font(.luma(size: 14, weight: .semibold)).tint(LPanelStyle.toggleTint)
             if let border {
                 HStack(spacing: 10) {
                     Text("Colour").font(.luma(.footnote)).foregroundStyle(LumaTheme.textSecondary)
@@ -251,7 +255,7 @@ struct OverlayEffectsPanel: View {
                         } label: {
                             Circle().fill(Color(hex: hex)).frame(width: 20, height: 20)
                                 .overlay(Circle().stroke(border.colorHex.uppercased() == hex
-                                    ? LumaTheme.accentBright : .white.opacity(0.25),
+                                    ? LumaTheme.pickedRing : .white.opacity(0.25),
                                     lineWidth: border.colorHex.uppercased() == hex ? 2.5 : 1))
                         }
                         .buttonStyle(.lumaPress)

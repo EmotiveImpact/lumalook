@@ -13,6 +13,10 @@ struct CropStraightenView: View {
 
     @State private var crop: CGRect
     @State private var straighten: Double
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw: String = LumaSliderStyle.ruler.rawValue
+
+    /// Whole degrees from −15 to 15: the stops on the straighten ruler.
+    private static let straightenStops: [String] = (-15...15).map { "\($0)°" }
 
     init(thumbnail: CGImage?, aspect: CGFloat, initialCrop: CGRect,
          initialStraighten: Double,
@@ -33,13 +37,17 @@ struct CropStraightenView: View {
         VStack(spacing: 18) {
             HStack {
                 Button("Cancel", action: onCancel)
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(size: 15, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.7))
                 Spacer()
-                Text("Crop & Straighten").font(.luma(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("Crop and").font(.luma(size: 16, weight: .light))
+                    Text("straighten").font(.luma(size: 16, weight: .bold))
+                }
+                .foregroundStyle(.white)
                 Spacer()
-                Button("Apply") { onApply(crop, straighten) }
-                    .foregroundStyle(LumaTheme.accentBright).fontWeight(.semibold)
+                // The one main action on this screen.
+                LumaMainPill(title: "Apply") { onApply(crop, straighten) }
             }
 
             GeometryReader { geo in
@@ -59,17 +67,24 @@ struct CropStraightenView: View {
             }
             .frame(height: 300)
 
-            // Straighten slider with a live degree readout.
+            // Straighten in whole degrees on the Appearance slider (ruler or
+            // dial). The ruler has no readout of its own, so the line above
+            // it stays; the dial draws its own title and big value.
             VStack(spacing: 6) {
-                HStack {
-                    Text("Straighten").font(.luma(size: 14, weight: .medium))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                    Spacer()
-                    Text("\(Int(straighten))°").font(.luma(size: 14).monospacedDigit())
-                        .foregroundStyle(.white)
+                if !isDial {
+                    HStack {
+                        Text("Straighten").font(.luma(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.55))
+                        Spacer()
+                        Text("\(Int(straighten))°").font(.luma(size: 13, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white)
+                    }
                 }
-                Slider(value: $straighten, in: -15...15, step: 1)
-                    .tint(LumaTheme.accentBright)
+                LumaStopsSlider(stops: Self.straightenStops,
+                                index: straightenIndex,
+                                title: "Straighten") { index in
+                    straighten = Double(index - 15)
+                }
             }
 
             HStack(spacing: 10) {
@@ -79,15 +94,26 @@ struct CropStraightenView: View {
                     straighten = 0
                     crop = .init(x: 0, y: 0, width: 1, height: 1)
                 } label: {
-                    Text("Clear").frame(maxWidth: .infinity)
+                    Text("Clear")
+                        .font(.luma(size: 13.5, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(LPanelStyle.glass, in: Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.plain).foregroundStyle(LumaTheme.textSecondary)
-                    .padding(.vertical, 10)
-                    .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .buttonStyle(.lumaPress)
+                .foregroundStyle(Color.white.opacity(0.6))
             }
         }
         .padding(20)
         .background(LumaTheme.background)
+    }
+
+    private var isDial: Bool { (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial }
+
+    /// The straighten value as a stop on the ruler (−15° is stop 0).
+    private var straightenIndex: Int {
+        min(max(Int(straighten.rounded()) + 15, 0), Self.straightenStops.count - 1)
     }
 
     @ViewBuilder private var imageLayer: some View {
@@ -107,11 +133,15 @@ struct CropStraightenView: View {
 
     private func cropPreset(_ title: String, _ rect: CGRect) -> some View {
         Button { crop = rect } label: {
-            Text(title).frame(maxWidth: .infinity)
+            Text(title)
+                .font(.luma(size: 13.5, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+                .background(LPanelStyle.glass, in: Capsule())
+                .contentShape(Capsule())
         }
-        .buttonStyle(.plain).foregroundStyle(.white)
-        .padding(.vertical, 10)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.lumaPress)
+        .foregroundStyle(Color.white.opacity(0.86))
     }
 
     private func fittedRect(in size: CGSize) -> CGSize {

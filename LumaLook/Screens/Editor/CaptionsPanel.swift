@@ -260,7 +260,10 @@ struct CaptionsPanel: View {
                 .font(.luma(size: 13))
                 .foregroundStyle(LumaTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            SolidCTA(title: "Generate captions", icon: "captions.bubble", height: 46) {
+            // The panel's confirm, white: the signal stays on Export, the
+            // editor's one main action, which sits above this drawer.
+            LPanelConfirmButton(title: "Generate captions", icon: "captions.bubble",
+                                height: 48, fullWidth: true) {
                 generate()
             }
             privacyNote
@@ -308,7 +311,7 @@ struct CaptionsPanel: View {
             HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
-                    .tint(LumaTheme.signal)
+                    .tint(.white)
                 Text(progressTitle)
                     .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(LumaTheme.textPrimary)
@@ -322,7 +325,7 @@ struct CaptionsPanel: View {
             }
             if let fraction = progressFraction {
                 ProgressView(value: fraction)
-                    .tint(LumaTheme.signal)
+                    .tint(.white)
             }
             Text(progressDetail)
                 .font(.luma(size: 12))
@@ -331,9 +334,7 @@ struct CaptionsPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var progressTitle: String {
@@ -395,9 +396,7 @@ struct CaptionsPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: Style, position, size
@@ -413,24 +412,31 @@ struct CaptionsPanel: View {
                     }
                 }
             }
+            // Room for the picked ring's glow.
+            .padding(.vertical, 4)
+            .padding(.leading, 2)
             .padding(.trailing, 20)
         }
         .lumaEdgeFade(leading: 0, trailing: 20)
     }
 
+    /// Where and how big, as text tabs (calm mock v2): position on the
+    /// left, size on the right.
     private var placementRow: some View {
-        HStack(spacing: 8) {
-            CaptionSegmented(labels: CaptionPosition.allCases.map(\.label),
-                             selected: CaptionPosition.allCases.firstIndex(of: currentPosition)) { index in
+        HStack(alignment: .bottom, spacing: 12) {
+            LPanelTabs(labels: CaptionPosition.allCases.map(\.label),
+                       selected: CaptionPosition.allCases.firstIndex(of: currentPosition),
+                       size: 13, spacing: 14) { index in
                 editor.setCaptionPlacement(position: CaptionPosition.allCases[index])
                 LumaHaptics.shared.tap()
             }
-            CaptionSegmented(labels: CaptionSize.allCases.map(\.label),
-                             selected: CaptionSize.allCases.firstIndex(of: currentSize)) { index in
+            Spacer(minLength: 4)
+            LPanelTabs(labels: CaptionSize.allCases.map(\.label),
+                       selected: CaptionSize.allCases.firstIndex(of: currentSize),
+                       size: 13, spacing: 12) { index in
                 editor.setCaptionPlacement(size: CaptionSize.allCases[index])
                 LumaHaptics.shared.tap()
             }
-            .frame(width: 104)
         }
     }
 
@@ -473,10 +479,8 @@ struct CaptionsPanel: View {
             .padding(.vertical, 8)
             .background {
                 if live {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LPanelStyle.glass)
                 }
             }
             .contentShape(Rectangle())
@@ -484,8 +488,9 @@ struct CaptionsPanel: View {
         .buttonStyle(.plain)
     }
 
-    /// The line's words, with the word being spoken in signal yellow while
-    /// the playhead is inside the line.
+    /// The line's words, with the word being spoken in bold white while the
+    /// playhead is inside the line (the list is interface, so it stays quiet;
+    /// the caption itself keeps its style colour in the picture).
     private func rowText(_ line: EditorState.OverlayItem, live: Bool) -> Text {
         let text = line.text ?? ""
         guard live else { return Text(text) }
@@ -501,7 +506,7 @@ struct CaptionsPanel: View {
         for (i, token) in tokens.enumerated() {
             if i > 0 { out = out + Text(" ") }
             if i == state.active {
-                out = out + Text(token).foregroundColor(LumaTheme.signal)
+                out = out + Text(token).foregroundColor(.white).bold()
             } else {
                 out = out + Text(token)
             }
@@ -514,15 +519,13 @@ struct CaptionsPanel: View {
             TextField("Caption", text: $draftText)
                 .font(.luma(size: 15, weight: .medium))
                 .foregroundStyle(LumaTheme.textPrimary)
-                .tint(LumaTheme.signal)
+                .tint(.white)
                 .focused($fieldFocused)
                 .submitLabel(.done)
                 .onSubmit { commitText(line) }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
+                .background(LPanelStyle.glassStrong, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             HStack(spacing: 8) {
                 timeNudger("Start", value: line.timelineOffset) { newStart in
                     editor.updateCaptionLine(id: line.id, text: line.text ?? "",
@@ -552,23 +555,14 @@ struct CaptionsPanel: View {
                 }
                 .buttonStyle(.lumaPress)
                 Spacer(minLength: 4)
-                Button {
+                // Confirming the line: a white pill, never the signal.
+                LPanelConfirmButton(title: "Done") {
                     commitText(line)
-                } label: {
-                    Text("Done")
-                        .font(.luma(size: 13, weight: .semibold))
-                        .foregroundStyle(LumaTheme.onLight)
-                        .padding(.horizontal, 16)
-                        .frame(height: 32)
-                        .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
-                .buttonStyle(.lumaPress)
             }
         }
         .padding(10)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func timeNudger(_ label: String, value: Double,
@@ -608,7 +602,7 @@ struct CaptionsPanel: View {
         .foregroundStyle(LumaTheme.textPrimary)
         .frame(maxWidth: .infinity)
         .frame(height: 34)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(LPanelStyle.glass, in: Capsule())
     }
 
     private func beginEditing(_ line: EditorState.OverlayItem) {
@@ -644,7 +638,7 @@ struct CaptionsPanel: View {
                     .font(.luma(size: 13.5, weight: .medium))
                     .foregroundStyle(LumaTheme.textPrimary)
             }
-            .tint(LumaTheme.signal)
+            .tint(LPanelStyle.toggleTint)
             if !isBurnedIn {
                 Text("The video stays clean. Share the SRT file with your post instead.")
                     .font(.luma(size: 12))
@@ -700,8 +694,8 @@ struct CaptionsPanel: View {
         .buttonStyle(.lumaPress)
     }
 
-    /// Emphasised = signal text on a faint signal rim (Regenerate, Open
-    /// Settings); otherwise a quiet panel pill.
+    /// Quiet glass pills. Emphasised (Regenerate, Open Settings) is one step
+    /// brighter, never the signal: that is kept for the main action.
     private func smallLabel(_ title: String, icon: String, emphasised: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -711,15 +705,12 @@ struct CaptionsPanel: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .foregroundStyle(emphasised ? LumaTheme.signal : LumaTheme.textPrimary)
+        .foregroundStyle(emphasised ? LumaTheme.textPrimary : Color.white.opacity(0.8))
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
         .frame(height: 34)
-        .background(emphasised ? LumaTheme.signal.opacity(0.1) : LumaTheme.surface,
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(emphasised ? LumaTheme.signal.opacity(0.45) : LumaTheme.edge, lineWidth: 1))
-        .contentShape(Rectangle())
+        .background(emphasised ? LPanelStyle.glassStrong : LPanelStyle.glass, in: Capsule())
+        .contentShape(Capsule())
     }
 
     // MARK: Actions
@@ -802,8 +793,9 @@ struct CaptionsPanel: View {
 
 // MARK: - Parts
 
-/// One caption style, previewed as "Aa" in that style. Picked = signal rim,
-/// as in the Night Lab captions mock.
+/// One caption style, previewed as "Aa" in that style. The previews keep their
+/// own style colour, because that is what gets exported into the video; the
+/// picked one wears the pale picked ring (calm mock v2).
 private struct CaptionStyleTile: View {
     let style: CaptionStyle
     let isOn: Bool
@@ -814,10 +806,8 @@ private struct CaptionStyleTile: View {
             VStack(spacing: 6) {
                 preview
                     .frame(width: 58, height: 44)
-                    .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(isOn ? LumaTheme.signal : LumaTheme.edge,
-                                      lineWidth: isOn ? 1.5 : 1))
+                    .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .pickedRing(isOn, cornerRadius: 10)
                 Text(style.label)
                     .font(.luma(size: 10.5, weight: .medium))
                     .foregroundStyle(isOn ? LumaTheme.textPrimary : LumaTheme.textMuted)
@@ -826,6 +816,8 @@ private struct CaptionStyleTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(style.label)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -863,49 +855,5 @@ private struct CaptionStyleTile: View {
                 .padding(.vertical, 1)
                 .background(Color.black, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
-    }
-}
-
-/// A compact segmented control for the drawer (30 pt tall).
-private struct CaptionSegmented: View {
-    let labels: [String]
-    let selected: Int?
-    let onSelect: (Int) -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(labels.indices, id: \.self) { index in
-                segment(index)
-            }
-        }
-        .padding(2)
-        .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
-    }
-
-    private func segment(_ index: Int) -> some View {
-        let isOn = index == selected
-        return Button {
-            onSelect(index)
-        } label: {
-            Text(labels[index])
-                .font(.luma(size: 12, weight: isOn ? .semibold : .medium))
-                .foregroundStyle(isOn ? LumaTheme.textPrimary : LumaTheme.textMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .background {
-                    if isOn {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(LumaTheme.control)
-                            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }

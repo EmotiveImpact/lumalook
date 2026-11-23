@@ -35,7 +35,7 @@ struct AudioLibrarySheet: View {
                     .foregroundStyle(LumaTheme.textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .background(LumaTheme.control, in: Capsule())
+                    .background(Color.white.opacity(0.09), in: Capsule())
             }
             .buttonStyle(.lumaPress)
         }

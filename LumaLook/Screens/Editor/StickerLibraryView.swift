@@ -19,19 +19,11 @@ struct StickerLibraryView: View {
     var body: some View {
         LumaScreen(title: "Stickers") {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     ForEach(Array(categories.enumerated()), id: \.offset) { index, cat in
-                        Button { category = index } label: {
-                            Text(cat.name)
-                                .font(.luma(size: 13, weight: .semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .foregroundStyle(category == index ? .black : .white)
-                                .background(category == index ? AnyShapeStyle(LumaTheme.accentBright)
-                                                             : AnyShapeStyle(LumaTheme.surface),
-                                            in: Capsule())
+                        LPanelFilterTab(title: cat.name, isOn: category == index) {
+                            category = index
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -44,7 +36,7 @@ struct StickerLibraryView: View {
                                 .font(.luma(size: 34))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 62)
-                                .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+                                .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .disabled(busy)
