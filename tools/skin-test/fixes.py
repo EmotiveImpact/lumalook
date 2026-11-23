@@ -2,8 +2,10 @@
 
     python3 fixes.py RENDER_DIR
 
-1. Engine fix (recipe looks): run CIColorControls on gamma-encoded values
-   (pivot at mid grey) with a soft toe, instead of in linear light.
+1. Engine fix (recipe looks), as built in SkinTrueTone.swift: contrast and
+   brightness run on lightness alone (on the gamma-encoded grey scale, pivot
+   at mid grey, soft toe and shoulder), saturation scales Oklab chroma, so
+   skin keeps its hue and chroma. Replaces CIColorControls in linear light.
 2. Recipe tweaks: for recipe looks that still fail after the engine fix, a
    small search over contrast, saturation, brightness and the warmth shift.
 3. Skin guard (film cubes): a hue-qualified correction baked into the cube
@@ -56,7 +58,7 @@ def kelvin_for(k, temp):
     return 1e6 / (m0 + k * (1e6 / temp - m0))
 
 
-def recipe_cube(look, r=None, space="srgb", toe=TOE, wb=1.0):
+def recipe_cube(look, r=None, space="lightness", toe=TOE, wb=1.0):
     r = dict(look["recipe"], **(r or {}))
     M = mired_scale(MATS[look["id"]], wb)
     return RM.apply_model(GRID, r, M, space=space, toe=toe).reshape(N, N, N, 3).astype(np.float32)
@@ -169,8 +171,11 @@ def job_recipe(look_id):
     look = dict(_LOOKS[look_id])
     out = {"id": look_id, "kind": "recipe"}
     # as shipped (re-measured so every row uses the same code path)
-    v0, mono = judge(measure(look, (1.0,))[0])
+    v0, _ = judge(measure(look, (1.0,))[0])
     out["now"] = brief(v0)
+    # recipes say what they are: no saturation is black and white, anything
+    # else is judged as colour (a bleach bypass still has to keep skin warm)
+    mono = look["recipe"]["saturation"] < 0.35
     # engine fix
     fixed = dict(look, lut=recipe_cube(look))
     res, ch = measure(fixed, (1.0, 0.75), RENDER / "thumbs_fix" / "engine" / look_id)
@@ -183,14 +188,21 @@ def job_recipe(look_id):
         r = look["recipe"]
         best = None
         cs = sorted({r["contrast"], *[c for c in (1.0, 1.05, 1.1, 1.15, 1.2) if c <= r["contrast"]]})
-        ss = sorted({r["saturation"], *[s for s in (0.9, 1.0, 1.05, 1.1) if s <= r["saturation"]]}) if not mono else [r["saturation"]]
+        if mono:
+            ss = [r["saturation"]]
+        elif r["saturation"] < 0.85:
+            # deliberately muted looks may give a little colour back to skin
+            ss = sorted({r["saturation"], round(min(0.9, r["saturation"] + 0.1), 2),
+                         round(min(0.9, r["saturation"] + 0.2), 2)})
+        else:
+            ss = sorted({r["saturation"], *[s for s in (0.9, 1.0, 1.05, 1.1) if s <= r["saturation"]]})
         bs = sorted({r["brightness"], *[b for b in (0.0, -0.01) if abs(b) <= abs(r["brightness"]) or r["brightness"] > 0]})
         wbs = [1.0, 0.7, 0.5] if (r["temperature"] != 6500 or r["tint"] != 0) else [1.0]
         vigs = sorted({r["vignette"], min(r["vignette"], 0.3)})
         cands = []
         for c, s_, b, wb, vg in itertools.product(cs, ss, bs, wbs, vigs):
             # distance from the original recipe: prefer the smallest change
-            dist = (abs(c - r["contrast"]) / 0.05 + abs(s_ - r["saturation"]) / 0.05
+            dist = (abs(c - r["contrast"]) / 0.05 + abs(s_ - r["saturation"]) / (0.1 if s_ > r["saturation"] else 0.05)
                     + abs(b - r["brightness"]) / 0.01 + (1 - wb) / 0.3 + abs(vg - r["vignette"]) / 0.2)
             cands.append((dist, c, s_, b, wb, vg))
         cands.sort()
@@ -285,7 +297,9 @@ if __name__ == "__main__":
     for d in ("chart_fix", "guarded_cubes", "thumbs_fix"):
         (RENDER / d).mkdir(parents=True, exist_ok=True)
     ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text())]
-    if ONLY:
+    if ONLY == ["@recipes"]:
+        ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text()) if l["recipe"]]
+    elif ONLY:
         ids = [i for i in ids if any(s in i for s in ONLY)]
     results = {}
     if ONLY and (RENDER / "fixes.json").exists():

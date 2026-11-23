@@ -33,6 +33,74 @@ def fit_tt_matrix(look):
     return np.eye(3, dtype=np.float32)
 
 
+# ---------------------------------------------------------------- Oklab
+
+_M1 = np.array([[0.4122214708, 0.5363325363, 0.0514459929],
+                [0.2119034982, 0.6806995451, 0.1073969566],
+                [0.0883024619, 0.2817188376, 0.6299787005]])
+_M2 = np.array([[0.2104542553, 0.7936177850, -0.0040720468],
+                [1.9779984951, -2.4285922050, 0.4505937099],
+                [0.0259040371, 0.7827717662, -0.8086757660]])
+_M1i, _M2i = np.linalg.inv(_M1), np.linalg.inv(_M2)
+
+
+def oklab(lin):
+    return np.cbrt(lin @ _M1.T) @ _M2.T
+
+
+def oklab_to_lin(lab):
+    return (lab @ _M2i.T) ** 3 @ _M1i.T
+
+
+def tone(e, c, b, toe=0.2):
+    """The tone curve, on gamma-encoded values: contrast about mid grey,
+    brightness added after it, then a soft toe (black lands on black, half
+    the slope kept) and the same shoulder at the top (white lands on white),
+    so nothing clips."""
+    out = c * (e - 0.5) + 0.5 + b
+    if toe <= 0:
+        return np.clip(out, 0, 1)
+    def bend(y, lo):
+        t = max(toe, 3 * -lo)
+        k = -lo / (lo - t) ** 2
+        return np.where(y < t, np.where(y < lo, 0.0, y + k * (y - t) ** 2), y)
+    lo = 0.5 - 0.5 * c + b
+    if lo < 0:
+        out = bend(out, lo)
+    hi = 0.5 + 0.5 * c + b
+    if hi > 1:
+        out = 1 - bend(1 - out, 1 - hi)
+    return np.clip(out, 0, 1)
+
+
+def skin_true(lin, sat, c, b, toe=0.2):
+    """The engine fix as built (SkinTrueTone.swift): saturation scales Oklab
+    chroma, and contrast and brightness run on lightness alone, on the
+    gamma-encoded grey scale, so skin keeps its hue and chroma while it gets
+    lighter or darker. Out-of-gamut results lose chroma, never lightness."""
+    lab = oklab(np.clip(lin, 0, 1).astype(np.float64))
+    L = np.clip(lab[..., 0], 0, 1)
+    e = S.lin_to_srgb(L ** 3).astype(np.float64)
+    L2 = np.cbrt(S.srgb_to_lin(tone(e, c, b, toe)).astype(np.float64))
+    ab = lab[..., 1:] * sat
+    lo_k, hi_k = np.zeros(L.shape), np.ones(L.shape)
+    def fits(k):
+        v = oklab_to_lin(np.concatenate([L2[..., None], ab * k[..., None]], -1))
+        return np.all((v >= -1e-6) & (v <= 1 + 1e-6), -1)
+    ok = fits(hi_k)
+    if not ok.all():
+        for _ in range(14):
+            mid = (lo_k + hi_k) / 2
+            f = fits(mid)
+            lo_k = np.where(f, mid, lo_k)
+            hi_k = np.where(f, hi_k, mid)
+        k = np.where(ok, 1.0, lo_k)
+    else:
+        k = hi_k
+    v = oklab_to_lin(np.concatenate([L2[..., None], ab * k[..., None]], -1))
+    return S.lin_to_srgb(np.clip(v, 0, 1)).astype(np.float32)
+
+
 def apply_model(rgb, r, M, space="linear", toe=0.0):
     """space='linear' reproduces the app today; space='srgb' runs the
     saturation, contrast and brightness on gamma-encoded values (pivot at
@@ -40,6 +108,8 @@ def apply_model(rgb, r, M, space="linear", toe=0.0):
     bottom end so contrast can no longer clip shadows to black."""
     x = S.srgb_to_lin(rgb)
     v = x @ M.T
+    if space == "lightness":
+        return skin_true(v, r["saturation"], r["contrast"], r["brightness"], toe or 0.2)
     if space == "linear":
         v = r["saturation"] * v + (1 - r["saturation"]) * (v @ W)[..., None]
         v = r["contrast"] * (v - 0.5) + 0.5 + r["brightness"]

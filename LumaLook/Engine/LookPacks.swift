@@ -214,9 +214,8 @@ enum PackCatalog {
                 PackLook(code: "VV100", name: "VV100 · Vivid Slide 100",
                          character: "The faster vivid landscape chrome.",
                          cubeFile: "FS_VV100.cube"),
-                PackLook(code: "SX200", name: "SX200 · Cross Neg 200",
-                         character: "Consumer negative through slide chemistry.",
-                         cubeFile: "FS_SX200.cube"),
+                // SX200 unlisted 23 Nov 2026: fails the skin test on Black and
+                // brown skin even with the skin guard (tools/skin-test). Cube kept.
                 PackLook(code: "EC100G", name: "EC100G · Warm Chrome 100",
                          character: "The warm-balanced professional chrome.",
                          cubeFile: "FS_EC100G.cube"),
@@ -335,9 +334,8 @@ enum PackCatalog {
                 PackLook(code: "PX70C", name: "PX70C · Integral Cold",
                          character: "The cool-cast integral batch.",
                          cubeFile: "FS_PX70C.cube"),
-                PackLook(code: "PX70", name: "PX70 · Integral Classic",
-                         character: "The original integral instant look.",
-                         cubeFile: "FS_PX70.cube"),
+                // PX70 unlisted 23 Nov 2026: fails the skin test on Black and
+                // brown skin even with the skin guard (tools/skin-test). Cube kept.
                 PackLook(code: "PX100W", name: "PX100W · Silver Shade Warm",
                          character: "Monochrome-ish silver shade, warm drift.",
                          cubeFile: "FS_PX100W.cube"),
@@ -353,12 +351,10 @@ enum PackCatalog {
                 PackLook(code: "PX680C", name: "PX680C · Integral 600 Cold",
                          character: "Fridge-stored 600 with cyan whispers.",
                          cubeFile: "FS_PX680C.cube"),
-                PackLook(code: "TZ0", name: "TZ0 · Expired Instant",
-                         character: "Time-Zero long past its date: gold rot, dream haze.",
-                         cubeFile: "FS_TZ0.cube"),
-                PackLook(code: "TZ0C", name: "TZ0C · Expired Instant Cold",
-                         character: "The expired batch that went blue instead.",
-                         cubeFile: "FS_TZ0C.cube"),
+                // TZ0 unlisted 23 Nov 2026: fails the skin test on Black and
+                // brown skin even with the skin guard (tools/skin-test). Cube kept.
+                // TZ0C unlisted 23 Nov 2026: fails the skin test on Black and
+                // brown skin even with the skin guard (tools/skin-test). Cube kept.
                 PackLook(code: "FP100", name: "FP100 · Pack Film 100",
                          character: "The beloved peel-apart colour stock.",
                          cubeFile: "FS_FP100.cube"),
@@ -377,9 +373,8 @@ enum PackCatalog {
                 PackLook(code: "PL665", name: "PL665 · Pro Pack Mono",
                          character: "The fine-art pack film with the usable negative.",
                          cubeFile: "FS_PL665.cube"),
-                PackLook(code: "IN669C", name: "IN669C · Instant Cold",
-                         character: "The classic pack film, cold-stored.",
-                         cubeFile: "FS_IN669C.cube"),
+                // IN669C unlisted 23 Nov 2026: fails the skin test on Black and
+                // brown skin even with the skin guard (tools/skin-test). Cube kept.
                 PackLook(code: "PL690", name: "PL690 · Pack Film 690",
                          character: "The last, best colour pack film.",
                          cubeFile: "FS_PL690.cube"),
@@ -455,7 +450,7 @@ enum PackCatalog {
             looks: [
                 PackLook(code: "CN83", name: "CN83 · Hollywood Print",
                          character: "The teal-and-amber print stock every blockbuster graded to.",
-                         recipe: LookRecipe(temperature: 5200, tint: -10, contrast: 1.18,
+                         recipe: LookRecipe(temperature: 5550, tint: -7, contrast: 1.18,
                                             saturation: 1.05, brightness: -0.02, vignette: 0.4, bloom: 0.2)),
                 PackLook(code: "CN93", name: "CN93 · Premiere Night",
                          character: "Champagne highlights over velvet shadows: the red-carpet grade.",
@@ -463,12 +458,12 @@ enum PackCatalog {
                                             saturation: 0.98, brightness: 0, vignette: 0.45, bloom: 0.35)),
                 PackLook(code: "CN71", name: "CN71 · Night Street",
                          character: "Sodium-lamp warmth against blue night, like city films after dark.",
-                         recipe: LookRecipe(temperature: 4600, tint: -6, contrast: 1.2,
+                         recipe: LookRecipe(temperature: 5400, tint: -3, contrast: 1.2,
                                             saturation: 1.1, brightness: -0.04, vignette: 0.5, bloom: 0.3)),
                 PackLook(code: "CN12", name: "CN12 · Bleach Bypass",
                          character: "Silver retained: crushed colour, brutal contrast, war-film grit.",
                          recipe: LookRecipe(temperature: 6300, tint: 0, contrast: 1.32,
-                                            saturation: 0.55, brightness: -0.02, vignette: 0.4, bloom: 0.1)),
+                                            saturation: 0.75, brightness: -0.02, vignette: 0.3, bloom: 0.1)),
                 PackLook(code: "CN44", name: "CN44 · Anamorphic Dusk",
                          character: "Indigo dusk with ember highlights, widescreen melancholy.",
                          recipe: LookRecipe(temperature: 5100, tint: 10, contrast: 1.1,
@@ -509,16 +504,16 @@ enum PackCatalog {
             looks: [
                 PackLook(code: "LL1", name: "Neon Nights",
                          character: "Magenta-soaked shadows, electric highlights, the city humming.",
-                         recipe: LookRecipe(temperature: 7200, tint: 18, contrast: 1.15,
+                         recipe: LookRecipe(temperature: 6950, tint: 13, contrast: 1.15,
                                             saturation: 1.25, brightness: -0.02, vignette: 0.4, bloom: 0.45)),
                 PackLook(code: "LL2", name: "Night Drive",
                          character: "Blue hour forever: cool mids, headlight blooms.",
-                         recipe: LookRecipe(temperature: 8200, tint: -4, contrast: 1.12,
+                         recipe: LookRecipe(temperature: 7600, tint: -3, contrast: 1.12,
                                             saturation: 0.95, brightness: -0.03, vignette: 0.45, bloom: 0.35)),
                 PackLook(code: "LL3", name: "Afrobeats Glow",
                          character: "Sun-drenched saturation with golden skin, festival light.",
                          recipe: LookRecipe(temperature: 5300, tint: 8, contrast: 1.1,
-                                            saturation: 1.3, brightness: 0.03, vignette: 0.25, bloom: 0.4)),
+                                            saturation: 1.1, brightness: 0.03, vignette: 0.25, bloom: 0.4)),
             ]
         ),
         // The Night Lab launch pack: five night looks, each tuned for the
@@ -538,14 +533,14 @@ enum PackCatalog {
                 PackLook(code: "AD1", name: "AD1 · Afrobeats Glow",
                          character: "Flash, packed rooms",
                          recipe: LookRecipe(temperature: 5400, tint: 10, contrast: 1.12,
-                                            saturation: 1.26, brightness: 0.03, vignette: 0.3, bloom: 0.4)),
+                                            saturation: 1.1, brightness: 0.03, vignette: 0.3, bloom: 0.4)),
                 PackLook(code: "AD2", name: "AD2 · Neon Nights",
                          character: "Practical neon",
-                         recipe: LookRecipe(temperature: 7400, tint: 20, contrast: 1.16,
+                         recipe: LookRecipe(temperature: 7100, tint: 14, contrast: 1.16,
                                             saturation: 1.3, brightness: -0.02, vignette: 0.45, bloom: 0.4)),
                 PackLook(code: "AD3", name: "AD3 · Night Drive",
                          character: "Dashboard red",
-                         recipe: LookRecipe(temperature: 4700, tint: 12, contrast: 1.2,
+                         recipe: LookRecipe(temperature: 5450, tint: 6, contrast: 1.2,
                                             saturation: 1.12, brightness: -0.04, vignette: 0.55, bloom: 0.3)),
                 PackLook(code: "AD4", name: "AD4 · Cine Negative",
                          character: "Stage haze",
@@ -554,7 +549,7 @@ enum PackCatalog {
                 PackLook(code: "AD5", name: "AD5 · London Rain",
                          character: "Wet streets",
                          recipe: LookRecipe(temperature: 7600, tint: -6, contrast: 1.08,
-                                            saturation: 0.74, brightness: -0.02, vignette: 0.45, bloom: 0.15)),
+                                            saturation: 0.9, brightness: -0.02, vignette: 0.45, bloom: 0.15)),
             ],
             isNew: true
         ),
@@ -789,6 +784,30 @@ enum PackInstaller {
             }
         }
         return text
+    }
+
+    /// One installed recipe look to bake again: where its cube lives and the
+    /// recipe it came from. Film stocks (bundled files) are never baked.
+    struct BakeJob {
+        let url: URL
+        let recipe: LookRecipe
+        let title: String
+    }
+
+    /// Installed recipe looks whose cubes the True Colour engine should bake
+    /// again (after the engine changed, or the switch flipped). Matched by
+    /// the file they were installed from, then by name.
+    @MainActor
+    static func recipeBakeJobs(in repository: LUTRepository) -> [BakeJob] {
+        repository.luts.compactMap { lut in
+            guard let packID = lut.packID,
+                  let pack = PackCatalog.packs.first(where: { $0.id == packID }) else { return nil }
+            let stem = (lut.originalFileName as NSString).deletingPathExtension
+            guard let look = pack.looks.first(where: {
+                $0.cubeFile == nil && ($0.name == stem || $0.name == lut.displayName)
+            }) else { return nil }
+            return BakeJob(url: repository.fileURL(for: lut), recipe: look.recipe, title: look.name)
+        }
     }
 
     /// Bakes every look in the pack to a .cube and imports it into the LUT

@@ -1,9 +1,9 @@
 # Skin test: the Mac half of tools/skin-test.
 #
-# Core Image only exists on Apple platforms, so this job bakes every recipe
-# look through the real Core Image filters (the same code path as
-# LookPipeline.applyRecipe) into small colour cubes, writes probe images for
-# bloom and vignette, and fetches the licensed test portraits listed in
+# Core Image only exists on Apple platforms, so this job bakes every look
+# through the app's own True Colour engine on real Core Image (TrueColour.swift
+# compiled in, the same code path as LookPipeline) into small colour cubes,
+# and fetches the licensed test portraits listed in
 # tools/skin-test/candidates.txt. It commits the results back to the branch
 # (tools/skin-test/out) so the rest of the test, which is plain Python, can
 # run anywhere. It only runs when the skin-test inputs change.
@@ -14,6 +14,8 @@ on:
     branches: ['claude/**']
     paths:
       - 'tools/skin-test/bake_recipes.swift'
+      - 'tools/skin-test/bake_truecolour.swift'
+      - 'LumaLook/Engine/TrueColour.swift'
       - 'tools/skin-test/extract_looks.py'
       - 'tools/skin-test/candidates.txt'
       - '.github/workflows/skin-test.yml'
@@ -36,12 +38,19 @@ jobs:
       - name: List the looks from the app's sources
         run: python3 tools/skin-test/extract_looks.py
 
-      - name: Bake recipe looks through Core Image
+      # out/luts and out/probes hold the bake of the looks as they shipped
+      # before the True Colour fix (bake_recipes.swift, the old linear-light
+      # CIColorControls path). They are the "before" of the skin test, so they
+      # are kept, not baked again. Run bake_recipes.swift by hand to redo them.
+
+      - name: Bake every look through the app's True Colour engine
         run: |
-          rm -rf tools/skin-test/out/luts tools/skin-test/out/probes
-          swift tools/skin-test/bake_recipes.swift tools/skin-test/looks.json tools/skin-test/out \
-            LumaLook/Resources/HeroPhotos/hero_golden.jpg
-          ls -la tools/skin-test/out/luts | head
+          rm -rf tools/skin-test/out/luts_tc tools/skin-test/out/luts_classic tools/skin-test/out/film_tc
+          mkdir -p /tmp/tc
+          cp tools/skin-test/bake_truecolour.swift /tmp/tc/main.swift
+          swiftc -O -o /tmp/tc/bake /tmp/tc/main.swift LumaLook/Engine/TrueColour.swift \
+            LumaLook/Engine/LUTParser.swift LumaLook/Engine/LUTDensifier.swift
+          /tmp/tc/bake tools/skin-test/looks.json tools/skin-test/out LumaLook/Resources/FilmLUTs
           du -sh tools/skin-test/out/*
 
       - name: Fetch the candidate portraits (Unsplash and Pexels licences)
@@ -70,7 +79,7 @@ jobs:
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add tools/skin-test/out tools/skin-test/looks.json
           if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
-          git commit -m "Skin test: Core Image bake and test portraits (from the Mac runner)"
+          git commit -m "Skin test: True Colour bake on Core Image (from the Mac runner)"
           for i in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
             sleep 5
