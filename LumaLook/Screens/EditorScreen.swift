@@ -119,23 +119,32 @@ private struct LDValueTool: View {
     }
 }
 
-/// A quiet glass pill (Mute, Duck under voice, Loop). On is a brighter
-/// glass step with white text; off is white at 9%. No accent, no outline.
+/// A quiet glass pill (Mute, Duck under voice, Loop). Off is white at 7%
+/// with light text; on is near-white with ink text, as in the calm mock's
+/// music panel. No accent, no outline.
 private struct LDChip: View {
     let title: String
     var selected = false
     var enabled = true
     let action: () -> Void
 
+    private var textColour: Color {
+        selected ? Color(hex: 0x0B0C0E) : Color.white.opacity(0.8)
+    }
+
+    private var fill: Color {
+        selected ? Color.white.opacity(0.9) : Color.white.opacity(0.07)
+    }
+
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(selected ? Color.white : Color.white.opacity(0.78))
+                .font(.luma(size: 13.5, weight: .semibold))
+                .foregroundStyle(textColour)
                 .lineLimit(1)
-                .padding(.horizontal, 12)
-                .frame(height: 30)
-                .background(Color.white.opacity(selected ? 0.22 : 0.09), in: Capsule())
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .background(fill, in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
@@ -3313,6 +3322,19 @@ private struct EditorContent: View {
 
     // MARK: Adjustment layers
 
+    /// A layer's look name in the look's own colour; a bare LUT stays white.
+    @ViewBuilder
+    private func adjustmentLayerName(_ name: String) -> some View {
+        if name.isEmpty {
+            Text("LUT")
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white)
+        } else {
+            LookNameText(name, colour: LookSignature.colour(forLookNamed: name),
+                         size: 13.5, weight: .medium)
+        }
+    }
+
     @ViewBuilder
     private var adjustmentPanel: some View {
         LDCaption("Grade a span", value: "\(editor.adjustmentLayers.count)")
@@ -3335,8 +3357,12 @@ private struct EditorContent: View {
                             .overlay(alignment: .bottomTrailing) {
                                 if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                             }
-                            Text(look.name).font(.luma(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55)).lineLimit(1).frame(width: 62)
+                            // The look's name in its own colour (Dot mode:
+                            // grey with a dot).
+                            LookNameText(LookSignature.title(in: look.name), colour: look.signature,
+                                         size: 11, weight: .medium,
+                                         quietColour: Color.white.opacity(0.55))
+                                .frame(width: 62)
                         }
                     }
                     .buttonStyle(.lumaPress)
@@ -3362,8 +3388,7 @@ private struct EditorContent: View {
         }
         ForEach(editor.adjustmentLayers) { layer in
             HStack(spacing: 10) {
-                Text(layer.grade.baseLookName.isEmpty ? "LUT" : layer.grade.baseLookName)
-                    .font(.luma(size: 13.5, weight: .medium)).foregroundStyle(.white)
+                adjustmentLayerName(layer.grade.baseLookName)
                 Spacer()
                 Text(LDFormat.secs(layer.duration))
                     .font(.luma(size: 12.5, weight: .medium, design: .monospaced))
