@@ -49,6 +49,7 @@ python3 export_cubes.py RENDER_DIR OUT_DIR  # guarded cubes as .cube files
 # after the Mac runner has baked the True Colour engine (skin-test.yml)
 python3 verify.py RENDER_DIR                # before, on, off, and the research targets
 python3 after_sheets.py RENDER_DIR OUT_DIR  # before and after sheets and PDF
+python3 try_photos.py OUT.jpg PHOTO...      # any photo: as shipped, True Colour off and on
 ```
 
 Needs numpy, scipy and Pillow.
@@ -73,3 +74,18 @@ purpose. Two extreme low-key frames are stress tests and count half.
   one bad neon frame and at most 2 bad chart cells.
 - **Rework**: 4 or more main frames bad, or 3 with 6 bad chart cells.
 - **Tweak**: everything in between.
+
+## True Colour results (23 Nov 2026)
+
+From the Mac runner's Core Image bake of the shipping engine, at 100%
+intensity unless stated. "Near" means mild flags only.
+
+| | Skin-true before | True Colour on | On at the 75% default | Bad main frames |
+|---|---|---|---|---|
+| Recipe looks (31) | 0 | 26 (5 near) | 31 | 219 to 0 |
+| Film looks (97) | 40 | 78 (19 near, none to rework) | 90 | 79 to 12 |
+| All looks (128) | 40 | 104 | 121 | 298 to 12 |
+
+With True Colour off, 54 of 128 are skin-true: the linear-light bug stays
+fixed either way. Monk 10 keeps at least 0.20 Oklab L on 125 of 128 looks
+(CP2383, CP3513 and CP2393 sit at 0.18 to 0.19).
