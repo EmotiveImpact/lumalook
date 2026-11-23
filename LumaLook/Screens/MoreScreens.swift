@@ -513,18 +513,28 @@ struct FilterStoreView: View {
     private func heroBuyTitle(_ pack: LookPack, installed: Bool) -> String {
         if installed { return "In library · Open" }
         if storeService.purchaseInFlight { return "Buying" }
-        if storeService.ownsPack(pack.id) { return pack.isFree ? "Get free" : "Install" }
+        if storeService.ownsPack(pack.id) { return pack.isFree ? "Install free" : "Install" }
         if pack.isProIncluded { return "Unlock with Pro" }
         return "Buy · \(StoreNav.price(pack, storeService))"
     }
 
     /// A paid pack buys right here through StoreKit, exactly as the pack
-    /// page does, and installs once the purchase goes through. Everything
-    /// else (owned, free, Pro only, or no product from the App Store yet)
-    /// opens the pack page or the library, where the full story is.
+    /// page does, and installs once the purchase goes through. A pack you
+    /// already own (free, bought or with Pro) installs straight away, as its
+    /// "Install" label says. Everything else (Pro only, or no product from
+    /// the App Store yet) opens the pack page, where the full story is; an
+    /// installed pack opens the library.
     private func heroBuy(_ pack: LookPack) {
         let installed = app.packStore.isInstalled(pack)
-        guard !installed, !storeService.ownsPack(pack.id), !pack.isProIncluded,
+        if !installed, storeService.ownsPack(pack.id) {
+            if StoreNav.install(pack, app: app) > 0 {
+                LumaHaptics.shared.tap()
+            } else {
+                StoreNav.open(pack, installed: false, app: app)
+            }
+            return
+        }
+        guard !installed, !pack.isProIncluded,
               let product = storeService.packProducts[pack.id] else {
             StoreNav.open(pack, installed: installed, app: app)
             return
@@ -1123,7 +1133,8 @@ struct FilterPackDetailView: View {
             StoreGlassPill(title: "Try on your clip", icon: "wand.and.stars") {
                 tab = .looks
                 // The panel lives on the Looks tab: let it appear first.
-                DispatchQueue.main.async {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(60))
                     withAnimation(.easeOut(duration: 0.3)) {
                         proxy.scrollTo(Self.tryOnID, anchor: .center)
                     }
