@@ -698,16 +698,14 @@ struct BackArrow: View {
 }
 
 /// The app's legal destinations, in one place so the paywall footer and the
-/// Settings ABOUT rows can never drift apart. Both are overridable from
-/// Info.plist (`LLPrivacyPolicyURL` / `LLTermsOfUseURL`) — set those to the
-/// real hosted documents before submission; `terms` otherwise falls back to
-/// Apple's standard EULA, which is the default agreement for apps that do not
-/// supply their own.
+/// Settings ABOUT rows can never drift apart. Both point at the documents
+/// hosted on lumalook.app (the `website/` folder) and stay overridable from
+/// Info.plist (`LLPrivacyPolicyURL` / `LLTermsOfUseURL`).
 enum LumaLegal {
     static let privacy = url(forInfoKey: "LLPrivacyPolicyURL",
-                             fallback: "https://emotiveimpact.com/lumalook/privacy")
+                             fallback: "https://lumalook.app/privacy")
     static let terms = url(forInfoKey: "LLTermsOfUseURL",
-                           fallback: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
+                           fallback: "https://lumalook.app/terms")
 
     private static func url(forInfoKey key: String, fallback: String) -> URL {
         if let configured = Bundle.main.object(forInfoDictionaryKey: key) as? String,
