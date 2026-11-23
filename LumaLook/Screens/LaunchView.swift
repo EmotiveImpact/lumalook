@@ -357,7 +357,7 @@ private struct LaunchDevelopFrame: View {
     private var wordmark: some View {
         HStack(spacing: 12) {
             LaunchMark(size: 25)
-            Text("lumalook")
+            Text("Lumalook")
                 .font(.luma(size: 42, weight: .bold))
                 .tracking(CGFloat(42 * LaunchTimeline.mix(0.25, -0.05, word)))
                 .foregroundStyle(LumaTheme.textPrimary)

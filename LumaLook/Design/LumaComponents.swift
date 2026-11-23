@@ -204,15 +204,15 @@ struct LumaHeader: View {
 
 // MARK: - Wordmark
 
-/// The Lumalook mark: a signal-yellow frame square and the lower-case name,
-/// set tight in Inter Bold.
+/// The Lumalook mark: a signal-yellow frame square and the name with a
+/// capital L, set tight in Inter Bold.
 struct LumaWordmark: View {
     var size: CGFloat = 20
 
     var body: some View {
         HStack(spacing: size * 0.32) {
             LumaMark(size: size * 0.66)
-            Text("lumalook")
+            Text("Lumalook")
                 .font(.luma(size: size, weight: .bold))
                 .tracking(-0.05 * size)
                 .foregroundStyle(LumaTheme.textPrimary)

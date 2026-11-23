@@ -9,7 +9,7 @@ struct TemplateLibraryView: View {
     @ObservedObject var editor: EditorState
     @Environment(\.dismiss) private var dismiss
 
-    private var templates: [VideoTemplate] { TemplateLibrary.all }
+    private var templates: [VideoTemplate] { TemplateLibrary.shown }
 
     var body: some View {
         LumaScreen(title: "Templates") {

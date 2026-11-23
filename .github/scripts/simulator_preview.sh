@@ -137,6 +137,9 @@ shot 10e-editor-captions 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEE
 shot 10f-editor-speed 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_RAMP=hero" "${P}SEED_TOOLPANEL=speed"
 shot 10g-editor-transition 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=transition"
 shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
+# A music lane selected: its panel (Cut to the beat hidden while the flag is off).
+shot 10i-editor-music-lane 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" \
+  "${P}SEED_MUSIC=$ROOT/LumaLook/Resources/AudioLibrary/pad_warm.m4a" "${P}SEED_AUDIOPANEL=music"
 shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
 # Camera A: pull-up Pro, the looks sheet, the thumb fan, sideways, the ask at
@@ -165,7 +168,7 @@ shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).
 shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
-# Home scrolled to Cut to the beat: the top row has become the top bar.
+# Home scrolled to the template rail: the top row has become the top bar.
 shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
 
 # A short recording of the app moving: onboarding, the tabs, the grade
