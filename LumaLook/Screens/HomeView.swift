@@ -2,48 +2,57 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
-/// Night Lab Home, "AF1 Viewfinder reel": direction A's edge-to-edge reel of
-/// tonight's looks with direction F's look strip. Tapping a look in the strip
-/// pauses the reel and regrades whoever is on screen; tapping the picture
-/// goes back to the reel. The picture is left clean: no focus brackets or
-/// thirds grid over it (Edem, 23 Nov 2026).
+/// Home, "AF1 Viewfinder reel" in the calm coat with the colour back (calm
+/// mock v2, other-screens-v2/01-home.jpg). The reel of tonight's looks runs
+/// edge to edge under the top bar with thin story bars and nothing drawn over
+/// the picture itself, then fades into the page. Tonight's look is the
+/// headline: its name and its Try button wear that look's own colour. The
+/// strip under it shows each code in its look's colour; tapping one pauses
+/// the reel and regrades whoever is on screen, and the picked tile wears the
+/// pale ring. Tapping the picture goes back to the reel.
 ///
-/// Top to bottom: the reel (story bars and the greeting on it), the Resume
-/// pill straddling its bottom edge, Shoot and Edit a clip with the
-/// quick starts, Templates (Cut to the beat templates when
-/// `LumaFeatures.cutToTheBeat` is on), Looks (For you | Recents),
-/// Continue editing, and the pack spotlight.
+/// Top to bottom: the reel (story bars, Tonight's look, Try this look and
+/// All looks, the strip), the Resume row, four quiet tiles (Edit a clip,
+/// Edit a photo, Templates, Import LUT), then calm captioned grids:
+/// Templates (Cut to the beat templates when `LumaFeatures.cutToTheBeat` is
+/// on, still as their rail), Looks (Looks for you | Recents), Continue
+/// editing and the pack spotlight. Shooting lives on the yellow tab shutter,
+/// in the same place on every tab; Try this look takes tonight's look to the
+/// camera.
 ///
-/// The top row (the wordmark, search and the avatar) is pinned. At rest it
-/// sits on the reel above the greeting; as the page scrolls it rises, tightens
-/// and gains the page's ink behind it, becoming the top bar that everything
-/// scrolls under.
+/// The top row (the wordmark, Pro and You) is pinned. At rest it sits on the
+/// reel; as the page scrolls the page's ink fades in behind it, so it becomes
+/// the top bar that everything scrolls under.
 ///
-/// First run (no projects): "Shoot or edit your first clip" under the
-/// greeting, no Resume pill and no Continue editing.
+/// First run (no projects): "Welcome to Lumalook" with Edit a clip (the main
+/// action), Edit a photo and Import, then "Or start from a template". No
+/// Resume row and no Continue editing.
 ///
 /// The avatar opens You; there is no crown or gear here any more. The Store
 /// is folded into Looks, so Home links to the pack page and the Looks tab,
 /// never to the old Store tab.
 struct HomeView: View {
     @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var lookTiles = HomeLookTileRender()
     @State private var looksMode: HomeLooksMode = .forYou
-    /// Which of tonight's three looks the reel is on.
+    /// Which of tonight's looks the reel is on.
     @State private var reelIndex = 0
     /// A look picked in the reel's strip (preset name). It pauses the reel
     /// and regrades the frame on screen; nil lets the reel cycle.
     @State private var reelPick: String? = nil
+    /// "See all" on the template grid shows every template in place.
+    @State private var showsAllTemplates = false
     /// How far the top row has turned into the top bar (0 at rest, 1 once
-    /// the greeting has scrolled away). Held in @State, not @StateObject, so
-    /// HomeView doesn't observe it: only the bar and the greeting do, and
+    /// the page has scrolled a little). Held in @State, not @StateObject, so
+    /// HomeView doesn't observe it: only the bar and the story bars do, and
     /// scrolling never redraws the rest of the page.
     @State private var scroll = HomeScrollProgress()
 
-    /// Scroll target for the "Templates" quick start.
+    /// Scroll target for the "Templates" quick tile.
     static let beatAnchor = "home.cutToTheBeat"
-    /// LUMA_SEED_HOMESCROLL (Debug): open Home scrolled down to the template rail.
+    /// LUMA_SEED_HOMESCROLL (Debug): open Home scrolled down to the templates.
     private static let seedScroll: Bool = {
         #if DEBUG
         return ProcessInfo.processInfo.environment["LUMA_SEED_HOMESCROLL"] == "1"
@@ -52,22 +61,30 @@ struct HomeView: View {
         #endif
     }()
     private static let scrollSpace = "home.scroll"
+    /// Looks in the Looks grid (two rows); All looks opens the rest.
+    private static let looksShown = 4
 
-    /// About three quarters of the screen, like the mock.
-    static func reelHeight(screen: CGFloat) -> CGFloat {
-        min(720, max(560, (screen * 0.74).rounded()))
+    /// The reel's height: about 600 pt on an iPhone 17 Pro like the mock,
+    /// shorter on the first run, where the copy is the welcome.
+    static func reelHeight(screen: CGFloat, isFirstRun: Bool) -> CGFloat {
+        if isFirstRun {
+            return min(540, max(440, (screen * 0.54).rounded()))
+        }
+        return min(660, max(540, (screen * 0.68).rounded()))
     }
 
     var body: some View {
         GeometryReader { geo in
             let safeTop = geo.safeAreaInsets.top
+            let works = self.works
             let reelHeight = HomeView.reelHeight(
-                screen: geo.size.height + safeTop + geo.safeAreaInsets.bottom)
+                screen: geo.size.height + safeTop + geo.safeAreaInsets.bottom,
+                isFirstRun: works.isEmpty)
             ZStack(alignment: .top) {
                 LumaTheme.background.ignoresSafeArea()
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
-                        page(safeTop: safeTop, reelHeight: reelHeight, scrollToBeat: {
+                        page(safeTop: safeTop, reelHeight: reelHeight, works: works, scrollToTemplates: {
                             withAnimation(.easeInOut(duration: 0.35)) {
                                 proxy.scrollTo(HomeView.beatAnchor, anchor: .top)
                             }
@@ -86,7 +103,7 @@ struct HomeView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .modifier(HomeScrollTracker(scroll: scroll))
                     .task {
-                        // Preview: scroll to the template rail so a screenshot
+                        // Preview: scroll to the templates so a screenshot
                         // shows the collapsed top bar.
                         guard HomeView.seedScroll else { return }
                         try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -112,38 +129,36 @@ struct HomeView: View {
     // MARK: Page
 
     @ViewBuilder
-    private func page(safeTop: CGFloat, reelHeight: CGFloat,
-                      scrollToBeat: @escaping () -> Void) -> some View {
-        let works = self.works
+    private func page(safeTop: CGFloat, reelHeight: CGFloat, works: [HomeWork],
+                      scrollToTemplates: @escaping () -> Void) -> some View {
         let resume = works.first
+        let isFirstRun = works.isEmpty
         VStack(alignment: .leading, spacing: 0) {
-            viewfinderReel(isFirstRun: works.isEmpty, safeTop: safeTop, height: reelHeight,
-                           pillRoom: resume == nil ? 0 : HomeResumePill.overlap)
+            viewfinderReel(isFirstRun: isFirstRun, safeTop: safeTop, height: reelHeight)
             if let resume {
-                // Straddles the reel's bottom edge (later siblings draw on top).
-                HomeResumePill(work: resume, store: app.store) { open(resume) }
-                    .padding(.horizontal, 12)
-                    .padding(.top, -HomeResumePill.overlap)
+                HomeResumeRow(work: resume, store: app.store) { open(resume) }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 2)
             }
-            HomeShootRow(onShoot: { shoot(with: shownLook) },
-                         onEdit: { newVideo() },
-                         onPhoto: { newPhoto() },
-                         onTemplates: scrollToBeat)
-                .padding(.horizontal, 12)
-                .padding(.top, resume == nil ? 4 : 12)
-                // Gives back the room Cut to the beat's heading reaches up
-                // into (see beatSection), so the visible gap is unchanged.
-                .padding(.bottom, beatTemplates.isEmpty ? 0 : -Self.beatReach(safeTop: safeTop))
-
-            beatSection(safeTop: safeTop)
+            if !isFirstRun {
+                HomeQuickTiles(onEdit: { newVideo() },
+                               onPhoto: { newPhoto() },
+                               onTemplates: scrollToTemplates)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    // Gives back the room the Templates heading reaches up
+                    // into (see templatesSection), so the visible gap is
+                    // unchanged.
+                    .padding(.bottom, beatTemplates.isEmpty ? 0 : -Self.anchorReach(safeTop: safeTop))
+            }
+            templatesSection(safeTop: safeTop, isFirstRun: isFirstRun)
             looksSection
-            continueSection(Array(works.dropFirst().prefix(8)))
+            continueSection(Array(works.dropFirst()))
             packSection
         }
     }
 
-    private func viewfinderReel(isFirstRun: Bool, safeTop: CGFloat, height: CGFloat,
-                                pillRoom: CGFloat) -> some View {
+    private func viewfinderReel(isFirstRun: Bool, safeTop: CGFloat, height: CGFloat) -> some View {
         ViewfinderReel(looks: reelLooks,
                        stripLooks: TonightsLook.all,
                        index: $reelIndex,
@@ -152,15 +167,19 @@ struct HomeView: View {
                        isFirstRun: isFirstRun,
                        safeTop: safeTop,
                        height: height,
-                       pillRoom: pillRoom,
                        reduceMotion: reduceMotion,
-                       scroll: scroll)
+                       scroll: scroll,
+                       onTry: { shoot(with: shownLook) },
+                       onAllLooks: { openLooks() },
+                       onEdit: { newVideo() },
+                       onPhoto: { newPhoto() })
     }
 
-    private var reelLooks: [TonightsLook] { TonightsLook.reel() }
+    /// Four looks, one for each story bar.
+    private var reelLooks: [TonightsLook] { TonightsLook.reel(count: 4) }
 
     /// What the reel's frame is wearing right now: the look picked in the
-    /// strip, else the reel's own. Shoot takes this look to the camera.
+    /// strip, else the reel's own. Try this look takes it to the camera.
     private var shownLook: TonightsLook {
         let looks = reelLooks
         let base = looks.isEmpty ? TonightsLook.today : looks[min(reelIndex, looks.count - 1)]
@@ -169,27 +188,48 @@ struct HomeView: View {
         return TonightsLook(preset: picked.preset, photo: base.photo, line: picked.line)
     }
 
-    /// How far Cut to the beat's heading reaches up behind the top bar, so
-    /// that with its 30 pt gap the words land just clear of the bar's soft
-    /// edge. Kept under the Shoot row's height, which gives the room back.
-    private static func beatReach(safeTop: CGFloat) -> CGFloat {
+    /// How far the Templates heading reaches up behind the top bar, so that
+    /// with its 30 pt gap the words land just clear of the bar's soft edge
+    /// when the Templates tile scrolls it to the top. The quick tiles give
+    /// the room back (their negative bottom padding); the heading's padding
+    /// is clear and takes no taps, so the Resume row and the tiles it lies
+    /// over stay tappable.
+    private static func anchorReach(safeTop: CGFloat) -> CGFloat {
         safeTop + LumaTabMetrics.barBottom - 14
     }
 
     @ViewBuilder
-    private func beatSection(safeTop: CGFloat) -> some View {
+    private func templatesSection(safeTop: CGFloat, isFirstRun: Bool) -> some View {
         let templates = beatTemplates
         if !templates.isEmpty {
-            // "Templates" scrolls this heading's frame to the top. Its top
-            // padding reaches up behind the top bar by `beatReach` (the Shoot
-            // row gives that room back), so the words land just below the
-            // bar rather than under it.
-            HomeSectionHeader(title: LumaFeatures.cutToTheBeat ? "Cut to the beat" : "Templates")
-                .padding(.horizontal, 16)
-                .padding(.top, 30 + Self.beatReach(safeTop: safeTop))
+            let reach = isFirstRun ? 0 : Self.anchorReach(safeTop: safeTop)
+            if LumaFeatures.cutToTheBeat {
+                // Cut to the beat (switched off): its own rail, unchanged.
+                HomeSectionHeader(title: "Cut to the beat")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 30 + reach)
+                    .id(HomeView.beatAnchor)
+                Spacer(minLength: 0).frame(height: 12)
+                BeatTemplateRail(templates: templates) { startTemplate($0) }
+            } else {
+                let collapsed = isFirstRun ? 4 : 3
+                let canExpand = templates.count > collapsed
+                let shown = showsAllTemplates ? templates : Array(templates.prefix(collapsed))
+                HomeSectionHeader(title: isFirstRun ? "Or start from a template" : "Templates",
+                                  quiet: isFirstRun,
+                                  actionTitle: canExpand ? (showsAllTemplates ? "Show less" : "See all") : nil) {
+                    withAnimation(.easeInOut(duration: 0.25)) { showsAllTemplates.toggle() }
+                    LumaHaptics.shared.tap()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, (isFirstRun ? 22 : 30) + reach)
                 .id(HomeView.beatAnchor)
-            Spacer(minLength: 0).frame(height: 12)
-            BeatTemplateRail(templates: templates) { startTemplate($0) }
+                Spacer(minLength: 0).frame(height: 12)
+                HomeTemplateGrid(templates: shown,
+                                 columns: isFirstRun ? 2 : 3,
+                                 tileHeight: 196) { startTemplate($0) }
+                    .padding(.horizontal, 12)
+            }
         }
     }
 
@@ -198,46 +238,60 @@ struct HomeView: View {
         let recents = recentLooks
         let showsSwitch = !recents.isEmpty
         let mode: HomeLooksMode = showsSwitch ? looksMode : .forYou
-        let looks = mode == .recents ? recents : forYouLooks
+        let looks = Array((mode == .recents ? recents : forYouLooks).prefix(Self.looksShown))
         HomeLooksHeader(mode: $looksMode, showsSwitch: showsSwitch) { openLooks() }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.top, 30)
         Spacer(minLength: 0).frame(height: 12)
-        HomeLookRail(looks: looks,
+        HomeLookGrid(looks: looks,
                      photos: lookPhotos,
                      images: lookTiles.images,
+                     isPro: storeService.isPro,
                      isCurrent: { app.isCurrent($0) },
-                     onPick: { tryOnLook($0) })
+                     onPick: { tryOnLook($0) },
+                     onStar: { app.library.toggleFavourite($0) })
+            .padding(.horizontal, 12)
     }
 
     @ViewBuilder
     private func continueSection(_ others: [HomeWork]) -> some View {
-        let sessions = Array(app.store.gradeSessions.prefix(3))
-        if !others.isEmpty || !sessions.isEmpty {
+        // Two rows at most: saved grades (up to two) keep their place, your
+        // other edits fill the rest. All opens Projects.
+        let sessions = Array(app.store.gradeSessions.prefix(2))
+        let shownWorks = Array(others.prefix(max(0, 4 - sessions.count)))
+        if !shownWorks.isEmpty || !sessions.isEmpty {
             HomeSectionHeader(title: "Continue editing", actionTitle: "All") {
                 openProjects()
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.top, 30)
             Spacer(minLength: 0).frame(height: 12)
-            ContinueRail(works: others, sessions: sessions, store: app.store) { open($0) }
+            HomeContinueGrid(works: shownWorks, sessions: sessions, store: app.store) { open($0) }
+                .padding(.horizontal, 12)
         }
     }
 
     @ViewBuilder
     private var packSection: some View {
         if let pack = spotlightPack {
-            PackSpotlight(pack: pack,
-                          kicker: packKicker(pack),
-                          line: packCopy(pack)) { openPack(pack) }
-                .padding(.horizontal, 12)
+            let tag = packTag(pack)
+            HomeSectionHeader(title: pack.isNew ? "New pack" : "Look pack")
+                .padding(.horizontal, 20)
                 .padding(.top, 30)
+            Spacer(minLength: 0).frame(height: 12)
+            PackSpotlight(pack: pack,
+                          detail: packDetail(pack),
+                          tag: tag.text,
+                          tagIsPaid: tag.paid) {
+                openPack(pack)
+            }
+            .padding(.horizontal, 12)
         }
     }
 
     // MARK: Data
 
-    /// Projects, newest first. The first one is the Resume card.
+    /// Projects, newest first. The first one is the Resume row.
     private var works: [HomeWork] {
         #if DEBUG
         // Forces the first-run layout on a device that already has work.
@@ -254,9 +308,9 @@ struct HomeView: View {
         return real
     }
 
-    /// The template rail: the beat-cut templates while Cut to the beat is
-    /// on, otherwise the plain ones (the Templates quick start still lands
-    /// on this rail).
+    /// The templates: the beat-cut ones while Cut to the beat is on (as
+    /// their own rail), otherwise the plain ones as a grid. The Templates
+    /// quick tile lands on either.
     private var beatTemplates: [VideoTemplate] {
         guard LumaFeatures.cutToTheBeat else { return TemplateLibrary.shown }
         let beat = TemplateLibrary.all.filter { $0.isBeatCut }
@@ -292,7 +346,7 @@ struct HomeView: View {
         Array(app.library.recents.prefix(10))
     }
 
-    /// Each look on its own person. Same input, same answer, so the rail and
+    /// Each look on its own person. Same input, same answer, so the grid and
     /// the renderer always agree.
     private var lookPhotos: [String: HeroPhoto] {
         HomeLookPhotos.assign(forYouLooks + recentLooks)
@@ -313,21 +367,30 @@ struct HomeView: View {
 
     /// Packs live in Looks now. The looks-pack lane owns which pack is in
     /// the spotlight (`PackCatalog.spotlight`, After Dark); Home only draws
-    /// it from the pack's own name, looks and photo.
+    /// it from the pack's own name, colour, looks and photo.
     private var spotlightPack: LookPack? {
         PackCatalog.spotlight
     }
 
-    private func packKicker(_ pack: LookPack) -> String {
+    /// "5 looks · Flash, neon and packed rooms"
+    private func packDetail(_ pack: LookPack) -> String {
         let count = pack.looks.count
         let looks = "\(count) \(count == 1 ? "look" : "looks")"
-        let isNew = pack.id == "after-dark" || pack.name.lowercased() == "after dark"
-        return (isNew ? "New pack · " : "Look pack · ") + looks
+        return looks + " · " + packCopy(pack)
     }
 
     private func packCopy(_ pack: LookPack) -> String {
         let night = pack.looks.contains { $0.name.contains("Neon Nights") || $0.name.contains("Afrobeats Glow") }
         return night ? "Flash, neon and packed rooms" : pack.eraTag
+    }
+
+    /// The small glass tag on the cover: Free, In library, With Pro, or the
+    /// price, which takes the pack's colour.
+    private func packTag(_ pack: LookPack) -> (text: String, paid: Bool) {
+        if pack.isFree { return ("Free", false) }
+        if storeService.ownsPack(pack.id) { return ("In library", false) }
+        if pack.isProIncluded { return ("With Pro", false) }
+        return (pack.price, true)
     }
 
     /// "After Dark pack", "Free · Signature" or "Signature · Pro".
@@ -382,6 +445,8 @@ struct HomeView: View {
         LumaHaptics.shared.tap()
     }
 
+    /// Try this look: tonight's look (or the one picked in the strip) goes
+    /// on, and the camera opens wearing it.
     private func shoot(with look: TonightsLook) {
         useLook(named: look.preset.name)
         app.path.append(.camera)
@@ -395,10 +460,9 @@ struct HomeView: View {
         LumaHaptics.shared.tap()
     }
 
-    /// Cut to the beat: the template's look goes on the grade, then Select
-    /// clips opens with the template. The picker builds the project from the
-    /// picks and applies the template by id through the editor's own
-    /// `applyTemplate`.
+    /// A template: its look goes on the grade, then Select clips opens with
+    /// the template. The picker builds the project from the picks and
+    /// applies the template by id through the editor's own `applyTemplate`.
     private func startTemplate(_ template: VideoTemplate) {
         if let name = template.lookName { useLook(named: name) }
         app.openSelectClips(.edit, templateID: template.id)
@@ -546,19 +610,8 @@ private enum HomeDemo {
 
 // MARK: - Header
 
-private enum HomeClock {
-    static func partOfDay(_ date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        switch hour {
-        case 5..<12: return "morning"
-        case 12..<18: return "afternoon"
-        default: return "evening"
-        }
-    }
-}
-
 /// The scroll position, kept apart from HomeView so that only the views
-/// that change as you scroll (the top bar and the greeting) redraw.
+/// that change as you scroll (the top bar and the story bars) redraw.
 private final class HomeScrollProgress: ObservableObject {
     /// 0 at rest, 1 once the page has scrolled `HomeTopBar.collapseDistance`.
     @Published private(set) var collapse: CGFloat = 0
@@ -615,7 +668,7 @@ private struct HomeTopBar: View {
                 .opacity(p)
                 .allowsHitTesting(p > 0.6)
             LumaTabHeader {
-                LumaWordmark(size: 20)
+                HomeWordmark()
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Lumalook")
                     .accessibilityAddTraits(.isHeader)
@@ -662,31 +715,6 @@ private struct HomeScrollFade<Content: View>: View {
     }
 }
 
-/// "Good evening" on the reel, under the pinned top row. It fades as it
-/// scrolls up towards the bar, so it never shows through the bar's backing.
-/// The first run adds a line on what to do first.
-private struct HomeGreeting: View {
-    let isFirstRun: Bool
-    @ObservedObject var scroll: HomeScrollProgress
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            TimelineView(.everyMinute) { context in
-                LumaHeadline(light: "Good", heavy: HomeClock.partOfDay(context.date), size: 34)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            if isFirstRun {
-                Text("Shoot or edit your first clip")
-                    .font(.luma(size: 14))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .lineLimit(1)
-            }
-        }
-        .opacity(max(0, 1 - scroll.collapse * 1.4))
-    }
-}
-
 /// The reel runs under the status bar. At the top a soft shade keeps the
 /// clock legible on the photo. Once the page scrolls, the top bar's backing
 /// covers the status bar too (see HomeTopBar).
@@ -715,26 +743,47 @@ private struct HomeScrollOffsetKey: PreferenceKey {
 
 // MARK: - Shared chrome
 
-/// Home's rail heading: sentence case at near-full white, the action a quiet
-/// grey word.
+/// Home's wordmark in the shared top row: Lumalook with a capital L at the
+/// tabs' title size, the small mark a white frame so the yellow stays with
+/// the shutter.
+private struct HomeWordmark: View {
+    var body: some View {
+        HStack(spacing: 9) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.92), lineWidth: 2.4)
+                .frame(width: 14, height: 14)
+            Text("Lumalook")
+                .font(.luma(size: 26, weight: .bold))
+                .kerning(-1)
+                .foregroundStyle(LumaTheme.textPrimary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// Home's section heading: sentence case at near-full white (or the quiet
+/// grey line "Or start from a template"), the action a grey word.
 private struct HomeSectionHeader: View {
     let title: String
+    var quiet: Bool = false
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(.luma(size: 17, weight: .semibold))
-                .kerning(-0.2)
-                .foregroundStyle(LumaTheme.textPrimary)
+                .font(.luma(size: quiet ? 13 : 17, weight: quiet ? .medium : .semibold))
+                .kerning(quiet ? 0 : -0.2)
+                .foregroundStyle(quiet ? Color.white.opacity(0.48) : LumaTheme.textPrimary)
                 .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             if let actionTitle {
                 Button { action?() } label: {
                     Text(actionTitle)
-                        .font(.luma(size: 13.5, weight: .medium))
-                        .foregroundStyle(LumaTheme.textMuted)
+                        .font(.luma(size: 13, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                        .lineLimit(1)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.lumaPress)
@@ -743,18 +792,15 @@ private struct HomeSectionHeader: View {
     }
 }
 
-/// Poster geometry shared by the Continue editing cards.
+/// Small helpers for frames and badges.
 private enum Poster {
-    static let width: CGFloat = 114
-    static let height: CGFloat = 176
-    static let radius: CGFloat = 13
-
     static func duration(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    /// The small dark value badge in a frame's corner (0:12).
+    /// The small dark value badge in a frame's corner (0:12), used by the
+    /// Cut to the beat posters.
     static func badge(_ text: String) -> some View {
         Text(text)
             .font(.luma(size: 11, weight: .semibold))
@@ -764,28 +810,153 @@ private enum Poster {
             .padding(.vertical, 2)
             .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
+}
 
-    /// The look's signature dot, glowing, in a frame's top corner.
-    static func dot(_ colour: Color) -> some View {
-        Circle()
-            .fill(colour)
-            .frame(width: 8, height: 8)
-            .shadow(color: colour, radius: 5)
+/// A captioned picture tile, the calm grid's one card: the picture fills
+/// it, a soft shade at the bottom carries the caption, and a small glass tag
+/// may sit in the top corner. No outline.
+private struct HomeCaptionTile<Picture: View, Caption: View>: View {
+    let height: CGFloat
+    let badge: String?
+    let badgePlay: Bool
+    let badgeColour: Color
+    let picture: Picture
+    let caption: Caption
+
+    static var radius: CGFloat { 15 }
+
+    init(height: CGFloat, badge: String? = nil, badgePlay: Bool = true,
+         badgeColour: Color = LumaTheme.textPrimary,
+         @ViewBuilder picture: () -> Picture,
+         @ViewBuilder caption: () -> Caption) {
+        self.height = height
+        self.badge = badge
+        self.badgePlay = badgePlay
+        self.badgeColour = badgeColour
+        self.picture = picture()
+        self.caption = caption()
     }
 
-    static func caption(title: String, detail: String) -> some View {
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        ZStack(alignment: .bottomLeading) {
+            picture
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.62)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 90)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .allowsHitTesting(false)
+            caption
+                .padding(.horizontal, 12)
+                .padding(.bottom, 11)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .background(LumaTheme.panel)
+        .overlay(alignment: .topTrailing) {
+            if let badge {
+                HomeBadge(text: badge, play: badgePlay, colour: badgeColour)
+                    .padding(9)
+            }
+        }
+        .clipShape(shape)
+        .contentShape(shape)
+    }
+}
+
+/// The small glass tag in a tile's corner: "▶ 0:12", "Video", a price.
+private struct HomeBadge: View {
+    let text: String
+    var play: Bool = true
+    var colour: Color = LumaTheme.textPrimary
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if play {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            Text(text)
+                .font(.luma(size: 11, weight: .semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .foregroundStyle(colour)
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(Capsule().fill(Color.black.opacity(0.48)))
+        .allowsHitTesting(false)
+    }
+}
+
+/// A tile's caption: the name in white and a grey line under it.
+private struct HomeTileCaption: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.luma(size: 14, weight: .semibold))
-                .kerning(-0.2)
+                .kerning(-0.15)
                 .foregroundStyle(LumaTheme.textPrimary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Text(detail)
-                .font(.luma(size: 12))
-                .foregroundStyle(LumaTheme.textMuted)
+                .font(.luma(size: 11.5, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.66))
                 .lineLimit(1)
         }
-        .frame(width: width, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A quiet glass pill (All looks, Edit a photo, Import): white at 10% with
+/// white words.
+private struct HomeGlassPill: View {
+    let icon: String
+    let title: String
+    var showsIcon: Bool = true
+    /// The one solid white pill on a page (first run's Edit a clip).
+    var solid: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            LumaHaptics.shared.tap()
+            action()
+        } label: {
+            HomeGlassPillLabel(icon: showsIcon ? icon : nil, title: title, solid: solid)
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(title)
+    }
+}
+
+private struct HomeGlassPillLabel: View {
+    let icon: String?
+    let title: String
+    var solid: Bool = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            Text(title)
+                .font(.luma(size: 14, weight: .semibold))
+                .tracking(-0.1)
+                .lineLimit(1)
+        }
+        .foregroundStyle(solid ? Color(hex: 0x0B0C0E) : Color.white.opacity(0.92))
+        .padding(.leading, icon == nil ? 15 : 12)
+        .padding(.trailing, 15)
+        .frame(height: 38)
+        .background(Capsule().fill(solid ? Color(hex: 0xF4F5F6) : Color.white.opacity(0.1)))
+        .contentShape(Capsule())
+        .fixedSize()
     }
 }
 
@@ -996,168 +1167,126 @@ private enum HomePosterFrame {
     }
 }
 
-// MARK: - Resume pill
+// MARK: - Resume row
 
-/// The last edit as a pill that straddles the reel's bottom edge: its poster
-/// in a ring of its look's colour, when it was edited, and a white play
-/// button.
-private struct HomeResumePill: View {
+/// The last edit as one quiet row where the reel meets the page: its poster,
+/// when it was edited, and a white play button.
+private struct HomeResumeRow: View {
     let work: HomeWork
     let store: PersistenceStore
     let action: () -> Void
 
-    static let height: CGFloat = 66
-    /// How far the pill rises into the reel.
-    static let overlap: CGFloat = 33
+    static let height: CGFloat = 64
 
-    private var editedLine: String {
-        let label = HomeWork.editedLabel(work.updatedAt)
-        let rest = String(label.dropFirst())
-        return "Resume · " + label.prefix(1).lowercased() + rest
+    /// "Edited 2 h ago · 0:12 · 6 clips"
+    private var detail: String {
+        "\(HomeWork.editedLabel(work.updatedAt)) · \(Poster.duration(work.duration)) · \(work.clipsText)"
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         Button(action: action) {
             HStack(spacing: 12) {
-                HomeWorkPoster(work: work, store: store, maxPixel: 240)
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(work.signature, lineWidth: 2))
+                HomeWorkPoster(work: work, store: store, maxPixel: 200)
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(editedLine)
-                        .font(.luma(size: 12.5))
-                        .foregroundStyle(LumaTheme.textMuted)
+                    Text(work.title)
+                        .font(.luma(size: 15, weight: .semibold))
+                        .kerning(-0.15)
+                        .foregroundStyle(LumaTheme.textPrimary)
                         .lineLimit(1)
-                    Text("\(work.title) · \(Poster.duration(work.duration))")
-                        .font(.luma(size: 17, weight: .semibold))
-                        .kerning(-0.3)
-                        .foregroundStyle(.white)
+                    Text(detail)
+                        .font(.luma(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.52))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.85)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "play.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(LumaTheme.onLight)
-                    .frame(width: 44, height: 44)
-                    .background(LumaTheme.textPrimary, in: Circle())
+                    .offset(x: 1)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(LumaTheme.textPrimary))
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 11)
+            .padding(.leading, 10)
+            .padding(.trailing, 12)
             .frame(maxWidth: .infinity)
             .frame(height: Self.height)
-            // Panel tone on solid ink, so the reel never shows through.
-            .background(Capsule().fill(LumaTheme.panel))
-            .background(Capsule().fill(LumaTheme.background))
-            .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
-            .shadow(color: .black.opacity(0.5), radius: 16, y: 6)
-            .contentShape(Capsule())
+            // Quiet glass over solid ink, so the reel never shows through.
+            .background(shape.fill(Color.white.opacity(0.06)))
+            .background(shape.fill(LumaTheme.background))
+            .contentShape(shape)
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Resume \(work.title). \(work.detail)")
     }
 }
 
-// MARK: - Make row
+// MARK: - Quick tiles
 
-/// Shoot (the one signal-yellow action, in the look on the reel) and Edit a
-/// clip, then the quick starts: Edit a photo, Templates and Import LUT.
-private struct HomeShootRow: View {
-    let onShoot: () -> Void
+/// Edit a clip, Edit a photo, Templates and Import LUT as four quiet tiles.
+/// Shooting is the tab shutter's job, in the same place on every tab.
+private struct HomeQuickTiles: View {
     let onEdit: () -> Void
     let onPhoto: () -> Void
     let onTemplates: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                makeButton(icon: "camera", title: "Shoot", primary: true, action: onShoot)
-                makeButton(icon: "film", title: "Edit a clip", primary: false, action: onEdit)
-            }
-            HStack(spacing: 8) {
-                quickButton(icon: "photo", title: "Edit a photo", action: onPhoto)
-                quickButton(icon: "wand.and.stars", title: "Templates", action: onTemplates)
-                LUTImportButton(onImported: nil, label: {
-                    HomeQuickLabel(icon: "square.and.arrow.down", title: "Import LUT")
-                })
-                .accessibilityLabel("Import a LUT")
-            }
+        HStack(spacing: 8) {
+            tile(icon: "film", title: "Edit a clip", action: onEdit)
+            tile(icon: "photo", title: "Edit a photo", action: onPhoto)
+            tile(icon: "square.on.square", title: "Templates", action: onTemplates)
+            LUTImportButton(onImported: nil, label: {
+                HomeQuickTileLabel(icon: "cube", title: "Import LUT")
+            })
+            .accessibilityLabel("Import a LUT")
         }
     }
 
-    private func makeButton(icon: String, title: String, primary: Bool,
-                            action: @escaping () -> Void) -> some View {
+    private func tile(icon: String, title: String,
+                      action: @escaping () -> Void) -> some View {
         Button {
             LumaHaptics.shared.tap()
             action()
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(primary ? LumaTheme.onSignal : LumaTheme.signal)
-                Text(title)
-                    .font(.luma(size: 16, weight: .semibold))
-                    .kerning(-0.3)
-                    .foregroundStyle(primary ? LumaTheme.onSignal : LumaTheme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity)
-            .frame(height: 60)
-            .background(primary ? LumaTheme.signal : LumaTheme.panel,
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(primary ? Color.clear : LumaTheme.edge, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel(title)
-    }
-
-    private func quickButton(icon: String, title: String,
-                             action: @escaping () -> Void) -> some View {
-        Button {
-            LumaHaptics.shared.tap()
-            action()
-        } label: {
-            HomeQuickLabel(icon: icon, title: title)
+            HomeQuickTileLabel(icon: icon, title: title)
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel(title)
     }
 }
 
-private struct HomeQuickLabel: View {
+private struct HomeQuickTileLabel: View {
     let icon: String
     let title: String
 
     var body: some View {
-        HStack(spacing: 7) {
+        let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
+        VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(LumaTheme.signal)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.78))
+                .frame(height: 20)
             Text(title)
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(LumaTheme.textPrimary)
+                .font(.luma(size: 11.5, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.58))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
-        .frame(height: 42)
-        .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .frame(height: 64)
+        .background(shape.fill(Color.white.opacity(0.055)))
+        .contentShape(shape)
     }
 }
 
 // MARK: - Tonight's look
 
-/// One signature look on the sample photo it suits best. The reel shows
-/// three, starting from today's; the trio turns over at midnight.
+/// One signature look on the sample photo it suits best. Home's reel shows
+/// four, starting from today's; the set turns over at midnight.
 struct TonightsLook {
     let preset: LookPreset
     let photo: HeroPhoto
@@ -1234,12 +1363,13 @@ struct TonightsLook {
     }
 }
 
-/// AF1: tonight's three looks on real people, edge to edge, with story bars
-/// and the greeting on top, and nothing drawn over the picture itself. The
-/// strip under the title regrades the frame on screen:
-/// picking a look pauses the reel, and tapping the picture (or the picked
-/// look again) lets it cycle on. With Reduce Motion on it neither cycles nor
-/// zooms; taps still move between looks.
+/// AF1: tonight's looks on real people, edge to edge, with thin story bars
+/// under the top bar and nothing drawn over the picture itself; the picture
+/// fades into the page, where Tonight's look, its Try button and the strip
+/// sit. The strip regrades the frame on screen: picking a look pauses the
+/// reel, and tapping the picture (or the picked look again) lets it cycle
+/// on. With Reduce Motion on it neither cycles nor zooms; taps still move
+/// between looks.
 private struct ViewfinderReel: View {
     let looks: [TonightsLook]
     let stripLooks: [TonightsLook]
@@ -1249,12 +1379,17 @@ private struct ViewfinderReel: View {
     let isFirstRun: Bool
     let safeTop: CGFloat
     let height: CGFloat
-    /// Room at the bottom for the Resume pill that rises into the reel.
-    let pillRoom: CGFloat
     let reduceMotion: Bool
-    /// Fades the greeting as it scrolls up under the pinned top bar.
+    /// Fades the story bars as they scroll up under the pinned top bar.
     let scroll: HomeScrollProgress
+    /// Try this look: the shown look, in the camera.
+    let onTry: () -> Void
+    let onAllLooks: () -> Void
+    /// First run: Edit a clip and Edit a photo.
+    let onEdit: () -> Void
+    let onPhoto: () -> Void
 
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
     @State private var started = Date()
 
     static let dwell: Double = 4.2
@@ -1279,8 +1414,9 @@ private struct ViewfinderReel: View {
         return TonightsLook(preset: picked.preset, photo: base.photo, line: picked.line)
     }
 
-    private var signature: Color {
-        shown?.preset.signature ?? LumaTheme.signal
+    /// Names in colour (the default), or white with a dot.
+    private var namesInColour: Bool {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
     }
 
     private var isPaused: Bool { reduceMotion || pick != nil || Self.heldForPreview }
@@ -1304,8 +1440,7 @@ private struct ViewfinderReel: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
-        .overlay(alignment: .top) { top }
-        .overlay(alignment: .bottom) { sigline }
+        .overlay(alignment: .top) { bars }
         .clipped()
         .task(id: "\(reduceMotion)-\(pick ?? "")") { await cycle() }
         .onAppear { seedPick() }
@@ -1331,95 +1466,196 @@ private struct ViewfinderReel: View {
         return HomeGradedPhoto(photo: look.photo, lookName: lookName, maxDimension: 1100)
             .scaleEffect(isOn || reduceMotion ? 1 : 1.07)
             .animation(reduceMotion ? nil : .easeOut(duration: 3.4), value: safeIndex)
-            .opacity(isOn ? 1 : 0)
+            .opacity(isOn ? 0.9 : 0)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: safeIndex)
     }
 
-    /// Dark under the status bar, clear across the face, then down into the
-    /// page's ink so the copy, the strip and the Resume pill read.
+    /// The mock's fade: ink under the status bar, clear across the face,
+    /// then down into the page's ink, so the reel fades into the page with
+    /// no edge.
     private var scrim: some View {
         LinearGradient(stops: [
-            .init(color: .black.opacity(0.5), location: 0),
-            .init(color: .clear, location: 0.24),
-            .init(color: .clear, location: 0.42),
-            .init(color: .black.opacity(0.62), location: 0.66),
-            .init(color: LumaTheme.background, location: 1),
+            .init(color: LumaTheme.ink.opacity(0.5), location: 0),
+            .init(color: LumaTheme.ink.opacity(0), location: 0.22),
+            .init(color: LumaTheme.ink.opacity(0), location: 0.40),
+            .init(color: LumaTheme.ink.opacity(0.7), location: 0.66),
+            .init(color: LumaTheme.ink, location: 0.92),
+            .init(color: LumaTheme.ink, location: 1),
         ], startPoint: .top, endPoint: .bottom)
         .allowsHitTesting(false)
     }
 
-    // MARK: Chrome
+    // MARK: Story bars
 
-    /// Room for the pinned top row (HomeView draws it above the page), then
-    /// the story bars just under it, then the greeting. The bars and the
-    /// greeting fade as the page scrolls up under the bar.
-    private var top: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HomeScrollFade(scroll: scroll, rate: 3) {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
-                    ReelBars(count: looks.count, index: safeIndex, progress: progress(at: context.date))
-                }
+    /// Thin story bars just under the pinned top row (HomeView draws the row
+    /// above the page). They fade as the page scrolls up under the bar.
+    private var bars: some View {
+        HomeScrollFade(scroll: scroll, rate: 3) {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { context in
+                ReelBars(count: looks.count, index: safeIndex, progress: progress(at: context.date))
             }
-            .frame(height: 3)
-            .allowsHitTesting(false)
-            HomeGreeting(isFirstRun: isFirstRun, scroll: scroll)
-                .padding(.top, 16)
-                .allowsHitTesting(false)
         }
-        .padding(.horizontal, 16)
+        .frame(height: 2.5)
+        .allowsHitTesting(false)
+        .padding(.horizontal, 20)
         .padding(.top, safeTop + LumaTabMetrics.barBottom)
     }
+
+    // MARK: Copy
 
     @ViewBuilder
     private var copy: some View {
         if let look = shown {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    stateChip
-                    Text(packLine(look))
-                        .font(.luma(size: 13, weight: .semibold))
-                        .foregroundStyle(look.preset.signature)
+                    kicker(look)
+                    headline(look)
+                        .padding(.top, 8)
+                    Text(meta(look))
+                        .font(.luma(size: isFirstRun ? 14 : 13.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.6))
                         .lineLimit(1)
-                        .padding(.top, 14)
-                    LumaHeadline(light: look.light, heavy: look.heavy, size: 40)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.top, 4)
-                    Text(look.line)
-                        .font(.luma(size: 14))
-                        .foregroundStyle(LumaTheme.textSecondary)
-                        .lineLimit(1)
-                        .padding(.top, 4)
+                        .minimumScaleFactor(0.85)
+                        .padding(.top, isFirstRun ? 8 : 6)
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 20)
                 .id("\(safeIndex)-\(pick ?? "")")
                 .transition(.opacity)
                 .allowsHitTesting(false)
-                strip
-                    .padding(.top, 16)
+                pills(look)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                if !isFirstRun {
+                    strip
+                        .padding(.top, 20)
+                }
             }
-            .padding(.bottom, pillRoom + 16)
+            .padding(.bottom, isFirstRun ? 18 : 12)
         }
     }
 
-    /// "Tonight's look" while the reel runs; once a look is picked, how to
-    /// get back to it.
-    private var stateChip: some View {
+    /// "• TONIGHT'S LOOK", the dot in the look's colour. Once a look is
+    /// picked, how to get back to the reel.
+    private func kicker(_ look: TonightsLook) -> some View {
         HStack(spacing: 7) {
             Circle()
-                .fill(signature)
+                .fill(look.preset.signature)
                 .frame(width: 7, height: 7)
-                .shadow(color: signature, radius: 4)
-            Text(pick == nil ? "Tonight's look" : "Your pick · tap the picture to go back")
-                .font(.luma(size: 13, weight: .medium))
-                .foregroundStyle(.white)
+            Text(kickerText(look))
+                .font(.luma(size: 11, weight: .bold))
+                .tracking(1.3)
+                .textCase(.uppercase)
+                .foregroundStyle(Color.white.opacity(0.55))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(Color.black.opacity(0.45), in: Capsule())
-        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
     }
+
+    private func kickerText(_ look: TonightsLook) -> String {
+        if pick != nil { return "Your pick · tap the picture to go back" }
+        if isFirstRun {
+            return "Tonight's look · " + look.preset.name.replacingOccurrences(of: " · ", with: " ")
+        }
+        return "Tonight's look"
+    }
+
+    /// The look's name as the headline, a light word and a bold word, the
+    /// bold one in the look's colour. The first run welcomes instead.
+    @ViewBuilder
+    private func headline(_ look: TonightsLook) -> some View {
+        if isFirstRun {
+            VStack(alignment: .leading, spacing: -4) {
+                Text("Welcome to")
+                    .font(.luma(size: 40, weight: .light))
+                Text("Lumalook")
+                    .font(.luma(size: 40, weight: .bold))
+            }
+            .tracking(LumaType.tracking(for: 40))
+            .foregroundStyle(LumaTheme.textPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+        } else {
+            lookTitle(look)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private func lookTitle(_ look: TonightsLook) -> Text {
+        let colour = namesInColour ? look.preset.signature : LumaTheme.textPrimary
+        let heavy = Text(verbatim: look.heavy)
+            .font(.luma(size: 40, weight: .bold))
+            .foregroundColor(colour)
+        let line: Text
+        if look.light.isEmpty {
+            line = heavy
+        } else {
+            let light = Text(verbatim: look.light + " ")
+                .font(.luma(size: 40, weight: .light))
+                .foregroundColor(LumaTheme.textPrimary)
+            // Interpolation, not `+`, which the iOS 26 SDK deprecates.
+            line = Text("\(light)\(heavy)")
+        }
+        return line.tracking(LumaType.tracking(for: 40))
+    }
+
+    /// "KD2 · Free · Signature · warm skin, soft bokeh", or the first run's
+    /// one line on what to do.
+    private func meta(_ look: TonightsLook) -> String {
+        if isFirstRun { return "Shoot with a look, or grade a clip you already have." }
+        var parts: [String] = []
+        if let code = LookSignature.code(in: look.preset.name) { parts.append(code) }
+        parts.append(packLine(look))
+        let line = look.line
+        if let first = line.first {
+            parts.append(first.lowercased() + String(line.dropFirst()))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: Actions
+
+    /// Try this look in the look's own colour and a quiet All looks; on the
+    /// first run, Edit a clip (the page's main action), Edit a photo and
+    /// Import.
+    @ViewBuilder
+    private func pills(_ look: TonightsLook) -> some View {
+        if isFirstRun {
+            ViewThatFits(in: .horizontal) {
+                firstRunPills(icons: true)
+                firstRunPills(icons: false)
+            }
+        } else {
+            HStack(spacing: 8) {
+                LumaColourButton(title: "Try this look",
+                                 colour: look.preset.signature,
+                                 icon: "wand.and.stars",
+                                 height: 38,
+                                 action: onTry)
+                    .fixedSize()
+                    .accessibilityLabel("Try \(look.preset.title) in the camera")
+                HomeGlassPill(icon: "square.grid.2x2", title: "All looks", action: onAllLooks)
+            }
+        }
+    }
+
+    private func firstRunPills(icons: Bool) -> some View {
+        HStack(spacing: 8) {
+            // The one solid white pill, as in the mock and on Projects: the
+            // yellow stays with the tab shutter.
+            HomeGlassPill(icon: "plus", title: "Edit a clip", showsIcon: icons, solid: true, action: onEdit)
+            HomeGlassPill(icon: "photo", title: "Edit a photo", showsIcon: icons, action: onPhoto)
+            LUTImportButton(onImported: nil, label: {
+                HomeGlassPillLabel(icon: icons ? "cube" : nil, title: "Import")
+            })
+            .accessibilityLabel("Import a LUT")
+        }
+    }
+
+    // MARK: Strip
 
     /// The strip's swatches all grade one close face, so each look reads on
     /// the same skin and the strip renders once rather than on every turn of
@@ -1428,52 +1664,37 @@ private struct ViewfinderReel: View {
 
     private var strip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 ForEach(stripLooks, id: \.preset.name) { entry in
                     tile(entry)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
+            // Room for the picked ring's glow.
             .padding(.vertical, 4)
         }
     }
 
+    /// A swatch, its code under it in the look's colour; the picked one
+    /// wears the pale ring, same as the camera.
     private func tile(_ entry: TonightsLook) -> some View {
         let isOn = (pick ?? base?.preset.name) == entry.preset.name
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return Button { choose(entry) } label: {
-            HomeGradedPhoto(photo: Self.swatchPhoto, lookName: entry.preset.name, maxDimension: 240)
-                .frame(width: 64, height: 80)
-                .overlay {
-                    LinearGradient(colors: [.clear, .black.opacity(0.72)],
-                                   startPoint: .center, endPoint: .bottom)
-                }
-                .overlay(alignment: .bottom) {
-                    Text(entry.tileCode)
-                        .font(.luma(size: 12, weight: .bold))
-                        .foregroundStyle(entry.preset.signature)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 6)
-                }
-                .clipShape(shape)
-                .overlay(shape.strokeBorder(LumaTheme.edge, lineWidth: 1))
-                .pickedRing(isOn, cornerRadius: 12)
-                .contentShape(shape)
+            VStack(alignment: .leading, spacing: 6) {
+                HomeGradedPhoto(photo: Self.swatchPhoto, lookName: entry.preset.name, maxDimension: 240)
+                    .frame(width: 54, height: 67.5)
+                    .clipShape(shape)
+                    .pickedRing(isOn, cornerRadius: 12)
+                LookNameText(entry.tileCode, colour: entry.preset.signature, size: 10.5)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 54, alignment: .leading)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("Try \(entry.preset.title) on this picture")
         .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-
-    private var sigline: some View {
-        Rectangle()
-            .fill(signature)
-            .frame(height: 2.5)
-            .shadow(color: signature.opacity(0.9), radius: 9)
-            .animation(.easeInOut(duration: 0.6), value: signature)
-            .allowsHitTesting(false)
     }
 
     // MARK: Behaviour
@@ -1542,8 +1763,8 @@ private struct ViewfinderReel: View {
     }
 }
 
-/// Story-style progress: done bars full, the current one filling, the rest
-/// dim.
+/// Story-style progress: thin lines, done ones full, the current one filling,
+/// the rest dim.
 private struct ReelBars: View {
     let count: Int
     let index: Int
@@ -1553,13 +1774,13 @@ private struct ReelBars: View {
         HStack(spacing: 5) {
             ForEach(0..<max(count, 1), id: \.self) { position in
                 Capsule()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.white.opacity(0.26))
                     .overlay(alignment: .leading) {
                         Capsule()
-                            .fill(Color.white)
+                            .fill(Color.white.opacity(0.9))
                             .scaleEffect(x: CGFloat(max(fill(position), 0.0001)), y: 1, anchor: .leading)
                     }
-                    .frame(height: 3)
+                    .frame(height: 2.5)
             }
         }
     }
@@ -1721,33 +1942,99 @@ private enum BeatPattern {
     }
 }
 
+// MARK: - Templates
+
+/// The plain templates as a captioned grid: three across on a returning
+/// Home, two across on the first run.
+private struct HomeTemplateGrid: View {
+    let templates: [VideoTemplate]
+    let columns: Int
+    let tileHeight: CGFloat
+    let onPick: (VideoTemplate) -> Void
+
+    private var gridItems: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: max(1, columns))
+    }
+
+    var body: some View {
+        LazyVGrid(columns: gridItems, spacing: 8) {
+            ForEach(Array(templates.enumerated()), id: \.element.id) { item in
+                HomeTemplateTile(template: item.element, index: item.offset, height: tileHeight) {
+                    onPick(item.element)
+                }
+            }
+        }
+    }
+}
+
+/// A template's poster in its look, its runtime in the corner, then its name
+/// and "6 clips".
+private struct HomeTemplateTile: View {
+    let template: VideoTemplate
+    let index: Int
+    let height: CGFloat
+    let action: () -> Void
+
+    private var clipsText: String {
+        "\(template.clipCount) \(template.clipCount == 1 ? "clip" : "clips")"
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HomeCaptionTile(height: height, badge: Poster.duration(template.totalDuration)) {
+                HomeGradedPhoto(photo: BeatTemplateCard.posterPhoto(for: template, index: index),
+                                lookName: template.lookName, maxDimension: 480)
+            } caption: {
+                HomeTileCaption(title: template.name, detail: clipsText)
+            }
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("\(template.name), \(clipsText). Pick clips")
+    }
+}
+
 // MARK: - Looks
 
 private enum HomeLooksMode: String, CaseIterable {
     case forYou = "For you"
     case recents = "Recents"
+
+    /// The text tab's word.
+    var title: String {
+        switch self {
+        case .forYou: return "Looks for you"
+        case .recents: return "Recents"
+        }
+    }
 }
 
-/// "Looks" with the For you | Recents switch and "All looks". Before any
-/// look has been used there is nothing recent, so it reads "Looks for you".
+/// "Looks for you" | "Recents" as text tabs (the picked one white, the
+/// other grey) and "All looks". Before any look has been used there is
+/// nothing recent, so it is just "Looks for you".
 private struct HomeLooksHeader: View {
     @Binding var mode: HomeLooksMode
     let showsSwitch: Bool
     let onAll: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(showsSwitch ? "Looks" : "Looks for you")
-                .font(.luma(size: 17, weight: .semibold))
-                .kerning(-0.2)
-                .foregroundStyle(LumaTheme.textPrimary)
-                .lineLimit(1)
-            if showsSwitch { switcher }
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            if showsSwitch {
+                ForEach(HomeLooksMode.allCases, id: \.self) { option in
+                    tab(option)
+                }
+            } else {
+                Text(HomeLooksMode.forYou.title)
+                    .font(.luma(size: 17, weight: .semibold))
+                    .kerning(-0.2)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+            }
             Spacer(minLength: 8)
             Button(action: onAll) {
                 Text("All looks")
-                    .font(.luma(size: 13.5, weight: .medium))
-                    .foregroundStyle(LumaTheme.textMuted)
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.45))
                     .lineLimit(1)
                     .contentShape(Rectangle())
             }
@@ -1755,117 +2042,140 @@ private struct HomeLooksHeader: View {
         }
     }
 
-    private var switcher: some View {
-        HStack(spacing: 2) {
-            ForEach(HomeLooksMode.allCases, id: \.self) { option in
-                Button {
-                    mode = option
-                    LumaHaptics.shared.tap()
-                } label: {
-                    Text(option.rawValue)
-                        .font(.luma(size: 12.5, weight: .semibold))
-                        .foregroundStyle(mode == option ? LumaTheme.textPrimary : LumaTheme.textMuted)
-                        .lineLimit(1)
-                        .padding(.horizontal, 11)
-                        .frame(height: 26)
-                        .background(mode == option ? LumaTheme.control : Color.clear, in: Capsule())
-                        .overlay(Capsule().strokeBorder(mode == option ? LumaTheme.edge : Color.clear,
-                                                        lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(mode == option ? .isSelected : [])
-            }
+    private func tab(_ option: HomeLooksMode) -> some View {
+        let isOn = mode == option
+        return Button {
+            mode = option
+            LumaHaptics.shared.tap()
+        } label: {
+            Text(option.title)
+                .font(.luma(size: 17, weight: .semibold))
+                .kerning(-0.2)
+                .foregroundStyle(isOn ? LumaTheme.textPrimary : LumaTheme.textMuted)
+                .lineLimit(1)
+                .contentShape(Rectangle())
         }
-        .padding(2)
-        .background(LumaTheme.raised, in: Capsule())
-        .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
-private struct HomeLookRail: View {
+/// Looks as a two-column captioned grid, each on its own person.
+private struct HomeLookGrid: View {
     let looks: [LibraryLook]
     let photos: [String: HeroPhoto]
     let images: [String: CGImage]
+    let isPro: Bool
     let isCurrent: (LibraryLook) -> Bool
     let onPick: (LibraryLook) -> Void
+    let onStar: (LibraryLook) -> Void
+
+    private var gridItems: [GridItem] {
+        [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+    }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(looks) { look in
-                    HomeLookTile(look: look,
-                                 photo: photos[look.id] ?? .golden,
-                                 image: images[look.id],
-                                 isOn: isCurrent(look)) {
-                        onPick(look)
-                    }
-                }
+        LazyVGrid(columns: gridItems, spacing: 8) {
+            ForEach(looks) { look in
+                HomeLookTile(look: look,
+                             photo: photos[look.id] ?? .golden,
+                             image: images[look.id],
+                             isPro: isPro,
+                             isOn: isCurrent(look),
+                             onStar: { onStar(look) },
+                             action: { onPick(look) })
             }
-            .padding(.horizontal, 16)
-            // Room for the picked ring's glow.
-            .padding(.vertical, 4)
         }
     }
 }
 
-/// Each look on its own person, its code large in the look's colour.
+/// A look on its person: the name in the look's colour, then its code in
+/// that colour and where it comes from. A quiet star favourites it; the
+/// look on the grade wears the pale ring.
 private struct HomeLookTile: View {
     let look: LibraryLook
     let photo: HeroPhoto
     let image: CGImage?
+    let isPro: Bool
     let isOn: Bool
+    let onStar: () -> Void
     let action: () -> Void
 
-    private static let width: CGFloat = 118
-    private static let height: CGFloat = 158
-    private static let radius: CGFloat = 14
+    private static let height: CGFloat = 210
 
-    /// "CN93", or the first word of a name without a stock code.
-    private var code: String {
-        if let code = LookSignature.code(in: look.name) { return code }
+    private var code: String? { LookSignature.code(in: look.name) }
+
+    private var title: String {
         let title = LookSignature.title(in: look.name)
-        return title.split(separator: " ").first.map(String.init) ?? title
+        return title.isEmpty ? look.name : title
+    }
+
+    private var isLocked: Bool {
+        if case .builtIn(let preset) = look.source { return preset.isPremium && !isPro }
+        return false
+    }
+
+    /// "Pro", "Free", the pack's name, "Imported" or "Your look".
+    private var origin: String {
+        switch look.source {
+        case .builtIn(let preset): return preset.isPremium ? "Pro" : "Free"
+        case .lut: return look.packName ?? "Imported"
+        case .saved: return "Your look"
+        }
     }
 
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .topLeading) {
+            HomeCaptionTile(height: Self.height) {
                 picture
-                LinearGradient(stops: [
-                    .init(color: .black.opacity(0.25), location: 0),
-                    .init(color: .clear, location: 0.35),
-                    .init(color: .clear, location: 0.55),
-                    .init(color: .black.opacity(0.8), location: 1),
-                ], startPoint: .top, endPoint: .bottom)
-                Text(code)
-                    .font(.luma(size: 22, weight: .heavy))
-                    .kerning(-1)
-                    .foregroundStyle(look.signature)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 9)
-                    .padding(.top, 8)
+            } caption: {
+                caption
             }
-            .frame(width: Self.width, height: Self.height)
-            .overlay(alignment: .bottomLeading) {
-                Text(LookSignature.title(in: look.name))
-                    .font(.luma(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .padding(.horizontal, 9)
-                    .padding(.bottom, 9)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                .strokeBorder(LumaTheme.edge, lineWidth: 1))
-            .pickedRing(isOn, cornerRadius: Self.radius)
-            .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+            .pickedRing(isOn, cornerRadius: 15)
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("\(look.name). Try on a clip")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .overlay(alignment: .topTrailing) {
+            starButton.padding(9)
+        }
+    }
+
+    private var caption: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            LookNameText(title, colour: look.signature, size: 14)
+                .minimumScaleFactor(0.8)
+            HStack(spacing: 4) {
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8.5, weight: .bold))
+                }
+                if let code {
+                    LookNameText(code, colour: look.signature, size: 11.5)
+                }
+                Text(code == nil ? origin : "· " + origin)
+                    .font(.luma(size: 11.5, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.white.opacity(0.66))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var starButton: some View {
+        Button {
+            onStar()
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: look.isFavourite ? "star.fill" : "star")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.black.opacity(0.42)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(look.isFavourite ? "Remove \(title) from favourites" : "Add \(title) to favourites")
     }
 
     @ViewBuilder
@@ -2012,129 +2322,168 @@ private final class HomeLookTileRender: ObservableObject {
 
 // MARK: - Continue editing
 
-private struct ContinueRail: View {
+/// Your other edits and saved grades as a two-column captioned grid.
+private struct HomeContinueGrid: View {
     let works: [HomeWork]
     let sessions: [GradeSession]
     let store: PersistenceStore
     let onOpen: (HomeWork) -> Void
 
+    private var gridItems: [GridItem] {
+        [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(works) { work in
-                    WorkPosterCard(work: work, store: store) { onOpen(work) }
-                }
-                // Saved grades are recents too; the badge keeps them from
-                // reading as projects.
-                ForEach(sessions) { session in
-                    GradeSessionPoster(session: session)
-                }
+        LazyVGrid(columns: gridItems, spacing: 8) {
+            ForEach(works) { work in
+                HomeWorkTile(work: work, store: store) { onOpen(work) }
             }
-            .padding(.horizontal, 16)
+            // Saved grades are recents too; the Video or Photo tag keeps
+            // them from reading as projects.
+            ForEach(sessions) { session in
+                GradeSessionTile(session: session)
+            }
         }
     }
 }
 
-private struct WorkPosterCard: View {
+/// An edit: its first frame, its runtime in the corner, its title, then
+/// "4 clips · KD2 Golden Hour" with the look in its colour.
+private struct HomeWorkTile: View {
     let work: HomeWork
     let store: PersistenceStore
     let action: () -> Void
 
+    static let height: CGFloat = 220
+
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HomeWorkPoster(work: work, store: store, maxPixel: 420)
-                    .frame(width: Poster.width, height: Poster.height)
-                    .clipShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous)
-                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .overlay(alignment: .topLeading) {
-                        if work.lookName != nil {
-                            Poster.dot(work.signature).padding(9)
-                        }
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        Poster.badge(Poster.duration(work.duration)).padding(7)
-                    }
-                Poster.caption(title: work.title, detail: work.shortDetail)
+            HomeCaptionTile(height: Self.height, badge: Poster.duration(work.duration)) {
+                HomeWorkPoster(work: work, store: store, maxPixel: 480)
+            } caption: {
+                caption
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel("\(work.title). \(work.shortDetail)")
     }
+
+    private var caption: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(work.title)
+                .font(.luma(size: 14, weight: .semibold))
+                .kerning(-0.15)
+                .foregroundStyle(LumaTheme.textPrimary)
+                .lineLimit(1)
+            HStack(spacing: 4) {
+                Text(work.lookName == nil ? work.clipsText : work.clipsText + " ·")
+                    .font(.luma(size: 11.5, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                if let name = work.lookName {
+                    LookNameText(name.replacingOccurrences(of: " · ", with: " "),
+                                 colour: work.signature, size: 11.5)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
-/// A saved Apply-a-Look session: real media frame + Video/Photo badge; tap
-/// restores the exact grade.
-private struct GradeSessionPoster: View {
+/// A saved Apply-a-Look session: its real media frame and a Video or Photo
+/// tag; a tap restores the exact grade.
+private struct GradeSessionTile: View {
     @EnvironmentObject private var app: AppModel
     let session: GradeSession
     @State private var thumb: CGImage?
+
+    private var title: String {
+        let title = LookSignature.title(in: session.baseLookName)
+        return title.isEmpty ? "Your grade" : title
+    }
+
+    private var detail: String {
+        "Grade · " + session.updatedAt.formatted(.dateTime.day().month(.abbreviated))
+    }
 
     var body: some View {
         Button {
             app.restoreGradeSession(session)
             LumaHaptics.shared.tap()
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                Color.clear
-                    .overlay {
-                        if let thumb {
-                            Image(decorative: thumb, scale: 1)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            LumaTheme.surfaceStrong
-                        }
-                    }
-                    .frame(width: Poster.width, height: Poster.height)
-                    .clipShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Poster.radius, style: .continuous)
-                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .overlay(alignment: .topLeading) {
-                        Poster.dot(LookSignature.colour(forLookNamed: session.baseLookName)).padding(9)
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        Poster.badge(session.isVideo ? "Video" : "Photo").padding(7)
-                    }
-                Poster.caption(title: LookSignature.title(in: session.baseLookName),
-                               detail: "Grade · " + session.updatedAt.formatted(.dateTime.day().month(.abbreviated)))
+            HomeCaptionTile(height: HomeWorkTile.height,
+                            badge: session.isVideo ? "Video" : "Photo",
+                            badgePlay: false) {
+                picture
+            } caption: {
+                VStack(alignment: .leading, spacing: 2) {
+                    LookNameText(title, colour: LookSignature.colour(forLookNamed: session.baseLookName), size: 14)
+                        .minimumScaleFactor(0.8)
+                    Text(detail)
+                        .font(.luma(size: 11.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.66))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel("\(title). \(detail)")
         .task {
             guard thumb == nil else { return }
             let url = app.store.sessionMediaURL(session)
             if session.isVideo {
                 let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
                 generator.appliesPreferredTrackTransform = true
-                generator.maximumSize = CGSize(width: 340, height: 340)
+                generator.maximumSize = CGSize(width: 420, height: 420)
                 thumb = try? await generator.image(
                     at: CMTime(seconds: 0.05, preferredTimescale: 600)).image
             } else if let ci = CIImage(contentsOf: url) {
-                let scale = min(1, 340 / max(ci.extent.width, ci.extent.height))
+                let scale = min(1, 420 / max(ci.extent.width, ci.extent.height))
                 let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
                 thumb = LookPipeline.shared.renderCGImage(from: scaled)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var picture: some View {
+        if let thumb {
+            Color.clear
+                .overlay {
+                    Image(decorative: thumb, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                }
+                .clipped()
+        } else {
+            LumaTheme.surfaceStrong
         }
     }
 }
 
 // MARK: - Pack spotlight
 
-/// The pack cover with three faces, its look count and one white button.
-/// Packs live in Looks now; this opens the pack page.
+/// The spotlight pack as one wide captioned tile: its cover in one of its
+/// looks, the pack's name in the pack's own colour, its looks and character,
+/// and the small glass tag (a paid price takes the pack's colour). The whole
+/// tile opens the pack page; packs live in Looks now.
 private struct PackSpotlight: View {
     let pack: LookPack
-    let kicker: String
-    let line: String
+    let detail: String
+    let tag: String?
+    /// A paid price takes the pack's colour (white with Names set to Dot).
+    let tagIsPaid: Bool
     let action: () -> Void
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
 
-    private static let radius: CGFloat = 20
-    private static let faces: [HeroPhoto] = [.neon, .drive, .gig]
+    private static let height: CGFloat = 232
+
+    private var tagColour: Color {
+        let inColour = (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+        return tagIsPaid && inColour ? pack.colour : LumaTheme.textPrimary
+    }
 
     private var hasNightLooks: Bool {
         pack.looks.contains { $0.name.contains("Afrobeats Glow") }
@@ -2146,87 +2495,31 @@ private struct PackSpotlight: View {
         hasNightLooks ? "Afrobeats Glow" : pack.looks.first?.name
     }
 
-    private var lightWord: String {
-        let words = pack.name.split(separator: " ").map(String.init)
-        return words.dropLast().joined(separator: " ")
-    }
-
-    private var heavyWord: String {
-        let words = pack.name.split(separator: " ").map(String.init)
-        return words.last ?? pack.name
-    }
-
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .leading) {
+            HomeCaptionTile(height: Self.height, badge: tag, badgePlay: false, badgeColour: tagColour) {
                 HomeGradedPhoto(photo: coverPhoto, lookName: coverLook, maxDimension: 900)
-                LinearGradient(colors: [.black.opacity(0.86), .black.opacity(0.15)],
-                               startPoint: .leading, endPoint: UnitPoint(x: 0.78, y: 0.5))
-                copy
+            } caption: {
+                caption
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 196)
-            .overlay(alignment: .bottomTrailing) { facesRow.padding(16) }
-            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                .strokeBorder(LumaTheme.edge, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         }
         .buttonStyle(.lumaPress)
-        .accessibilityLabel("\(pack.name). \(kicker). See the pack")
+        .accessibilityLabel("\(pack.name). \(detail). See the pack")
     }
 
-    private var copy: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(kicker)
-                .font(.luma(size: 13, weight: .semibold))
-                .foregroundStyle(LumaTheme.signal)
-                .lineLimit(1)
-            title
-                .padding(.top, 3)
-            Text(line)
-                .font(.luma(size: 13))
-                .foregroundStyle(LumaTheme.textSecondary)
-                .lineLimit(1)
-                .padding(.top, 3)
-            Spacer(minLength: 10)
-            Text("See the pack")
-                .font(.luma(size: 14, weight: .semibold))
-                .foregroundStyle(LumaTheme.onLight)
-                .padding(.horizontal, 16)
-                .frame(height: 42)
-                .background(LumaTheme.textPrimary,
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .padding(18)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private var title: some View {
-        if lightWord.isEmpty {
-            Text(heavyWord)
-                .font(.luma(size: 34, weight: .heavy))
-                .tracking(LumaType.tracking(for: 34))
-                .foregroundStyle(LumaTheme.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        } else {
-            LumaHeadline(light: lightWord, heavy: heavyWord, size: 34)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-    }
-
-    private var facesRow: some View {
-        HStack(spacing: -10) {
-            ForEach(Self.faces, id: \.self) { photo in
-                HomeGradedPhoto(photo: photo)
-                    .frame(width: 34, height: 34)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(Color.black, lineWidth: 2))
+    private var caption: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                LookNameText(pack.name, colour: pack.colour, size: 24, weight: .bold)
+                    .minimumScaleFactor(0.7)
+                Text(detail)
+                    .font(.luma(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
+            Spacer(minLength: 0)
+            HomeGlassPillLabel(icon: nil, title: "See the pack")
         }
-        .allowsHitTesting(false)
     }
 }
