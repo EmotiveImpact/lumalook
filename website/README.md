@@ -91,3 +91,31 @@ and `sitemap.xml` all use the same domain.
 - The privacy policy describes what the app does today: on-device editing,
   captions on device where the language allows, RevenueCat for purchases,
   no analytics. Update it before adding any SDK that collects data.
+
+## Lifetime on the web (Polar) and the waitlist (Resend)
+
+**Lifetime.** The Lifetime card's "Buy Lifetime" button is a Polar checkout
+link (organisation "Emotive", slug `emotive-impact`; product "LumaLook
+Lifetime", $79.99 / £64.99, one-off). Polar is the merchant of record, so it
+charges tax and sends the receipt. After paying, buyers land on `/thanks`.
+Polar only takes real payments once the organisation passes Polar's account
+review (identity check, payout account, support email: Finance, then Account
+in the Polar dashboard).
+
+**How a web buyer gets Lifetime in the app (planned, not built yet).** The
+purchase is tied to the email paid with. In the app, You, then "Restore web
+purchase", asks for that email; a small server route emails a one-time code
+(Resend), checks Polar for a paid LumaLook Lifetime order on that email, then
+grants the RevenueCat entitlement `pro` as a lifetime promotional entitlement
+to the app's RevenueCat user (REST API, secret key kept on the server). Being
+an email sign-in rather than a licence key keeps it inside App Store guideline
+3.1.3(b) (multiplatform services), and Lifetime is also sold as an in-app
+purchase. The app itself must not link to or mention the web price, except in
+storefronts where Apple allows external purchase links (such as the US).
+
+**Waitlist.** The form in the closing band posts to `/api/waitlist`
+(`api/waitlist.js` at the repo root, a Vercel function). It saves the address
+as a Resend contact in the "LumaLook waitlist" segment and sends one
+confirmation from `hello@lumalook.app`. A repeat signup gets no second email.
+The form hides itself once `APP_STORE_URL` is set in `site.js`.
+Vercel env: `RESEND_API_KEY`, `RESEND_WAITLIST_SEGMENT_ID`, `WAITLIST_REPLY_TO`.
