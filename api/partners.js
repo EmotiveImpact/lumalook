@@ -7,7 +7,7 @@
 // Environment (Vercel project settings, the same ones /api/founders uses):
 //   RESEND_API_KEY        full-access key
 //   PARTNERS_NOTIFY_TO    inbox for enquiries; falls back to FOUNDERS_NOTIFY_TO, then WAITLIST_REPLY_TO
-//   WAITLIST_FROM         optional sender, defaults to "LumaLook <hello@lumalook.app>"
+//   WAITLIST_FROM         optional sender, defaults to "Lumalook <hello@lumalook.app>"
 
 const API = "https://api.resend.com";
 const EMAIL_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
@@ -109,7 +109,7 @@ module.exports = async function handler(req, res) {
   if (!EMAIL_RE.test(e.email)) return res.status(400).json({ ok: false, error: "email" });
   if (!e.name || !e.org || !e.message) return res.status(400).json({ ok: false, error: "fields" });
 
-  const from = process.env.WAITLIST_FROM || "LumaLook <hello@lumalook.app>";
+  const from = process.env.WAITLIST_FROM || "Lumalook <hello@lumalook.app>";
   const list = rows(e);
   const intro = "A new partner enquiry from lumalook.app/partners. Reply to this email to answer them directly.";
   try {

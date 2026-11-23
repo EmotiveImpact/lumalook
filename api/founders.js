@@ -2,7 +2,7 @@
 //
 // 1. Emails the full application to the team inbox, with reply-to set to the
 //    applicant so a reply goes straight to them.
-// 2. Saves the applicant as a Resend contact in the "LumaLook Founding
+// 2. Saves the applicant as a Resend contact in the "Lumalook Founding
 //    Creators" segment (if the segment is configured).
 // 3. Sends the applicant one short confirmation with a copy of what they sent,
 //    only the first time that address is seen.
@@ -13,8 +13,8 @@
 // Environment (Vercel project settings):
 //   RESEND_API_KEY                full-access key (already used by /api/waitlist)
 //   FOUNDERS_NOTIFY_TO            inbox that receives applications; falls back to WAITLIST_REPLY_TO
-//   RESEND_FOUNDERS_SEGMENT_ID    optional, the "LumaLook Founding Creators" segment
-//   WAITLIST_FROM                 optional sender, defaults to "LumaLook <hello@lumalook.app>"
+//   RESEND_FOUNDERS_SEGMENT_ID    optional, the "Lumalook Founding Creators" segment
+//   WAITLIST_FROM                 optional sender, defaults to "Lumalook <hello@lumalook.app>"
 
 const API = "https://api.resend.com";
 const EMAIL_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
@@ -63,7 +63,7 @@ function rows(app) {
     ["Makes", app.makes.join(", ") || "Not given"],
     ["Monk skin tone", app.monk ? app.monk + " of 10 (consent given)" : "Not given"],
     ["What apps get wrong", app.wrong],
-    ["What they want from LumaLook", app.want || "Not given"],
+    ["What they want from Lumalook", app.want || "Not given"],
   ];
 }
 
@@ -127,7 +127,7 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ ok: false, error: "fields" });
   }
 
-  const from = process.env.WAITLIST_FROM || "LumaLook <hello@lumalook.app>";
+  const from = process.env.WAITLIST_FROM || "Lumalook <hello@lumalook.app>";
   const list = rows(app);
 
   try {
@@ -174,14 +174,14 @@ module.exports = async function handler(req, res) {
     if (!isNew) return res.status(200).json({ ok: true });
 
     // 3. A copy for the applicant (best effort).
-    const youIntro = "Thanks for applying to be a LumaLook Founding Creator. We read every application ourselves and pick the first group of about 30 when the next test build is ready. We'll email you either way.";
-    const youFooter = "Want to change or withdraw your application, or have us delete it? Just reply to this email.<br>LumaLook, by Emotive Impact &middot; lumalook.app";
+    const youIntro = "Thanks for applying to be a Lumalook Founding Creator. We read every application ourselves and pick the first group of about 30 when the next test build is ready. We'll email you either way.";
+    const youFooter = "Want to change or withdraw your application, or have us delete it? Just reply to this email.<br>Lumalook, by Emotive Impact &middot; lumalook.app";
     const copy = {
       from,
       to: [app.email],
       reply_to: notifyTo,
-      subject: "Your LumaLook Founding Creators application",
-      text: plain(youIntro, list, "Want to change or withdraw your application, or have us delete it? Just reply to this email.\nLumaLook, by Emotive Impact, https://lumalook.app"),
+      subject: "Your Lumalook Founding Creators application",
+      text: plain(youIntro, list, "Want to change or withdraw your application, or have us delete it? Just reply to this email.\nLumalook, by Emotive Impact, https://lumalook.app"),
       html: shell("Your application is in.", esc(youIntro), list, youFooter),
     };
     const sent = await resend("/emails", "POST", copy);

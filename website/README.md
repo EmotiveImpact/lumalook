@@ -1,4 +1,4 @@
-# LumaLook website
+# Lumalook website
 
 The marketing site for the app, plus the privacy policy, terms and support
 pages the App Store listing links to. Plain HTML and CSS with a few lines of
@@ -14,7 +14,7 @@ website/
   terms.html      terms of use, including the subscription disclosure
   support.html    help and contact (the App Store support URL)
   founders.html   Founding Creators application form (posts to /api/founders)
-  mission.html    why LumaLook exists, the Shirley card history, Emotive Impact
+  mission.html    why Lumalook exists, the Shirley card history, Emotive Impact
   partners.html   ways to partner, Awards teaser, enquiry form (posts to /api/partners)
   showcase.html   creators' work, shared with permission (placeholders until filled)
   blog.html       blog index; posts live in blog/<slug>.html
@@ -85,9 +85,9 @@ and `sitemap.xml` all use the same domain.
   7-day trial or $5.99 a month, Lifetime $79.99 with every pack, packs $2.99
   and $3.99. Change `index.html` and `terms.html` together if they move.
 - Look and pack counts (123 looks, 11 packs) come from
-  `LumaLook/Engine/LookPacks.swift`.
+  `Lumalook/Engine/LookPacks.swift`.
 - The graded photos in `img/hero` and `img/looks` were made by applying the
-  app's own `.cube` files (`LumaLook/Resources/FilmLUTs`) to the sample
+  app's own `.cube` files (`Lumalook/Resources/FilmLUTs`) to the sample
   photos, so each card shows exactly what that look does. If a look's LUT
   changes, regrade its card. The hero's wide version extends the red wall
   of the original portrait so it fills a landscape frame.
@@ -100,7 +100,7 @@ and `sitemap.xml` all use the same domain.
 ## Lifetime on the web (Polar) and the waitlist (Resend)
 
 **Lifetime.** The Lifetime card's "Buy Lifetime" button is a Polar checkout
-link (organisation "Emotive", slug `emotive-impact`; product "LumaLook
+link (organisation "Emotive", slug `emotive-impact`; product "Lumalook
 Lifetime", $79.99 / £64.99, one-off). Polar is the merchant of record, so it
 charges tax and sends the receipt. After paying, buyers land on `/thanks`.
 Polar only takes real payments once the organisation passes Polar's account
@@ -110,7 +110,7 @@ in the Polar dashboard).
 **How a web buyer gets Lifetime in the app (planned, not built yet).** The
 purchase is tied to the email paid with. In the app, You, then "Restore web
 purchase", asks for that email; a small server route emails a one-time code
-(Resend), checks Polar for a paid LumaLook Lifetime order on that email, then
+(Resend), checks Polar for a paid Lumalook Lifetime order on that email, then
 grants the RevenueCat entitlement `pro` as a lifetime promotional entitlement
 to the app's RevenueCat user (REST API, secret key kept on the server). Being
 an email sign-in rather than a licence key keeps it inside App Store guideline
@@ -120,7 +120,7 @@ storefronts where Apple allows external purchase links (such as the US).
 
 **Waitlist.** The form in the closing band posts to `/api/waitlist`
 (`api/waitlist.js` at the repo root, a Vercel function). It saves the address
-as a Resend contact in the "LumaLook waitlist" segment and sends one
+as a Resend contact in the "Lumalook waitlist" segment and sends one
 confirmation from `hello@lumalook.app`. A repeat signup gets no second email.
 The form hides itself once `APP_STORE_URL` is set in `site.js`.
 Vercel env: `RESEND_API_KEY`, `RESEND_WAITLIST_SEGMENT_ID`, `WAITLIST_REPLY_TO`.
@@ -133,7 +133,7 @@ It posts to `/api/founders` (`api/founders.js`), which:
 
 1. emails the whole application to `FOUNDERS_NOTIFY_TO` (falls back to
    `WAITLIST_REPLY_TO`), with reply-to set to the applicant;
-2. saves the applicant as a Resend contact, in the "LumaLook Founding
+2. saves the applicant as a Resend contact, in the "Lumalook Founding
    Creators" segment when `RESEND_FOUNDERS_SEGMENT_ID` is set;
 3. sends the applicant one copy of what they sent, only the first time that
    address is seen, so the form can't be used to flood an inbox.

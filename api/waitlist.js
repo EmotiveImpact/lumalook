@@ -1,13 +1,13 @@
 // POST /api/waitlist  { email, website }  (website is a honeypot that people never see)
 //
-// Saves the address as a Resend contact in the LumaLook waitlist segment and
+// Saves the address as a Resend contact in the Lumalook waitlist segment and
 // sends one short confirmation email. A repeat signup is added to the segment
 // again but gets no second email, so the form cannot be used to flood someone.
 //
 // Environment (Vercel project settings):
 //   RESEND_API_KEY              full-access key (contacts need more than sending access)
-//   RESEND_WAITLIST_SEGMENT_ID  the "LumaLook waitlist" segment
-//   WAITLIST_FROM               optional, defaults to "LumaLook <hello@lumalook.app>"
+//   RESEND_WAITLIST_SEGMENT_ID  the "Lumalook waitlist" segment
+//   WAITLIST_FROM               optional, defaults to "Lumalook <hello@lumalook.app>"
 //   WAITLIST_REPLY_TO           optional reply-to address
 
 const API = "https://api.resend.com";
@@ -26,9 +26,9 @@ function resend(path, method, body) {
 
 function confirmation(to) {
   const text = [
-    "You're on the LumaLook waitlist.",
+    "You're on the Lumalook waitlist.",
     "",
-    "LumaLook is a camera, grade room and video editor for iPhone, with film looks tuned on deep skin first.",
+    "Lumalook is a camera, grade room and video editor for iPhone, with film looks tuned on deep skin first.",
     "We'll email you once, on launch day, with the App Store link. Nothing else in between.",
     "",
     "Want everything for good? Lifetime is $79.99 once on the web: every look and every pack, now and in future.",
@@ -36,7 +36,7 @@ function confirmation(to) {
     "",
     "Didn't sign up? Ignore this email and you won't hear from us again.",
     "",
-    "LumaLook, by Emotive Impact",
+    "Lumalook, by Emotive Impact",
     "https://lumalook.app",
   ].join("\n");
 
@@ -46,20 +46,20 @@ function confirmation(to) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#f7f8f8;">
 <tr><td style="font-size:15px;font-weight:700;letter-spacing:-0.02em;padding-bottom:36px;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ffc53d;margin-right:8px;vertical-align:1px;"></span>lumalook</td></tr>
 <tr><td style="font-size:30px;line-height:1.15;font-weight:650;letter-spacing:-0.04em;padding-bottom:18px;">You're on the list.</td></tr>
-<tr><td style="font-size:15.5px;line-height:1.6;color:#a3a6ad;padding-bottom:16px;">LumaLook is a camera, grade room and video editor for iPhone, with film looks tuned on deep skin first.</td></tr>
+<tr><td style="font-size:15.5px;line-height:1.6;color:#a3a6ad;padding-bottom:16px;">Lumalook is a camera, grade room and video editor for iPhone, with film looks tuned on deep skin first.</td></tr>
 <tr><td style="font-size:15.5px;line-height:1.6;color:#a3a6ad;padding-bottom:30px;">We'll email you once, on launch day, with the App Store link. Nothing else in between.</td></tr>
 <tr><td style="background:#121316;border-radius:14px;padding:22px 22px 24px;">
 <div style="font-size:13px;font-weight:650;color:#ffc53d;padding-bottom:6px;">Lifetime, $79.99 once</div>
 <div style="font-size:15px;line-height:1.55;color:#f7f8f8;padding-bottom:16px;">Every look and every pack, now and in future. No subscription.</div>
 <a href="https://lumalook.app/#pricing" style="display:inline-block;background:#ffc53d;color:#141006;font-size:14.5px;font-weight:650;text-decoration:none;padding:12px 18px;border-radius:10px;">See Lifetime</a>
 </td></tr>
-<tr><td style="font-size:13px;line-height:1.6;color:#6e727a;padding-top:30px;">Didn't sign up? Ignore this email and you won't hear from us again.<br>LumaLook, by Emotive Impact &middot; <a href="https://lumalook.app" style="color:#a3a6ad;">lumalook.app</a></td></tr>
+<tr><td style="font-size:13px;line-height:1.6;color:#6e727a;padding-top:30px;">Didn't sign up? Ignore this email and you won't hear from us again.<br>Lumalook, by Emotive Impact &middot; <a href="https://lumalook.app" style="color:#a3a6ad;">lumalook.app</a></td></tr>
 </table></td></tr></table></body></html>`;
 
   const msg = {
-    from: process.env.WAITLIST_FROM || "LumaLook <hello@lumalook.app>",
+    from: process.env.WAITLIST_FROM || "Lumalook <hello@lumalook.app>",
     to: [to],
-    subject: "You're on the LumaLook waitlist",
+    subject: "You're on the Lumalook waitlist",
     text,
     html,
   };

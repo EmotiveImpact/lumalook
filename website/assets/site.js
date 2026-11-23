@@ -1,4 +1,4 @@
-/* LumaLook website: the few things that need script. Everything still
+/* Lumalook website: the few things that need script. Everything still
    reads correctly with script off. */
 (function () {
   "use strict";
