@@ -533,6 +533,10 @@ struct CameraLooksSheet: View {
     @EnvironmentObject private var app: AppModel
     @EnvironmentObject private var storeService: StoreService
     @AppStorage(CameraFavourites.key) private var favouritesRaw = ""
+    /// You › Appearance: the strength ruler turns into the dial, and pack
+    /// prices take the pack's colour only while names are in colour.
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
     @StateObject private var thumbs = CameraLookThumbs()
     @State private var filter: CameraLookFilter = .all
     @State private var search = ""
@@ -722,7 +726,8 @@ struct CameraLooksSheet: View {
 
     private func sectionRow(_ section: CameraLookSection) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(section.title, tag: section.tag, count: section.looks.count)
+            sectionHeader(section.title, tag: section.tag, count: section.looks.count,
+                          colour: PackCatalog.pack(id: section.id)?.colour)
             lookRow(section.looks, trailingImport: section.id == "imported")
         }
         .padding(.top, 12)
@@ -736,14 +741,20 @@ struct CameraLooksSheet: View {
         .padding(.top, 12)
     }
 
-    private func sectionHeader(_ title: String, tag: CameraLookSection.Tag?, count: Int) -> some View {
+    /// `colour` is a pack's: its name follows the Names choice.
+    private func sectionHeader(_ title: String, tag: CameraLookSection.Tag?, count: Int,
+                               colour: Color? = nil) -> some View {
         HStack(spacing: 8) {
-            Text(title)
-                .font(.luma(size: 14, weight: .bold))
-                .kerning(-0.1)
-                .foregroundStyle(CamLab.text)
-                .lineLimit(1)
-            if let tag { tagPill(tag) }
+            if let colour {
+                LookNameText(title, colour: colour, size: 14, weight: .bold)
+            } else {
+                Text(title)
+                    .font(.luma(size: 14, weight: .bold))
+                    .kerning(-0.1)
+                    .foregroundStyle(CamLab.text)
+                    .lineLimit(1)
+            }
+            if let tag { tagPill(tag, colour: colour) }
             Spacer(minLength: 0)
             Text("\(count)")
                 .font(.luma(size: 11.5, weight: .semibold))
@@ -753,7 +764,7 @@ struct CameraLooksSheet: View {
         .padding(.bottom, 8)
     }
 
-    private func tagPill(_ tag: CameraLookSection.Tag) -> some View {
+    private func tagPill(_ tag: CameraLookSection.Tag, colour: Color? = nil) -> some View {
         let text: String
         let ink: Color
         let fill: Color
@@ -772,7 +783,9 @@ struct CameraLooksSheet: View {
             fill = Color.white.opacity(0.14)
         case .price(let price):
             text = price
-            ink = Color(hex: 0xD9DADE)
+            // A paid price wears the pack's colour while names are in colour.
+            let inColour = (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+            ink = inColour ? (colour ?? Color(hex: 0xD9DADE)) : Color(hex: 0xD9DADE)
             fill = Color.white.opacity(0.09)
         }
         return Text(text)
@@ -880,11 +893,7 @@ struct CameraLooksSheet: View {
                             .padding(.leading, 6)
                     }
                 }
-            Text(look.code)
-                .font(.luma(size: 11, weight: .bold))
-                .kerning(0.2)
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            LookNameText(look.code, colour: look.signature, size: 11, weight: .bold)
                 .padding(.top, 6)
             Text(look.title)
                 .font(.luma(size: 10.5))
@@ -944,35 +953,53 @@ struct CameraLooksSheet: View {
 
     private var footer: some View {
         let strength = Int(app.settings.intensity.rounded())
-        let index = min(max(Int((app.settings.intensity / 5).rounded()), 0), Self.strengthStops.count - 1)
         let worn = app.cameraWornLook
+        let dial = (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial
         return VStack(spacing: 0) {
             Rectangle()
                 .fill(Color.white.opacity(0.07))
                 .frame(height: 1)
             HStack(spacing: 10) {
-                (Text(worn.code).font(.luma(size: 11, weight: .bold)).foregroundColor(.white)
-                 + Text(" " + wornLine(worn)).font(.luma(size: 11, weight: .semibold)))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 4) {
+                    LookNameText(worn.code, colour: worn.signature, size: 11, weight: .bold)
+                        .fixedSize()
+                    Text(wornLine(worn))
+                        .font(.luma(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 Spacer(minLength: 0)
-                (Text("STRENGTH ").font(.luma(size: 11, weight: .semibold))
-                 + Text("\(strength)%").font(.luma(size: 11, weight: .bold)).foregroundColor(.white))
-                    .lineLimit(1)
-                    .fixedSize()
+                // The dial draws its own title and value.
+                if !dial {
+                    (Text("STRENGTH ").font(.luma(size: 11, weight: .semibold))
+                     + Text("\(strength)%").font(.luma(size: 11, weight: .bold)).foregroundColor(.white))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .foregroundStyle(Color.white.opacity(0.62))
             .padding(.horizontal, 14)
             .padding(.top, 8)
             .frame(height: 22, alignment: .top)
+            strengthControl(dial: dial)
+                .padding(.top, 2)
+        }
+        .frame(height: dial ? 132 : 70, alignment: .top)
+    }
+
+    /// The strength ruler, or the dial when that is the Sliders choice.
+    @ViewBuilder
+    private func strengthControl(dial: Bool) -> some View {
+        if dial {
+            LumaStrengthDial(value: $app.settings.intensity, title: "Strength", needle: CamLab.sig)
+        } else {
+            let index = min(max(Int((app.settings.intensity / 5).rounded()), 0), Self.strengthStops.count - 1)
             CamRuler(ticks: Self.strengthStops.map { "\($0)%" }, index: index,
                      spacing: 14, labelEvery: 5) { stop in
                 guard Self.strengthStops.indices.contains(stop) else { return }
                 app.settings.intensity = Double(Self.strengthStops[stop])
             }
-            .padding(.top, 2)
         }
-        .frame(height: 70, alignment: .top)
     }
 
     /// "Golden Hour · Signature · free": the look, where it comes from, and
@@ -1060,6 +1087,7 @@ struct CameraLockCard: View {
     let onClose: () -> Void
 
     @EnvironmentObject private var storeService: StoreService
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
     @State private var showPaywall = false
     @State private var trial: String?
     @State private var errorMessage: String?
@@ -1087,6 +1115,20 @@ struct CameraLockCard: View {
         lock.pack.flatMap { storeService.packProducts[$0.id] }
     }
     private var verb: String { stills ? "shoot" : "record" }
+    /// The spinner on the pack button: ink on the pack's colour, white on
+    /// the quiet glass it wears with names set to Dot and code.
+    private var buyInk: Color {
+        (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour ? CamLab.ink : CamLab.text
+    }
+    /// The look's own colour for its name: a pack look's from its pack,
+    /// a built-in look's hand-picked one.
+    private var lookColour: Color {
+        if let packID = lock.previewPackID ?? lock.pack?.id,
+           let look = PackCatalog.pack(id: packID)?.looks.first(where: { $0.name == lock.lookName }) {
+            return look.signature
+        }
+        return LookSignature.colour(forLookNamed: lock.lookName)
+    }
     private var need: String { lock.pack.map { "\($0.name) or Pro" } ?? "Pro" }
     /// A free trial is only promised to an account StoreKit says can have it.
     private var proTitle: String {
@@ -1095,11 +1137,7 @@ struct CameraLockCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(lock.lookName)
-                .font(.luma(size: 17, weight: .bold))
-                .tracking(-0.2)
-                .foregroundStyle(CamLab.text)
-                .lineLimit(1)
+            LookNameText(lock.lookName, colour: lookColour, size: 17, weight: .bold)
                 .minimumScaleFactor(0.8)
             Text("Trying looks is always free. To \(verb) with this one you need \(need).")
                 .font(.luma(size: 13, weight: .regular))
@@ -1113,11 +1151,20 @@ struct CameraLockCard: View {
                 .padding(.bottom, 14)
             VStack(spacing: 8) {
                 if let pack = lock.pack {
-                    choice("Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
-                           primary: true, busy: storeService.purchaseInFlight) { buyPack() }
+                    // The pack's own colour, as on its Buy button in the Store.
+                    LumaColourButton(title: storeService.purchaseInFlight ? " "
+                                        : "Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
+                                     colour: pack.colour, height: 44, fullWidth: true) { buyPack() }
+                        .overlay {
+                            if storeService.purchaseInFlight {
+                                ProgressView().tint(buyInk)
+                            }
+                        }
+                        .minimumScaleFactor(0.75)
                     choice(proTitle) { openPaywall() }
                 } else {
-                    choice(proTitle, primary: true) { openPaywall() }
+                    // The card's one main action follows You › Appearance.
+                    LumaMainButton(title: proTitle, height: 44, cornerRadius: 14) { openPaywall() }
                 }
                 if let freeLookName {
                     choice("\(stills ? "Shoot" : "Record") with \(freeLookName), free") {

@@ -165,6 +165,8 @@ struct CameraLiveLookView: View {
     @State private var showHint = false
     @State private var hintToken = 0
     @AppStorage("lumalook.camera.hintSeen") private var hintSeen = false
+    /// You › Appearance › Sliders: Pro's ruler turns into the dial.
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
 
     private static let space = "camera"
     /// The lab's ease for sheets and the picture: quick out, soft landing.
@@ -367,7 +369,7 @@ struct CameraLiveLookView: View {
             CamToast(text: statusCaption)
                 .id(statusCaption)
                 .frame(width: size.width)
-                .offset(y: proOpen ? chromeBottom(size) - Self.proHeight - 44
+                .offset(y: proOpen ? chromeBottom(size) - proSheetHeight - 44
                          : (showLookBrowser ? size.height - 640 : chromeBottom(size) - 170))
                 .transition(.opacity)
         }
@@ -705,11 +707,8 @@ struct CameraLiveLookView: View {
         if let look = swipe?.next ?? nameFlash {
             let strength = Int(app.settings.intensity.rounded())
             VStack(spacing: 4) {
-                Text(look.title)
-                    .font(.luma(size: 32, weight: .bold))
-                    .kerning(-0.96)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                LookNameText(look.title, colour: look.signature, size: 32, weight: .bold,
+                             alwaysDot: true)
                     .minimumScaleFactor(0.6)
                 Text("\(look.code) · \(strength)%")
                     .font(.luma(size: 13))
@@ -1207,14 +1206,9 @@ struct CameraLiveLookView: View {
         } label: {
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(worn.signature)
-                        .frame(width: 7, height: 7)
-                    Text(worn.title)
-                        .font(.luma(size: 17, weight: .semibold))
-                        .kerning(-0.25)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                    // The dot stays in both Names choices; in colour the
+                    // name takes the look's colour too.
+                    LookNameText(worn.title, colour: worn.signature, size: 17, alwaysDot: true)
                         .minimumScaleFactor(0.7)
                     if locked {
                         CamGlyph(icon: .lock, size: 12, weight: 2.2)
@@ -1665,10 +1659,7 @@ struct CameraLiveLookView: View {
                 CamRing(code: worn.code, colour: worn.signature, strength: strength / 100, size: ring)
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 5) {
-                        Text(worn.title)
-                            .font(.luma(size: large ? 14.5 : 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
+                        LookNameText(worn.title, colour: worn.signature, size: large ? 14.5 : 14)
                         if locked {
                             CamGlyph(icon: .lock, size: 11, weight: 2.2)
                                 .foregroundStyle(Color.white.opacity(0.85))
@@ -2358,6 +2349,26 @@ struct CameraLiveLookView: View {
     /// lower picture, and the dock stays in front of nothing.
     static let proHeight: CGFloat = 338
 
+    /// Sliders set to Dial in You › Appearance: Pro's ruler is the curved
+    /// dial (108 pt against the ruler's 46), so Pro grows by the difference
+    /// and its tiles move down with it.
+    private var proDial: Bool { (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial }
+    private var proExtra: CGFloat { proDial ? 62 : 0 }
+    private var proSheetHeight: CGFloat { Self.proHeight + proExtra }
+
+    /// Pro's ruler, or the dial when that is the Sliders choice. Both keep
+    /// the yellow needle and drive the same readout.
+    @ViewBuilder
+    private func proRuler(target: DialTarget) -> some View {
+        if proDial {
+            LumaStopDial(stops: dialTicks(for: target), index: dialPosition(for: target),
+                         title: target.spoken, needle: CamLab.sig) { applyDial($0, to: target) }
+        } else {
+            CamRuler(ticks: dialTicks(for: target), index: dialPosition(for: target),
+                     spacing: target.spacing) { applyDial($0, to: target) }
+        }
+    }
+
     private func proSheet(size: CGSize) -> some View {
         let w = size.width
         let target = dialTarget
@@ -2379,16 +2390,15 @@ struct CameraLiveLookView: View {
             proReadouts
                 .frame(width: max(w - 40, 0))
                 .offset(x: 20, y: 62)
-            CamRuler(ticks: dialTicks(for: target), index: dialPosition(for: target),
-                     spacing: target.spacing) { applyDial($0, to: target) }
+            proRuler(target: target)
                 .id(target)
                 .frame(width: w)
                 .offset(y: 120)
             proTiles
                 .frame(width: max(w - 40, 0))
-                .offset(x: 20, y: 184)
+                .offset(x: 20, y: 184 + proExtra)
         }
-        .frame(width: w, height: Self.proHeight, alignment: .topLeading)
+        .frame(width: w, height: proSheetHeight, alignment: .topLeading)
         .background {
             ZStack {
                 CamBackdrop().clipShape(shape).allowsHitTesting(false)
@@ -2396,7 +2406,7 @@ struct CameraLiveLookView: View {
             }
         }
         .contentShape(Rectangle())
-        .offset(y: chromeBottom(size) - Self.proHeight)
+        .offset(y: chromeBottom(size) - proSheetHeight)
     }
 
     private var proDismissDrag: some Gesture {
