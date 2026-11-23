@@ -721,7 +721,12 @@ enum PackInstaller {
     /// SPATIAL (vignette varies by pixel position — poison in a lattice;
     /// bloom's kernel eats edge texels, zeroing the white point). They are
     /// stripped here and remain live pipeline passes at apply time.
-    static func cubeText(for recipe: LookRecipe, title: String) -> String? {
+    ///
+    /// `trueColour` is the switch position to bake with. A batch that bakes
+    /// many looks passes one value for all of them, so the switch moving
+    /// half way cannot leave the batch mixed.
+    static func cubeText(for recipe: LookRecipe, title: String,
+                         trueColour: Bool = TrueColour.isOn) -> String? {
         var recipe = recipe
         recipe.bloom = 0
         recipe.vignette = 0
@@ -747,7 +752,7 @@ enum PackInstaller {
                                format: .RGBAf,
                                colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
 
-        let graded = LookPipeline.shared.applyRecipe(recipe, to: identity)
+        let graded = LookPipeline.shared.applyRecipe(recipe, to: identity, trueColour: trueColour)
             .cropped(to: identity.extent)
 
         var out = [Float32](repeating: 0, count: width * height * 4)

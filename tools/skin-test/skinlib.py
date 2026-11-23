@@ -138,14 +138,50 @@ def identity_cube(n: int) -> np.ndarray:
 
 # ---------------------------------------------------------------- looks
 
+def before_bake(look_id):
+    """Where a recipe look's bake from before True Colour lives (out/luts)."""
+    return BAKE_DIR / "luts" / f"{look_id}.u16"
+
+
 def load_looks():
+    """Every look, with a colour cube under "lut": a film look's own .cube
+    file, or a recipe look's bake as it shipped before True Colour (out/luts,
+    the "before" of the skin test, which is never baked again).
+
+    A recipe added since then has no "before", so its "lut" is None. The gate
+    and verify.py do not need it: they judge the bakes of today's engine
+    (out/luts_tc, out/luts_classic). The tools that draw or measure the
+    "before" leave such a look out."""
     looks = json.loads((HERE / "looks.json").read_text())
     for lk in looks:
         if lk["cube"]:
             lk["lut"] = read_cube(FILM_DIR / lk["cube"])
         else:
-            lk["lut"] = read_baked(BAKE_DIR / "luts" / f"{lk['id']}.u16")
+            path = before_bake(lk["id"])
+            lk["lut"] = read_baked(path) if path.exists() else None
     return looks
+
+
+def own_input_range(path):
+    """True when a .cube file sets its own input range (DOMAIN_MIN/MAX other
+    than 0 and 1). The app stretches the picture into that range before the
+    cube and shows such a LUT without the skin guard (TrueColour.lutData), so
+    a lattice point of the cube is not a plain screen colour and the skin test
+    cannot read it as one."""
+    for line in Path(path).read_text(errors="replace").splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith("#"):
+            continue
+        if parts[0].upper() in ("DOMAIN_MIN", "DOMAIN_MAX"):
+            want = 0.0 if parts[0].upper() == "DOMAIN_MIN" else 1.0
+            try:
+                if any(abs(float(v) - want) > 1e-6 for v in parts[1:4]):
+                    return True
+            except ValueError:
+                return True
+        elif parts[0][0] in "+-.0123456789":
+            break                   # the colour table has started; the header is over
+    return False
 
 
 def _vignette_profile():

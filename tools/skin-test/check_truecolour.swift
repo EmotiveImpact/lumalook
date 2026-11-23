@@ -847,10 +847,79 @@ do {
           "a cube that is already 64 points is passed through untouched")
 }
 
-// MARK: - 9. Real Core Image
+// MARK: - 9. Baking installed looks again
+
+section("9. Installed pack looks baked again when the switch moves: the books stay honest")
+do {
+    // Pack looks are saved as cube files and overwritten one by one, in the
+    // background, when the True Colour switch moves. The saved stamp has to
+    // mean "every cube on disk was baked this way", whatever the person does
+    // with the switch, or with the app, while a batch runs.
+    let d = UserDefaults.standard
+    func saved() -> String { d.string(forKey: TrueColour.bakedKey) ?? "none" }
+    func flip(_ on: Bool) { d.set(on, forKey: TrueColour.key) }
+
+    flip(true)
+    d.removeObject(forKey: TrueColour.bakedKey)
+    let first = TrueColour.Rebake.isNeeded
+    var mode = TrueColour.Rebake.begin()
+    var again = TrueColour.Rebake.finish(bakedOn: mode, complete: true)
+    check(first && mode && !again && saved() == TrueColour.stamp(on: true) && !TrueColour.Rebake.isNeeded,
+          "a first launch bakes once, with the switch as it stands, and is then settled", "stamp \(saved())")
+
+    // The switch goes off. The batch starts and overwrites the first cubes...
+    flip(false)
+    let wanted = TrueColour.Rebake.isNeeded
+    mode = TrueColour.Rebake.begin()
+    check(wanted && !mode && saved() == "none",
+          "the stamp is cleared before the first cube is overwritten (closing the app half way bakes again next launch)",
+          "stamp \(saved())")
+
+    // ...and the person switches it straight back on while the batch runs.
+    flip(true)
+    check(TrueColour.Rebake.isNeeded,
+          "off, then back on before the batch ends: the looks are still known to need baking",
+          "stamp \(saved()), switch on")
+    again = TrueColour.Rebake.finish(bakedOn: mode, complete: true)
+    check(again && saved() == "none",
+          "a batch baked for a switch position that has since changed is not signed off, and another is due",
+          "stamp \(saved())")
+    mode = TrueColour.Rebake.begin()
+    again = TrueColour.Rebake.finish(bakedOn: mode, complete: true)
+    check(mode && !again && saved() == TrueColour.stamp(on: true) && !TrueColour.Rebake.isNeeded,
+          "the follow-up batch bakes for the switch as it now stands and settles it", "stamp \(saved())")
+
+    flip(false)
+    mode = TrueColour.Rebake.begin()
+    again = TrueColour.Rebake.finish(bakedOn: mode, complete: false)
+    check(!again && saved() == "none" && TrueColour.Rebake.isNeeded,
+          "a batch that could not write every cube is not signed off (the next launch tries again)",
+          "stamp \(saved())")
+
+    // One batch, one mode: a look told to bake with True Colour off does so
+    // even though the switch has gone back on.
+    flip(true)
+    let live = toneCube(1.2, 1.1, 0.02, skin: TrueColour.isOn)
+    let held = toneCube(1.2, 1.1, 0.02, skin: false)
+    flip(false)
+    let classic = TrueColour.toneFilter(contrast: 1.2, saturation: 1.1, brightness: 0.02)
+        .flatMap { $0.value(forKey: "inputCubeData") as? Data }.map { Cube($0, 33) }
+    flip(true)
+    var same = false, differs = false
+    if let live, let held, let classic {
+        same = held.v == classic.v
+        differs = zip(held.v, live.v).contains { abs($0 - $1) > 0.01 }
+    }
+    check(same && differs,
+          "a batch holds one switch position for every cube, whatever the switch does meanwhile")
+
+    d.removeObject(forKey: TrueColour.bakedKey)
+}
+
+// MARK: - 10. Real Core Image
 
 #if os(macOS)
-section("9. On real Core Image: the picture matches the cube, and the old filter still shows the bug")
+section("10. On real Core Image: the picture matches the cube, and the old filter still shows the bug")
 do {
     let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
     let ctx = CIContext(options: [.useSoftwareRenderer: false])   // as LookPipeline.shared.context

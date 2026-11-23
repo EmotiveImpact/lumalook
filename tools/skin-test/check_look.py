@@ -31,6 +31,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+BAKE_POINTS = 25         # the lattice of the Mac runner's bake (bake_truecolour.swift)
 SHEET_PORTRAITS = ["day-pexels-31579771", "warm-pexels-5760943", "night-pexels-7194024", "back-pexels-29037457"]
 
 
@@ -57,14 +58,11 @@ def as_the_app_shows_it(raw, F, S):
     return (F.mono_floor(dense) if mono else F.skin_guard(dense)), mono
 
 
-def own_input_range(path):
-    for line in path.read_text(errors="replace").splitlines()[:40]:
-        parts = line.split()
-        if parts and parts[0].upper() in ("DOMAIN_MIN", "DOMAIN_MAX"):
-            want = 0.0 if parts[0].upper() == "DOMAIN_MIN" else 1.0
-            if any(abs(float(v) - want) > 1e-6 for v in parts[1:4]):
-                return True
-    return False
+def as_the_gate_reads_it(shown, S):
+    """The Mac runner reads the app's cube back through Core Image on a
+    25-point lattice, and gate.py judges that. Do the same here, so this tool
+    and the gate judge the same colours (--self-test checks exactly these)."""
+    return S.sample_trilinear(shown, S.identity_cube(BAKE_POINTS)).astype(np.float32)
 
 
 def sheet(path, rows, F, S, T):
@@ -120,7 +118,6 @@ def main():
     F._init()
 
     if a.self_test:
-        grid = S.identity_cube(25)
         bake = Path(os.environ.get("VERIFY_BAKE") or HERE / "out")     # as verify.py and gate.py
         worst, over, n = 0.0, 0, 0
         for look in F._LOOKS.values():
@@ -128,7 +125,7 @@ def main():
                 continue
             shown, _ = as_the_app_shows_it(look["lut"], F, S)
             # the Mac bake reads the guarded cube back through Core Image on a 25-point lattice
-            gap = np.abs(S.sample_trilinear(shown, grid) - S.read_baked(bake / "film_tc" / f"{look['id']}.u16")).max() * 255
+            gap = np.abs(as_the_gate_reads_it(shown, S) - S.read_baked(bake / "film_tc" / f"{look['id']}.u16")).max() * 255
             worst, over, n = max(worst, gap), over + (gap > 1.0), n + 1
         print(f"{n} film looks: this tool's guard and the app's differ by at most {worst:.2f} of 255 "
               f"({over} looks differ by more than 1).")
@@ -143,20 +140,28 @@ def main():
     failed, rows = 0, []
     for arg in a.cubes:
         path = Path(arg)
+        if S.own_input_range(path):
+            # The app stretches the picture into the file's own range first and
+            # shows the LUT without the skin guard. Nothing here models that,
+            # so there is no honest verdict to give.
+            failed += 1
+            print(f"\n{path.name}")
+            print("  FAIL: this file sets its own input range (DOMAIN_MIN/MAX). The app shows such a LUT as authored, "
+                  "with no skin guard, and the skin test cannot read it. Export it again with the standard range "
+                  "(0 to 1) and check that file.")
+            continue
         raw = S.read_cube(path)
         shown, mono = as_the_app_shows_it(raw, F, S)
+        shown = as_the_gate_reads_it(shown, S)
         look = {"id": path.stem, "recipe": None}
         r = V.judge_variants(look, {"on": shown, "off": raw}, None)
         now = G.summarise(r)
-        problems = G.judge(now, None)
+        problems = G.judge(now, None, r["on_targets"]["mst10_ok"])
         print(f"\n{path.name}  ({raw.shape[0]} points a side, {'black-and-white' if mono else 'colour'})")
         print(f"  as its author made it:  {G.WORD[r['off']['category']]} at full strength, "
               f"{G.WORD[r['off75']['category']]} at 75%")
         print(f"  in Lumalook:            {G.WORD[now['full']]} at full strength, {G.WORD[now['default']]} at 75%, "
               f"deepest skin tone keeps {now['monk10']:.3f} lightness")
-        if own_input_range(path):
-            print("  note: this file sets its own input range (DOMAIN_MIN/MAX). The app shows such a LUT as authored, "
-                  "with no skin guard, so judge it by the first line.")
         if problems:
             failed += 1
             print("  FAIL: this look " + "; ".join(problems) + ".")
@@ -166,7 +171,7 @@ def main():
             print("  PASS")
         rows.append((path.stem, "PASS" if not problems else "FAIL: " + G.WORD[now["default"]] + " at 75%", raw, shown))
 
-    if a.sheet:
+    if a.sheet and rows:
         sheet(a.sheet, rows, F, S, T)
         print("\nPicture saved:", a.sheet)
     return 1 if failed else 0

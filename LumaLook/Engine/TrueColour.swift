@@ -39,9 +39,47 @@ enum TrueColour {
 
     /// Installed recipe looks are baked into cubes at install time. This
     /// stamp says which engine and switch position baked them; when it
-    /// differs from `bakeStamp`, AppModel bakes them again.
+    /// differs from `bakeStamp`, AppModel bakes them again (see `Rebake`).
     static let bakedKey = "lumalook.trueColour.bakedWith"
-    static var bakeStamp: String { "tone2-" + (isOn ? "on" : "off") }
+    static var bakeStamp: String { stamp(on: isOn) }
+    static func stamp(on: Bool) -> String { "tone2-" + (on ? "on" : "off") }
+
+    /// The books for baking installed recipe looks again. The saved stamp
+    /// has to mean "every cube on disk was baked this way", and a batch
+    /// overwrites the cubes one by one, so:
+    ///
+    /// - `begin` clears the stamp before the first cube is overwritten. If
+    ///   the app closes half way, or the switch goes back to where it was,
+    ///   the cubes are still known to be a mix and get baked again.
+    /// - one batch bakes every cube with the switch position `begin`
+    ///   returned, whatever the switch does meanwhile.
+    /// - `finish` saves the stamp only for a whole batch that still matches
+    ///   the switch.
+    enum Rebake {
+        /// True while the cubes on disk are not known to match the switch.
+        static var isNeeded: Bool {
+            UserDefaults.standard.string(forKey: bakedKey) != bakeStamp
+        }
+
+        /// Call before the first cube is overwritten. Returns the switch
+        /// position to bake the whole batch with.
+        static func begin() -> Bool {
+            UserDefaults.standard.removeObject(forKey: bakedKey)
+            return isOn
+        }
+
+        /// Call when the batch ends: `bakedOn` is what `begin` returned and
+        /// `complete` says whether every cube was written. Returns true when
+        /// the switch moved during the batch, so another one is due.
+        @discardableResult
+        static func finish(bakedOn: Bool, complete: Bool) -> Bool {
+            let moved = isOn != bakedOn
+            if complete && !moved {
+                UserDefaults.standard.set(stamp(on: bakedOn), forKey: bakedKey)
+            }
+            return moved
+        }
+    }
 
     // MARK: Tone
 

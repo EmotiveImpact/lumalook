@@ -19,6 +19,10 @@ The rules
      portraits it fails, and how much lightness the deepest skin tone keeps).
   3. A new look has to be skin-true at 75%, and its deepest skin tone (Monk
      10) has to keep at least 0.20 lightness (Oklab L) at full strength.
+  4. A film LUT in a pack uses the standard input range (0 to 1). One that
+     sets its own range (DOMAIN_MIN/MAX) is shown by the app without the skin
+     guard, and the test cannot read it, so it is turned away.
+  5. Nothing in the app's source goes around True Colour (source_rules.py).
 
 A failure prints what went wrong and what to change. `--accept` is for the
 rare time a result is a decision, not an accident: it rewrites baseline.json,
@@ -69,9 +73,14 @@ def summarise(r):
             "bad_frames": r["on"]["bad_main"], "monk10": r["on_targets"]["mst10_L"]}
 
 
-def judge(now, old):
-    """Problems with one look: a list of plain sentences, empty when it passes."""
+def judge(now, old, floor_ok=None):
+    """Problems with one look: a list of plain sentences, empty when it passes.
+    `floor_ok` is the exact answer to "does Monk 10 keep the floor"; the
+    number kept in `now` is rounded to three places and would let 0.1996
+    through as 0.200."""
     out = []
+    if floor_ok is None:
+        floor_ok = now["monk10"] >= MONK10_FLOOR
     if now["full"] == "rework":
         out.append("needs rework at full strength")
     if now["default"] == "rework":
@@ -79,9 +88,9 @@ def judge(now, old):
     if old is None:
         if now["default"] != "true":
             out.append("is a new look and is only " + WORD[now["default"]] + " at 75%; new looks must be skin-true there")
-        if now["monk10"] < MONK10_FLOOR:
-            out.append(f"is a new look and takes the deepest skin tone down to {now['monk10']:.3f} lightness; "
-                       f"new looks must keep {MONK10_FLOOR:.2f}")
+        if not floor_ok:
+            out.append(f"is a new look and takes the deepest skin tone down to {now['monk10']:.3f} lightness "
+                       f"(rounded); new looks must keep {MONK10_FLOOR:.2f}")
         return out
     for key, where in (("full", "at full strength"), ("default", "at 75%")):
         if RANK[now[key]] > RANK[old[key]]:
@@ -125,8 +134,18 @@ def main():
     os.environ["VERIFY_NO_THUMBS"] = "1"
     sys.argv = [sys.argv[0], str(scratch)]
     import fixes as F
+    import skinlib as S
+    import source_rules
     import verify as V
 
+    # Rule 4: a pack's film LUT has to use the standard input range.
+    own_range = [l["id"] for l in looks if l["id"] in ids and l["cube"] and S.own_input_range(S.FILM_DIR / l["cube"])]
+    # Rule 5: nothing in the app goes around True Colour.
+    source_problems = [] if only else source_rules.check()
+
+    # Load everything once here first: a worker that cannot start would
+    # otherwise be started again for ever, and the run would hang, not fail.
+    F._init()
     results = {}
     with Pool(4, initializer=F._init) as pool:
         for r in pool.imap_unordered(V.job, ids):
@@ -148,7 +167,10 @@ def main():
     for lid in ids:
         if lid not in base:
             new.append(lid)
-        problems = judge(now[lid], base.get(lid))
+        problems = judge(now[lid], base.get(lid), results[lid]["on_targets"]["mst10_ok"])
+        if lid in own_range:
+            problems.append("sets its own input range (DOMAIN_MIN/MAX). The app shows such a LUT without the skin "
+                            "guard and the test cannot read it; export it again with the standard range, 0 to 1")
         if problems:
             failures.append((lid, problems))
 
@@ -166,9 +188,14 @@ def main():
     if gone:
         print(f"  in the baseline but no longer in the app: {', '.join(gone)}")
 
-    if not failures:
+    for p in source_problems:
+        print("  source rule broken:", p)
+    if not failures and not source_problems:
         print("PASS: every look meets the rules.")
         return 0
+    if not failures:
+        print("\nFAIL: every look passes, but the app's source breaks a True Colour rule (above).")
+        return 1
     print(f"\nFAIL: {len(failures)} look{'s' if len(failures) > 1 else ''} did not pass.")
     for lid, problems in failures:
         r = results[lid]

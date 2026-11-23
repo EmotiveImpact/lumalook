@@ -37,9 +37,12 @@ def load(path, long_side=900):
 def versions(look, before_recipe):
     lid = look["id"]
     if look["recipe"]:
-        b = dict(look, lut=S.read_baked(OUT / "luts" / f"{lid}.u16"), recipe=before_recipe or look["recipe"])
         off = dict(look, lut=S.read_baked(OUT / "luts_classic" / f"{lid}.u16"))
         on = dict(look, lut=S.read_baked(OUT / "luts_tc" / f"{lid}.u16"))
+        if S.before_bake(lid).exists():
+            b = dict(look, lut=S.read_baked(S.before_bake(lid)), recipe=before_recipe or look["recipe"])
+        else:
+            b = on                  # added since True Colour: it shipped with it on
     else:
         raw = S.read_cube(S.FILM_DIR / look["cube"])
         b = dict(look, lut=raw)

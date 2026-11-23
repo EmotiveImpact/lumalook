@@ -52,6 +52,12 @@ python3 export_cubes.py RENDER_DIR OUT_DIR  # guarded cubes as .cube files
 python3 verify.py RENDER_DIR                # before, on, off, and the research targets
 python3 after_sheets.py RENDER_DIR OUT_DIR  # before and after sheets and PDF
 python3 try_photos.py OUT.jpg PHOTO...      # any photo: as shipped, True Colour off and on
+
+# the rules for new looks
+python3 gate.py                             # every look against the rules and baseline.json
+python3 check_look.py NEW.cube              # a new film LUT, no Mac needed
+python3 selftest_gate.py                    # the gate itself, on two pretend new looks
+python3 source_rules.py                     # nothing in the app goes around True Colour
 ```
 
 Needs numpy, scipy and Pillow.
@@ -66,8 +72,18 @@ the skin guard. The gate checks that the protection was enough for this look.
 
 1. Skin-true at 75%, the strength the app opens every look at.
 2. Never "needs rework", not even at full strength.
-3. The deepest skin tone (Monk 10) keeps at least 0.20 lightness (Oklab L).
+3. The deepest skin tone (Monk 10) keeps at least 0.20 lightness (Oklab L),
+   on the exact measurement, not the rounded one that gets printed.
 4. No look already in the app gets worse than its line in `baseline.json`.
+5. A film LUT uses the standard input range, 0 to 1. A `.cube` file that sets
+   its own (`DOMAIN_MIN` / `DOMAIN_MAX`) is shown by the app as authored, with
+   no skin guard, and the test cannot read it, so the gate and `check_look.py`
+   turn it away. Export it again with the standard range.
+
+The gate also runs `source_rules.py` (see "Things not to do"), and
+`selftest_gate.py` checks the gate itself: it pretends a new recipe and a new
+film look were just added and checks that the first gets a verdict and the
+second, which is only near at 75%, is turned away.
 
 **A film LUT (.cube file)**
 
@@ -76,7 +92,9 @@ python3 tools/skin-test/check_look.py NEW.cube --sheet new.jpg   # no Mac needed
 ```
 
 It prints PASS or FAIL with the reason and what to change, and saves a
-picture on four test portraits. If it passes, put the file in
+picture on four test portraits. It judges the same colours the gate does
+(the app's cube read back on the Mac bake's 25-point lattice), so the two
+agree. If it passes, put the file in
 `LumaLook/Resources/FilmLUTs/`, add the look to its pack in `LookPacks.swift`
 and push to a `claude/` branch. The Mac runner bakes it through the app's own
 code and the gate has the last word.
@@ -121,6 +139,13 @@ cube itself. A look that cannot pass at 75% does not ship.
   Tone goes through `TrueColour.toneFilter`.
 - No new colour filter that skips `TrueColour`. If a look needs something
   new, add it there, with a check in `check_truecolour.swift`.
+
+  `source_rules.py` reads the app's Swift sources for both: any new use of
+  `CIColorControls`, and `LookPipeline.swift` no longer sending recipes,
+  sliders, overlays and LUTs through `TrueColour`. It runs in the gate and,
+  on every pull request, in the Build workflow. It is a tripwire for the
+  known ways round, not a render of the whole app: the Mac programs compile
+  the three engine files only, because `LookPipeline` needs the whole app.
 - No `gate.py --accept` to make a failure go away. It records a decision
   that somebody made on purpose, and the baseline change shows in the pull
   request.
@@ -130,11 +155,17 @@ cube itself. A look that cannot pass at 75% does not ship.
 
 1. `check_truecolour.swift` has to pass (the Mac runner runs it before it
    bakes). Add a check for whatever changed.
-2. If the tone maths changed, bump the stamp in `TrueColour.bakeStamp`
+2. If the tone maths changed, bump the stamp in `TrueColour.stamp(on:)`
    (`tone2` today), so pack looks already installed on phones are baked again.
+   `TrueColour.Rebake` keeps the books for that: the stamp is cleared when a
+   batch starts, the whole batch is baked for one position of the switch, and
+   the stamp is saved only for a batch that finished with the switch where it
+   started. A batch that is interrupted, or that the switch moves under, is
+   simply done again.
 3. The gate has to pass on the new bake, then
    `python3 tools/skin-test/check_look.py --self-test` has to pass, which
    proves the Python copy of the guard (`fixes.skin_guard`) still matches.
+   The workflow runs both, and `selftest_gate.py`, on every push.
 
 **What the skin guard cannot do**
 

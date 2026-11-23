@@ -331,6 +331,8 @@ if __name__ == "__main__":
         ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text()) if l["recipe"]]
     elif ONLY:
         ids = [i for i in ids if any(s in i for s in ONLY)]
+    cubes = {l["id"]: l["cube"] for l in json.loads((HERE / "looks.json").read_text())}
+    ids = [i for i in ids if cubes[i] or S.before_bake(i).exists()]   # recipes added since have no "before" to fix
     results = {}
     if ONLY and (RENDER / "fixes.json").exists():
         results = json.loads((RENDER / "fixes.json").read_text())

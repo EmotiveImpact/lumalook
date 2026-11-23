@@ -439,7 +439,10 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - Built-in look recipes
 
-    func applyRecipe(_ recipe: LookRecipe, to image: CIImage) -> CIImage {
+    /// `trueColour` is the switch position: the live one unless a caller
+    /// baking a batch of cubes holds it still (PackInstaller.cubeText).
+    func applyRecipe(_ recipe: LookRecipe, to image: CIImage,
+                     trueColour: Bool = TrueColour.isOn) -> CIImage {
         var output = image
 
         if recipe.temperature != 6500 || recipe.tint != 0 {
@@ -453,7 +456,8 @@ final class LookPipeline: @unchecked Sendable {
         // its brightness greyed it. See TrueColour.swift.
         if let tone = TrueColour.toneFilter(contrast: recipe.contrast,
                                             saturation: recipe.saturation,
-                                            brightness: recipe.brightness) {
+                                            brightness: recipe.brightness,
+                                            protectSkin: trueColour) {
             tone.setValue(output, forKey: kCIInputImageKey)
             output = tone.outputImage ?? output
         }
