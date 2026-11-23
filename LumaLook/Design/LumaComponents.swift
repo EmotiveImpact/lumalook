@@ -431,7 +431,9 @@ struct LumaTabGlyph: View {
 
 // MARK: - Buttons
 
-/// The one main action on a screen: signal yellow, ink text.
+/// The one main action on a screen: signal yellow, ink text. With the
+/// default fill it follows You › Appearance › Main buttons (yellow or quiet
+/// white), see `LumaMainButton`.
 struct SolidCTA: View {
     let title: String
     var icon: String? = nil
@@ -439,8 +441,13 @@ struct SolidCTA: View {
     var fill: Color = LumaTheme.signal
     var action: () -> Void
     @State private var fired = 0
+    @AppStorage(LumaAppearance.buttonsKey) private var buttonsRaw = LumaMainButtonStyle.signal.rawValue
 
     var body: some View {
+        let main = fill == LumaTheme.signal
+        let style = LumaMainButtonStyle(rawValue: buttonsRaw) ?? .signal
+        let resolvedFill = main ? style.fill : fill
+        let resolvedText = main ? style.text : LumaTheme.textPrimary
         Button {
             fired += 1
             action()
@@ -454,10 +461,10 @@ struct SolidCTA: View {
                     .font(.luma(size: 16, weight: .semibold))
                     .tracking(-0.2)
             }
-            .foregroundStyle(fill == LumaTheme.signal ? LumaTheme.onSignal : LumaTheme.textPrimary)
+            .foregroundStyle(resolvedText)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(resolvedFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.lumaPress)
         .sensoryFeedback(.impact(weight: .light), trigger: fired)

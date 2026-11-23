@@ -422,6 +422,8 @@ final class AppModel: ObservableObject {
     private func applyDebugRoute() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
+        // Appearance cell: LUMA_APPEARANCE=dial,dot,white sets You › Appearance.
+        LumaAppearance.applyLaunchOverride()
         // Auto-grade cell: load a cast image, run autoGrade, print result.
         if let path = env["LUMA_SEED_AUTOGRADE"], FileManager.default.fileExists(atPath: path) {
             selectedImage = CIImage(contentsOf: URL(fileURLWithPath: path))
@@ -563,7 +565,8 @@ final class AppModel: ObservableObject {
             "projectLibrary": [.projectLibrary],
             "settings": [.settings],
             "customLook": [.selectClip, .applyLook, .customLook],
-            "collections": [.collections]
+            "collections": [.collections],
+            "appearance": [.settings, .appearance]
         ]
         if let target = map[route] {
             path = target

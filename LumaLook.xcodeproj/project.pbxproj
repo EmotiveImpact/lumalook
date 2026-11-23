@@ -100,6 +100,8 @@
 		6CFCE97E2B2532B8849F1D34 /* ApplyLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1C28E748C160529C0841DB /* ApplyLookView.swift */; };
 		6D076D5473B5FCB327FEB780 /* CameraLiveLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */; };
 		6D256DE46137863C52EA8993 /* click.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1769959689A6A4FB63FB2B2F /* click.m4a */; };
+		A526291D26C3E2B8013CAC58 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D676BC87DB99F757A95E3E /* AppearanceSettingsView.swift */; };
+		FC34DE874CBC89966BFF621A /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2ED297CF0EDD9B5F786BCBA /* OnboardingFlowView.swift */; };
 		6E06B85F0F6CAD15B0CDA431 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8354830054679B8534BA10B /* CollectionsView.swift */; };
 		6F144B22480FB7C893EB5EB9 /* Identity_17.cube in Resources */ = {isa = PBXBuildFile; fileRef = 1D39A8A786EB61B4513AE82F /* Identity_17.cube */; };
 		703CC38FDE7552253A88EA7E /* LookBrowserSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33254F03ACC2BA97E447C934 /* LookBrowserSheet.swift */; };
@@ -239,6 +241,7 @@
 		6465C55BE5115C437BFEE662 /* hero_skate.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7CFFB316ED67BA29ADC7D148 /* hero_skate.jpg */; };
 		6FFB5783902CC5CA822E8135 /* hero_gig.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 62866CA9B13DDC48B526E11D /* hero_gig.jpg */; };
 		87580A9E5BA1CF97192B0F70 /* hero_campaign.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */; };
+		4B50D608246ED560E018B6FC /* LumaAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9C07F1985814D6B305846E /* LumaAppearance.swift */; };
 		584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16781F8A536C51EF97E6CBA /* LookSignature.swift */; };
 		CC0609EE675EBE8F45B02D45 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AFC01F23C4BE58816C73D67 /* LaunchView.swift */; };
 		71011323E9A1DC9BB2A72D32 /* SelectClipsLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28AA1221C29EBE0D3FA04CFD /* SelectClipsLibrary.swift */; };
@@ -419,6 +422,8 @@
 		B12764BA4326C71C00EC7EA8 /* OverlayEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayEffectsPanel.swift; sourceTree = "<group>"; };
 		B147754600B3B5803C3E0583 /* ClipBaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipBaker.swift; sourceTree = "<group>"; };
 		B38478EF2EEA2A8135980EED /* FS_HP400.cube */ = {isa = PBXFileReference; path = FS_HP400.cube; sourceTree = "<group>"; };
+		06D676BC87DB99F757A95E3E /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
+		C2ED297CF0EDD9B5F786BCBA /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		B8354830054679B8534BA10B /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionsView.swift; sourceTree = "<group>"; };
 		B8ABCC5DCF7D1276F026BE5C /* FS_AV200.cube */ = {isa = PBXFileReference; path = FS_AV200.cube; sourceTree = "<group>"; };
 		B94FE99FD4878FE6FED713B8 /* ZebraRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZebraRenderer.swift; sourceTree = "<group>"; };
@@ -488,6 +493,7 @@
 		7CFFB316ED67BA29ADC7D148 /* hero_skate.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_skate.jpg; sourceTree = "<group>"; };
 		62866CA9B13DDC48B526E11D /* hero_gig.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_gig.jpg; sourceTree = "<group>"; };
 		2D5FBF167474E3B16DEBFEC5 /* hero_campaign.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = hero_campaign.jpg; sourceTree = "<group>"; };
+		8C9C07F1985814D6B305846E /* LumaAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaAppearance.swift; sourceTree = "<group>"; };
 		D16781F8A536C51EF97E6CBA /* LookSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookSignature.swift; sourceTree = "<group>"; };
 		3AFC01F23C4BE58816C73D67 /* LaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchView.swift; sourceTree = "<group>"; };
 		28AA1221C29EBE0D3FA04CFD /* SelectClipsLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipsLibrary.swift; sourceTree = "<group>"; };
@@ -524,6 +530,8 @@
 				AAD0AE01C80FD9E48353D72F /* BeforeAfterView.swift */,
 				EC43C555C19621740C5AD6C4 /* CameraLiveLookView.swift */,
 				56302FDBFA481328896527FA /* CameraLooksSheet.swift */,
+				06D676BC87DB99F757A95E3E /* AppearanceSettingsView.swift */,
+				C2ED297CF0EDD9B5F786BCBA /* OnboardingFlowView.swift */,
 				B8354830054679B8534BA10B /* CollectionsView.swift */,
 				55581BB4B9DDB446353FBC82 /* ColorGradingViews.swift */,
 				6179EBD36201DBA3960BCD66 /* Editor */,
@@ -753,6 +761,7 @@
 				5E21F06A5A4564ECD44B1682 /* HeroPhoto.swift */,
 				8722C35F72247FE70F9AF07F /* InputMeterView.swift */,
 				89B458DC83F20DB6B16FDD7C /* LevelIndicator.swift */,
+				8C9C07F1985814D6B305846E /* LumaAppearance.swift */,
 				D16781F8A536C51EF97E6CBA /* LookSignature.swift */,
 				26F50F9BB2D825B496F19DD3 /* LumaComponents.swift */,
 				6B846D621E4F274EC907E0EC /* LumaDial.swift */,
@@ -1127,6 +1136,8 @@
 				E01F4CC75BEA536D7EE404FB /* CaptionStyle.swift in Sources */,
 				9DD75E266B27F69E16E52FB2 /* ChromaKeyFilter.swift in Sources */,
 				C29C9FFEAF99275E772348B8 /* ClipBaker.swift in Sources */,
+				A526291D26C3E2B8013CAC58 /* AppearanceSettingsView.swift in Sources */,
+				FC34DE874CBC89966BFF621A /* OnboardingFlowView.swift in Sources */,
 				6E06B85F0F6CAD15B0CDA431 /* CollectionsView.swift in Sources */,
 				5F7194EF0E4ABA59D1F64098 /* ColorGradingViews.swift in Sources */,
 				F84B7F8C0D2118909C890F6A /* ColorMath.swift in Sources */,
@@ -1156,6 +1167,7 @@
 				EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
+				4B50D608246ED560E018B6FC /* LumaAppearance.swift in Sources */,
 				584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,
 				63774835EFEEFA197D828A1C /* LoudnessAnalyzer.swift in Sources */,
