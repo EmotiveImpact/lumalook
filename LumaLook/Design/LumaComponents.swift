@@ -225,8 +225,9 @@ struct LumaMark: View {
     var size: CGFloat = 13
 
     var body: some View {
+        // White since the calm round: the yellow stays with the shutter.
         RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-            .fill(LumaTheme.signal)
+            .fill(LumaTheme.textPrimary)
             .overlay(
                 RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
                     .fill(LumaTheme.ink)

@@ -188,6 +188,7 @@ struct LumaColourButton: View {
                     .font(.luma(size: 15, weight: .semibold))
                     .tracking(-0.15)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundStyle(inColour ? Color(hex: 0x0B0B0C) : LumaTheme.textPrimary)
             .padding(.horizontal, 18)
