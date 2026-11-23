@@ -282,7 +282,7 @@ struct HomeView: View {
             PackSpotlight(pack: pack,
                           detail: packDetail(pack),
                           tag: tag.text,
-                          tagColour: tag.paid ? LookNameColour.forText(pack.colour) : LumaTheme.textPrimary) {
+                          tagIsPaid: tag.paid) {
                 openPack(pack)
             }
             .padding(.horizontal, 12)
@@ -918,6 +918,8 @@ private struct HomeGlassPill: View {
     let icon: String
     let title: String
     var showsIcon: Bool = true
+    /// The one solid white pill on a page (first run's Edit a clip).
+    var solid: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -925,7 +927,7 @@ private struct HomeGlassPill: View {
             LumaHaptics.shared.tap()
             action()
         } label: {
-            HomeGlassPillLabel(icon: showsIcon ? icon : nil, title: title)
+            HomeGlassPillLabel(icon: showsIcon ? icon : nil, title: title, solid: solid)
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel(title)
@@ -935,6 +937,7 @@ private struct HomeGlassPill: View {
 private struct HomeGlassPillLabel: View {
     let icon: String?
     let title: String
+    var solid: Bool = false
 
     var body: some View {
         HStack(spacing: 7) {
@@ -947,11 +950,11 @@ private struct HomeGlassPillLabel: View {
                 .tracking(-0.1)
                 .lineLimit(1)
         }
-        .foregroundStyle(Color.white.opacity(0.92))
+        .foregroundStyle(solid ? Color(hex: 0x0B0C0E) : Color.white.opacity(0.92))
         .padding(.leading, icon == nil ? 15 : 12)
         .padding(.trailing, 15)
         .frame(height: 38)
-        .background(Capsule().fill(Color.white.opacity(0.1)))
+        .background(Capsule().fill(solid ? Color(hex: 0xF4F5F6) : Color.white.opacity(0.1)))
         .contentShape(Capsule())
         .fixedSize()
     }
@@ -1583,16 +1586,18 @@ private struct ViewfinderReel: View {
 
     private func lookTitle(_ look: TonightsLook) -> Text {
         let colour = namesInColour ? look.preset.signature : LumaTheme.textPrimary
-        let heavy = Text(look.heavy)
+        let heavy = Text(verbatim: look.heavy)
             .font(.luma(size: 40, weight: .bold))
             .foregroundColor(colour)
         let line: Text
         if look.light.isEmpty {
             line = heavy
         } else {
-            line = Text(look.light + " ")
+            let light = Text(verbatim: look.light + " ")
                 .font(.luma(size: 40, weight: .light))
-                .foregroundColor(LumaTheme.textPrimary) + heavy
+                .foregroundColor(LumaTheme.textPrimary)
+            // Interpolation, not `+`, which the iOS 26 SDK deprecates.
+            line = Text("\(light)\(heavy)")
         }
         return line.tracking(LumaType.tracking(for: 40))
     }
@@ -1639,7 +1644,9 @@ private struct ViewfinderReel: View {
 
     private func firstRunPills(icons: Bool) -> some View {
         HStack(spacing: 8) {
-            LumaMainPill(title: "Edit a clip", icon: icons ? "plus" : nil, height: 38, action: onEdit)
+            // The one solid white pill, as in the mock and on Projects: the
+            // yellow stays with the tab shutter.
+            HomeGlassPill(icon: "plus", title: "Edit a clip", showsIcon: icons, solid: true, action: onEdit)
             HomeGlassPill(icon: "photo", title: "Edit a photo", showsIcon: icons, action: onPhoto)
             LUTImportButton(onImported: nil, label: {
                 HomeGlassPillLabel(icon: icons ? "cube" : nil, title: "Import")
@@ -2466,10 +2473,17 @@ private struct PackSpotlight: View {
     let pack: LookPack
     let detail: String
     let tag: String?
-    let tagColour: Color
+    /// A paid price takes the pack's colour (white with Names set to Dot).
+    let tagIsPaid: Bool
     let action: () -> Void
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
 
     private static let height: CGFloat = 232
+
+    private var tagColour: Color {
+        let inColour = (LumaNameStyle(rawValue: namesRaw) ?? .colour) == .colour
+        return tagIsPaid && inColour ? pack.colour : LumaTheme.textPrimary
+    }
 
     private var hasNightLooks: Bool {
         pack.looks.contains { $0.name.contains("Afrobeats Glow") }
