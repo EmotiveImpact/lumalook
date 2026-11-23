@@ -1129,6 +1129,15 @@ struct CameraLockCard: View {
         }
         return LookSignature.colour(forLookNamed: lock.lookName)
     }
+    /// "Get Film Stocks · £3.99", the store's local price once it answers.
+    private func buyTitle(_ pack: LookPack) -> String {
+        let price = packProduct?.displayPrice ?? pack.price
+        return "Get \(pack.name) · \(price)"
+    }
+    /// Blank while a purchase runs, so the spinner sits on the colour alone.
+    private func buyButtonTitle(_ pack: LookPack) -> String {
+        storeService.purchaseInFlight ? " " : buyTitle(pack)
+    }
     private var need: String { lock.pack.map { "\($0.name) or Pro" } ?? "Pro" }
     /// A free trial is only promised to an account StoreKit says can have it.
     private var proTitle: String {
@@ -1152,15 +1161,15 @@ struct CameraLockCard: View {
             VStack(spacing: 8) {
                 if let pack = lock.pack {
                     // The pack's own colour, as on its Buy button in the Store.
-                    LumaColourButton(title: storeService.purchaseInFlight ? " "
-                                        : "Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
-                                     colour: pack.colour, height: 44, fullWidth: true) { buyPack() }
+                    LumaColourButton(title: buyButtonTitle(pack), colour: pack.colour,
+                                     height: 44, fullWidth: true) { buyPack() }
                         .overlay {
                             if storeService.purchaseInFlight {
                                 ProgressView().tint(buyInk)
                             }
                         }
                         .minimumScaleFactor(0.75)
+                        .accessibilityLabel(buyTitle(pack))
                     choice(proTitle) { openPaywall() }
                 } else {
                     // The card's one main action follows You › Appearance.
@@ -1216,28 +1225,21 @@ struct CameraLockCard: View {
         }
     }
 
-    /// One of the card's buttons: 44 tall on a 14 pt corner, the signal fill
-    /// for the one the card leads with.
-    private func choice(_ title: String, primary: Bool = false, busy: Bool = false,
-                        action: @escaping () -> Void) -> some View {
+    /// One of the card's quiet buttons: 44 tall on a 14 pt corner, glass.
+    /// The card's lead (the pack's colour, or Pro as the main action) is
+    /// drawn by `LumaColourButton` / `LumaMainButton` above.
+    private func choice(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            ZStack {
-                if busy {
-                    ProgressView().tint(CamLab.ink)
-                } else {
-                    Text(title)
-                        .font(.luma(size: 14, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-            .foregroundStyle(primary ? CamLab.ink : CamLab.text)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(primary ? CamLab.sig : Color.white.opacity(0.09),
-                        in: RoundedRectangle(cornerRadius: 14))
-            .contentShape(RoundedRectangle(cornerRadius: 14))
+            Text(title)
+                .font(.luma(size: 14, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .foregroundStyle(CamLab.text)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.lumaPress)
     }
