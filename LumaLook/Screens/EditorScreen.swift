@@ -50,14 +50,16 @@ private struct LDToolItem: View {
     var tint: Color? = nil
     let action: () -> Void
 
+    // Quiet: an active tool is plain white, the rest a step down. Signal
+    // yellow is kept for the one main action (Export).
     private var glyphColour: Color {
         if let tint { return tint }
-        return active ? LumaTheme.signal : LumaTheme.textPrimary.opacity(0.85)
+        return active ? LumaTheme.textPrimary : LumaTheme.textPrimary.opacity(0.78)
     }
 
     private var labelColour: Color {
         if let tint { return tint }
-        return active ? LumaTheme.signal : LumaTheme.textSecondary
+        return active ? LumaTheme.textPrimary : LumaTheme.textSecondary
     }
 
     var body: some View {
@@ -117,25 +119,32 @@ private struct LDValueTool: View {
     }
 }
 
-/// A pill. Selection is a ring; unselected is a value step. No accent.
+/// A quiet glass pill (Mute, Duck under voice, Loop). Off is white at 7%
+/// with light text; on is near-white with ink text, as in the calm mock's
+/// music panel. No accent, no outline.
 private struct LDChip: View {
     let title: String
     var selected = false
     var enabled = true
     let action: () -> Void
 
+    private var textColour: Color {
+        selected ? Color(hex: 0x0B0C0E) : Color.white.opacity(0.8)
+    }
+
+    private var fill: Color {
+        selected ? Color.white.opacity(0.9) : Color.white.opacity(0.07)
+    }
+
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.luma(size: 13, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Color.white : LumaTheme.textSecondary)
+                .font(.luma(size: 13.5, weight: .semibold))
+                .foregroundStyle(textColour)
                 .lineLimit(1)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 8)
-                .background(LumaTheme.surface, in: Capsule())
-                .overlay {
-                    if selected { Capsule().strokeBorder(Color.white, lineWidth: 1.2) }
-                }
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .background(fill, in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
@@ -426,6 +435,143 @@ private struct LDWaveform: View {
                 }
             }
             .stroke(Color.white.opacity(0.55), lineWidth: 1.2)
+        }
+    }
+}
+
+/// One of the six dock tools: a white glyph over a grey label, equal width,
+/// all quiet glass. The open one turns its label white; no signal yellow
+/// here, which belongs to Export alone. `glyphText` draws a word ("Aa")
+/// in place of a symbol.
+private struct LDDockButton: View {
+    let title: String
+    var icon: String? = nil
+    var glyphText: String? = nil
+    var active = false
+    var enabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                glyph
+                    .frame(height: 22)
+                    .foregroundStyle(LumaTheme.textPrimary.opacity(active ? 1 : 0.88))
+                Text(title)
+                    .font(.luma(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .foregroundStyle(active ? LumaTheme.textPrimary : Color.white.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .opacity(enabled ? 1 : 0.3)
+        .disabled(!enabled)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if let glyphText {
+            Text(glyphText)
+                .font(.luma(size: 18, weight: .semibold))
+                .tracking(-0.4)
+        } else {
+            Image(systemName: icon ?? "circle")
+                .font(.system(size: 19, weight: .regular))
+        }
+    }
+}
+
+/// Text tabs in place of segmented boxes: words in a row, the picked one
+/// white with a short white rule under it, the others grey.
+private struct LDTextTabs: View {
+    let options: [String]
+    let selected: Int
+    var size: CGFloat = 13.5
+    var spacing: CGFloat = 18
+    let onSelect: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, title in
+                tab(index: index, title: title)
+            }
+        }
+    }
+
+    private func tab(index: Int, title: String) -> some View {
+        let on = index == selected
+        return Button {
+            if !on { onSelect(index) }
+        } label: {
+            Text(title)
+                .font(.luma(size: size, weight: .semibold))
+                .foregroundStyle(on ? LumaTheme.textPrimary : Color.white.opacity(0.42))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.vertical, 7)
+                .overlay(alignment: .bottom) {
+                    if on {
+                        Capsule()
+                            .fill(LumaTheme.textPrimary)
+                            .frame(height: 2)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// A look tile in the editor's drawer: the real grade on the clip's own
+/// frame, the look's code underneath in its own colour (Dot mode: white with
+/// a dot), its name in grey, and the pale picked ring while it is applied.
+private struct LDLookTile: View {
+    let image: CGImage?
+    let code: String
+    let name: String
+    let colour: Color
+    var picked = false
+    var locked = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            artwork
+                .frame(width: EditorLookTile.width, height: EditorLookTile.height)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // clipShape clips pixels, not touches: without this the
+                // overflowing fill steals its neighbour's taps.
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    if locked { LookLockGlyph(compact: true) }
+                }
+                .pickedRing(picked, cornerRadius: 10)
+                .padding(.bottom, 4)
+            LookNameText(code, colour: colour, size: 12, weight: .bold)
+                .frame(width: EditorLookTile.width, alignment: .leading)
+            Text(name)
+                .font(.luma(size: 10.5, weight: .medium))
+                .foregroundStyle(picked ? LumaTheme.textPrimary : LumaTheme.textMuted)
+                .lineLimit(1)
+                .frame(width: EditorLookTile.width, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if let image {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: EditorLookTile.width, height: EditorLookTile.height)
+        } else {
+            Color(white: 0.12)
         }
     }
 }
@@ -1856,6 +2002,9 @@ private struct EditorContent: View {
     /// A More tile's action, run once the sheet has gone.
     @State private var pendingMoreAction: (() -> Void)?
     @State private var showTemplates = false
+    /// You › Appearance › Sliders: the dial draws its own title and value,
+    /// so the drawer hides its "Strength 75%" line while it is on.
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
 
     private var toolIsOpen: Bool { tool != .none }
     private var hasClips: Bool { !editor.isEmpty }
@@ -1941,9 +2090,11 @@ private struct EditorContent: View {
         HStack(spacing: 2) {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(LumaTheme.textPrimary)
-                    .frame(width: 36, height: 44)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(LumaTheme.textPrimary.opacity(0.92))
+                    .frame(width: 38, height: 38)
+                    .background(Color.white.opacity(0.07), in: Circle())
+                    .frame(width: 40, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
@@ -1955,22 +2106,14 @@ private struct EditorContent: View {
             topBarIcon("arrow.uturn.backward", label: "Undo", enabled: editor.canUndo) { editor.undo() }
             topBarIcon("arrow.uturn.forward", label: "Redo", enabled: editor.canRedo) { editor.redo() }
 
-            // The one main action on this screen, in signal yellow.
-            Button(action: onExport) {
-                Text("Export")
-                    .font(.luma(size: 14, weight: .semibold))
-                    .foregroundStyle(LumaTheme.onSignal)
-                    .padding(.horizontal, 15)
-                    .frame(height: 34)
-                    .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .buttonStyle(.lumaPress)
-            .opacity(editor.isEmpty ? 0.35 : 1)
-            // Looked disabled but still opened the export sheet on an empty
-            // timeline, erroring only after the user picked a spec.
-            .disabled(editor.isEmpty)
-            .padding(.leading, 6)
+            // The one main action on this screen: signal yellow, or quiet
+            // white, as You › Appearance › Main buttons says.
+            LumaMainPill(title: "Export", action: onExport)
+                .opacity(editor.isEmpty ? 0.35 : 1)
+                // Looked disabled but still opened the export sheet on an
+                // empty timeline, erroring only after the user picked a spec.
+                .disabled(editor.isEmpty)
+                .padding(.leading, 6)
         }
         .padding(.horizontal, 12)
         .frame(height: 48)
@@ -2027,6 +2170,12 @@ private struct EditorContent: View {
         let total = max(0, editor.totalDuration)
         let length = String(format: "%d:%02d", Int(total) / 60, Int(total) % 60)
         return "\(count) \(count == 1 ? "clip" : "clips") · \(length)"
+    }
+
+    /// The preview label's words: "Neon Nights" from "LL1 · Neon Nights"
+    /// (the code rides on the timeline tag), the whole name otherwise.
+    private func lookChipTitle(_ name: String) -> String {
+        LookSignature.title(in: name)
     }
 
     /// The grade under the playhead: the clip's own look if it has one, else
@@ -2125,8 +2274,14 @@ private struct EditorContent: View {
             }
             .overlay(alignment: .topLeading) {
                 if audioFocus == nil, let look = lookAtPlayhead {
-                    LookChip(name: look.name, colour: look.colour, size: 11)
-                        .padding(10)
+                    // The look's name in its own colour with a dot, over the
+                    // picture (no filled block).
+                    LookNameText(lookChipTitle(look.name), colour: look.colour, size: 12,
+                                 alwaysDot: true)
+                        .shadow(color: .black.opacity(0.5), radius: 6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 11)
+                        .accessibilityLabel("Look: \(look.name)")
                         .allowsHitTesting(false)
                         .transition(.opacity)
                         .animation(.easeOut(duration: 0.18), value: look.name)
@@ -2287,19 +2442,16 @@ private struct EditorContent: View {
     private func clipBadge(_ clip: EditorState.Clip) -> some View {
         let look = clipLookLabel(clip)
         return HStack(spacing: 6) {
-            Circle()
-                .fill(look.colour)
-                .frame(width: 7, height: 7)
-                .shadow(color: look.colour.opacity(0.8), radius: 4)
             Text(clipName(clip.id))
                 .font(.luma(size: 13, weight: .semibold))
                 .foregroundStyle(LumaTheme.textPrimary)
                 .lineLimit(1)
                 .fixedSize()
-            Text("· \(look.name)")
+            Text("·")
                 .font(.luma(size: 13, weight: .medium))
                 .foregroundStyle(LumaTheme.textMuted)
-                .lineLimit(1)
+            // The look in its own colour (Dot mode: white with a dot).
+            LookNameText(look.name, colour: look.colour, size: 13, weight: .medium)
         }
         .accessibilityElement(children: .combine)
     }
@@ -2550,14 +2702,14 @@ private struct EditorContent: View {
 
     private var mainDock: some View {
         HStack(spacing: 0) {
-            EditorDockButton(title: "Looks", icon: "camera.filters", enabled: hasClips) {
+            LDDockButton(title: "Looks", icon: "wand.and.stars", enabled: hasClips) {
                 looksTargetClipID = nil; tool = .looks
             }
-            EditorDockButton(title: "Text", icon: "textformat", enabled: hasClips) { addText() }
-            EditorDockButton(title: "Audio", icon: "music.note", enabled: hasClips) { dockMode = .audio }
-            EditorDockButton(title: "Captions", icon: "captions.bubble", enabled: hasClips) { tool = .captions }
-            EditorDockButton(title: "Effects", icon: "sparkles", enabled: hasClips) { dockMode = .effects }
-            EditorDockButton(title: "More", icon: "square.grid.2x2", active: showMoreTools) {
+            LDDockButton(title: "Text", glyphText: "Aa", enabled: hasClips) { addText() }
+            LDDockButton(title: "Audio", icon: "waveform", enabled: hasClips) { dockMode = .audio }
+            LDDockButton(title: "Captions", icon: "captions.bubble", enabled: hasClips) { tool = .captions }
+            LDDockButton(title: "Effects", icon: "sparkles", enabled: hasClips) { dockMode = .effects }
+            LDDockButton(title: "More", icon: "ellipsis", active: showMoreTools) {
                 showMoreTools = true
             }
         }
@@ -2894,8 +3046,8 @@ private struct EditorContent: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             Spacer(minLength: 6)
-            EditorMiniSegment(options: ["This clip", "All clips"],
-                              selection: clipID == nil ? 1 : 0) { index in
+            LDTextTabs(options: ["This clip", "All clips"],
+                       selected: clipID == nil ? 1 : 0) { index in
                 switchLookTarget(toClip: index == 0)
             }
             .opacity(hasClips ? 1 : 0.4)
@@ -2942,11 +3094,12 @@ private struct EditorContent: View {
         return Button {
             pickLook(look, clipID: clipID)
         } label: {
-            EditorLookTile(image: thumbs.images[LookThumbs.key(look)],
-                           code: EditorLookTile.code(for: look.name),
-                           name: LookSignature.title(in: look.name),
-                           picked: picked,
-                           locked: storeService.isLocked(look))
+            LDLookTile(image: thumbs.images[LookThumbs.key(look)],
+                       code: EditorLookTile.code(for: look.name),
+                       name: LookSignature.title(in: look.name),
+                       colour: look.signature,
+                       picked: picked,
+                       locked: storeService.isLocked(look))
         }
         .buttonStyle(.lumaPress)
         .accessibilityLabel(look.name)
@@ -3021,23 +3174,26 @@ private struct EditorContent: View {
         return app.isCurrent(look)
     }
 
-    /// Strength on the ruler, needle in the look's own colour. A clip with no
-    /// look of its own has nothing to weaken, so its ruler rests.
+    /// Strength on the ruler or the dial (You › Appearance › Sliders), under
+    /// the live signal needle. A clip with no look of its own has nothing to
+    /// weaken, so its slider rests.
     private func strengthSection(clipID: UUID?) -> some View {
         let live = clipID.map { id in editor.clips.first(where: { $0.id == id })?.grade != nil } ?? true
         let value = strengthValue(clipID: clipID)
+        let isDial = (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial
         return VStack(spacing: 4) {
-            HStack {
-                Text("Strength")
-                    .font(.luma(size: 12.5, weight: .medium))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Spacer(minLength: 8)
-                Text("\(Int(value.rounded()))%")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textPrimary)
+            if !isDial {
+                HStack {
+                    Text("Strength")
+                        .font(.luma(size: 12.5, weight: .medium))
+                        .foregroundStyle(LumaTheme.textSecondary)
+                    Spacer(minLength: 8)
+                    Text("\(Int(value.rounded()))%")
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                }
             }
-            LumaStrengthRuler(value: strengthBinding(clipID: clipID),
-                              needle: strengthNeedle(clipID: clipID))
+            LumaValueSlider(value: strengthBinding(clipID: clipID), title: "Strength")
         }
         .opacity(live ? 1 : 0.35)
         .allowsHitTesting(live)
@@ -3061,13 +3217,6 @@ private struct EditorContent: View {
                 clipStrengthDraft = (clipID, newValue)
                 scheduleClipStrengthCommit()
             })
-    }
-
-    private func strengthNeedle(clipID: UUID?) -> Color {
-        if let clipID, let clip = editor.clips.first(where: { $0.id == clipID }) {
-            return clipLookLabel(clip).colour
-        }
-        return wholeEditLook.colour
     }
 
     private func scheduleClipStrengthCommit() {
@@ -3173,6 +3322,19 @@ private struct EditorContent: View {
 
     // MARK: Adjustment layers
 
+    /// A layer's look name in the look's own colour; a bare LUT stays white.
+    @ViewBuilder
+    private func adjustmentLayerName(_ name: String) -> some View {
+        if name.isEmpty {
+            Text("LUT")
+                .font(.luma(size: 13.5, weight: .medium))
+                .foregroundStyle(.white)
+        } else {
+            LookNameText(name, colour: LookSignature.colour(forLookNamed: name),
+                         size: 13.5, weight: .medium)
+        }
+    }
+
     @ViewBuilder
     private var adjustmentPanel: some View {
         LDCaption("Grade a span", value: "\(editor.adjustmentLayers.count)")
@@ -3195,8 +3357,12 @@ private struct EditorContent: View {
                             .overlay(alignment: .bottomTrailing) {
                                 if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                             }
-                            Text(look.name).font(.luma(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55)).lineLimit(1).frame(width: 62)
+                            // The look's name in its own colour (Dot mode:
+                            // grey with a dot).
+                            LookNameText(LookSignature.title(in: look.name), colour: look.signature,
+                                         size: 11, weight: .medium,
+                                         quietColour: Color.white.opacity(0.55))
+                                .frame(width: 62)
                         }
                     }
                     .buttonStyle(.lumaPress)
@@ -3222,8 +3388,7 @@ private struct EditorContent: View {
         }
         ForEach(editor.adjustmentLayers) { layer in
             HStack(spacing: 10) {
-                Text(layer.grade.baseLookName.isEmpty ? "LUT" : layer.grade.baseLookName)
-                    .font(.luma(size: 13.5, weight: .medium)).foregroundStyle(.white)
+                adjustmentLayerName(layer.grade.baseLookName)
                 Spacer()
                 Text(LDFormat.secs(layer.duration))
                     .font(.luma(size: 12.5, weight: .medium, design: .monospaced))
@@ -3484,41 +3649,16 @@ extension View {
     }
 }
 
-/// The small two-or-three-way switch in a panel header ("Constant | Curve").
+/// The small two-or-three-way switch in a panel header ("Constant | Curve"):
+/// text tabs, the picked word white, the others grey.
 private struct LDPSegmented: View {
     let options: [String]
     let selected: Int
     let onSelect: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(options.enumerated()), id: \.offset) { index, title in
-                Button {
-                    onSelect(index)
-                } label: {
-                    Text(title)
-                        .font(.luma(size: 12, weight: .semibold))
-                        .foregroundStyle(index == selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
-                        .padding(.horizontal, 11)
-                        .frame(height: 26)
-                        .background {
-                            if index == selected {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(LumaTheme.control)
-                                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                            }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(index == selected ? .isSelected : [])
-            }
-        }
-        .padding(2)
-        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
+        LDTextTabs(options: options, selected: selected, size: 13, spacing: 16,
+                   onSelect: onSelect)
     }
 }
 
@@ -3609,7 +3749,8 @@ private struct LDPSwatch: View {
 }
 
 /// A preset tile: artwork in a raised box, its name underneath. The picked
-/// tile wears a signal ring. `width` nil stretches it to its grid column.
+/// tile wears the pale picked ring. `width` nil stretches it to its grid
+/// column.
 private struct LDPTile<Art: View>: View {
     let title: String
     let selected: Bool
@@ -3624,11 +3765,9 @@ private struct LDPTile<Art: View>: View {
                 art()
                     .frame(maxWidth: width ?? .infinity)
                     .frame(width: width, height: height)
-                    .background(LumaTheme.raised)
+                    .background(Color.white.opacity(0.07))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(selected ? LumaTheme.signal : LumaTheme.edge,
-                                      lineWidth: selected ? 2 : 1))
+                    .pickedRing(selected, cornerRadius: 10)
                 Text(title)
                     .font(.luma(size: 11, weight: selected ? .semibold : .medium))
                     .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
@@ -3647,6 +3786,8 @@ private struct LDPTile<Art: View>: View {
 /// An index ruler like `LumaRuler` (labelled stops under a signal needle),
 /// but it commits ONCE, on release: the setters behind it snapshot undo and
 /// rebuild the composition on every call. `onPreview` follows the finger.
+/// With You › Appearance › Sliders on Dial it shows the curved dial instead,
+/// which commits once it has settled for a moment.
 private struct LDPStopRuler: View {
     let stops: [String]
     let index: Int
@@ -3656,6 +3797,46 @@ private struct LDPStopRuler: View {
 
     @State private var draft: Int?
     @State private var dragBase: Int?
+    @State private var dialCommitTask: Task<Void, Never>?
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
+
+    var body: some View {
+        if (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial {
+            dialBody
+        } else {
+            rulerBody
+        }
+    }
+
+    /// The dial reports every stop it passes, so the draft follows it and
+    /// one commit lands once it rests (one undo step, one rebuild).
+    private var dialBody: some View {
+        LumaStopsSlider(stops: stops, index: shown, onChange: { target in
+            draft = target
+            onPreview(target)
+            scheduleDialCommit()
+        })
+        .opacity(enabled ? 1 : 0.35)
+        .allowsHitTesting(enabled)
+        .onDisappear { flushDialCommit() }
+    }
+
+    private func scheduleDialCommit() {
+        dialCommitTask?.cancel()
+        dialCommitTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            flushDialCommit()
+        }
+    }
+
+    private func flushDialCommit() {
+        dialCommitTask?.cancel()
+        dialCommitTask = nil
+        guard let d = draft else { return }
+        draft = nil
+        onCommit(d)
+    }
 
     /// Distance between labelled stops.
     private let spacing: CGFloat = 56
@@ -3664,7 +3845,7 @@ private struct LDPStopRuler: View {
 
     private var shown: Int { min(max(draft ?? index, 0), max(stops.count - 1, 0)) }
 
-    var body: some View {
+    private var rulerBody: some View {
         ZStack(alignment: .top) {
             Canvas { context, size in
                 let count = stops.count
@@ -3769,6 +3950,8 @@ private struct LDSpeedPanel: View {
     @State private var showsCustom = false
     /// The ruler's value while a finger is on it.
     @State private var draftSpeed: Double?
+    /// The dial draws its own big value, so the panel's goes while it is on.
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
 
     private static let presets: [LDSpeedPreset] = [
         LDSpeedPreset(title: "Normal", ramp: EditorState.SpeedRamp.none),
@@ -3850,7 +4033,7 @@ private struct LDSpeedPanel: View {
                                 LumaHaptics.shared.tap()
                             }) {
                         LDRampCurve(ramp: preset.ramp,
-                                    color: ramp == preset.ramp ? LumaTheme.signal : LumaTheme.textSecondary,
+                                    color: ramp == preset.ramp ? LumaTheme.textPrimary : LumaTheme.textSecondary,
                                     lineWidth: 1.6)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 10)
@@ -3862,7 +4045,7 @@ private struct LDSpeedPanel: View {
                             LumaHaptics.shared.tap()
                         }) {
                     LDRampCurve(ramp: isCustomRamp ? ramp : .slowFastSlow,
-                                color: isCustomRamp ? LumaTheme.signal : LumaTheme.textMuted,
+                                color: isCustomRamp ? LumaTheme.textPrimary : LumaTheme.textMuted,
                                 lineWidth: 1.6)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 10)
@@ -3904,10 +4087,12 @@ private struct LDSpeedPanel: View {
         let shown = draftSpeed ?? clip.speed
         let sourceLength = max(0, clip.trimEnd - clip.trimStart)
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(Self.speedLabel(shown))
-                .font(.luma(size: 30, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(LumaTheme.textPrimary)
+            if (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) != .dial {
+                Text(Self.speedLabel(shown))
+                    .font(.luma(size: 30, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(LumaTheme.textPrimary)
+            }
             Text(String(format: "Clip %.1f s", sourceLength / max(shown, 0.01)))
                 .font(.luma(size: 13, weight: .medium))
                 .monospacedDigit()
@@ -3984,7 +4169,7 @@ private struct LDRampCurve: View {
     }
 }
 
-/// The picked curve, large: grid at 5×, 1× and 0.2×, the curve in signal
+/// The picked curve, large: grid at 5×, 1× and 0.2×, the curve in white
 /// with a soft fill, knots at the start, middle and end, and a white line
 /// where the playhead sits inside the clip.
 private struct LDPSpeedGraph: View {
@@ -4030,8 +4215,8 @@ private struct LDPSpeedGraph: View {
             fill.addLine(to: CGPoint(x: left + w, y: size.height))
             fill.addLine(to: CGPoint(x: left, y: size.height))
             fill.closeSubpath()
-            context.fill(fill, with: .color(LumaTheme.signal.opacity(0.08)))
-            context.stroke(curve, with: .color(LumaTheme.signal),
+            context.fill(fill, with: .color(Color.white.opacity(0.06)))
+            context.stroke(curve, with: .color(LumaTheme.textPrimary),
                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
             for t in [0.0, 0.5, 1.0] {
@@ -4039,7 +4224,7 @@ private struct LDPSpeedGraph: View {
                                      y: top + h * (1 - LDRampCurve.level(speed(at: t))))
                 let knot = Path(ellipseIn: CGRect(x: centre.x - 4, y: centre.y - 4, width: 8, height: 8))
                 context.fill(knot, with: .color(LumaTheme.ink))
-                context.stroke(knot, with: .color(LumaTheme.signal), lineWidth: 1.6)
+                context.stroke(knot, with: .color(LumaTheme.textPrimary), lineWidth: 1.6)
             }
 
             if let progress {
@@ -5043,7 +5228,7 @@ private struct LDOverlayPanel: View {
                   axis: .vertical)
             .font(.luma(size: 17, weight: .semibold))
             .foregroundStyle(LumaTheme.textPrimary)
-            .tint(LumaTheme.signal)
+            .tint(LumaTheme.textPrimary)
             .lineLimit(1...3)
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(LumaTheme.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -5496,12 +5681,12 @@ private struct LDMusicPanel: View {
         }
     }
 
+    /// Level, Fade, Envelope, Effects and Lane as text tabs.
     private var sectionChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Section.allCases, id: \.self) { s in
-                    LDChip(title: s.rawValue, selected: section == s) { section = s }
-                }
+            LDTextTabs(options: Section.allCases.map(\.rawValue),
+                       selected: Section.allCases.firstIndex(of: section) ?? 0) { index in
+                if Section.allCases.indices.contains(index) { section = Section.allCases[index] }
             }
             .padding(.trailing, 24)
         }
@@ -5541,7 +5726,7 @@ private struct LDMusicPanel: View {
             Button { cut(track) } label: {
                 HStack(spacing: 8) {
                     if busy {
-                        ProgressView().controlSize(.mini).tint(LumaTheme.onSignal)
+                        ProgressView().controlSize(.mini).tint(LumaTheme.textPrimary)
                     } else {
                         Image(systemName: "scissors").font(.system(size: 13, weight: .semibold))
                     }
@@ -5549,10 +5734,11 @@ private struct LDMusicPanel: View {
                         .font(.luma(size: 14, weight: .semibold))
                         .lineLimit(1)
                 }
-                .foregroundStyle(LumaTheme.onSignal)
+                // Quiet glass: Export is the editor's one main action.
+                .foregroundStyle(LumaTheme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
-                .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.lumaPress)
@@ -5777,11 +5963,11 @@ private struct LDMusicCard: View {
         .background(LumaTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    /// A quiet glass tile with the lane's glyph (calm mock v2: no coloured
+    /// art tile).
     private var artwork: some View {
-        let tint = generated?.colour ?? track.kind.tint
-        return RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(LinearGradient(colors: [tint, tint.opacity(0.35)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+        RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .fill(LumaTheme.control)
             .frame(width: 40, height: 40)
             .overlay {
                 Image(systemName: track.kind.icon)
@@ -5810,9 +5996,9 @@ private struct LDMusicCard: View {
     }
 }
 
-/// The whole file as RMS bars with the part on the timeline lit, a dot on
-/// every beat (yellow on the beats Cut to the beat will use) and the in and
-/// out points as thin yellow handles.
+/// The whole file as RMS bars with the part on the timeline lit, a grey dot
+/// on every beat (lighter on the beats Cut to the beat will use) and the in
+/// and out points as white handles.
 private struct LDBeatStrip: View {
     let track: EditorState.MusicTrack
     let everyBeats: Int
@@ -5826,9 +6012,9 @@ private struct LDBeatStrip: View {
             drawBars(ctx, size: size, waveHeight: waveHeight, inX: inX, outX: outX)
             drawBeats(ctx, size: size, total: total)
             for x in [inX, outX] {
-                let clamped = min(max(0, x - 1), max(0, size.width - 2))
-                let handle = CGRect(x: clamped, y: 0, width: 2, height: waveHeight)
-                ctx.fill(Path(roundedRect: handle, cornerRadius: 1), with: .color(LumaTheme.signal))
+                let clamped = min(max(0, x - 1.5), max(0, size.width - 3))
+                let handle = CGRect(x: clamped, y: 0, width: 3, height: waveHeight)
+                ctx.fill(Path(roundedRect: handle, cornerRadius: 1.5), with: .color(LumaTheme.textPrimary))
             }
         }
     }
@@ -5868,8 +6054,8 @@ private struct LDBeatStrip: View {
             let inside = beat >= track.trimStart - 0.0005 && beat <= track.trimEnd + 0.0005
             let r: CGFloat = strong ? strongRadius : 1
             let colour: Color = strong && inside
-                ? LumaTheme.signal
-                : Color.white.opacity(inside ? 0.4 : 0.16)
+                ? Color.white.opacity(0.62)
+                : Color.white.opacity(inside ? 0.32 : 0.14)
             ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
                      with: .color(colour))
         }
@@ -5913,10 +6099,10 @@ private struct LDEnvelopeEditor: View {
                             else { p.addLine(to: CGPoint(x: x, y: y)) }
                         }
                     }
-                    .stroke(LumaTheme.signal, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .stroke(LumaTheme.textPrimary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     ForEach(Array(points.enumerated()), id: \.offset) { idx, pt in
                         Circle().fill(LumaTheme.ink)
-                            .overlay(Circle().strokeBorder(LumaTheme.signal, lineWidth: 2))
+                            .overlay(Circle().strokeBorder(LumaTheme.textPrimary, lineWidth: 2))
                             .frame(width: 14, height: 14)
                             .frame(width: 30, height: 30)
                             .contentShape(Circle())
@@ -5983,7 +6169,7 @@ private struct LDAudioEffects: View {
         VStack(alignment: .leading, spacing: 16) {
             if editor.isRenderingEffects {
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.mini).tint(LumaTheme.signal)
+                    ProgressView().controlSize(.mini).tint(LumaTheme.textPrimary)
                     Text("Baking effects…")
                         .font(.luma(size: 13, weight: .medium)).foregroundStyle(LumaTheme.textSecondary)
                 }
