@@ -3,11 +3,14 @@ import StoreKit
 
 // MARK: - Paywall (C5)
 
-/// Pro paywall. Pricing (StoreService.LockedPricing): $34.99 a year with a
+/// Pro paywall. US pricing (StoreService.LockedPricing): $34.99 a year with a
 /// 7-day free trial, $5.99 a month, or $79.99 once for Lifetime, which keeps
-/// Pro and every pack, including packs released later. No WEEKLY tier,
-/// matching the anti-subscription wave in the LUT niche. Presented as a sheet
-/// from Settings, onboarding, premium looks, and pack purchases.
+/// Pro and every pack, including packs released later. The UK and euro
+/// stores have their own prices (£29.99 / €34.99 a year, £5.99 / €5.99 a
+/// month, £74.99 / €79.99 Lifetime), which only StoreKit supplies. No
+/// WEEKLY tier, matching the anti-subscription wave in the LUT niche.
+/// Presented as a sheet from Settings, onboarding, premium looks, and pack
+/// purchases.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
@@ -22,24 +25,12 @@ struct PaywallView: View {
     /// guarantee StoreKit would not honour.
     @State private var yearlyTrialEligible = false
 
-    private var yearlyPrice: String {
-        storeService.proYearly?.displayPrice ?? StoreService.LockedPricing.yearly
-    }
-    private var monthlyPrice: String {
-        storeService.proMonthly?.displayPrice ?? StoreService.LockedPricing.monthly
-    }
-    private var lifetimePrice: String {
-        storeService.proLifetime?.displayPrice ?? StoreService.LockedPricing.lifetime
-    }
-    /// The yearly price spread over twelve months, in the storefront's own
-    /// currency once StoreKit has answered ("$2.92").
-    private var yearlyPerMonth: String {
-        if let product = storeService.proYearly {
-            return (product.price / 12).formatted(product.priceFormatStyle)
-        }
-        return (StoreService.LockedPricing.yearlyAmount / 12)
-            .formatted(.currency(code: "USD"))
-    }
+    // Prices come from StoreKit in the buyer's own currency. Before it has
+    // answered they are nil outside the US (a UK buyer must never see "$"),
+    // and the rows hold a quiet placeholder in their place.
+    private var yearlyPrice: String? { storeService.yearlyPrice }
+    private var monthlyPrice: String? { storeService.monthlyPrice }
+    private var lifetimePrice: String? { storeService.lifetimePrice }
 
     /// The look the cover portrait wears.
     private static let coverLook = "CN93 · Luxury Campaign"
@@ -168,10 +159,18 @@ struct PaywallView: View {
     private var renewalNote: String? {
         switch plan {
         case .yearly:
-            return yearlyTrialLabel == nil
-                ? "\(yearlyPrice) per year. Cancel anytime."
-                : "Then \(yearlyPrice) per year. Cancel anytime."
-        case .monthly:  return "\(monthlyPrice) per month. Cancel anytime."
+            // The button stays off until the real price is in, so the note
+            // can say the cadence alone for that moment.
+            let trial = yearlyTrialLabel != nil
+            guard let yearlyPrice else {
+                return trial ? "Then billed yearly. Cancel anytime." : "Billed yearly. Cancel anytime."
+            }
+            return trial
+                ? "Then \(yearlyPrice) per year. Cancel anytime."
+                : "\(yearlyPrice) per year. Cancel anytime."
+        case .monthly:
+            guard let monthlyPrice else { return "Billed monthly. Cancel anytime." }
+            return "\(monthlyPrice) per month. Cancel anytime."
         case .lifetime: return "One payment. No subscription."
         }
     }
@@ -180,8 +179,9 @@ struct PaywallView: View {
         VStack(spacing: 10) {
             PaywallPlanRow(
                 title: "Yearly",
-                price: "\(yearlyPrice) / year",
-                detail: "\(yearlyPerMonth) a month, billed yearly",
+                price: yearlyPrice.map { "\($0) / year" },
+                detail: storeService.yearlyPricePerMonth.map { "\($0) a month, billed yearly" }
+                    ?? "Billed yearly",
                 // The trial badge is a promise, so it shows only when StoreKit
                 // says THIS account can take the offer (same rule as the CTA).
                 badge: yearlyTrialLabel ?? "Best Value",
@@ -189,14 +189,14 @@ struct PaywallView: View {
             ) { plan = .yearly }
             PaywallPlanRow(
                 title: "Monthly",
-                price: "\(monthlyPrice) / month",
+                price: monthlyPrice.map { "\($0) / month" },
                 detail: nil,
                 badge: nil,
                 selected: plan == .monthly
             ) { plan = .monthly }
             PaywallPlanRow(
                 title: "Lifetime",
-                price: "\(lifetimePrice) once",
+                price: lifetimePrice.map { "\($0) once" },
                 detail: "Every pack, including future ones",
                 badge: "Pay Once",
                 selected: plan == .lifetime
@@ -280,7 +280,8 @@ private struct PaywallFeatureRow: View {
 
 private struct PaywallPlanRow: View {
     let title: String
-    let price: String
+    /// Nil while StoreKit hasn't given this store's price yet.
+    let price: String?
     /// A quieter third line: the yearly plan's monthly equivalent, or what
     /// Lifetime keeps.
     let detail: String?
@@ -295,10 +296,14 @@ private struct PaywallPlanRow: View {
                     Text(title)
                         .font(.luma(size: 16, weight: .semibold))
                         .foregroundStyle(LumaTheme.textPrimary)
-                    Text(price)
+                    // A soft bar the width of a price holds the line while it
+                    // loads, so the row doesn't jump when the price lands.
+                    Text(price ?? "00.00 / month")
                         .font(.luma(size: 13))
                         .monospacedDigit()
                         .foregroundStyle(LumaTheme.textSecondary)
+                        .redacted(reason: price == nil ? .placeholder : [])
+                        .accessibilityLabel(price ?? "Price loading")
                     if let detail {
                         Text(detail)
                             .font(.luma(size: 12))
@@ -465,7 +470,8 @@ struct LockedLookSheet: View {
 
             VStack(spacing: 10) {
                 if let pack = lock.pack {
-                    primaryButton("Buy \(pack.name) · \(packPrice(pack))") { buyPack() }
+                    primaryButton(packPrice(pack).map { "Buy \(pack.name) · \($0)" }
+                                  ?? "Buy \(pack.name)") { buyPack() }
                         .disabled(packProduct == nil || storeService.purchaseInFlight)
                         .opacity(packProduct == nil ? 0.45 : 1)
                     secondaryButton("Get Pro for every look") { showPaywall = true }
@@ -562,13 +568,16 @@ struct LockedLookSheet: View {
 
     private var subtitle: String {
         if let pack = lock.pack {
-            return "\(pack.name) · \(packPrice(pack)) · yours to keep"
+            return [pack.name, packPrice(pack), "yours to keep"]
+                .compactMap { $0 }
+                .joined(separator: " · ")
         }
         return "Included with Pro"
     }
 
-    private func packPrice(_ pack: LookPack) -> String {
-        packProduct?.displayPrice ?? pack.price
+    /// Nil outside the US until StoreKit has this store's price.
+    private func packPrice(_ pack: LookPack) -> String? {
+        storeService.price(for: pack)
     }
 
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {

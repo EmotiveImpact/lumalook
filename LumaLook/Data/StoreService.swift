@@ -47,9 +47,14 @@ final class StoreService: ObservableObject {
         }
     }
 
-    /// Fallback display pricing so the paywall reads correctly even before
-    /// products load (offline, review, fresh install). Real Product values
-    /// replace these the moment StoreKit answers.
+    /// Fallback display pricing for the US App Store, so the paywall reads
+    /// correctly even before products load (offline, review, fresh install).
+    /// Real Product values replace these the moment StoreKit answers.
+    ///
+    /// These are US dollars only. The UK and euro storefronts have their own
+    /// approved prices (Pro £29.99 / €34.99 a year, for example), so outside
+    /// the US the screens show no price at all until StoreKit gives the real
+    /// one: see `showsDollarFallback`.
     enum LockedPricing {
         static let yearly = "$34.99"
         static let monthly = "$5.99"
@@ -65,6 +70,10 @@ final class StoreService: ObservableObject {
     @Published private(set) var proLifetime: Product?
     @Published private(set) var packProducts: [String: Product] = [:]  // packID → product
 
+    /// The App Store country this account buys in ("USA", "GBR", "FRA"),
+    /// once StoreKit reports it. Nil until then, or if it can't say.
+    @Published private(set) var storefrontCountry: String?
+
     /// True once ANY Pro entitlement (yearly sub or lifetime) is verified.
     @Published private(set) var isPro = false
     /// Pack product IDs the user owns outright.
@@ -74,6 +83,7 @@ final class StoreService: ObservableObject {
     @Published var lastError: String?
 
     private var updatesTask: Task<Void, Never>?
+    private var storefrontTask: Task<Void, Never>?
 
     init() {
         #if DEBUG
@@ -95,13 +105,82 @@ final class StoreService: ObservableObject {
             updatesTask = Task { await listenForTransactions() }
         }
         Task {
+            await loadStorefront()
             await loadProducts()
             await refreshEntitlements()
         }
+        storefrontTask = Task { await listenForStorefrontChanges() }
     }
 
     deinit {
         updatesTask?.cancel()
+        storefrontTask?.cancel()
+    }
+
+    // MARK: Storefront and prices
+
+    /// True when the US dollar fallbacks in `LockedPricing` and on each pack
+    /// are the right thing to show while StoreKit hasn't given a real price:
+    /// the account buys in the US App Store or, until StoreKit says which
+    /// store it is, the phone is set to the US. Anywhere else a dollar price
+    /// would be wrong, so the screens leave the price out until it arrives.
+    var showsDollarFallback: Bool {
+        if let storefrontCountry { return storefrontCountry == "USA" }
+        return Locale.current.region?.identifier == "US"
+    }
+
+    var yearlyPrice: String? {
+        proYearly?.displayPrice ?? (showsDollarFallback ? LockedPricing.yearly : nil)
+    }
+    var monthlyPrice: String? {
+        proMonthly?.displayPrice ?? (showsDollarFallback ? LockedPricing.monthly : nil)
+    }
+    var lifetimePrice: String? {
+        proLifetime?.displayPrice ?? (showsDollarFallback ? LockedPricing.lifetime : nil)
+    }
+    /// The yearly price spread over twelve months, in the storefront's own
+    /// currency ("$2.92", "£2.50").
+    var yearlyPricePerMonth: String? {
+        if let product = proYearly {
+            return (product.price / 12).formatted(product.priceFormatStyle)
+        }
+        guard showsDollarFallback else { return nil }
+        return (LockedPricing.yearlyAmount / 12).formatted(.currency(code: "USD"))
+    }
+
+    /// What a paid pack costs in this account's store, or nil while that is
+    /// still unknown. Free and Pro packs have no price.
+    func price(for pack: LookPack) -> String? {
+        if pack.isFree || pack.isProIncluded { return nil }
+        if let product = packProducts[pack.id] { return product.displayPrice }
+        return showsDollarFallback ? pack.price : nil
+    }
+
+    private func loadStorefront() async {
+        #if DEBUG
+        // UI verification seed: LUMA_SEED_STOREFRONT=GBR shows the screens
+        // as a UK buyer sees them before StoreKit has answered.
+        if let seeded = ProcessInfo.processInfo.environment["LUMA_SEED_STOREFRONT"] {
+            storefrontCountry = seeded
+            return
+        }
+        #endif
+        // Qualified: RevenueCat has a Storefront type of its own.
+        if let storefront = await StoreKit.Storefront.current {
+            storefrontCountry = storefront.countryCode
+        }
+    }
+
+    /// Someone who moves their Apple Account to another country sees that
+    /// store's currency, so the prices load again.
+    private func listenForStorefrontChanges() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LUMA_SEED_STOREFRONT"] != nil { return }
+        #endif
+        for await storefront in StoreKit.Storefront.updates {
+            storefrontCountry = storefront.countryCode
+            await loadProducts()
+        }
     }
 
     // MARK: Products

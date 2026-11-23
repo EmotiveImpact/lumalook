@@ -251,7 +251,9 @@ extension AppModel {
             } else if pack.isProIncluded {
                 tag = .pro
             } else {
-                tag = .price(store.packProducts[pack.id]?.displayPrice ?? pack.price)
+                // "Buy" stands in while this store's price loads, so a UK
+                // buyer never sees the US fallback.
+                tag = .price(store.price(for: pack) ?? "Buy")
             }
             sections.append(CameraLookSection(
                 id: pack.id, title: pack.name, tag: tag,
@@ -1113,7 +1115,8 @@ struct CameraLockCard: View {
                 .padding(.bottom, 14)
             VStack(spacing: 8) {
                 if let pack = lock.pack {
-                    choice("Get \(pack.name) · \(packProduct?.displayPrice ?? pack.price)",
+                    choice(storeService.price(for: pack).map { "Get \(pack.name) · \($0)" }
+                               ?? "Get \(pack.name)",
                            primary: true, busy: storeService.purchaseInFlight) { buyPack() }
                     choice(proTitle) { openPaywall() }
                 } else {
