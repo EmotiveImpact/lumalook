@@ -1,5 +1,16 @@
 import Foundation
 
+/// Features that are built but switched off until they are ready. Flip one to
+/// true to bring it back; the code behind it is untouched.
+enum LumaFeatures {
+    /// Cut to the beat: Home's beat-cut template rail (Home shows a plain
+    /// Templates rail instead), the beat-cut templates in the editor's
+    /// template lists, and the Cut to the beat button and its every-N-beats
+    /// menu in the editor's music lane panel. Off until it has had more work
+    /// (Edem, 23 Nov 2026).
+    static let cutToTheBeat = false
+}
+
 /// One clip slot in a template — a recipe for a single timeline clip, not a clip
 /// itself. The applier pairs slot `i` with the user's `i`th picked media.
 struct TemplateSlot: Codable, Equatable {
@@ -92,6 +103,13 @@ enum TemplateLibrary {
     /// Templates loaded from the bundled Templates/templates.json, falling back
     /// to `builtIn` when the resource is missing or malformed. Decoded once and
     /// memoised — the card grid re-reads this on every layout pass.
+    /// The templates offered in lists (Home, the editor's template panel and
+    /// library). While Cut to the beat is off the beat-cut ones are left out;
+    /// a template id already in a project still resolves through `all`.
+    static var shown: [VideoTemplate] {
+        LumaFeatures.cutToTheBeat ? all : all.filter { !$0.isBeatCut }
+    }
+
     static var all: [VideoTemplate] {
         lock.lock()
         defer { lock.unlock() }

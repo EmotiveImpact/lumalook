@@ -3253,7 +3253,7 @@ private struct EditorContent: View {
         if editor.clips.isEmpty {
             LDNote("Templates restyle clips you already have. Add footage first.")
         }
-        ForEach(TemplateLibrary.all) { template in
+        ForEach(TemplateLibrary.shown) { template in
             Button {
                 if editor.applyTemplate(template) {
                     LumaHaptics.shared.tap()
@@ -5439,8 +5439,9 @@ private struct LDOverlayPanel: View {
 
 /// The selected audio lane (editor mock 6): a card with the track's name,
 /// source, BPM and length, its waveform with the beat grid and the in and
-/// out points, then Cut to the beat every 1, 2, 4 or 8 beats. Level, fade,
-/// envelope, effects and lane settings sit under the chips below.
+/// out points, then Cut to the beat every 1, 2, 4 or 8 beats (hidden while
+/// `LumaFeatures.cutToTheBeat` is off). Level, fade, envelope, effects and
+/// lane settings sit under the chips below.
 private struct LDMusicPanel: View {
     @ObservedObject var editor: EditorState
     let trackID: UUID?
@@ -5467,10 +5468,16 @@ private struct LDMusicPanel: View {
         if let track {
             VStack(alignment: .leading, spacing: 16) {
                 LDMusicCard(track: track, bpm: Self.bpm(of: track))
-                LDBeatStrip(track: track, everyBeats: beatStride)
+                // While Cut to the beat is off the strip marks every fourth
+                // beat, like the timeline's lane, rather than the beats a cut
+                // would use.
+                LDBeatStrip(track: track,
+                            everyBeats: LumaFeatures.cutToTheBeat ? beatStride : 4)
                     .frame(height: 46)
-                cutRow(track)
-                if let cutNote { LDNote(cutNote) }
+                if LumaFeatures.cutToTheBeat {
+                    cutRow(track)
+                    if let cutNote { LDNote(cutNote) }
+                }
                 sectionChips
                 switch section {
                 case .level:    level(track)

@@ -3,14 +3,15 @@ import AVFoundation
 import CoreImage
 
 /// Night Lab Home, "AF1 Viewfinder reel": direction A's edge-to-edge reel of
-/// tonight's looks wearing direction F's viewfinder (corner brackets, a
-/// thirds grid and a look strip). Tapping a look in the strip pauses the reel
-/// and regrades whoever is on screen; tapping the picture goes back to the
-/// reel.
+/// tonight's looks with direction F's look strip. Tapping a look in the strip
+/// pauses the reel and regrades whoever is on screen; tapping the picture
+/// goes back to the reel. The picture is left clean: no focus brackets or
+/// thirds grid over it (Edem, 23 Nov 2026).
 ///
 /// Top to bottom: the reel (story bars and the greeting on it), the Resume
 /// pill straddling its bottom edge, Shoot and Edit a clip with the
-/// quick starts, Cut to the beat templates, Looks (For you | Recents),
+/// quick starts, Templates (Cut to the beat templates when
+/// `LumaFeatures.cutToTheBeat` is on), Looks (For you | Recents),
 /// Continue editing, and the pack spotlight.
 ///
 /// The top row (the wordmark, search and the avatar) is pinned. At rest it
@@ -42,7 +43,7 @@ struct HomeView: View {
 
     /// Scroll target for the "Templates" quick start.
     static let beatAnchor = "home.cutToTheBeat"
-    /// LUMA_SEED_HOMESCROLL (Debug): open Home scrolled down to Cut to the beat.
+    /// LUMA_SEED_HOMESCROLL (Debug): open Home scrolled down to the template rail.
     private static let seedScroll: Bool = {
         #if DEBUG
         return ProcessInfo.processInfo.environment["LUMA_SEED_HOMESCROLL"] == "1"
@@ -85,7 +86,7 @@ struct HomeView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .modifier(HomeScrollTracker(scroll: scroll))
                     .task {
-                        // Preview: scroll to Cut to the beat so a screenshot
+                        // Preview: scroll to the template rail so a screenshot
                         // shows the collapsed top bar.
                         guard HomeView.seedScroll else { return }
                         try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -183,7 +184,7 @@ struct HomeView: View {
             // padding reaches up behind the top bar by `beatReach` (the Shoot
             // row gives that room back), so the words land just below the
             // bar rather than under it.
-            HomeSectionHeader(title: "Cut to the beat")
+            HomeSectionHeader(title: LumaFeatures.cutToTheBeat ? "Cut to the beat" : "Templates")
                 .padding(.horizontal, 16)
                 .padding(.top, 30 + Self.beatReach(safeTop: safeTop))
                 .id(HomeView.beatAnchor)
@@ -253,7 +254,11 @@ struct HomeView: View {
         return real
     }
 
+    /// The template rail: the beat-cut templates while Cut to the beat is
+    /// on, otherwise the plain ones (the Templates quick start still lands
+    /// on this rail).
     private var beatTemplates: [VideoTemplate] {
+        guard LumaFeatures.cutToTheBeat else { return TemplateLibrary.shown }
         let beat = TemplateLibrary.all.filter { $0.isBeatCut }
         if !beat.isEmpty { return beat }
         return TemplateLibrary.builtIn.filter { $0.isBeatCut }
@@ -613,7 +618,7 @@ private struct HomeTopBar: View {
             LumaTabHeader {
                 LumaWordmark(size: 20)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("lumalook")
+                    .accessibilityLabel("Lumalook")
                     .accessibilityAddTraits(.isHeader)
             } trailing: {
                 searchButton(collapse: p)
@@ -1242,9 +1247,9 @@ struct TonightsLook {
     }
 }
 
-/// AF1: tonight's three looks on real people, edge to edge, with story bars,
-/// the greeting on top and a viewfinder over the frame (corner brackets and a
-/// thirds grid). The strip under the title regrades the frame on screen:
+/// AF1: tonight's three looks on real people, edge to edge, with story bars
+/// and the greeting on top, and nothing drawn over the picture itself. The
+/// strip under the title regrades the frame on screen:
 /// picking a look pauses the reel, and tapping the picture (or the picked
 /// look again) lets it cycle on. With Reduce Motion on it neither cycles nor
 /// zooms; taps still move between looks.
@@ -1266,11 +1271,6 @@ private struct ViewfinderReel: View {
     @State private var started = Date()
 
     static let dwell: Double = 4.2
-    /// Where the brackets start below the safe area (under the greeting, and
-    /// on the first run its extra line), and what the copy and strip need
-    /// beneath them.
-    private var bracketTop: CGFloat { isFirstRun ? 154 : 134 }
-    private static let copyRoom: CGFloat = 312
 
     private var safeIndex: Int {
         looks.isEmpty ? 0 : min(index, looks.count - 1)
@@ -1313,12 +1313,10 @@ private struct ViewfinderReel: View {
         ZStack(alignment: .bottomLeading) {
             photos
             scrim
-            thirds
             copy
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
-        .overlay(alignment: .top) { brackets }
         .overlay(alignment: .top) { top }
         .overlay(alignment: .bottom) { sigline }
         .clipped()
@@ -1361,38 +1359,6 @@ private struct ViewfinderReel: View {
             .init(color: LumaTheme.background, location: 1),
         ], startPoint: .top, endPoint: .bottom)
         .allowsHitTesting(false)
-    }
-
-    private var thirds: some View {
-        GeometryReader { geo in
-            Path { path in
-                for step in 1...2 {
-                    let x = geo.size.width * CGFloat(step) / 3
-                    path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: geo.size.height))
-                    let y = geo.size.height * CGFloat(step) / 3
-                    path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: geo.size.width, y: y))
-                }
-            }
-            .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private var brackets: some View {
-        GeometryReader { geo in
-            let boxHeight = max(90, height - safeTop - bracketTop - Self.copyRoom)
-            ViewfinderBrackets()
-                .stroke(Color.white.opacity(0.88),
-                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                .frame(width: geo.size.width * 0.6, height: boxHeight)
-                .position(x: geo.size.width / 2, y: safeTop + bracketTop + boxHeight / 2)
-        }
-        .frame(height: height)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     // MARK: Chrome
@@ -1589,29 +1555,6 @@ private struct ViewfinderReel: View {
     }
 }
 
-/// Four rounded corner brackets, like a camera's focus frame.
-private struct ViewfinderBrackets: Shape {
-    var arm: CGFloat = 24
-
-    func path(in rect: CGRect) -> Path {
-        let a = min(arm, rect.width / 3, rect.height / 3)
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + a))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX + a, y: rect.minY))
-        path.move(to: CGPoint(x: rect.maxX - a, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + a))
-        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - a))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX - a, y: rect.maxY))
-        path.move(to: CGPoint(x: rect.minX + a, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - a))
-        return path
-    }
-}
-
 /// Story-style progress: done bars full, the current one filling, the rest
 /// dim.
 private struct ReelBars: View {
@@ -1726,10 +1669,12 @@ private struct BeatTemplateCard: View {
             Poster.badge(Poster.duration(template.totalDuration)).padding(8)
         }
         .overlay(alignment: .bottom) {
-            BeatBars(levels: BeatPattern.levels(for: template, seed: seed), colour: colour)
-                .frame(height: 20)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+            if template.isBeatCut {
+                BeatBars(levels: BeatPattern.levels(for: template, seed: seed), colour: colour)
+                    .frame(height: 20)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
