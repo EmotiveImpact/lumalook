@@ -55,10 +55,14 @@ the stylesheet and script).
 **GitHub Pages** also works because the repository is public: Settings, Pages,
 deploy from a GitHub Actions workflow that uploads the `website` folder.
 
-Once the domain is live, set `LLPrivacyPolicyURL` and `LLTermsOfUseURL` in the
-app's Info.plist (see `LumaLegal` in `Screens/MoreScreens.swift`) to
-`https://<domain>/privacy` and `https://<domain>/terms`, and use
-`https://<domain>/support` as the App Store support URL.
+The site lives at **https://lumalook.app** (registered on Spaceship, DNS
+pointing at Vercel; `www.lumalook.app` and `lumalook.vercel.app` redirect to
+it). The app's privacy and terms links (`LumaLegal` in
+`Screens/MoreScreens.swift`) point at `https://lumalook.app/privacy` and
+`https://lumalook.app/terms`. In App Store Connect use
+`https://lumalook.app/privacy` as the privacy policy URL and
+`https://lumalook.app/support` as the support URL. Canonical links, `og:url`
+and `sitemap.xml` all use the same domain.
 
 ## Launch day
 
