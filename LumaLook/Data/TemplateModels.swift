@@ -9,6 +9,13 @@ enum LumaFeatures {
     /// menu in the editor's music lane panel. Off until it has had more work
     /// (Edem, 23 Nov 2026).
     static let cutToTheBeat = false
+
+    /// Templates: Home's Templates row and quick tile, the Templates pills
+    /// and starter grid in Projects, and the editor's "Start from a
+    /// template" band. Off until templates are up to the standard of the
+    /// best editors (Edem, 23 Nov 2026). Projects and edits already made
+    /// from a template still open as normal.
+    static let templates = false
 }
 
 /// One clip slot in a template — a recipe for a single timeline clip, not a clip
