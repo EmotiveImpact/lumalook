@@ -8,9 +8,15 @@ import StoreKit
 /// Pro and every pack, including packs released later. No WEEKLY tier,
 /// matching the anti-subscription wave in the LUT niche. Presented as a sheet
 /// from Settings, onboarding, premium looks, and pack purchases.
+///
+/// Calm mock v2 (08-paywall): a quiet kicker with the Pro spark, white ticks,
+/// the pale picked ring on the chosen plan, and the trial or subscribe button
+/// as the one main action (`LumaMainButton`, so it follows the Main buttons
+/// choice). Restore, Terms and Privacy sit underneath in small grey type.
 struct PaywallView: View {
     @EnvironmentObject private var storeService: StoreService
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(LumaAppearance.buttonsKey) private var buttonsRaw = LumaMainButtonStyle.signal.rawValue
 
     private enum Plan { case yearly, monthly, lifetime }
     @State private var plan: Plan = .yearly
@@ -18,7 +24,7 @@ struct PaywallView: View {
     /// True only when StoreKit says THIS user can still get the introductory
     /// offer on the yearly product. The CTA and badge used to promise a
     /// 7-day free trial purely from the local `Plan` enum, so a returning
-    /// subscriber — or a product with no eligible offer — was shown a
+    /// subscriber, or a product with no eligible offer, was shown a
     /// guarantee StoreKit would not honour.
     @State private var yearlyTrialEligible = false
 
@@ -49,7 +55,7 @@ struct PaywallView: View {
             LumaTheme.ink.ignoresSafeArea()
             // A graded portrait behind the top of the sheet, fading into ink.
             GradedHeroImage(photo: .campaign, lookName: Self.coverLook)
-                .frame(height: 430)
+                .frame(height: 460)
                 .overlay {
                     LinearGradient(stops: [
                         .init(color: LumaTheme.ink.opacity(0.15), location: 0),
@@ -61,38 +67,23 @@ struct PaywallView: View {
                 .ignoresSafeArea(edges: .top)
                 .accessibilityHidden(true)
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 0) {
                     hero
                     featureList
+                        .padding(.top, 26)
+                        .padding(.horizontal, 4)
                     planPicker
+                        .padding(.top, 20)
                     purchaseButton
-                    footerLinks
+                        .padding(.top, 14)
+                    finePrint
+                        .padding(.top, 12)
                 }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 28)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
             }
         }
-        .overlay(alignment: .top) {
-            HStack {
-                LookChip(name: Self.coverLook,
-                         colour: LookSignature.colour(forLookNamed: Self.coverLook), size: 12)
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("Close")
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
-        }
+        .overlay(alignment: .top) { topBar }
         .onChange(of: storeService.isPro) { _, pro in
             if pro { dismiss() }
         }
@@ -105,23 +96,62 @@ struct PaywallView: View {
         }
     }
 
+    /// The cover look's name on dark glass, and a quiet close button.
+    private var topBar: some View {
+        HStack {
+            LookNameText(Self.coverLook,
+                         colour: LookSignature.colour(forLookNamed: Self.coverLook),
+                         size: 12, alwaysDot: true)
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+                .background(.ultraThinMaterial, in: Capsule())
+                .background(Color.black.opacity(0.3), in: Capsule())
+                .accessibilityLabel("Look: \(Self.coverLook)")
+            Spacer()
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .background(Color.black.opacity(0.25), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.lumaPress)
+            .accessibilityLabel("Close")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
     /// Kicker and headline, sitting low on the cover portrait.
     private var hero: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Lumalook Pro")
-                .font(.luma(size: 14, weight: .semibold))
-                .foregroundStyle(LumaTheme.signal)
+            HStack(spacing: 6) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(LumaTheme.signal)
+                    .accessibilityHidden(true)
+                Text("Lumalook Pro")
+                    .font(.luma(size: 11, weight: .bold))
+                    .tracking(1.3)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
             LumaHeadline(light: "Every look.", heavy: "Every pack.", size: 34)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
         .padding(.top, 250)
     }
 
     private var featureList: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
             PaywallFeatureRow(text: "All \(PackCatalog.totalLookCount) looks and every new pack")
-            PaywallFeatureRow(text: "Stack looks with per-slot strength")
+            PaywallFeatureRow(text: "Stack looks with a strength for each")
             PaywallFeatureRow(text: "Batch export up to 10 clips")
             PaywallFeatureRow(text: "Take your grade anywhere as .cube")
         }
@@ -136,128 +166,140 @@ struct PaywallView: View {
     }
 
     /// The yearly product's introductory offer, in whatever units StoreKit
-    /// actually reports (a "7-day" claim hardcoded in the UI is a claim about
-    /// App Store Connect configuration that the app cannot see).
+    /// actually reports ("7-day free trial"). A "7-day" claim hardcoded in
+    /// the UI is a claim about App Store Connect configuration that the app
+    /// cannot see.
     private var yearlyTrialLabel: String? {
         guard yearlyTrialEligible,
               let offer = storeService.proYearly?.subscription?.introductoryOffer,
               offer.paymentMode == .freeTrial else { return nil }
-        let n = offer.period.value
         let unit: String
         switch offer.period.unit {
-        case .day:   unit = n == 1 ? "Day" : "Day"
-        case .week:  unit = n == 1 ? "Week" : "Week"
-        case .month: unit = n == 1 ? "Month" : "Month"
-        case .year:  unit = n == 1 ? "Year" : "Year"
+        case .day:   unit = "day"
+        case .week:  unit = "week"
+        case .month: unit = "month"
+        case .year:  unit = "year"
         @unknown default: return nil
         }
-        return "\(n)-\(unit) Free Trial"
+        return "\(offer.period.value)-\(unit) free trial"
     }
 
     private var callToAction: String {
         switch plan {
         case .yearly:
             // Only offer a trial when this user is actually eligible for one.
-            return yearlyTrialLabel.map { "Start \($0)" } ?? "Subscribe Yearly"
-        case .monthly:  return "Subscribe Monthly"
-        case .lifetime: return "Get Lifetime Access"
+            return yearlyTrialLabel.map { "Start \($0)" } ?? "Subscribe yearly"
+        case .monthly:  return "Subscribe monthly"
+        case .lifetime: return "Get Lifetime"
         }
     }
 
     /// Apple requires the renewing price and cadence next to a subscription CTA.
-    private var renewalNote: String? {
+    private var renewalNote: String {
         switch plan {
         case .yearly:
-            return yearlyTrialLabel == nil
-                ? "\(yearlyPrice) per year. Cancel anytime."
-                : "Then \(yearlyPrice) per year. Cancel anytime."
-        case .monthly:  return "\(monthlyPrice) per month. Cancel anytime."
+            let price = "\(yearlyPrice) a year (\(yearlyPerMonth) a month). Cancel any time."
+            return yearlyTrialLabel == nil ? price : "Then \(price)"
+        case .monthly:  return "\(monthlyPrice) a month. Cancel any time."
         case .lifetime: return "One payment. No subscription."
         }
     }
 
     private var planPicker: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             PaywallPlanRow(
                 title: "Yearly",
-                price: "\(yearlyPrice) / year",
-                detail: "\(yearlyPerMonth) a month, billed yearly",
+                detail: "\(yearlyPrice) a year · \(yearlyPerMonth) a month",
                 // The trial badge is a promise, so it shows only when StoreKit
                 // says THIS account can take the offer (same rule as the CTA).
-                badge: yearlyTrialLabel ?? "Best Value",
+                badge: yearlyTrialLabel ?? "Best value",
                 selected: plan == .yearly
             ) { plan = .yearly }
             PaywallPlanRow(
                 title: "Monthly",
-                price: "\(monthlyPrice) / month",
-                detail: nil,
+                detail: "\(monthlyPrice) a month",
                 badge: nil,
                 selected: plan == .monthly
             ) { plan = .monthly }
             PaywallPlanRow(
                 title: "Lifetime",
-                price: "\(lifetimePrice) once",
-                detail: "Every pack, including future ones",
-                badge: "Pay Once",
+                detail: "\(lifetimePrice) once · every pack, now and later",
+                badge: nil,
                 selected: plan == .lifetime
             ) { plan = .lifetime }
         }
     }
 
-    private var purchaseButton: some View {
-        Button {
-            Task {
-                guard let product = selectedProduct else { return }
-                // The result used to be assigned to state nothing read, so a
-                // successful purchase left the paywall sitting there as if
-                // nothing had happened.
-                if await storeService.purchase(product) {
-                    LumaHaptics.shared.exportSuccess()
-                    dismiss()
-                }
-            }
-        } label: {
-            HStack {
-                if storeService.purchaseInFlight {
-                    ProgressView().tint(LumaTheme.onSignal)
-                } else {
-                    Text(callToAction)
-                        .font(.luma(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundStyle(LumaTheme.onSignal)
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.lumaPress)
-        .disabled(storeService.purchaseInFlight || selectedProduct == nil)
-        .overlay(alignment: .bottom) {
-            if let note = renewalNote {
-                Text(note)
-                    .font(.luma(.caption))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                    .offset(y: 22)
-            }
-        }
-        .padding(.bottom, 12)
+    private var mainStyle: LumaMainButtonStyle {
+        LumaMainButtonStyle(rawValue: buttonsRaw) ?? .signal
     }
 
-    private var footerLinks: some View {
-        HStack(spacing: 18) {
-            Button("Restore Purchases") {
-                Task { await storeService.restorePurchases() }
-            }
-            // Reachable Terms + Privacy on the purchase surface are required
-            // for auto-renewable subscriptions. Destinations live in LumaLegal
-            // so this footer and Settings' ABOUT rows cannot drift apart.
-            Button("Terms") { LumaLegal.open(LumaLegal.terms) }
-            Button("Privacy") { LumaLegal.open(LumaLegal.privacy) }
+    /// The one main action: start the trial, subscribe, or buy Lifetime.
+    private var purchaseButton: some View {
+        LumaMainButton(title: storeService.purchaseInFlight ? "One moment" : callToAction,
+                       height: 54, cornerRadius: 27) {
+            purchase()
         }
-        .font(.luma(.footnote))
-        .foregroundStyle(LumaTheme.textMuted)
+        .disabled(storeService.purchaseInFlight || selectedProduct == nil)
+        .opacity(selectedProduct == nil ? 0.5 : 1)
+        .overlay(alignment: .trailing) {
+            if storeService.purchaseInFlight {
+                ProgressView()
+                    .tint(mainStyle.text)
+                    .padding(.trailing, 20)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func purchase() {
+        Task {
+            guard let product = selectedProduct else { return }
+            // The result used to be assigned to state nothing read, so a
+            // successful purchase left the paywall sitting there as if
+            // nothing had happened.
+            if await storeService.purchase(product) {
+                LumaHaptics.shared.exportSuccess()
+                dismiss()
+            }
+        }
+    }
+
+    /// The renewal terms, then Restore, Terms and Privacy, all quiet.
+    private var finePrint: some View {
+        VStack(spacing: 8) {
+            Text(renewalNote)
+                .font(.luma(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Button("Restore") {
+                    Task { await storeService.restorePurchases() }
+                }
+                .accessibilityLabel("Restore purchases")
+                dot
+                // Reachable Terms + Privacy on the purchase surface are
+                // required for auto-renewable subscriptions. Destinations live
+                // in LumaLegal so this footer and Settings' ABOUT rows cannot
+                // drift apart.
+                Button("Terms") { LumaLegal.open(LumaLegal.terms) }
+                dot
+                Button("Privacy") { LumaLegal.open(LumaLegal.privacy) }
+            }
+            .buttonStyle(.plain)
+            .font(.luma(size: 12, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.45))
+        }
         .frame(maxWidth: .infinity)
-        .padding(.top, 6)
+        .padding(.horizontal, 4)
+    }
+
+    private var dot: some View {
+        Text("·")
+            .font(.luma(size: 12, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.3))
+            .accessibilityHidden(true)
     }
 }
 
@@ -268,70 +310,82 @@ private struct PaywallFeatureRow: View {
         HStack(spacing: 11) {
             Image(systemName: "checkmark")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(LumaTheme.signal)
-                .frame(width: 18)
+                .foregroundStyle(.white)
+                .frame(width: 16)
+                .accessibilityHidden(true)
             Text(text)
-                .font(.luma(size: 15))
-                .foregroundStyle(LumaTheme.textPrimary.opacity(0.92))
+                .font(.luma(size: 14.5, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.86))
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(minHeight: 27)
     }
 }
 
+/// One plan on the paywall. The picked plan wears the pale picked ring
+/// (`LumaTheme.pickedRing`) and a slightly brighter glass; the others are
+/// quiet glass with an empty radio.
 private struct PaywallPlanRow: View {
     let title: String
-    let price: String
-    /// A quieter third line: the yearly plan's monthly equivalent, or what
-    /// Lifetime keeps.
-    let detail: String?
+    /// The price line ("$5.99 a month").
+    let detail: String
     let badge: String?
     let selected: Bool
     let action: () -> Void
+
+    private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.luma(size: 16, weight: .semibold))
+                        .font(.luma(size: 15.5, weight: .semibold))
+                        .tracking(-0.15)
                         .foregroundStyle(LumaTheme.textPrimary)
-                    Text(price)
-                        .font(.luma(size: 13))
-                        .monospacedDigit()
-                        .foregroundStyle(LumaTheme.textSecondary)
-                    if let detail {
-                        Text(detail)
-                            .font(.luma(size: 12))
-                            .monospacedDigit()
-                            .foregroundStyle(LumaTheme.textMuted)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                    }
+                    Text(detail)
+                        .font(.luma(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 if let badge {
                     Text(badge)
-                        .font(.luma(size: 12, weight: .semibold))
-                        .foregroundStyle(selected ? LumaTheme.onSignal : LumaTheme.textSecondary)
+                        .font(.luma(size: 11.5, weight: .semibold))
+                        .foregroundStyle(selected ? LumaTheme.pickedRing : LumaTheme.textSecondary)
+                        .lineLimit(1)
                         .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(selected ? LumaTheme.signal : LumaTheme.raised, in: Capsule())
+                        .frame(height: 24)
+                        .background(Color.white.opacity(0.12), in: Capsule())
                 }
-                Circle()
-                    .strokeBorder(selected ? LumaTheme.signal : LumaTheme.border, lineWidth: selected ? 6 : 1.5)
-                    .frame(width: 20, height: 20)
+                radio
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(selected ? LumaTheme.signal.opacity(0.06) : LumaTheme.panel,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(selected ? LumaTheme.signal.opacity(0.55) : LumaTheme.edge,
-                              lineWidth: selected ? 1.5 : 1))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: selected ? 66 : 58)
+            .background(Color.white.opacity(selected ? 0.1 : 0.055), in: shape)
+            .pickedRing(selected, cornerRadius: 18)
+            .contentShape(shape)
         }
         .buttonStyle(.lumaPress)
+        .animation(.easeOut(duration: 0.18), value: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder private var radio: some View {
+        if selected {
+            Circle()
+                .fill(LumaTheme.pickedRing)
+                .frame(width: 22, height: 22)
+                .overlay(Circle().fill(LumaTheme.ink).frame(width: 8, height: 8))
+                .accessibilityHidden(true)
+        } else {
+            Circle()
+                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1.5)
+                .frame(width: 22, height: 22)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -385,21 +439,22 @@ private struct LockedLookPresenter: ViewModifier {
                             offersFreeLook: onUseFreeLook != nil,
                             onUnlocked: { didUnlock = true },
                             onUseFreeLook: { choseFreeLook = true })
-                // Fitted to the three choices; it can still be pulled up if
-                // a large text size needs the room.
-                .presentationDetents([.height(context == .export ? 400 : 376), .large])
+                // Fitted to the header, the message and the choices; it can
+                // still be pulled up if a large text size needs the room.
+                .presentationDetents([.height(context == .export ? 500 : 480), .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(Color.black)
+                .presentationBackground(LumaTheme.panel)
         }
     }
 }
 
 /// Shown when a premium look is about to leave the app (an export, a
 /// recording, a still, a .cube). The look has already graded the footage for
-/// free. The sheet offers three ways on and no dead end: buy the one pack that
-/// contains the look and keep it, go Pro for every look, or carry on with the
-/// closest free look, keeping every other edit. It gets out of the way the
-/// moment a purchase lands.
+/// free: previewing is free, exporting needs the pack. The sheet offers the
+/// pack in its own colour ("Buy After Dark"), Pro for every pack on quiet
+/// glass underneath, and the agreed escape hatch, "Export without this look",
+/// which swaps in the closest free look and keeps every other edit. It gets
+/// out of the way the moment a purchase lands.
 struct LockedLookSheet: View {
     let lock: LookLock
     let context: LockedLookContext
@@ -418,19 +473,15 @@ struct LockedLookSheet: View {
         guard lock.previewPackID == nil else { return nil }
         return MockData.looks.first { $0.name == lock.lookName }
     }
-    /// The free look the third choice swaps in.
+    /// The free look the escape hatch swaps in.
     private var freeLook: LookPreset? {
         preset.map(MockData.freeAlternative(to:)).flatMap { $0.isPremium ? nil : $0 }
     }
-    /// The free look's name and swatch: a built-in for a built-in look, or
-    /// the free look the camera picked for a pack it is trying on.
-    private var freeChoice: (name: String, colours: [Color])? {
-        if lock.previewPackID != nil {
-            guard let name = lock.freeLookName else { return nil }
-            return (name, Self.swatch(forName: name))
-        }
-        guard let freeLook else { return nil }
-        return (freeLook.name, Self.swatch(for: freeLook))
+    /// The free look's name: a built-in for a built-in look, or the free
+    /// look the camera picked for a pack it is trying on.
+    private var freeLookName: String? {
+        if lock.previewPackID != nil { return lock.freeLookName }
+        return freeLook?.name
     }
     private var isUnlocked: Bool {
         if let packID = lock.previewPackID { return storeService.ownsPack(packID) }
@@ -439,6 +490,20 @@ struct LockedLookSheet: View {
     }
     private var packProduct: Product? {
         lock.pack.flatMap { storeService.packProducts[$0.id] }
+    }
+    /// The pack the look belongs to, for the header: the pack sold here, or a
+    /// pack that only comes with Pro (After Dark) that the camera is trying on.
+    private var shownPack: LookPack? {
+        if let pack = lock.pack { return pack }
+        guard let id = lock.previewPackID else { return nil }
+        return PackCatalog.pack(id: id)
+    }
+    /// The look's own colour, for its name in the header.
+    private var lookColour: Color {
+        if let look = shownPack?.looks.first(where: { $0.name == lock.lookName }) {
+            return look.signature
+        }
+        return LookSignature.colour(forLookNamed: lock.lookName)
     }
     private var swatch: [Color] {
         lock.previewPackID != nil ? Self.swatch(forName: lock.lookName) : Self.swatch(for: preset)
@@ -456,53 +521,17 @@ struct LockedLookSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.top, 30)
-                .padding(.horizontal, 22)
-
+                .padding(.top, 28)
+            message
+                .padding(.top, 18)
             Spacer(minLength: 18)
-
-            VStack(spacing: 10) {
-                if let pack = lock.pack {
-                    primaryButton("Buy \(pack.name) · \(packPrice(pack))") { buyPack() }
-                        .disabled(packProduct == nil || storeService.purchaseInFlight)
-                        .opacity(packProduct == nil ? 0.45 : 1)
-                    secondaryButton("Get Pro for every look") { showPaywall = true }
-                } else {
-                    primaryButton("Get Pro for every look") { showPaywall = true }
-                }
-                if offersFreeLook, let freeChoice {
-                    freeLookButton(name: freeChoice.name, colours: freeChoice.colours)
-                }
-                if context == .export {
-                    Text("Your edit is saved either way")
-                        .font(.luma(size: 12))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.top, 2)
-                }
-                Button {
-                    restore()
-                } label: {
-                    Group {
-                        if restoring {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text(restoreFoundNothing ? "No purchases found to restore"
-                                                     : "Restore Purchases")
-                        }
-                    }
-                    .font(.luma(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .frame(height: 30)
-                }
-                .buttonStyle(.plain)
-                .disabled(restoring)
-            }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 14)
+            actions
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showPaywall, onDismiss: {
             // Bought Pro from the paywall: it closed itself, now close too.
             if isUnlocked { finish() }
@@ -523,117 +552,201 @@ struct LockedLookSheet: View {
         }
     }
 
-    /// The look's swatch with a lock on it, beside what the look is and what
-    /// it costs, so the price is the first thing read and never a surprise.
+    // MARK: Header and message
+
+    /// The look's swatch with a lock on it, the pack it comes from, and the
+    /// look's name in its own colour.
     private var header: some View {
-        HStack(alignment: .center, spacing: 14) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+        HStack(alignment: .center, spacing: 12) {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(LinearGradient(colors: swatch, startPoint: .topLeading,
                                      endPoint: .bottomTrailing))
-                .frame(width: 62, height: 62)
+                .frame(width: 48, height: 60)
                 .overlay {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 19, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
                 }
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(context == .export ? "This edit uses" : "This shot uses")
-                    .font(.luma(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(lock.lookName)
-                    .font(.luma(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(kicker)
+                    .font(.luma(size: 12, weight: .bold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(subtitle)
-                    .font(.luma(size: 13))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                LookNameText(lock.lookName, colour: lookColour, size: 17)
+                    .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
     }
 
-    private var subtitle: String {
-        if let pack = lock.pack {
-            return "\(pack.name) · \(packPrice(pack)) · yours to keep"
+    /// "After Dark · 5 looks", "After Dark · comes with Pro", or the Pro
+    /// kicker for a built-in premium look.
+    private var kicker: String {
+        guard let pack = shownPack else { return "Lumalook Pro" }
+        if lock.pack == nil { return "\(pack.name) · comes with Pro" }
+        return "\(pack.name) · \(pack.looks.count) looks"
+    }
+
+    private var message: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LumaHeadline(light: headlineLight, heavy: headlineHeavy, size: 26)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(bodyText)
+                .font(.luma(size: 14))
+                .foregroundStyle(Color.white.opacity(0.55))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        return "Included with Pro"
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var headlineLight: String {
+        context == .export ? "Previewing is free." : "Trying it on is free."
+    }
+
+    private var headlineHeavy: String {
+        let verb = context == .export ? "Exporting" : "Shooting"
+        return lock.pack != nil ? "\(verb) needs the pack." : "\(verb) needs Pro."
+    }
+
+    private var bodyText: String {
+        let lead = context == .export ? "Your edit is saved. " : ""
+        let tail = context == .export ? "and this export carries on." : "and keep shooting with this look."
+        if let pack = lock.pack {
+            return "\(lead)Buy \(pack.name) once and keep it, or get every pack with Pro, \(tail)"
+        }
+        if let pack = shownPack {
+            return "\(lead)Go Pro for \(pack.name) and every other pack, \(tail)"
+        }
+        return "\(lead)Go Pro for this look and every other, \(tail)"
     }
 
     private func packPrice(_ pack: LookPack) -> String {
         packProduct?.displayPrice ?? pack.price
     }
 
-    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                if storeService.purchaseInFlight {
-                    ProgressView().tint(.black)
-                } else {
-                    Text(title)
-                        .font(.luma(size: 16, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+    // MARK: Choices
+
+    @ViewBuilder private var actions: some View {
+        VStack(spacing: 10) {
+            if let pack = lock.pack {
+                buyPackButton(pack)
+                proButton
+            } else {
+                proMainButton
             }
-            .foregroundStyle(.black)
+            VStack(spacing: 0) {
+                if offersFreeLook, let freeLookName {
+                    withoutLookButton(freeName: freeLookName)
+                }
+                restoreButton
+            }
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(.white, in: Capsule())
         }
-        .buttonStyle(.lumaPress)
     }
 
-    private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.luma(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(LumaTheme.surfaceStrong, in: Capsule())
+    /// "Buy After Dark · $2.99" in the pack's own colour.
+    private func buyPackButton(_ pack: LookPack) -> some View {
+        LumaColourButton(title: "Buy \(pack.name) · \(packPrice(pack))",
+                         colour: pack.colour, height: 54, fullWidth: true) {
+            buyPack()
+        }
+        .disabled(packProduct == nil || storeService.purchaseInFlight)
+        .opacity(packProduct == nil ? 0.45 : 1)
+        .overlay(alignment: .trailing) {
+            if storeService.purchaseInFlight {
+                ProgressView()
+                    .tint(.white)
+                    .padding(.trailing, 20)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// Pro on quiet glass, under the pack's own button.
+    private var proButton: some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(LumaTheme.signal)
+                    .accessibilityHidden(true)
+                Text("Every pack with Pro")
+                    .font(.luma(size: 16, weight: .semibold))
+                    .tracking(-0.15)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(Color.white.opacity(0.1), in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
         .disabled(storeService.purchaseInFlight)
     }
 
-    /// The free way out, on a quieter fill than the purchase buttons so it
-    /// never competes with them, and naming the exact look it swaps in.
-    private func freeLookButton(name: String, colours: [Color]) -> some View {
+    /// When the look is not sold on its own, Pro is the one purchase, so it
+    /// is the main action.
+    private var proMainButton: some View {
+        LumaMainButton(title: shownPack.map { "Get \($0.name) with Pro" } ?? "Get Pro for every look",
+                       height: 54, cornerRadius: 27) {
+            showPaywall = true
+        }
+        .disabled(storeService.purchaseInFlight)
+    }
+
+    /// The agreed escape hatch: carry on with the closest free look, keeping
+    /// every other edit. Small and grey so it never competes with buying.
+    private func withoutLookButton(freeName: String) -> some View {
         Button {
             LumaHaptics.shared.tap()
             onUseFreeLook()
             dismiss()
         } label: {
-            HStack(spacing: 9) {
-                Circle()
-                    .fill(LinearGradient(colors: colours,
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 14, height: 14)
-                    .accessibilityHidden(true)
-                Text("\(context == .export ? "Export" : "Shoot") with \(name)")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(LumaTheme.chip, in: Capsule())
-            .contentShape(Capsule())
+            Text(context == .export ? "Export without this look" : "Shoot without this look")
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.55))
+                .frame(maxWidth: .infinity)
+                .frame(height: 34)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.lumaPress)
+        .buttonStyle(.plain)
         .disabled(storeService.purchaseInFlight)
-        .accessibilityHint("Swaps in a free look and keeps your other edits")
+        .accessibilityHint("Swaps in \(freeName), a free look, and keeps your other edits")
     }
+
+    private var restoreButton: some View {
+        Button {
+            restore()
+        } label: {
+            Group {
+                if restoring {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(restoreFoundNothing ? "No purchases found to restore"
+                                             : "Restore purchases")
+                }
+            }
+            .font(.luma(size: 12, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.4))
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(restoring)
+    }
+
+    // MARK: Purchases
 
     private func buyPack() {
         guard let product = packProduct else { return }
