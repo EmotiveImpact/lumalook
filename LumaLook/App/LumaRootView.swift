@@ -181,6 +181,7 @@ struct LumaRootView: View {
         case .audio: AudioView()
         case .settings: SettingsSubscriptionView()
         case .collections: CollectionsView()
+        case .appearance: AppearanceSettingsView()
         }
     }
 }

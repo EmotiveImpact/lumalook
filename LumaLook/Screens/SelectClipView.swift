@@ -242,7 +242,7 @@ struct SelectClipView: View {
         case .all: title = "Nothing here yet"
         }
         let message = limited
-            ? "Only the photos you've shared with LumaLook show here."
+            ? "Only the photos you've shared with Lumalook show here."
             : "Clips and photos you shoot or save will show up here."
         return VStack(spacing: 0) {
             Spacer(minLength: 0)

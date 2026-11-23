@@ -118,6 +118,8 @@ launch warmup 12 "${P}ROUTE=none" || true
 shot 00-launch 5 "${P}ROUTE=launch"
 # Any LUMA_ROUTE value skips onboarding, so "none" gives the plain tab.
 shot 01-onboarding 7 "${P}SEED_ONBOARDING=1"
+shot 01b-onboarding-try 9 "${P}SEED_ONBOARDING=1" "${P}ONBOARDING_STEP=2"
+shot 01c-onboarding-style 7 "${P}SEED_ONBOARDING=1" "${P}ONBOARDING_STEP=3"
 shot 02-home 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1"
 shot 02b-home-first-run 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEEMPTY=1" "${P}SEED_REELHOLD=1"
 shot 02c-home-picked 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_HOMEPICK=BW32"
@@ -126,6 +128,11 @@ shot 04-projects 5 "${P}ROUTE=none" "${P}TAB=Projects"
 shot 05-looks 9 "${P}ROUTE=none" "${P}TAB=Looks"
 shot 05b-looks-packs 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=packs"
 shot 06-profile 5 "${P}ROUTE=none" "${P}TAB=Profile"
+# The bar once Pro is bought: the yellow Get Pro becomes a quiet Pro badge.
+shot 05c-looks-pro 9 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_PRO=1"
+# Mine, where New look and Import a LUT live now the top row holds only Pro and You.
+shot 05d-looks-mine 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=mine"
+shot 06b-profile-pro 5 "${P}ROUTE=none" "${P}TAB=Profile" "${P}SEED_PRO=1"
 shot 07-select-clip 5 "${P}ROUTE=selectClip"
 shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg"
 shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"
@@ -137,6 +144,9 @@ shot 10e-editor-captions 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEE
 shot 10f-editor-speed 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_RAMP=hero" "${P}SEED_TOOLPANEL=speed"
 shot 10g-editor-transition 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=transition"
 shot 10h-editor-music 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_TOOLPANEL=audioAdd"
+# A music lane selected: its panel (Cut to the beat hidden while the flag is off).
+shot 10i-editor-music-lane 14 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" \
+  "${P}SEED_MUSIC=$ROOT/LumaLook/Resources/AudioLibrary/pad_warm.m4a" "${P}SEED_AUDIOPANEL=music"
 shot 11-camera 10 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_campaign.jpg"
 shot 11b-camera-photo 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" "${P}SEED_CAMMODE=photo" "${P}SEED_CAMROLL=24" "${P}SEED_CAMFOCUS=1"
 # Camera A: pull-up Pro, the looks sheet, the thumb fan, sideways, the ask at
@@ -157,16 +167,25 @@ shot 12b-archive-pack 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive"
 shot 13-lut-manager 5 "${P}ROUTE=lutManager"
 shot 14-settings 5 "${P}ROUTE=settings"
 shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
+# You › Appearance, with the defaults and with the other three choices.
+shot 14b-appearance 6 "${P}ROUTE=appearance" "${P}APPEARANCE=default"
+shot 14c-appearance-alt 6 "${P}ROUTE=appearance" "${P}APPEARANCE=dial,dot,white"
+# The grade room and the editor with Dial, Dot and code, Quiet white.
+shot 08b-grade-room-alt 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg" "${P}APPEARANCE=dial,dot,white"
+shot 10j-editor-quiet 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}APPEARANCE=dial,dot,white"
 # The export lock with its three ways on, one of them free.
 # The photo loads without the auto grade, so the sheet never waits behind it.
 shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party.jpg" \
-  "${P}SEED_LOCK=Night Drive"
+  "${P}SEED_LOCK=Night Drive" "${P}APPEARANCE=default"
 
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).
-shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon"
-# Home scrolled to Cut to the beat: the top row has become the top bar.
+shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon" "${P}APPEARANCE=default"
+# Home scrolled to the template rail: the top row has become the top bar.
 shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
+# Seeds five photo projects that stay in the app data, so it runs after
+# every other shot that would otherwise show them.
+shot 04b-projects-full 10 "${P}ROUTE=none" "${P}TAB=Projects" "${P}SEED_PROJECTS=1"
 
 # A short recording of the app moving: onboarding, the tabs, the grade
 # room, the editor playing, and the camera.

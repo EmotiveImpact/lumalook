@@ -7,6 +7,19 @@
   "ignoreCommand": "test ! -d website",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "lumalook.vercel.app"
+        }
+      ],
+      "destination": "https://lumalook.app/:path*",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/assets/([^/]+)\\.(css|js)",

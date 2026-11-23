@@ -327,19 +327,19 @@ struct TimelineV2View: View {
         }
     }
 
-    /// Fixed centre playhead: a small cap over a 2 pt line, ruler to the last
-    /// audio lane (it stops above the "+ Add" row).
+    /// Fixed centre playhead: a white 10 pt dot over a 2 pt white line, ruler
+    /// to the last audio lane (it stops above the "+ Add" row).
     private var playhead: some View {
-        VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
+        VStack(spacing: -4) {
+            Circle()
                 .fill(LumaTheme.textPrimary)
-                .frame(width: 10, height: 6)
-            Rectangle()
+                .frame(width: 10, height: 10)
+            Capsule()
                 .fill(LumaTheme.textPrimary)
                 .frame(width: 2)
         }
-        .frame(height: layout.lanesHeight + 4)
-        .offset(y: -3)
+        .frame(height: layout.lanesHeight + 6)
+        .offset(y: -5)
         .shadow(color: .black.opacity(0.6), radius: 4)
         .allowsHitTesting(false)
     }
@@ -375,8 +375,8 @@ struct TimelineV2View: View {
     }
 }
 
-/// The white "+" on the film strip's trailing edge: adds a clip. An ink ring
-/// keeps it apart from the frames scrolling under it.
+/// The white round "+" on the film strip's trailing edge: adds a clip. An
+/// ink ring keeps it apart from the frames scrolling under it.
 private struct TimelineAddClipButton: View {
     let action: () -> Void
 
@@ -385,12 +385,10 @@ private struct TimelineAddClipButton: View {
             Image(systemName: "plus")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(LumaTheme.ink)
-                .frame(width: 30, height: 30)
-                .background(LumaTheme.textPrimary,
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(4)
-                .background(Color.black,
-                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .frame(width: 32, height: 32)
+                .background(LumaTheme.textPrimary, in: Circle())
+                .padding(3)
+                .background(Color.black, in: Circle())
                 .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
@@ -414,8 +412,11 @@ struct TimelineAddRow: View {
                 Text("Add")
                     .font(.luma(size: 11.5, weight: .semibold))
             }
-            .foregroundStyle(LumaTheme.textMuted)
-            .padding(.trailing, 2)
+            .foregroundStyle(Color.white.opacity(0.72))
+            .padding(.horizontal, 9)
+            .frame(height: 26)
+            .background(Color.white.opacity(0.07), in: Capsule())
+            .fixedSize()
             .accessibilityHidden(true)
             chip("Text", icon: "textformat", action: onAddText)
             chip("Overlay", icon: "square.on.square", action: onAddOverlay)
@@ -433,14 +434,13 @@ struct TimelineAddRow: View {
                 Image(systemName: icon)
                     .font(.system(size: 9.5, weight: .semibold))
                 Text(title)
-                    .font(.luma(size: 11, weight: .medium))
+                    .font(.luma(size: 11.5, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(LumaTheme.textSecondary)
+            .foregroundStyle(Color.white.opacity(0.72))
             .padding(.horizontal, 9)
-            .frame(height: 24)
-            .background(LumaTheme.raised, in: Capsule())
-            .overlay(Capsule().strokeBorder(LumaTheme.edge, lineWidth: 1))
+            .frame(height: 26)
+            .background(Color.white.opacity(0.07), in: Capsule())
             .fixedSize()
             .contentShape(HitSlop(horizontal: 3, vertical: 4))
         }
@@ -536,12 +536,10 @@ struct TransitionChip: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(LumaTheme.textPrimary)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(hex: 0x1C1D21))
                 .frame(width: 20, height: 20)
                 .overlay { glyph }
-                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(Color(hex: 0x050506), lineWidth: 2))
                 .shadow(color: .black.opacity(0.5), radius: 3)
                 .contentShape(Rectangle().inset(by: -8))
         }
@@ -554,12 +552,12 @@ struct TransitionChip: View {
     private var glyph: some View {
         if style == .none {
             CutBowTie()
-                .fill(LumaTheme.ink)
+                .fill(Color.white.opacity(0.7))
                 .frame(width: 9, height: 8)
         } else {
             Image(systemName: style.icon)
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(LumaTheme.ink)
+                .foregroundStyle(LumaTheme.textPrimary)
         }
     }
 }
@@ -597,10 +595,7 @@ struct ClipAudioLane: View {
                     if clip.hasAudio {
                         let w = max(metrics.x(for: clip.timelineDuration), 10)
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(editor.muteAudio || clip.isMuted ? LumaTheme.surface
-                                                                   : LumaTheme.surfaceStrong)
-                            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(LumaTheme.hairline, lineWidth: 1))
+                            .fill(Color.white.opacity(editor.muteAudio || clip.isMuted ? 0.03 : 0.06))
                             .overlay(alignment: .leading) {
                                 // A lane nobody can name is a rendering
                                 // artifact, not a track: label it wherever
@@ -817,7 +812,7 @@ struct VideoLane: View {
                 }
             }
 
-            // On-cell trim handles for the selected clip, in signal yellow.
+            // On-cell trim handles for the selected clip, in white.
             if !reorder.isDragging,
                let selected = editor.clips.first(where: { $0.id == editor.selectedClipID }) {
                 ClipTrimHandles(editor: editor, metrics: metrics, clip: selected,
@@ -864,7 +859,7 @@ struct VideoLane: View {
                 // Insertion slot indicator: accent line at the drop boundary.
                 if let slot = reorder.insertSlot {
                     Rectangle()
-                        .fill(LumaTheme.signal)
+                        .fill(LumaTheme.textPrimary)
                         .frame(width: 3, height: LaneMetrics.video + 6)
                         .shadow(color: .black.opacity(0.7), radius: 4)
                         .offset(x: slotX(slot) - 1.5)
@@ -917,7 +912,7 @@ struct VideoLane: View {
     }
 }
 
-/// "3.0 s" in a signal tab over the selected clip's leading edge.
+/// "3.0 s" on a dark glass tab over the selected clip's leading edge.
 private struct ClipLengthTab: View {
     let seconds: Double
 
@@ -925,15 +920,16 @@ private struct ClipLengthTab: View {
         Text(String(format: "%.1f s", seconds))
             .font(.luma(size: 10, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(LumaTheme.onSignal)
+            .foregroundStyle(LumaTheme.textPrimary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(LumaTheme.signal, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background(Color(hex: 0x0A0B0D).opacity(0.72),
+                        in: RoundedRectangle(cornerRadius: 5, style: .continuous))
             .fixedSize()
     }
 }
 
-/// On-cell trim handles (#3/#106): signal-yellow grips on the selected
+/// On-cell trim handles (#3/#106): white grips on the selected
 /// clip's edges. Dragging previews the new cell width live; releasing
 /// commits one `applyTrim` (one undo entry, one rebuild) with a haptic.
 private struct ClipTrimHandles: View {
@@ -1003,7 +999,7 @@ private struct ClipTrimHandles: View {
         onCommit()
     }
 
-    /// A signal tab with a dark grip line, rounded on its outer side.
+    /// A white tab with a dark grip line, rounded on its outer side.
     private func grip(leading: Bool) -> some View {
         ZStack {
             UnevenRoundedRectangle(
@@ -1012,13 +1008,13 @@ private struct ClipTrimHandles: View {
                 bottomTrailingRadius: leading ? 0 : 6,
                 topTrailingRadius: leading ? 0 : 6,
                 style: .continuous)
-                .fill(LumaTheme.signal)
+                .fill(LumaTheme.textPrimary)
             Capsule()
-                .fill(LumaTheme.onSignal.opacity(0.55))
+                .fill(LumaTheme.ink.opacity(0.55))
                 .frame(width: 2.5, height: 16)
         }
         .frame(width: 14, height: LaneMetrics.video)
-        .shadow(color: LumaTheme.signal.opacity(0.45), radius: 6)
+        .shadow(color: .black.opacity(0.5), radius: 4)
         // 14 pt grip, 44 pt touch.
         .contentShape(HitSlop(horizontal: 15, vertical: 4))
         .accessibilityLabel(leading ? "Trim start" : "Trim end")
@@ -1026,8 +1022,9 @@ private struct ClipTrimHandles: View {
 }
 
 /// Film-strip cell at an explicit time-derived width: real frames on a black
-/// film base with sprocket holes top and bottom, and the clip's look tag in
-/// its signature colour, so the lane reads as film rather than a grey bar.
+/// film base with sprocket holes top and bottom, and the clip's look code in
+/// its signature colour on a dark glass tag, so the lane reads as film rather
+/// than a grey bar and the colour reads without shouting.
 struct TimelineClipCell: View {
     let clip: EditorState.Clip
     let width: CGFloat
@@ -1086,37 +1083,30 @@ struct TimelineClipCell: View {
                     }
                     Text(String(format: "%.1fs", clip.timelineDuration))
                 }
-                .font(.luma(size: 9.5, weight: .semibold))
+                .font(.luma(size: 10, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(LumaTheme.textPrimary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
                 .padding(.bottom, band + 3)
-                .padding(.trailing, 5)
+                .padding(.trailing, 6)
             }
         }
         .overlay(alignment: .topLeading) {
-            // The clip's look tag, filled with the look's signature colour,
-            // so a graded cut is identifiable at a glance.
+            // The clip's look code in the look's own colour on dark glass
+            // (Dot mode: white with a dot), so a graded cut is identifiable
+            // at a glance without a filled colour block.
             if let tag = lookTag {
-                Text(width > 70 ? tag.text : String(tag.text.prefix(3)))
-                    .font(.luma(size: 10, weight: .bold))
-                    .lineLimit(1)
-                    .foregroundStyle(Color(hex: 0x0B0B0C))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(tag.colour, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                ClipLookTag(text: width > 70 ? tag.text : String(tag.text.prefix(3)),
+                            colour: tag.colour)
                     .padding(.top, band + 3)
                     .padding(.leading, selected ? 17 : 5)
             }
         }
-        // A stroke means selection and nothing else, in signal yellow.
+        // A stroke means selection and nothing else, in white.
         .overlay {
             if selected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(LumaTheme.signal, lineWidth: 2)
-                    .shadow(color: LumaTheme.signal.opacity(0.5), radius: 7)
+                    .strokeBorder(LumaTheme.textPrimary, lineWidth: 2)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
@@ -1153,6 +1143,22 @@ struct TimelineClipCell: View {
         let frameIndex = min(clip.filmstrip.count - 1,
                              Int(position * Double(clip.filmstrip.count)))
         return clip.filmstrip[frameIndex]
+    }
+}
+
+/// A clip's look code on the timeline: the code in the look's colour (or
+/// white with a dot, per the Names choice) on a small dark glass tag.
+private struct ClipLookTag: View {
+    let text: String
+    let colour: Color
+
+    var body: some View {
+        LookNameText(text, colour: colour, size: 10, weight: .semibold)
+            .padding(.horizontal, 6)
+            .frame(height: 18)
+            .background(Color(hex: 0x0A0B0D).opacity(0.62),
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .fixedSize()
     }
 }
 
@@ -1276,10 +1282,13 @@ private struct OverlayBar: View {
         barLabel(width: barWidth, duration: shownDuration)
             .frame(width: barWidth, height: laneHeight)
             .background(RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(isCaption ? Color.white.opacity(0.08) : LumaTheme.cardRaised))
-            .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .strokeBorder(isDraggingBar ? Color.white : Color.white.opacity(isCaption ? 0.06 : 0.1),
-                              lineWidth: isDraggingBar ? 1.5 : 1))
+                .fill(Color.white.opacity(isCaption ? 0.07 : 0.09)))
+            .overlay {
+                if isDraggingBar {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .strokeBorder(Color.white, lineWidth: 1.5)
+                }
+            }
             .opacity(isDraggingBar ? 0.92 : 1)
             // Trim handles (gap fix): head trims content + anchors the
             // out-point, tail adjusts duration. One engine commit per drag.
@@ -1317,11 +1326,11 @@ private struct OverlayBar: View {
             HStack(spacing: 4) {
                 Text("Aa")
                     .font(.luma(size: 9.5, weight: .bold))
-                    .foregroundStyle(LumaTheme.textMuted)
+                    .foregroundStyle(Color.white.opacity(0.45))
                 if width > 40 {
                     Text(item.text ?? item.title)
                         .font(.luma(size: 10.5, weight: .medium))
-                        .foregroundStyle(LumaTheme.textSecondary)
+                        .foregroundStyle(Color.white.opacity(0.55))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -1516,9 +1525,10 @@ struct MusicLane: View {
         .task(id: track.id) { await detectBeatsIfNeeded() }
     }
 
-    /// Music lanes wear signal yellow (round-three timeline); voice and
-    /// detached sound stay neutral so the song reads first.
-    private var tintsSignal: Bool { track.kind == .music || track.kind == .sfx }
+    /// Music and sound effects draw a little brighter than voice and
+    /// detached sound, so the song reads first. Quiet glass either way: no
+    /// colour on the lanes (calm mock v2).
+    private var isSong: Bool { track.kind == .music || track.kind == .sfx }
 
     /// One beat analysis per music lane per session, so the beat marks show
     /// without opening the Music panel. Uses the engine's own `detectBeats`
@@ -1581,21 +1591,24 @@ struct MusicLane: View {
                     WaveformBars(samples: music.waveform,
                                  windowStart: shownTrimStart / max(music.assetDuration, 0.01),
                                  windowEnd: shownTrimEnd / max(music.assetDuration, 0.01),
-                                 colour: tintsSignal ? LumaTheme.signal.opacity(music.isMuted ? 0.25 : 0.5)
-                                                     : Color.white.opacity(0.28))
+                                 colour: Color.white.opacity(music.isMuted ? 0.16
+                                                             : (isSong ? 0.4 : 0.28)))
                         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .strokeBorder(isDraggingBar ? Color.white : laneStroke,
-                          lineWidth: isDraggingBar ? 1.5 : 1))
+        .overlay {
+            if isDraggingBar {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(Color.white, lineWidth: 1.5)
+            }
+        }
         .overlay(alignment: .leading) {
-            // Beat marks (C6): a dot at each detected beat, a bigger signal
-            // dot on every fourth so the bar lines read.
+            // Beat marks (C6): a grey dot at each detected beat, a bigger,
+            // lighter dot on every fourth so the bar lines read.
             if !music.beatMarkers.isEmpty {
                 BeatDots(beats: music.beatMarkers, trimStart: shownTrimStart,
-                         metrics: metrics, signal: tintsSignal)
+                         metrics: metrics, bright: isSong)
                     .frame(width: barWidth, height: LaneMetrics.music)
             }
         }
@@ -1666,12 +1679,7 @@ struct MusicLane: View {
     }
 
     private func laneFill(muted: Bool) -> Color {
-        if tintsSignal { return LumaTheme.signal.opacity(muted ? 0.03 : 0.07) }
-        return muted ? LumaTheme.surface : LumaTheme.surfaceStrong
-    }
-
-    private var laneStroke: Color {
-        tintsSignal ? LumaTheme.signal.opacity(0.18) : Color.white.opacity(0.1)
+        Color.white.opacity(muted ? 0.03 : 0.06)
     }
 
     private func clampTranslation(_ translation: CGFloat, music: EditorState.MusicTrack) -> CGFloat {
@@ -1720,17 +1728,17 @@ struct MusicLane: View {
         let beats: [Double]
         let trimStart: Double
         let metrics: TimelineMetrics
-        let signal: Bool
+        let bright: Bool
 
         var body: some View {
             Canvas { context, size in
+                let base = Color.white.opacity(bright ? 0.6 : 0.45)
                 for (index, beat) in beats.enumerated() {
                     let x = metrics.x(for: beat - trimStart)
                     guard x >= 2, x <= size.width - 2 else { continue }
                     let strong = index % 4 == 0
                     let d: CGFloat = strong ? 3.5 : 2.2
                     let rect = CGRect(x: x - d / 2, y: 3, width: d, height: d)
-                    let base: Color = signal ? LumaTheme.signal : Color.white
                     context.fill(Path(ellipseIn: rect),
                                  with: .color(strong ? base : base.opacity(0.5)))
                 }

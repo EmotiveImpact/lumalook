@@ -17,12 +17,13 @@ struct MaskPanel: View {
             HStack(spacing: 10) {
                 Image(systemName: "circle.dashed.inset.filled")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Spot Tool")
-                    .font(.luma(size: 16, weight: .semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("Spot").font(.luma(size: 17, weight: .light))
+                    Text("tool").font(.luma(size: 17, weight: .bold))
+                }
                 Spacer()
-                Button("Done", action: onClose)
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(LumaTheme.accentBright)
+                // The panel's confirm: a white pill, never the signal.
+                LPanelConfirmButton(title: "Done", action: onClose)
             }
             .foregroundStyle(.white)
 
@@ -30,17 +31,10 @@ struct MaskPanel: View {
             HStack(spacing: 8) {
                 ForEach(ClipMaskShape.allCases, id: \.self) { shape in
                     let on = clip?.maskShape == shape.rawValue
-                    Button {
+                    LPanelPill(title: shape.label, isOn: on) {
                         editor.setClipMask(id: clipID, shape: on ? nil : shape)
                         LumaHaptics.shared.tap()
-                    } label: {
-                        Text(shape.label)
-                            .font(.luma(.footnote, weight: .semibold))
-                            .foregroundStyle(on ? LumaTheme.onSignal : LumaTheme.textSecondary)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
                     }
-                    .buttonStyle(.lumaPress)
                 }
                 Spacer()
                 if isOn {
@@ -60,19 +54,12 @@ struct MaskPanel: View {
                 HStack(spacing: 8) {
                     ForEach(ClipMaskEffect.allCases, id: \.self) { fx in
                         let on = clip.maskEffect == fx.rawValue
-                        Button {
+                        LPanelPill(title: fx.label, icon: fx.icon, isOn: on, height: 32) {
                             editor.setClipMask(id: clipID,
                                                shape: ClipMaskShape(rawValue: clip.maskShape ?? ""),
                                                effect: fx)
                             LumaHaptics.shared.tap()
-                        } label: {
-                            Label(fx.label, systemImage: fx.icon)
-                                .font(.luma(.footnote, weight: .semibold))
-                                .foregroundStyle(on ? LumaTheme.onSignal : LumaTheme.textSecondary)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(on ? LumaTheme.accent : LumaTheme.surface, in: Capsule())
                         }
-                        .buttonStyle(.lumaPress)
                     }
                     Spacer()
                     Toggle("Invert", isOn: Binding(
@@ -81,18 +68,20 @@ struct MaskPanel: View {
                                                   shape: ClipMaskShape(rawValue: clip.maskShape ?? ""),
                                                   inverted: $0) }))
                         .labelsHidden()
-                        .tint(LumaTheme.accent)
+                        .tint(LPanelStyle.toggleTint)
                     Text("Invert")
                         .font(.luma(size: 12))
                         .foregroundStyle(LumaTheme.textSecondary)
                 }
 
-                InlineSlider(title: clip.maskEffect == "fill" ? "Opacity" : "Strength",
-                             value: Binding(get: { clip.maskAmount },
+                // Strength (or opacity) is an amount: the Appearance slider,
+                // ruler or dial, in percent over the engine's 0...1.
+                LPanelAmount(clip.maskEffect == "fill" ? "Opacity" : "Strength",
+                             value: Binding(get: { clip.maskAmount * 100 },
                                             set: { editor.setClipMask(id: clipID,
                                                                       shape: ClipMaskShape(rawValue: clip.maskShape ?? ""),
-                                                                      amount: $0) }),
-                             range: 0...1) { String(format: "%.0f%%", $0 * 100) }
+                                                                      amount: $0 / 100) }),
+                             range: 0...100)
 
                 InlineSlider(title: "Size",
                              value: Binding(get: { clip.maskWidth },
@@ -121,7 +110,7 @@ struct MaskPanel: View {
             }
         }
         .padding(16)
-        .background(LumaTheme.surfaceStrong, in: RoundedRectangle(cornerRadius: 18))
+        .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -134,11 +123,12 @@ private struct PositionPad: View {
         GeometryReader { geo in
             let p = CGPoint(x: center.x * geo.size.width, y: center.y * geo.size.height)
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(LumaTheme.card)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LPanelStyle.glass)
                 Circle()
-                    .fill(LumaTheme.accentBright)
+                    .fill(Color.white)
                     .frame(width: 18, height: 18)
+                    .shadow(color: .black.opacity(0.4), radius: 3)
                     .position(p)
             }
             .contentShape(Rectangle())

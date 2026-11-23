@@ -88,7 +88,7 @@ enum MockData {
     // as expertise; "Trending" reads as commodity.
     static let categories = ["All", "Skin", "Negative", "Cine", "Slide", "B&W", "Original"]
     /// Nominative-use disclaimer shown in the Store and look details.
-    static let namingDisclaimer = "Look names and codes are original LumaLook creations inspired by classic photographic processes. No affiliation with or endorsement by any film manufacturer."
+    static let namingDisclaimer = "Look names and codes are original Lumalook creations inspired by classic photographic processes. No affiliation with or endorsement by any film manufacturer."
 
     static let clips: [MockClip] = [
         .init(title: "Sunset Ride", duration: "00:16", scene: .sunsetRoad),

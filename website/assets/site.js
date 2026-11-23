@@ -136,6 +136,48 @@
     card.addEventListener("blur", off);
   });
 
+  // Waitlist: posts to /api/waitlist, which saves the address in Resend and
+  // sends one confirmation email. Without script the form still posts.
+  document.querySelectorAll("[data-waitlist]").forEach(function (form) {
+    var input = form.querySelector("input[type=email]");
+    var button = form.querySelector("button[type=submit]");
+    var msg = form.querySelector(".wl-msg");
+    var say = function (text, kind) {
+      msg.textContent = text;
+      msg.dataset.kind = kind || "";
+    };
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = input.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        say("That email doesn't look right. Check it and try again.", "error");
+        input.focus();
+        return;
+      }
+      button.disabled = true;
+      say("Adding you\u2026");
+      fetch(form.action, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, website: form.querySelector(".hp").value })
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
+      }).then(function (res) {
+        if (res.ok && res.data.ok) {
+          form.classList.add("done");
+          say(res.data.already ? "You're already on the list. We'll be in touch on launch day." : "You're on the list. Check your inbox for a short hello.", "ok");
+          input.value = "";
+        } else if (res.data && res.data.error === "email") {
+          say("That email doesn't look right. Check it and try again.", "error");
+        } else {
+          say("Something went wrong on our side. Please try again in a minute.", "error");
+        }
+      }).catch(function () {
+        say("You seem to be offline. Please try again.", "error");
+      }).then(function () { button.disabled = false; });
+    });
+  });
+
   // Year in the footer
   document.querySelectorAll("[data-year]").forEach(function (el) { el.textContent = String(new Date().getFullYear()); });
 })();

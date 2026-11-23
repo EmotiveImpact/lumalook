@@ -58,31 +58,17 @@ struct MusicLibraryList: View {
 
     // MARK: Music | Sounds
 
+    /// Text tabs, as in the calm mock: the picked word white, the other grey.
     private var switcher: some View {
-        HStack(spacing: 2) {
-            switchButton("Music", on: !showSounds) { showSounds = false }
-            switchButton("Sounds", on: showSounds) { showSounds = true }
-        }
-        .padding(3)
-        .background(LumaTheme.control, in: Capsule())
-    }
-
-    private func switchButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button {
+        LPanelTabs(labels: ["Music", "Sounds"], selected: showSounds ? 1 : 0, size: 14.5, spacing: 22) { index in
+            let sounds = index == 1
+            guard sounds != showSounds else { return }
             preview.stop()
             auditioning = nil
-            action()
+            showSounds = sounds
             LumaHaptics.shared.tap()
-        } label: {
-            Text(title)
-                .font(.luma(size: 13, weight: on ? .semibold : .medium))
-                .foregroundStyle(on ? LumaTheme.textPrimary : LumaTheme.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(on ? AnyShapeStyle(LumaTheme.raised) : AnyShapeStyle(Color.clear), in: Capsule())
-                .contentShape(Capsule())
         }
-        .buttonStyle(.lumaPress)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Music
@@ -110,9 +96,7 @@ struct MusicLibraryList: View {
                 .foregroundStyle(LumaTheme.textSecondary)
         }
         if !pads.isEmpty, moodFilter == "all" || moodFilter == MusicMood.chill.rawValue {
-            Text("Pads")
-                .font(.luma(size: 12.5, weight: .semibold))
-                .foregroundStyle(LumaTheme.textSecondary)
+            LPanelLabel("Pads")
                 .padding(.top, 6)
             VStack(spacing: 8) {
                 ForEach(pads) { entry in
@@ -120,7 +104,7 @@ struct MusicLibraryList: View {
                 }
             }
         }
-        Text("Every track is made by LumaLook, free to use in anything you post.")
+        Text("Every track is made by Lumalook, free to use in anything you post.")
             .font(.luma(size: 12))
             .foregroundStyle(LumaTheme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
@@ -239,17 +223,17 @@ struct MusicLibraryList: View {
                 }
             } label: {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(LumaTheme.control)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(MusicTrackRow.artFill)
                     if playing {
-                        PlayingBars(colour: LumaTheme.signal)
+                        PlayingBars(colour: .white)
                     } else {
                         Image(systemName: entry.category == "sfx" ? "sparkles" : "play.fill")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(LumaTheme.textPrimary)
                     }
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
@@ -262,7 +246,7 @@ struct MusicLibraryList: View {
                     .lineLimit(1)
                 Text(entry.category == "sfx" ? "Sound effect" : "Pad · loop")
                     .font(.luma(size: 12))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .foregroundStyle(Color.white.opacity(0.48))
             }
             Spacer(minLength: 6)
             Text(String(format: "%.1fs", entry.duration))
@@ -279,28 +263,29 @@ struct MusicLibraryList: View {
             } label: {
                 Text("Add")
                     .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(LumaTheme.textPrimary)
+                    .foregroundStyle(Color.white.opacity(0.86))
                     .padding(.horizontal, 14)
-                    .frame(height: 32)
-                    .background(LumaTheme.control, in: Capsule())
+                    .frame(height: 30)
+                    .background(Color.white.opacity(0.09), in: Capsule())
                     .contentShape(Capsule())
             }
             .buttonStyle(.lumaPress)
+            .accessibilityLabel("Add \(entry.title)")
         }
-        .padding(8)
-        .background(LumaTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(LumaTheme.edge, lineWidth: 1)
-        )
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .frame(minHeight: 56)
+        .background(MusicTrackRow.rowFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
 // MARK: - Row
 
-/// One generated track: artwork in the track's colour (play, loading or the
-/// playing bars), name, genre · BPM · length, a two-bar beat preview that
-/// lights up as the audition plays, a favourite heart and Use.
+/// One generated track, calm (mock v2): a quiet art tile (play, loading or the
+/// playing bars), name, genre · BPM · length, and a two-bar beat preview that
+/// lights up as the audition plays. The track's colour stays as a small
+/// accent: a dot on the tile, the beat preview and the playing bars. Then a
+/// favourite heart and Use, which becomes the main action while you listen.
 struct MusicTrackRow: View {
     let track: GeneratedTrack
     let isPlaying: Bool
@@ -314,6 +299,10 @@ struct MusicTrackRow: View {
     let onFavourite: () -> Void
 
     private var isActive: Bool { isPlaying || isLoading }
+
+    /// The art tile and the row, as in the mock (#232429 on white at 5%).
+    static let artFill = Color(hex: 0x232429)
+    static let rowFill = Color.white.opacity(0.05)
 
     var body: some View {
         HStack(spacing: 12) {
@@ -331,33 +320,35 @@ struct MusicTrackRow: View {
             favouriteButton
             useButton
         }
-        .padding(8)
-        .background(isActive ? LumaTheme.raised : LumaTheme.panel,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isActive ? track.colour.opacity(0.45) : LumaTheme.edge, lineWidth: 1)
-        )
+        .padding(.leading, 8)
+        .padding(.trailing, 8)
+        .padding(.vertical, 7)
+        .background(isActive ? Color.white.opacity(0.09) : Self.rowFill,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var artwork: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LinearGradient(colors: [track.colour, track.colour.opacity(0.35)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.black.opacity(isActive ? 0.35 : 0.18))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Self.artFill)
             if isLoading {
                 ProgressView().controlSize(.small).tint(.white)
             } else if isPlaying {
-                PlayingBars(colour: .white)
+                PlayingBars(colour: track.colour)
             } else {
                 Image(systemName: "play.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.white.opacity(0.85))
             }
         }
-        .frame(width: 48, height: 48)
+        .frame(width: 46, height: 46)
+        // The track's colour, kept small.
+        .overlay(alignment: .bottomTrailing) {
+            Circle()
+                .fill(track.colour)
+                .frame(width: 7, height: 7)
+                .padding(5)
+        }
     }
 
     private var details: some View {
@@ -368,7 +359,7 @@ struct MusicTrackRow: View {
                 .lineLimit(1)
             Text("\(track.genre.label) · \(track.bpmLabel) · \(track.lengthLabel)")
                 .font(.luma(size: 12))
-                .foregroundStyle(LumaTheme.textSecondary)
+                .foregroundStyle(Color.white.opacity(0.48))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             beatPreview
@@ -394,7 +385,7 @@ struct MusicTrackRow: View {
         Button(action: onFavourite) {
             Image(systemName: isFavourite ? "heart.fill" : "heart")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isFavourite ? LumaTheme.signal : LumaTheme.textMuted)
+                .foregroundStyle(isFavourite ? LumaTheme.textPrimary : LumaTheme.textMuted)
                 .frame(width: 30, height: 36)
                 .contentShape(Rectangle())
         }
@@ -402,7 +393,22 @@ struct MusicTrackRow: View {
         .accessibilityLabel(isFavourite ? "Remove from favourites" : "Add to favourites")
     }
 
+    /// The track you are listening to is the one you are about to use, so
+    /// its Use steps up to the white confirm pill. It is not the signal: the
+    /// library also sits inline under the editor, where Export is the one
+    /// main action. Every other Use stays quiet glass.
+    @ViewBuilder
     private var useButton: some View {
+        if isActive && !isAdded && !(isRendering && !isLoading) {
+            LPanelConfirmButton(title: "Use", action: onUse)
+                .frame(minWidth: 58)
+                .accessibilityLabel("Use \(track.name)")
+        } else {
+            quietUseButton
+        }
+    }
+
+    private var quietUseButton: some View {
         Button(action: onUse) {
             HStack(spacing: 5) {
                 if isAdded {
@@ -415,14 +421,11 @@ struct MusicTrackRow: View {
                 }
             }
             .font(.luma(size: 13, weight: .semibold))
-            // The track you are listening to is the one you are about to
-            // use, so its Use is the main action and wears the signal.
-            .foregroundStyle(isActive && !isAdded ? LumaTheme.onSignal : LumaTheme.textPrimary)
+            .foregroundStyle(Color.white.opacity(0.86))
             .padding(.horizontal, 14)
             .frame(minWidth: 58)
-            .frame(height: 32)
-            .background(isActive && !isAdded ? AnyShapeStyle(LumaTheme.signal) : AnyShapeStyle(LumaTheme.control),
-                        in: Capsule())
+            .frame(height: 30)
+            .background(Color.white.opacity(0.09), in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
@@ -451,7 +454,7 @@ struct BeatPreviewBars: View {
                                   width: width, height: height)
                 var lit = false
                 if let progress { lit = Double(i) / Double(n) <= progress }
-                let shade: Color = progress == nil ? colour.opacity(0.55) : (lit ? colour : colour.opacity(0.25))
+                let shade: Color = progress == nil ? colour.opacity(0.45) : (lit ? colour : colour.opacity(0.22))
                 context.fill(Path(roundedRect: rect, cornerRadius: min(width, height) / 2),
                              with: .color(shade))
             }
@@ -487,7 +490,8 @@ struct PlayingBars: View {
     }
 }
 
-/// Mood chip: a ring marks the chosen one, the rest separate by surface.
+/// Mood filter: a word, white on a little glass when chosen, grey otherwise.
+/// No rings and no outlines (calm mock v2).
 struct LibraryChip: View {
     let title: String
     var icon: String? = nil
@@ -495,28 +499,10 @@ struct LibraryChip: View {
     let action: () -> Void
 
     var body: some View {
-        Button {
+        LPanelFilterTab(title: title, icon: icon, isOn: selected) {
             action()
             LumaHaptics.shared.tap()
-        } label: {
-            HStack(spacing: 5) {
-                if let icon {
-                    Image(systemName: icon).font(.system(size: 10, weight: .semibold))
-                }
-                Text(title)
-                    .font(.luma(size: 13, weight: selected ? .semibold : .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(LumaTheme.surface, in: Capsule())
-            .overlay {
-                if selected { Capsule().strokeBorder(Color.white, lineWidth: 1.2) }
-            }
-            .contentShape(Capsule())
         }
-        .buttonStyle(.lumaPress)
     }
 }
 
@@ -550,6 +536,6 @@ struct LibrarySearchField: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
-        .background(LumaTheme.control, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 }

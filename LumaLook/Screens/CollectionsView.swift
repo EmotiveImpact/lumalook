@@ -63,7 +63,7 @@ struct CollectionsView: View {
             thumbs.render(source: app.previewFrame, library: app.library.all,
                           fileURL: { app.lutRepository.fileURL(for: $0) })
         }
-        .alert("New Collection", isPresented: $showNewAlert) {
+        .alert("New collection", isPresented: $showNewAlert) {
             TextField("Name", text: $newName)
             Button("Create") {
                 let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -76,7 +76,7 @@ struct CollectionsView: View {
         } message: {
             Text("Group looks you shoot with, then pin one to the camera.")
         }
-        .alert("Rename Collection", isPresented: Binding(
+        .alert("Rename collection", isPresented: Binding(
             get: { renameID != nil },
             set: { if !$0 { renameID = nil } })) {
             TextField("Name", text: $renameText)
@@ -86,7 +86,7 @@ struct CollectionsView: View {
             }
             Button("Cancel", role: .cancel) { renameID = nil }
         }
-        .alert("Delete Collection?", isPresented: Binding(
+        .alert("Delete collection?", isPresented: Binding(
             get: { deleteID != nil },
             set: { if !$0 { deleteID = nil } })) {
             Button("Delete", role: .destructive) {
@@ -98,32 +98,38 @@ struct CollectionsView: View {
             }
             Button("Cancel", role: .cancel) { deleteID = nil }
         } message: {
-            Text("The looks stay in your library — only the grouping goes.")
+            Text("The looks stay in your library. Only the grouping goes.")
         }
         .preferredColorScheme(.dark)
     }
 
     // MARK: Header
 
+    /// The calm page head: back, then the quiet Reorder and New pills on one
+    /// row, the headline as a light word and a bold word, and one grey line
+    /// with the count.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             headerRow
-            // Own full-width row: sharing the title row with the Reorder and
-            // New pills squeezed this to a clipped "1 PI…".
-            TechReadout(readout, size: 9, color: LumaTheme.textMuted)
-                .padding(.leading, 50)   // aligns under the title, past BackArrow
+            LumaHeadline(light: "Your", heavy: "collections", size: 30)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.top, 14)
+                .accessibilityAddTraits(.isHeader)
+            Text(readout)
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.48))
+                .lineLimit(1)
+                .padding(.top, 6)
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
-        .padding(.bottom, 12)
+        .padding(.bottom, 16)
     }
 
     private var headerRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             BackArrow()
-            Text("Collections")
-                .font(.luma(size: 17, weight: .bold))
-                .foregroundStyle(.white)
             Spacer()
             if !groups.isEmpty {
                 Button {
@@ -134,17 +140,9 @@ struct CollectionsView: View {
                 } label: {
                     // Labelled so the only ≡ on screen is the live drag handle
                     // the List itself supplies while reordering.
-                    Label(editMode == .active ? "Done" : "Reorder",
-                          systemImage: editMode == .active ? "checkmark" : "arrow.up.arrow.down")
-                        .font(.luma(size: 13, weight: .semibold))
-                        .foregroundStyle(editMode == .active ? LumaTheme.accentBright : .white)
-                        .padding(.horizontal, 12)
-                        .frame(height: 34)
-                        // Active reordering is signalled by an accent FILL,
-                        // not by swapping one hairline for another.
-                        .background(editMode == .active ? AnyShapeStyle(LumaTheme.accentSoft)
-                                                        : AnyShapeStyle(LumaTheme.chip),
-                                    in: Capsule())
+                    quietPill(editMode == .active ? "Done" : "Reorder",
+                              icon: editMode == .active ? "checkmark" : "arrow.up.arrow.down",
+                              on: editMode == .active)
                 }
                 .accessibilityLabel(editMode == .active ? "Done reordering" : "Reorder collections")
                 .buttonStyle(.lumaPress)
@@ -153,25 +151,36 @@ struct CollectionsView: View {
                 showNewAlert = true
                 LumaHaptics.shared.tap()
             } label: {
-                Label("New", systemImage: "plus")
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(LumaTheme.onSignal)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(LumaTheme.accent, in: Capsule())
+                quietPill("New", icon: "plus", on: false)
             }
+            .accessibilityLabel("New collection")
             .buttonStyle(.lumaPress)
         }
     }
 
+    /// Quiet glass pill; white with ink text while it is on (reordering).
+    private func quietPill(_ title: String, icon: String, on: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+            Text(title)
+                .font(.luma(size: 13, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(on ? LumaTheme.onLight : Color.white.opacity(0.92))
+        .padding(.horizontal, 13)
+        .frame(height: 34)
+        .background(on ? Color.white : Color.white.opacity(0.1), in: Capsule())
+    }
+
+    /// "3 collections · Street pinned to the camera".
     private var readout: String {
         let n = groups.count
-        let base = "\(n) COLLECTION\(n == 1 ? "" : "S")"
-        // Fixed-width tail: the collection name would be the first thing to get
-        // clipped by TechReadout's lineLimit(1). The pin glyph and the "pinned
-        // to camera" line on the card itself name which one it is.
-        guard app.lutRepository.pinnedCollection != nil else { return "\(base) · NONE PINNED" }
-        return "\(base) · 1 PINNED"
+        let base = "\(n) collection\(n == 1 ? "" : "s")"
+        guard let pinned = app.lutRepository.pinnedCollection else {
+            return n == 0 ? "Group the looks you shoot with" : "\(base) · none pinned to the camera"
+        }
+        return "\(base) · \(pinned.name) pinned to the camera"
     }
 
     // MARK: List
@@ -223,29 +232,30 @@ struct CollectionsView: View {
             } label: {
                 HStack(spacing: 12) {
                     mosaic(group.looks)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(collection.name)
-                                .font(.luma(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
+                                .font(.luma(size: 15, weight: .semibold))
+                                .foregroundStyle(LumaTheme.textPrimary)
                                 .lineLimit(1)
                             if collection.pinnedToCamera == true {
                                 Image(systemName: "pin.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(LumaTheme.accentBright)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.7))
+                                    .accessibilityLabel("Pinned to the camera")
                             }
                         }
                         Text(stats(for: group))
-                            .font(.luma(size: 11))
-                            .foregroundStyle(LumaTheme.textSecondary)
+                            .font(.luma(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.45))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    // Disclosure state only — the reorder handle is supplied by
+                    // Disclosure state only: the reorder handle is supplied by
                     // the List in edit mode, so no decorative ≡ here.
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isSelected ? LumaTheme.accentBright : LumaTheme.textMuted)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(isSelected ? 0.85 : 0.3))
                         .rotationEffect(.degrees(isSelected ? 0 : -90))
                         .opacity(editMode == .active ? 0 : 1)
                 }
@@ -257,19 +267,17 @@ struct CollectionsView: View {
             }
         }
         .padding(12)
-        .background(LumaTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        // MEANINGFUL strokes only: the teal drop-target ring and the accent
-        // selection ring. At rest the card carries no outline — it separates
-        // from the canvas by being lighter than it.
+        .background(Color.white.opacity(isTargeted ? 0.09 : 0.045),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        // Calm: no outline at rest. The picked card wears the pale picked
+        // ring; a card a look is being dragged over brightens and lifts.
+        .pickedRing(isSelected && !isTargeted, cornerRadius: 18)
         .overlay {
-            if isTargeted || isSelected {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(isTargeted ? LumaTheme.teal : LumaTheme.accent.opacity(0.5),
-                                  lineWidth: 1.5)
+            if isTargeted {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5)
             }
         }
-        .shadow(color: isSelected ? LumaTheme.accent.opacity(0.15) : LumaTheme.cardShadow,
-                radius: isSelected ? 12 : 10, y: isSelected ? 6 : 4)
         .scaleEffect(isTargeted ? 1.02 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isTargeted)
         .dropDestination(for: String.self) { ids, _ in
@@ -332,12 +340,11 @@ struct CollectionsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 6))
         } else if index < looks.count {
             RoundedRectangle(cornerRadius: 6)
-                .fill(LumaTheme.surfaceStrong)
+                .fill(Color.white.opacity(0.085))
                 .frame(width: side, height: side)
         } else {
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                .foregroundStyle(.white.opacity(0.14))
+                .fill(Color.white.opacity(0.045))
                 .frame(width: side, height: side)
         }
     }
@@ -380,12 +387,14 @@ struct CollectionsView: View {
     /// Members of the selected collection, each removable — the counterpart to
     /// dragging one in.
     private func memberStrip(for group: (collection: LUTCollection, looks: [LibraryLook])) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Hairline()
+        VStack(alignment: .leading, spacing: 10) {
+            Rectangle()
+                .fill(Color.white.opacity(0.055))
+                .frame(height: 1)
             if group.looks.isEmpty {
-                Text("Drag a look from the strip below, or long-press one and choose Add to Collection.")
-                    .font(.luma(size: 11))
-                    .foregroundStyle(LumaTheme.textMuted)
+                Text("Drag a look from the row below, or long-press one and choose Add to Collection.")
+                    .font(.luma(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -402,10 +411,9 @@ struct CollectionsView: View {
     private func memberTile(_ look: LibraryLook, in collection: LUTCollection) -> some View {
         VStack(spacing: 4) {
             thumb(look, side: 48, radius: 10)
-            Text(look.name)
-                .font(.luma(size: 9))
-                .foregroundStyle(LumaTheme.textMuted)
-                .lineLimit(1)
+            // The look's name in its own colour (You › Appearance › Names).
+            LookNameText(look.nameSplit.title, colour: look.signature, size: 10, weight: .medium)
+                .minimumScaleFactor(0.8)
                 .frame(width: 52)
         }
         .contextMenu {
@@ -419,11 +427,16 @@ struct CollectionsView: View {
 
     private var addLooksStrip: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                SectionHeader(title: "Add looks")
-                Spacer()
-                TechReadout(selected == nil ? "SELECT A COLLECTION" : "DRAG INTO COLLECTION",
-                            size: 9, color: LumaTheme.textMuted)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Add looks")
+                    .font(.luma(size: 17, weight: .semibold))
+                    .kerning(-0.25)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                Spacer(minLength: 8)
+                Text(selected == nil ? "Pick a collection first" : "Drag one into a collection")
+                    .font(.luma(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.45))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 20)
 
@@ -442,10 +455,8 @@ struct CollectionsView: View {
     private func sourceTile(_ look: LibraryLook) -> some View {
         VStack(spacing: 5) {
             thumb(look, side: 64, radius: 12)
-            Text(look.name)
-                .font(.luma(size: 10))
-                .foregroundStyle(LumaTheme.textSecondary)
-                .lineLimit(1)
+            LookNameText(look.nameSplit.title, colour: look.signature, size: 11, weight: .medium)
+                .minimumScaleFactor(0.8)
                 .frame(width: 68)
         }
         // Lifted, tilted drag preview — direct manipulation, as in the mockup.
@@ -482,7 +493,7 @@ struct CollectionsView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Rectangle().fill(LumaTheme.surfaceStrong)
+                Rectangle().fill(Color.white.opacity(0.085))
             }
         }
         .frame(width: side, height: side)
@@ -496,18 +507,21 @@ struct CollectionsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 34))
-                .foregroundStyle(LumaTheme.textMuted)
-            Text("No Collections Yet")
+            Image(systemName: "square.stack")
+                .font(.system(size: 30, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .frame(width: 64, height: 64)
+                .background(Color.white.opacity(0.06), in: Circle())
+            Text("No collections yet")
                 .font(.luma(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(LumaTheme.textPrimary)
             Text("Group the looks you shoot with, then pin one collection to the camera filmstrip.")
-                .font(.luma(size: 13))
-                .foregroundStyle(LumaTheme.textMuted)
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.48))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 44)
-            SolidCTA(title: "New Collection", icon: "plus", height: 50) {
+            // The one main action here, so it follows Main buttons.
+            LumaMainButton(title: "New collection", icon: "plus", height: 50) {
                 showNewAlert = true
             }
             .padding(.horizontal, 44)
@@ -520,35 +534,41 @@ struct CollectionsView: View {
 
     /// The screen's headline action, per §2 Unit 8 / mockup G3: a permanent
     /// bottom element, never hidden behind a selection the user has not made
-    /// yet. Disabled-but-visible while no collection is chosen.
+    /// yet. Pinning is the one main action (it follows Main buttons); with
+    /// nothing picked, or the picked one already pinned, it is quiet glass.
     @ViewBuilder
     private var footer: some View {
         if !groups.isEmpty {
             let collection = selected
             let isPinned = collection?.pinnedToCamera == true
-            Button {
-                if let collection { togglePin(collection) }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: collection == nil ? "pin"
-                                    : isPinned ? "pin.slash" : "pin.fill")
-                        .font(.luma(size: 14, weight: .semibold))
-                    Text(footerTitle(for: collection, isPinned: isPinned))
-                        .font(.luma(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+            Group {
+                if let collection, !isPinned {
+                    LumaMainButton(title: footerTitle(for: collection, isPinned: false),
+                                   icon: "pin.fill", height: 50) {
+                        togglePin(collection)
+                    }
+                } else {
+                    Button {
+                        if let collection { togglePin(collection) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: collection == nil ? "pin" : "pin.slash")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(footerTitle(for: collection, isPinned: isPinned))
+                                .font(.luma(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .foregroundStyle(Color.white.opacity(collection == nil ? 0.45 : 0.85))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.white.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.lumaPress)
+                    .disabled(collection == nil)
                 }
-                .foregroundStyle(collection == nil || isPinned ? LumaTheme.textSecondary : .white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                // Actionable = accent-tinted fill; inert = plain surface.
-                .background(collection == nil || isPinned
-                            ? AnyShapeStyle(LumaTheme.card)
-                            : AnyShapeStyle(LumaTheme.accentSoft),
-                            in: RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.lumaPress)
-            .disabled(collection == nil)
             .padding(.horizontal, 20)
             .padding(.bottom, 14)
             .padding(.top, 4)

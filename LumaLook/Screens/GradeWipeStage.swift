@@ -5,11 +5,11 @@ import CoreImage
 // THE GRADE ROOM STAGE, and the still helpers the photo editor shares.
 //
 // The grade room shows the picture full bleed, edge to edge and up under the
-// status bar, with a diagonal wipe: the graded picture on the left of a line
-// that leans like "/", the original on the right. The line glows in the look's
-// signature colour and carries a round handle; drag anywhere on the picture to
-// move it. Hold still to peek at the original, double tap to see the whole
-// frame instead of the full-bleed crop.
+// status bar, with a straight vertical wipe: the original on the left of a
+// thin white line, the graded picture on the right. The line carries a round
+// glass handle, so the colour you see is the grade, never the interface; drag
+// anywhere on the picture to move it. Hold still to peek at the original,
+// double tap to see the whole frame instead of the full-bleed crop.
 //
 // Stills are drawn as two layers (one ungraded render, one live grade, same
 // pixel size), so the wipe is pure SwiftUI and never touches the engine. A
@@ -116,37 +116,8 @@ struct LiveGradedStill: View {
 
 // MARK: - Wipe shapes
 
-enum DiagonalWipe {
-    /// Horizontal run of the wipe line per point of height: a lean of about
-    /// 18 degrees, like the mock.
-    static let lean: CGFloat = 0.32
-}
-
-/// The graded side of the grade room wipe: everything left of a line that
-/// leans like "/" and crosses mid-height at `centre` (a fraction of the width).
-struct DiagonalWipeShape: Shape {
-    var centre: CGFloat
-
-    var animatableData: CGFloat {
-        get { centre }
-        set { centre = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let half = rect.height / 2 * DiagonalWipe.lean
-        let mid = rect.minX + rect.width * centre
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: mid + half, y: rect.minY))
-        path.addLine(to: CGPoint(x: mid - half, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// The edited side of the photo editor's split: everything right of a
-/// vertical line at `fraction` of the width.
+/// The graded side of a straight wipe (the grade room and the photo
+/// editor): everything right of a vertical line at `fraction` of the width.
 struct SplitRevealShape: Shape {
     var fraction: CGFloat
 
@@ -161,24 +132,26 @@ struct SplitRevealShape: Shape {
     }
 }
 
-/// The round handle that rides a wipe line.
+/// The round glass handle that rides a wipe line: dark translucent glass with
+/// a white left-right mark, so it reads on any frame without adding colour.
 struct WipeKnob: View {
-    var ring: Color = .white
+    var size: CGFloat = 38
 
     var body: some View {
         Circle()
-            .fill(.white)
-            .frame(width: 32, height: 32)
-            .overlay(Circle().strokeBorder(ring, lineWidth: 2))
-            .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
+            .fill(.ultraThinMaterial)
+            .background(Color(hex: 0x101114).opacity(0.58), in: Circle())
+            .frame(width: size, height: size)
+            .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
             .overlay {
-                HStack(spacing: 3) {
+                HStack(spacing: 2) {
                     Image(systemName: "chevron.left")
                     Image(systemName: "chevron.right")
                 }
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.black.opacity(0.72))
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
             }
+            .environment(\.colorScheme, .dark)
     }
 }
 
@@ -292,13 +265,14 @@ struct GradeWipeStage: View {
     let still: CIImage?
     /// Where the subject sits, so the full-bleed crop keeps it in view.
     var focus: UnitPoint = .center
-    /// Where the line crosses mid-height, as a fraction of the picture's width.
+    /// Where the vertical line sits, as a fraction of the picture's width.
+    /// Original on the left of it, graded on the right.
     @Binding var wipe: CGFloat
     @Binding var eyedropping: Bool
     /// False while the original is peeked or the look is bypassed.
     var showsWipe: Bool = true
-    /// The look's short code ("KD2"), labelling the graded side.
-    let code: String
+    /// The look's name ("KD2 · Golden Hour"), labelling the graded side.
+    let label: String
     let signature: Color
     let onHold: (Bool) -> Void
 
@@ -351,10 +325,10 @@ struct GradeWipeStage: View {
             originalLayer
                 .frame(width: box.width, height: box.height)
                 .position(x: box.midX, y: box.midY)
-            // A centre far past the right edge covers the whole picture.
+            // A line at 0 leaves the whole picture graded.
             LiveGradedStill(source: previewSource)
                 .frame(width: box.width, height: box.height)
-                .clipShape(DiagonalWipeShape(centre: wipeOn ? wipe : 4))
+                .clipShape(SplitRevealShape(fraction: wipeOn ? wipe : 0))
                 .position(x: box.midX, y: box.midY)
         } else {
             ZStack {
@@ -380,48 +354,44 @@ struct GradeWipeStage: View {
         }
     }
 
-    /// The line in the look's colour, and its knob where it crosses the
-    /// middle of the screen.
+    /// A straight white line down the picture and its glass handle where it
+    /// crosses the middle of the screen. White, so the only colour on the
+    /// picture is the grade itself.
     private func seam(box: CGRect, size: CGSize) -> some View {
-        let half = box.height / 2 * DiagonalWipe.lean
-        let mid = box.minX + box.width * wipe
+        let x = box.minX + box.width * min(max(wipe, 0), 1)
         let knobY = min(max(size.height / 2, box.minY), box.maxY)
-        let knobX = mid + DiagonalWipe.lean * (box.midY - knobY)
         return ZStack(alignment: .topLeading) {
-            Path { path in
-                path.move(to: CGPoint(x: mid + half, y: box.minY))
-                path.addLine(to: CGPoint(x: mid - half, y: box.maxY))
-            }
-            .stroke(signature, lineWidth: 2)
-            .shadow(color: signature.opacity(0.8), radius: 6)
-            WipeKnob(ring: signature)
-                .position(x: knobX, y: knobY)
+            Rectangle()
+                .fill(Color.white.opacity(0.95))
+                .frame(width: 2, height: box.height)
+                .shadow(color: .black.opacity(0.35), radius: 3)
+                .position(x: x, y: box.midY)
+            WipeKnob()
+                .position(x: x, y: knobY)
         }
         .allowsHitTesting(false)
     }
 
-    /// Graded bottom left, Original bottom right, pinned to the part of the
-    /// picture that is on screen.
+    /// Original bottom left, the look bottom right with a dot in its colour,
+    /// pinned to the part of the picture that is on screen.
     private func labels(box: CGRect, size: CGSize) -> some View {
         let visible = box.intersection(CGRect(origin: .zero, size: size))
         let frame = visible.isNull ? CGRect(origin: .zero, size: size) : visible
         return HStack(spacing: 8) {
-            wipeLabel(code, colour: signature)
+            Text("Original")
+                .font(.luma(size: 12, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .lineLimit(1)
+                .modifier(StageGlassLabel())
             Spacer(minLength: 0)
-            wipeLabel("Original", colour: LumaTheme.textPrimary)
+            LookNameText(label, colour: signature, size: 12, alwaysDot: true,
+                         quietColour: Color.white.opacity(0.92))
+                .modifier(StageGlassLabel())
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .frame(width: frame.width)
-        .position(x: frame.midX, y: frame.maxY - 26)
+        .position(x: frame.midX, y: frame.maxY - 29)
         .allowsHitTesting(false)
-    }
-
-    private func wipeLabel(_ text: String, colour: Color) -> some View {
-        Text(text)
-            .font(.luma(size: 12, weight: .semibold))
-            .foregroundStyle(colour)
-            .lineLimit(1)
-            .lumaGlassPill()
     }
 
     /// WB eyedropper: tap a neutral in the frame to balance to it. It has to
@@ -474,15 +444,11 @@ struct GradeWipeStage: View {
         return CGRect(x: x, y: y, width: w, height: h)
     }
 
-    /// The wipe position that puts the line under the finger. It can run
-    /// fully off either side, so either picture can fill the stage.
+    /// The wipe position that puts the line under the finger. It can run to
+    /// either edge, so either picture can fill the stage.
     static func wipeFraction(at point: CGPoint, box: CGRect) -> CGFloat {
         guard box.width > 1, box.height > 1 else { return 0.5 }
-        let localX = point.x - box.minX
-        let localY = point.y - box.minY
-        let centre = localX - DiagonalWipe.lean * (box.height / 2 - localY)
-        let reach = DiagonalWipe.lean * box.height / 2 / box.width
-        return min(max(centre / box.width, -reach), 1 + reach)
+        return min(max((point.x - box.minX) / box.width, 0), 1)
     }
 
     // MARK: Sources
@@ -501,5 +467,20 @@ struct GradeWipeStage: View {
         }.value
         guard !Task.isCancelled else { return }
         original = image
+    }
+}
+
+// MARK: - Labels on the picture
+
+/// A small glass label over footage, 26 pt high: dark translucent glass, no
+/// outline, so it reads on any frame without adding colour of its own.
+struct StageGlassLabel: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(Color(hex: 0x101114).opacity(0.58), in: Capsule())
+            .environment(\.colorScheme, .dark)
     }
 }
