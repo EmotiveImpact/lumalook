@@ -14,6 +14,10 @@ website/
   terms.html      terms of use, including the subscription disclosure
   support.html    help and contact (the App Store support URL)
   founders.html   Founding Creators application form (posts to /api/founders)
+  mission.html    why LumaLook exists, the Shirley card history, Emotive Impact
+  partners.html   ways to partner, Awards teaser, enquiry form (posts to /api/partners)
+  showcase.html   creators' work, shared with permission (placeholders until filled)
+  blog.html       blog index; posts live in blog/<slug>.html
   404.html
   assets/
     site.css      Night Lab tokens and every style
