@@ -344,35 +344,32 @@ extension Notification.Name {
     static let lumaShowPlan = Notification.Name("lumalook.showPlan")
 }
 
-/// The Pro button's face. Free: signal yellow, "Get Pro". Pro or Lifetime:
-/// the yellow moves into the words on a quiet fill, "Pro".
+/// The Pro button's face: the calm chip from the approved calm mock. A quiet
+/// frosted capsule with white text, the only colour being the small yellow
+/// spark. Free reads "Get Pro"; Pro or Lifetime reads "Pro" on the same chip.
 struct LumaProBadge: View {
     let isPro: Bool
     var onPhoto: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: "sparkle")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(LumaTheme.signal)
             Text(isPro ? "Pro" : "Get Pro")
                 .font(.luma(size: 13, weight: .semibold))
                 .tracking(-0.1)
                 .lineLimit(1)
+                .foregroundStyle(LumaTheme.textPrimary)
         }
-        .foregroundStyle(isPro ? LumaTheme.signal : LumaTheme.onSignal)
-        .padding(.leading, 9)
-        .padding(.trailing, 11)
-        .frame(height: 28)
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
+        .frame(height: 32)
         .background {
-            if isPro {
-                ZStack {
-                    Capsule().fill(LumaTheme.control)
-                        .opacity(1 - onPhoto)
-                    Capsule().fill(Color.white.opacity(0.13))
-                        .opacity(onPhoto)
-                }
-            } else {
-                Capsule().fill(LumaTheme.signal)
+            ZStack {
+                Capsule().fill(.ultraThinMaterial)
+                    .opacity(onPhoto)
+                Capsule().fill(Color.white.opacity(0.12))
             }
         }
         .fixedSize()
