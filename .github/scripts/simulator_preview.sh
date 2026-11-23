@@ -169,6 +169,12 @@ shot 15-paywall 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1"
 # The photo loads without the auto grade, so the sheet never waits behind it.
 shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party.jpg" \
   "${P}SEED_LOCK=Night Drive"
+# A UK buyer before StoreKit answers: no US dollar fallback anywhere, the
+# price rows hold a placeholder and the buy buttons drop the amount.
+shot 15b-paywall-uk 6 "${P}ROUTE=settings" "${P}SEED_PAYWALL=1" "${P}SEED_STOREFRONT=GBR"
+shot 12c-archive-pack-uk 8 "${P}ROUTE=filterPack" "${P}SEED_PACK=film-neg-archive" "${P}SEED_STOREFRONT=GBR"
+shot 11m-camera-locked-uk 8 "${P}ROUTE=camera" "${P}SEED_CAMFRAME=$MEDIA/hero_golden.jpg" \
+  "${P}SEED_CAMLOOK=pack:film-neg-archive:FN400" "${P}SEED_CAMLOCK=1" "${P}SEED_STOREFRONT=GBR"
 
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).

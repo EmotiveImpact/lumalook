@@ -154,7 +154,8 @@ private func packMetaLine(_ pack: LookPack) -> Text {
 struct PackStatePill: View {
     let pack: LookPack
     let installed: Bool
-    /// The formatted StoreKit price. Only rendered in the `.buy` state.
+    /// The formatted StoreKit price, or "Buy" while it loads. Only rendered
+    /// in the `.buy` state.
     let price: String
 
     var body: some View {
@@ -649,10 +650,13 @@ struct FilterStoreView: View {
 /// detail screen so "owned" behaves identically wherever it is tapped.
 @MainActor
 enum StoreNav {
+    /// The short label a pack's pill or cover wears: Free, Pro, its price in
+    /// this account's own currency, or a plain "Buy" while that price is
+    /// still on its way (a UK buyer is never shown a dollar fallback).
     static func price(_ pack: LookPack, _ storeService: StoreService) -> String {
         if pack.isFree { return "Free" }
         if pack.isProIncluded { return "Pro" }
-        return storeService.packProducts[pack.id]?.displayPrice ?? pack.price
+        return storeService.price(for: pack) ?? "Buy"
     }
 
     /// Owned packs are a door into the library, not a purchase screen: land
@@ -1080,7 +1084,7 @@ struct FilterPackDetailView: View {
                 } else if pack.isProIncluded {
                     Text("Unlock with Pro")
                 } else {
-                    Text("Buy pack · \(StoreNav.price(pack, storeService))")
+                    Text(storeService.price(for: pack).map { "Buy pack · \($0)" } ?? "Buy pack")
                 }
             }
             .font(.luma(size: 16, weight: .semibold))
