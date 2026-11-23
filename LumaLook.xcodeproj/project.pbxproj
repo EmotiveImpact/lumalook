@@ -120,6 +120,7 @@
 		7B0B4B2AFFAD2E51FB985BDD /* hero_rain.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 9822ECA6F64920F625730286 /* hero_rain.jpg */; };
 		7B0F90A1E94C763D028DBDC5 /* FS_PT400U.cube in Resources */ = {isa = PBXBuildFile; fileRef = 061C6B1EF15741F9AD810B48 /* FS_PT400U.cube */; };
 		7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */; };
+		E37B488B0FCB36AB111A838F /* TrueColour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020F7CEEC8F38BA01446DC27 /* TrueColour.swift */; };
 		7C6CC7EC14EE46B845684B11 /* FS_MS11.cube in Resources */ = {isa = PBXBuildFile; fileRef = 51847FFB61D4C591A507AF23 /* FS_MS11.cube */; };
 		7DEFEF178FAE1426E1FEEFE0 /* LogNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179CDBD264D592FF761B1F7A /* LogNormalizer.swift */; };
 		7E736E0D019FC99EABA35E38 /* OverlayMaskRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D865130564F1DCF5BD588FA /* OverlayMaskRenderer.swift */; };
@@ -436,6 +437,7 @@
 		BE8EA353524205957ACA01CD /* FS_DL400.cube */ = {isa = PBXFileReference; path = FS_DL400.cube; sourceTree = "<group>"; };
 		C01A0C1280A23592103B3574 /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookPipeline.swift; sourceTree = "<group>"; };
+		020F7CEEC8F38BA01446DC27 /* TrueColour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrueColour.swift; sourceTree = "<group>"; };
 		C21F84C2D86C1A7CE6A1B210 /* FS_RR80.cube */ = {isa = PBXFileReference; path = FS_RR80.cube; sourceTree = "<group>"; };
 		C4AF1FB0304125FB4E5BE74B /* SelectClipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectClipView.swift; sourceTree = "<group>"; };
 		C6D8B84208BCDA1900855A3E /* FS_MS7.cube */ = {isa = PBXFileReference; path = FS_MS7.cube; sourceTree = "<group>"; };
@@ -841,6 +843,7 @@
 				179CDBD264D592FF761B1F7A /* LogNormalizer.swift */,
 				826BFB8F63B18F87ECCEAB65 /* LookPacks.swift */,
 				C031C949076BD2D9EF9D6E30 /* LookPipeline.swift */,
+				020F7CEEC8F38BA01446DC27 /* TrueColour.swift */,
 				3A0EE97F776FA63E7E36C8B4 /* LookThumbs.swift */,
 				59D6504E8F53CD30B71C6480 /* LoudnessAnalyzer.swift */,
 				7CA07F33B727EC523266C623 /* LumaCompositor.swift */,
@@ -1167,6 +1170,7 @@
 				EBB1E1F42EB619EA52A02B2B /* LookLibraryStore.swift in Sources */,
 				C0E5C19FDBA917E18225BDBA /* LookPacks.swift in Sources */,
 				7C22389E0EF0983BCA604D28 /* LookPipeline.swift in Sources */,
+				E37B488B0FCB36AB111A838F /* TrueColour.swift in Sources */,
 				4B50D608246ED560E018B6FC /* LumaAppearance.swift in Sources */,
 				584656D0BFDB7995937C9946 /* LookSignature.swift in Sources */,
 				C16ADF3D9068BEBEC75F8D07 /* LookThumbs.swift in Sources */,

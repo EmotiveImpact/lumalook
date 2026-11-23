@@ -86,7 +86,8 @@ extension ParsedLUT {
 
         return ParsedLUT(size: target,
                          rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) },
-                         domainMin: domainMin, domainMax: domainMax)
+                         domainMin: domainMin, domainMax: domainMax,
+                         bakedByLumalook: bakedByLumalook)
     }
 
     /// T2.6 — plain trilinear resample, used to DOWNSAMPLE oversized lattices
@@ -117,6 +118,7 @@ extension ParsedLUT {
         }}}
         return ParsedLUT(size: target,
                          rgbaFloatData: out.withUnsafeBufferPointer { Data(buffer: $0) },
-                         domainMin: domainMin, domainMax: domainMax)
+                         domainMin: domainMin, domainMax: domainMax,
+                         bakedByLumalook: bakedByLumalook)
     }
 }
