@@ -255,7 +255,9 @@ enum TrueColour {
     }
 
     /// Black and white, or toned close to it: colourful inputs keep under
-    /// 30% of their chroma (median over a sample of the cube).
+    /// 15% of their chroma (median over a sample of the cube). The film cubes
+    /// split cleanly: mono and toned mono sit at 0 to 8%, the most muted
+    /// colour look (MS15) at 28%, everything else above 50%.
     private static func isMonochrome(_ values: [Float], _ n: Int) -> Bool {
         var ratios: [Double] = []
         let step = max(1, n / 9)
@@ -274,7 +276,7 @@ enum TrueColour {
         }
         guard !ratios.isEmpty else { return false }
         ratios.sort()
-        return ratios[ratios.count / 2] < 0.3
+        return ratios[ratios.count / 2] < 0.15
     }
 
     private static func write(_ rgb: (Double, Double, Double), into values: inout [Float], at i: Int) {
