@@ -59,8 +59,9 @@ struct ExportOutputInfo: Equatable {
 /// it is the real poster frame while the player warms up, and it is the graded
 /// source frame when nothing was produced. Everything else lives in a drawer
 /// beneath it: what was written (mono, read off the asset), what went wrong
-/// (verbatim), the actions as an unboxed tool row, and one calm instruction bar
-/// whose single filled button is Share.
+/// (verbatim), the actions as an unboxed tool row, and one calm bar whose
+/// single filled button is Share: the main action, in the Main buttons colour
+/// from You › Appearance (`LumaMainButton`, or its look on the ShareLink).
 ///
 /// Monochrome throughout — no teal tick, no orange failure slab, no branded
 /// share tiles, no confetti. Mono type is reserved for the measurements.
@@ -76,6 +77,9 @@ struct ExportCompleteView: View {
     /// produced nothing, so the failure screen still shows the user's picture
     /// rather than a black box. Never bundled art.
     @State private var sourceFrame: CGImage?
+    /// Main buttons choice, for the Share link (a ShareLink cannot be a
+    /// `LumaMainButton`, so it wears the same fill and text).
+    @AppStorage(LumaAppearance.buttonsKey) private var buttonsRaw = LumaMainButtonStyle.signal.rawValue
 
     /// There is no success to report without a file (or an in-memory still) to
     /// show for it — every share affordance keys off this.
@@ -186,10 +190,15 @@ struct ExportCompleteView: View {
 
     private var drawer: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(hasArtefact ? "Export complete" : "Export unavailable")
-                    .font(.luma(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+            HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("Export")
+                        .font(.luma(size: 20, weight: .light))
+                    Text(hasArtefact ? "complete" : "unavailable")
+                        .font(.luma(size: 20, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
                 if let status = photosStatus {
                     Text(status)
@@ -199,7 +208,15 @@ struct ExportCompleteView: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
-            .padding(.bottom, 10)
+            .padding(.bottom, 4)
+
+            Text(barSentence)
+                .font(.luma(size: 12.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 10)
 
             // The delivery spec of the file that was ACTUALLY written — read
             // back off the asset, never the spec that was requested.
@@ -253,7 +270,7 @@ struct ExportCompleteView: View {
         } else if !app.lastExportSavedToPhotos, photosEligible {
             // The export itself succeeded; only the library hand-off was
             // refused. Explain it, and put the fix in the row below.
-            noticeBar("Lumalook couldn't add this to your photo library. In Settings choose \"Add Photos Only\" — that's the only access it ever asks for, so iOS won't offer Full Access.")
+            noticeBar("Lumalook couldn't add this to your photo library. In Settings choose \"Add Photos Only\". That's the only access it ever asks for, so iOS won't offer Full Access.")
                 .padding(.horizontal, 18)
                 .padding(.bottom, 12)
         } else if shareableURL == nil {
@@ -274,8 +291,8 @@ struct ExportCompleteView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(LumaTheme.surfaceStrong,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(LPanelStyle.glass,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - Actions — icon over label, unboxed, the last item clipped
@@ -396,7 +413,7 @@ struct ExportCompleteView: View {
     // MARK: - The calm instruction bar
 
     private var completeBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             Button { goBack() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .medium))
@@ -406,43 +423,45 @@ struct ExportCompleteView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            Spacer(minLength: 8)
-            Text(barSentence)
-                .font(.luma(size: 14, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-            Spacer(minLength: 8)
-            // The one filled button in the language. It exists only when there
-            // is a file to hand to the share sheet — a full-width button that
-            // opens nothing is worse than no button at all.
+            // The one main action. It exists only when there is a file to
+            // hand to the share sheet; a button that opens nothing is worse
+            // than no button at all, so without one it becomes Try again.
             if let url = shareableURL {
                 ShareLink(item: url) {
-                    filledLabel(app.lastExportImage != nil ? "Share photo" : "Share")
+                    mainLabel(app.lastExportImage != nil ? "Share photo" : "Share",
+                              icon: "square.and.arrow.up")
                 }
                 .buttonStyle(.lumaPress)
             } else {
-                Button { goBack() } label: { filledLabel("Try again") }
-                    .buttonStyle(.lumaPress)
+                LumaMainButton(title: "Try again", icon: "arrow.clockwise", height: 50) { goBack() }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, 8)
+        .padding(.trailing, 18)
         .padding(.bottom, 6)
     }
 
-    private func filledLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.luma(size: 15, weight: .semibold))
-            .foregroundStyle(.black)
-            .padding(.horizontal, 18)
-            .frame(height: 40)
-            .background(Color.white, in: Capsule())
-            .contentShape(Capsule())
+    /// `LumaMainButton`'s look for the ShareLink: full width, 50 high, in the
+    /// Main buttons colour.
+    private func mainLabel(_ title: String, icon: String) -> some View {
+        let style = LumaMainButtonStyle(rawValue: buttonsRaw) ?? .signal
+        return HStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold))
+            Text(title)
+                .font(.luma(size: 16, weight: .semibold))
+                .tracking(-0.2)
+                .lineLimit(1)
+        }
+        .foregroundStyle(style.text)
+        .frame(maxWidth: .infinity)
+        .frame(height: 50)
+        .background(style.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var barSentence: String {
         if shareableURL != nil { return "Your file is ready" }
-        if hasArtefact { return "Not on disk — export again" }
+        if hasArtefact { return "Not on disk. Export again" }
         return "Nothing was produced"
     }
 

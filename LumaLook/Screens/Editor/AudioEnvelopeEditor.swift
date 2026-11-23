@@ -20,20 +20,22 @@ struct AudioEnvelopeEditor: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
-                Text("Volume envelope").font(.luma(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+            HStack(spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("Volume").font(.luma(size: 18, weight: .light))
+                    Text("envelope").font(.luma(size: 18, weight: .bold))
+                }
+                .foregroundStyle(.white)
                 Spacer()
-                Button("Clear") { commit([]) }
-                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textSecondary)
-                Button("Done", action: onClose)
-                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
+                LPanelPill(title: "Clear", height: 32) { commit([]) }
+                // The panel's confirm: the main action.
+                LumaMainPill(title: "Done", height: 32, action: onClose)
             }
 
             GeometryReader { geo in
                 let pts = normalizedPoints()
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(LumaTheme.surface)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LPanelStyle.glass)
                     // Gridlines.
                     ForEach(1..<4) { i in
                         let y = geo.size.height * CGFloat(i) / 4
@@ -46,7 +48,7 @@ struct AudioEnvelopeEditor: View {
                         p.move(to: point(first, in: geo.size))
                         for pt in pts.dropFirst() { p.addLine(to: point(pt, in: geo.size)) }
                     }
-                    .stroke(LumaTheme.accentBright, lineWidth: 2)
+                    .stroke(Color.white.opacity(0.85), lineWidth: 2)
                     // Draggable handles.
                     ForEach(Array(pts.enumerated()), id: \.offset) { idx, pt in
                         Circle().fill(.white).frame(width: 16, height: 16)
@@ -61,10 +63,10 @@ struct AudioEnvelopeEditor: View {
             .frame(height: 220)
 
             Text("Tap to add a point · drag to shape")
-                .font(.luma(.caption)).foregroundStyle(LumaTheme.textMuted)
+                .font(.luma(size: 12)).foregroundStyle(LumaTheme.textMuted)
         }
         .padding(20)
-        .background(LumaTheme.background)
+        .background(LumaTheme.panel)
     }
 
     // MARK: - Point maths (unit: x = time/duration, y = volume 0…1)

@@ -174,8 +174,9 @@ struct EditorPreviewSurface: UIViewRepresentable {
 
 // MARK: - Dock
 
-/// One of the six dock tools: icon over label, equal width. Signal yellow
-/// marks the one that is open.
+/// One of the six dock tools: icon over label, equal width. The dock stays
+/// quiet (calm mock v2): the open tool is simply white, the rest grey. Signal
+/// yellow belongs to Export, the one main action on the editor.
 struct EditorDockButton: View {
     let title: String
     let icon: String
@@ -189,12 +190,12 @@ struct EditorDockButton: View {
                 Image(systemName: icon)
                     .font(.system(size: 19, weight: .regular))
                     .frame(height: 22)
-                    .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textPrimary.opacity(0.88))
+                    .foregroundStyle(active ? LumaTheme.textPrimary : LumaTheme.textPrimary.opacity(0.82))
                 Text(title)
-                    .font(.luma(size: 11, weight: .medium))
+                    .font(.luma(size: 11, weight: active ? .semibold : .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .foregroundStyle(active ? LumaTheme.signal : LumaTheme.textSecondary)
+                    .foregroundStyle(active ? LumaTheme.textPrimary : LumaTheme.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 52)
@@ -287,9 +288,13 @@ struct EditorMoreToolsSheet: View {
             searchField
         } else {
             HStack(spacing: 10) {
-                Text("Tools")
-                    .font(.luma(size: 22, weight: .bold))
-                    .foregroundStyle(LumaTheme.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("More")
+                        .font(.luma(size: 22, weight: .light))
+                    Text("tools")
+                        .font(.luma(size: 22, weight: .bold))
+                }
+                .foregroundStyle(LumaTheme.textPrimary)
                 Spacer(minLength: 0)
                 Button {
                     searching = true
@@ -326,7 +331,7 @@ struct EditorMoreToolsSheet: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 38)
-            .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             Button {
                 query = ""
                 searchFocused = false
@@ -361,7 +366,9 @@ struct EditorMoreToolsSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(LumaTheme.signal)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .frame(width: 40, height: 40)
+                    .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Start from a template")
                         .font(.luma(size: 15, weight: .semibold))
@@ -375,21 +382,18 @@ struct EditorMoreToolsSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(LumaTheme.textSecondary)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
             .frame(height: 64)
-            .background(
-                LinearGradient(colors: [LumaTheme.signal.opacity(0.16), LookSignature.neon.opacity(0.12)],
-                               startPoint: .leading, endPoint: .trailing),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(LumaTheme.signal.opacity(0.3), lineWidth: 1))
+            // Quiet glass: a way in, not the screen's main action.
+            .background(LPanelStyle.glass, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.lumaPress)
     }
 }
 
-/// A tool tile: the glyph on a raised square, its name underneath.
+/// A tool tile: the glyph on a quiet glass square, its name underneath. The
+/// open tool is white, the rest a step greyer.
 private struct EditorToolTile: View {
     let entry: EditorToolEntry
 
@@ -398,15 +402,14 @@ private struct EditorToolTile: View {
             VStack(spacing: 6) {
                 Image(systemName: entry.icon)
                     .font(.system(size: 19, weight: .regular))
-                    .foregroundStyle(entry.active ? LumaTheme.signal : LumaTheme.textPrimary)
+                    .foregroundStyle(entry.active ? LumaTheme.textPrimary : LumaTheme.textPrimary.opacity(0.85))
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(LumaTheme.edge, lineWidth: 1))
+                    .background(entry.active ? LPanelStyle.glassStrong : LPanelStyle.glass,
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 Text(entry.title)
-                    .font(.luma(size: 11.5, weight: .medium))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .font(.luma(size: 11.5, weight: entry.active ? .semibold : .medium))
+                    .foregroundStyle(entry.active ? LumaTheme.textPrimary : LumaTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -421,47 +424,21 @@ private struct EditorToolTile: View {
 
 // MARK: - Look drawer parts
 
-/// Two-way switch for the drawer header ("This clip" / "All clips").
+/// Two-way switch for the drawer header ("This clip" / "All clips"): words,
+/// the picked one white on a little glass, the other grey. No box around it.
 struct EditorMiniSegment: View {
     let options: [String]
     let selection: Int
     let onSelect: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 2) {
             ForEach(options.indices, id: \.self) { index in
-                segment(index)
+                LPanelFilterTab(title: options[index], isOn: index == selection) {
+                    if index != selection { onSelect(index) }
+                }
             }
         }
-        .padding(2)
-        .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(LumaTheme.edge, lineWidth: 1))
-    }
-
-    private func segment(_ index: Int) -> some View {
-        let on = index == selection
-        return Button {
-            if !on { onSelect(index) }
-        } label: {
-            Text(options[index])
-                .font(.luma(size: 12, weight: .semibold))
-                .foregroundStyle(on ? LumaTheme.textPrimary : LumaTheme.textMuted)
-                .lineLimit(1)
-                .padding(.horizontal, 11)
-                .frame(height: 26)
-                .background {
-                    if on {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(LumaTheme.control)
-                            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -474,8 +451,12 @@ struct EditorLookTile: View {
     let name: String
     var picked = false
     var locked = false
+    /// The look's own colour for its code. Nil reads it from the name.
+    var colour: Color? = nil
 
     static let width: CGFloat = 70
+
+    private var codeColour: Color { colour ?? LookSignature.colour(forLookNamed: name) }
     static let height: CGFloat = 86
 
     var body: some View {
@@ -484,10 +465,9 @@ struct EditorLookTile: View {
                 artwork
                 LinearGradient(colors: [.clear, .black.opacity(0.72)],
                                startPoint: .center, endPoint: .bottom)
-                Text(code)
-                    .font(.luma(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                // The code in the look's own colour (or white with a dot, per
+                // You › Appearance), with the dot kept since it sits on a frame.
+                LookNameText(code, colour: codeColour, size: 12, weight: .bold, alwaysDot: true)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, 6)
                     .padding(.bottom, 5)
@@ -539,7 +519,7 @@ struct EditorPlainTile: View {
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
-                LumaTheme.raised
+                LPanelStyle.glass
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .light))
                     .foregroundStyle(LumaTheme.textSecondary)
@@ -553,6 +533,181 @@ struct EditorPlainTile: View {
                 .foregroundStyle(picked ? LumaTheme.textPrimary : LumaTheme.textMuted)
                 .lineLimit(1)
                 .frame(width: EditorLookTile.width)
+        }
+    }
+}
+
+// =============================================================================
+// Calm panel parts (calm mock v2, 06-editor.jpg): quiet glass, text tabs,
+// quiet pills and the amount slider that follows You › Appearance. Shared by
+// the editor's tool panels and the export screens. Prefixed LPanel so they
+// never collide with the atoms elsewhere.
+// =============================================================================
+
+enum LPanelStyle {
+    /// Quiet glass: tools, chips, secondary pills (white at 7%).
+    static let glass = Color.white.opacity(0.07)
+    /// One step up: a picked filter, an engaged tool (white at 12%).
+    static let glassStrong = Color.white.opacity(0.12)
+    /// The fill of an "on" quiet pill (Loop, a picked effect).
+    static let onFill = Color.white.opacity(0.9)
+    /// Text on that fill.
+    static let onText = Color(hex: 0x0B0C0E)
+    /// Grey words: unpicked tabs and labels.
+    static let quietText = Color.white.opacity(0.42)
+    /// A switch that is on: quiet grey, never the signal.
+    static let toggleTint = Color(hex: 0x8E929A)
+}
+
+/// Text tabs: words in a row, the picked one white with a short white line
+/// under it, the rest grey. Used instead of boxed segmented controls.
+struct LPanelTabs: View {
+    let labels: [String]
+    let selected: Int?
+    var size: CGFloat = 13.5
+    var spacing: CGFloat = 18
+    let onSelect: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(labels.indices, id: \.self) { index in
+                tab(index)
+            }
+        }
+    }
+
+    private func tab(_ index: Int) -> some View {
+        let isOn = index == selected
+        return Button {
+            onSelect(index)
+        } label: {
+            Text(labels[index])
+                .font(.luma(size: size, weight: .semibold))
+                .foregroundStyle(isOn ? LumaTheme.textPrimary : LPanelStyle.quietText)
+                .lineLimit(1)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+                .overlay(alignment: .bottom) {
+                    if isOn {
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(height: 2)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.15), value: isOn)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// A filter word: grey, or white on a little glass when picked (All looks,
+/// moods, This clip / All clips).
+struct LPanelFilterTab: View {
+    let title: String
+    var icon: String? = nil
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+                }
+                Text(title)
+                    .font(.luma(size: 12.5, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isOn ? LumaTheme.textPrimary : Color.white.opacity(0.5))
+            .padding(.horizontal, 11)
+            .frame(height: 28)
+            .background(isOn ? Color.white.opacity(0.13) : Color.clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// A quiet pill: glass with grey-white words, or near-white with ink words
+/// when on (Mute, Duck under voice, Loop; effect and shape choices).
+struct LPanelPill: View {
+    let title: String
+    var icon: String? = nil
+    var isOn: Bool = false
+    var height: CGFloat = 34
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+                }
+                Text(title)
+                    .font(.luma(size: 13.5, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isOn ? LPanelStyle.onText : Color.white.opacity(0.8))
+            .padding(.horizontal, 14)
+            .frame(height: height)
+            .background(isOn ? LPanelStyle.onFill : LPanelStyle.glass, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// A small heading inside a panel, in sentence case and grey.
+struct LPanelLabel: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.luma(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.48))
+    }
+}
+
+/// An amount (strength, wet, feather, size) as the Sliders choice says. With
+/// the ruler it shows its own "Wet 40%" line above the 48 pt ruler; the dial
+/// draws its own title and big value, so the line is left out then.
+struct LPanelAmount: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let format: (Double) -> String
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw: String = LumaSliderStyle.ruler.rawValue
+
+    init(_ title: String, value: Binding<Double>, range: ClosedRange<Double> = 0...100,
+         format: @escaping (Double) -> String = { "\(Int($0.rounded()))%" }) {
+        self.title = title
+        self._value = value
+        self.range = range
+        self.format = format
+    }
+
+    var body: some View {
+        let dial = (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial
+        VStack(spacing: 2) {
+            if !dial {
+                HStack {
+                    Text(title)
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                    Spacer(minLength: 8)
+                    Text(format(value))
+                        .font(.luma(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(LumaTheme.textPrimary)
+                }
+            }
+            LumaValueSlider(value: $value, range: range, title: title, format: format)
         }
     }
 }
