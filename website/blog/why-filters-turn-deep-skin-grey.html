@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Why filters turn deep skin grey · Lumalook</title>
-<meta name="description" content="The maths behind ashy and orange skin in photo filters, what we found in our own looks, and what we're changing.">
+<meta name="description" content="The maths behind ashy and orange skin in photo filters, what we found in our own looks, and how we fixed it.">
 <meta name="theme-color" content="#08090a">
 <link rel="canonical" href="https://lumalook.app/blog/why-filters-turn-deep-skin-grey">
 <meta property="og:title" content="Why filters turn deep skin grey">
-<meta property="og:description" content="The maths behind ashy and orange skin in photo filters, what we found in our own looks, and what we're changing.">
+<meta property="og:description" content="The maths behind ashy and orange skin in photo filters, what we found in our own looks, and how we fixed it.">
 <meta property="og:url" content="https://lumalook.app/blog/why-filters-turn-deep-skin-grey">
 <meta property="og:image" content="https://lumalook.app/assets/img/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -70,24 +70,25 @@
       <p>None of this is new. For decades, film and photo labs were balanced against one reference face, and it was never a dark one. Kodak improved the browns in its film only after chocolate and furniture advertisers complained. We tell that story on our <a href="/mission">mission page</a>. Today the bias lives in defaults: a midpoint here, an extra lift there, tuned on whoever was in front of the camera when the look was made.</p>
 
       <h2>We checked our own looks</h2>
-      <p>Before launch we put every Lumalook look through the same test: 16 portraits of Black and brown people under four kinds of light, plus the full Monk chart. We weren't happy with what we found.</p>
-      <div class="stat-row">
-        <div><b>40</b><span>of 133 looks kept skin true as they were</span></div>
-        <div><b>88</b><span>needed a small fix to shadows, contrast or colour</span></div>
-        <div><b>5</b><span>are being rebuilt from scratch</span></div>
-      </div>
-      <p>Our own recipe looks had exactly the linear contrast problem described above. So we're fixing it at the root, in the engine every look runs through, rather than patching looks one by one.</p>
-
-      <h2>What we're changing</h2>
+      <p>Before launch we put every Lumalook look through the same test: 16 portraits of Black and brown people under four kinds of light, plus the full Monk chart. We weren't happy with what we found. Only 40 of our 133 looks kept skin true. Our own recipe looks had exactly the linear contrast problem described above.</p>
+      <p>So we fixed it at the root, in the engine every look runs through, rather than patching looks one by one. We call it True Colour:</p>
       <ul>
-        <li><strong>Contrast on lightness you can see.</strong> We apply contrast to perceived lightness (using the Oklab colour model), which leaves hue and colour exactly where they were.</li>
+        <li><strong>Contrast on lightness you can see.</strong> Contrast now works on perceived lightness (using the Oklab colour model), which leaves hue and colour exactly where they were.</li>
         <li><strong>A soft floor, not a crush.</strong> The deepest skin keeps its detail without being lifted to grey.</li>
-        <li><strong>No grey veil.</strong> No looks that add flat brightness to the shadows.</li>
-        <li><strong>Skin colour held steady.</strong> Through any look at its usual strength, skin hue moves less than five degrees and its colour stays within a narrow band.</li>
+        <li><strong>No grey veil.</strong> No look adds flat brightness to the shadows.</li>
+        <li><strong>Skin colour held steady.</strong> Skin keeps its hue and stays within a narrow band of colour as a look is applied.</li>
         <li><strong>The sheen stays.</strong> Highlights on skin are what make it look alive, so we protect them.</li>
         <li><strong>We never brighten faces for you.</strong> Rich and deep is the goal, not lighter.</li>
       </ul>
-      <p>Every look then goes back through the test, across all ten Monk tones, before it ships.</p>
+
+      <h2>40 before, 120 after</h2>
+      <p>Then we ran the whole test again. Five looks that couldn't be saved were removed from the app.</p>
+      <div class="stat-row">
+        <div><b>40 of 133</b><span>looks kept skin true before the fix</span></div>
+        <div><b>120 of 128</b><span>keep skin true after it, at the default 75% strength</span></div>
+        <div><b>104</b><span>stay skin-true even pushed to full strength</span></div>
+      </div>
+      <p>The handful still short of the mark are being tuned, and every new look now goes through the same test, across all ten Monk tones, before it ships.</p>
 
       <h2>Help us check</h2>
       <p>Numbers only go so far. We're looking for creators to try Lumalook first, push it in the hardest light they can find and tell us where it still gets them wrong.</p>
