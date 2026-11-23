@@ -248,20 +248,25 @@ enum LumaTabMetrics {
     /// The bar's bottom edge below the safe area: the row plus a little air.
     /// Home's story bars start here at rest.
     static let barBottom: CGFloat = top + rowHeight + 8
-    /// Air between the bar and a tab's own title row under it.
-    static let titleGap: CGFloat = 4
 }
 
-/// The bar at the top of every tab: the wordmark on the left and, on the
-/// right, the two buttons that never change, Pro and You. A tab's own title
-/// and actions sit on the row under it, so this row looks the same whichever
-/// tab is open. Home builds the same row on its photo (HomeTopBar).
+/// The one row at the top of every tab. The left says where you are: the
+/// tab's title, or the wordmark when there is none (Home builds the same row
+/// on its photo, see HomeTopBar). The right never changes: Pro, then You.
+/// Anything that belongs to one tab (search, import, new) lives in that
+/// page, never in this row.
 struct LumaTopBar: View {
+    var title: String? = nil
+
     var body: some View {
         LumaTabHeader {
-            LumaWordmark(size: 20)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Lumalook")
+            if let title {
+                LumaTabTitle(text: title)
+            } else {
+                LumaWordmark(size: 20)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Lumalook")
+            }
         } trailing: {
             LumaTopBarButtons()
         }

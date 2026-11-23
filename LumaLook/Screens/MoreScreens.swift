@@ -289,10 +289,10 @@ struct FilterStoreView: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
-                    // Opened as a tab, it wears every tab's bar.
-                    LumaTopBar()
+                    // Opened as a tab, it wears every tab's one row.
+                    LumaTopBar(title: LumaTab.store.title)
                         .padding(.top, LumaTabMetrics.top)
-                        .padding(.bottom, LumaTabMetrics.titleGap)
+                        .padding(.bottom, 4)
                 }
                 hero
                     .frame(height: 214)
@@ -1553,26 +1553,27 @@ struct ProjectLibraryView: View {
 
     // MARK: Top row
 
-    /// The tab's bar (Lumalook, Pro and You), then the title row: the title
-    /// and + for a new video. Both stay put while the list scrolls under them.
+    /// The top row, in the same spot as every tab's. On the tab: Projects,
+    /// then Pro and You (New video and New project live in the page).
+    /// Pushed from elsewhere: the title and + for a new video.
     private var header: some View {
-        VStack(spacing: 0) {
+        Group {
             if isRoot {
-                LumaTopBar()
-            }
-            LumaTabHeader {
-                LumaTabTitle(text: "Projects")
-            } trailing: {
-                Button {
-                    app.openSelectClips(.edit)
-                    LumaHaptics.shared.tap()
-                } label: {
-                    LumaTabGlyph(systemName: "plus")
+                LumaTopBar(title: "Projects")
+            } else {
+                LumaTabHeader {
+                    LumaTabTitle(text: "Projects")
+                } trailing: {
+                    Button {
+                        app.openSelectClips(.edit)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        LumaTabGlyph(systemName: "plus")
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("New video")
                 }
-                .buttonStyle(.lumaPress)
-                .accessibilityLabel("New video")
             }
-            .padding(.top, isRoot ? LumaTabMetrics.titleGap : 0)
         }
         .padding(.top, LumaTabMetrics.top)
         .padding(.bottom, 2)
@@ -2316,16 +2317,10 @@ struct SettingsSubscriptionView: View {
             (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
-                    // The tab's bar (You lights up here), then the title.
-                    LumaTopBar()
+                    // The tab's one row: You, then Pro and You (lit here).
+                    LumaTopBar(title: "You")
                         .padding(.top, LumaTabMetrics.top)
-                    LumaTabHeader {
-                        LumaTabTitle(text: "You")
-                    } trailing: {
-                        EmptyView()
-                    }
-                    .padding(.top, LumaTabMetrics.titleGap)
-                    .padding(.bottom, 4)
+                        .padding(.bottom, 4)
                 } else {
                     header
                 }
