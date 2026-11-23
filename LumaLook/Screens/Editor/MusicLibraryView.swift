@@ -394,12 +394,13 @@ struct MusicTrackRow: View {
     }
 
     /// The track you are listening to is the one you are about to use, so
-    /// its Use is the panel's main action (`LumaMainPill`, which follows the
-    /// Main buttons choice). Every other Use stays quiet glass.
+    /// its Use steps up to the white confirm pill. It is not the signal: the
+    /// library also sits inline under the editor, where Export is the one
+    /// main action. Every other Use stays quiet glass.
     @ViewBuilder
     private var useButton: some View {
         if isActive && !isAdded && !(isRendering && !isLoading) {
-            LumaMainPill(title: "Use", height: 32, action: onUse)
+            LPanelConfirmButton(title: "Use", action: onUse)
                 .frame(minWidth: 58)
                 .accessibilityLabel("Use \(track.name)")
         } else {

@@ -260,8 +260,10 @@ struct CaptionsPanel: View {
                 .font(.luma(size: 13))
                 .foregroundStyle(LumaTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            // The panel's main action.
-            LumaMainButton(title: "Generate captions", icon: "captions.bubble", height: 48) {
+            // The panel's confirm, white: the signal stays on Export, the
+            // editor's one main action, which sits above this drawer.
+            LPanelConfirmButton(title: "Generate captions", icon: "captions.bubble",
+                                height: 48, fullWidth: true) {
                 generate()
             }
             privacyNote
@@ -553,8 +555,8 @@ struct CaptionsPanel: View {
                 }
                 .buttonStyle(.lumaPress)
                 Spacer(minLength: 4)
-                // Confirming the line is this editor's main action.
-                LumaMainPill(title: "Done", height: 32) {
+                // Confirming the line: a white pill, never the signal.
+                LPanelConfirmButton(title: "Done") {
                     commitText(line)
                 }
             }

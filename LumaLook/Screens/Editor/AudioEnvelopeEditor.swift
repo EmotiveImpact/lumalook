@@ -28,8 +28,8 @@ struct AudioEnvelopeEditor: View {
                 .foregroundStyle(.white)
                 Spacer()
                 LPanelPill(title: "Clear", height: 32) { commit([]) }
-                // The panel's confirm: the main action.
-                LumaMainPill(title: "Done", height: 32, action: onClose)
+                // The panel's confirm: a white pill, never the signal.
+                LPanelConfirmButton(title: "Done", action: onClose)
             }
 
             GeometryReader { geo in

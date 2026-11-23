@@ -22,8 +22,8 @@ struct MaskPanel: View {
                     Text("tool").font(.luma(size: 17, weight: .bold))
                 }
                 Spacer()
-                // The panel's confirm: the main action.
-                LumaMainPill(title: "Done", height: 32, action: onClose)
+                // The panel's confirm: a white pill, never the signal.
+                LPanelConfirmButton(title: "Done", action: onClose)
             }
             .foregroundStyle(.white)
 
@@ -54,7 +54,7 @@ struct MaskPanel: View {
                 HStack(spacing: 8) {
                     ForEach(ClipMaskEffect.allCases, id: \.self) { fx in
                         let on = clip.maskEffect == fx.rawValue
-                        LPanelPill(title: fx.label, isOn: on, height: 32) {
+                        LPanelPill(title: fx.label, icon: fx.icon, isOn: on, height: 32) {
                             editor.setClipMask(id: clipID,
                                                shape: ClipMaskShape(rawValue: clip.maskShape ?? ""),
                                                effect: fx)

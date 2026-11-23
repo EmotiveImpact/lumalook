@@ -711,3 +711,40 @@ struct LPanelAmount: View {
         }
     }
 }
+
+/// A panel's confirm (Done, Use, Generate captions) inside the editor: a
+/// near-white pill with ink words, like "Shape this audio lane · Done" in the
+/// calm mock. It is never the signal: on the editor that belongs to Export,
+/// the one main action. `fullWidth` makes it a 48 pt bar instead of a pill.
+struct LPanelConfirmButton: View {
+    let title: String
+    var icon: String? = nil
+    var height: CGFloat = 32
+    var fullWidth: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon).font(.system(size: fullWidth ? 15 : 12, weight: .semibold))
+                }
+                Text(title)
+                    .font(.luma(size: fullWidth ? 15.5 : 13.5, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(LPanelStyle.onText)
+            .padding(.horizontal, fullWidth ? 18 : 15)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
+            .frame(height: height)
+            .background(LPanelStyle.onFill, in: confirmShape)
+            .contentShape(confirmShape)
+        }
+        .buttonStyle(.lumaPress)
+        .fixedSize(horizontal: !fullWidth, vertical: false)
+    }
+
+    private var confirmShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: fullWidth ? 14 : height / 2, style: .continuous)
+    }
+}

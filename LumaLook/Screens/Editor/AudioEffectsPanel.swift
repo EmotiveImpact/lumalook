@@ -36,8 +36,9 @@ struct AudioEffectsPanel: View {
                     }
                     Spacer()
                     LPanelPill(title: "Reset", height: 32) { apply(AudioEffectSettings()) }
-                    // The panel's confirm: the main action.
-                    LumaMainPill(title: "Done", height: 32, action: onClose)
+                    // The panel's confirm: a white pill, as in the calm mock.
+                    // The signal stays on Export, the editor's main action.
+                    LPanelConfirmButton(title: "Done", action: onClose)
                 }
 
                 section("Equaliser") {
