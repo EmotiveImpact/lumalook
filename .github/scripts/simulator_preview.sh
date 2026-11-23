@@ -126,6 +126,11 @@ shot 04-projects 5 "${P}ROUTE=none" "${P}TAB=Projects"
 shot 05-looks 9 "${P}ROUTE=none" "${P}TAB=Looks"
 shot 05b-looks-packs 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=packs"
 shot 06-profile 5 "${P}ROUTE=none" "${P}TAB=Profile"
+# The bar once Pro is bought: the yellow Get Pro becomes a quiet Pro badge.
+shot 05c-looks-pro 9 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_PRO=1"
+# Mine, where New look and Import a LUT live now the top row holds only Pro and You.
+shot 05d-looks-mine 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=mine"
+shot 06b-profile-pro 5 "${P}ROUTE=none" "${P}TAB=Profile" "${P}SEED_PRO=1"
 shot 07-select-clip 5 "${P}ROUTE=selectClip"
 shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg"
 shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"

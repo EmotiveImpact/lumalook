@@ -288,6 +288,12 @@ struct FilterStoreView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
+                if isRoot {
+                    // Opened as a tab, it wears every tab's one row.
+                    LumaTopBar(title: LumaTab.store.title)
+                        .padding(.top, LumaTabMetrics.top)
+                        .padding(.bottom, 4)
+                }
                 hero
                     .frame(height: 214)
                 drawer
@@ -698,16 +704,14 @@ struct BackArrow: View {
 }
 
 /// The app's legal destinations, in one place so the paywall footer and the
-/// Settings ABOUT rows can never drift apart. Both are overridable from
-/// Info.plist (`LLPrivacyPolicyURL` / `LLTermsOfUseURL`) — set those to the
-/// real hosted documents before submission; `terms` otherwise falls back to
-/// Apple's standard EULA, which is the default agreement for apps that do not
-/// supply their own.
+/// Settings ABOUT rows can never drift apart. Both point at the documents
+/// hosted on lumalook.app (the `website/` folder) and stay overridable from
+/// Info.plist (`LLPrivacyPolicyURL` / `LLTermsOfUseURL`).
 enum LumaLegal {
     static let privacy = url(forInfoKey: "LLPrivacyPolicyURL",
-                             fallback: "https://emotiveimpact.com/lumalook/privacy")
+                             fallback: "https://lumalook.app/privacy")
     static let terms = url(forInfoKey: "LLTermsOfUseURL",
-                           fallback: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
+                           fallback: "https://lumalook.app/terms")
 
     private static func url(forInfoKey key: String, fallback: String) -> URL {
         if let configured = Bundle.main.object(forInfoDictionaryKey: key) as? String,
@@ -1593,20 +1597,27 @@ struct ProjectLibraryView: View {
 
     // MARK: Top row
 
-    /// The shared top row, in the same spot as every tab's: the title, and +
-    /// for a new video. It stays put while the list scrolls under it.
+    /// The top row, in the same spot as every tab's. On the tab: Projects,
+    /// then Pro and You (New video and New project live in the page).
+    /// Pushed from elsewhere: the title and + for a new video.
     private var header: some View {
-        LumaTabHeader {
-            LumaTabTitle(text: "Projects")
-        } trailing: {
-            Button {
-                app.openSelectClips(.edit)
-                LumaHaptics.shared.tap()
-            } label: {
-                LumaTabGlyph(systemName: "plus")
+        Group {
+            if isRoot {
+                LumaTopBar(title: "Projects")
+            } else {
+                LumaTabHeader {
+                    LumaTabTitle(text: "Projects")
+                } trailing: {
+                    Button {
+                        app.openSelectClips(.edit)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        LumaTabGlyph(systemName: "plus")
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("New video")
+                }
             }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("New video")
         }
         .padding(.top, LumaTabMetrics.top)
         .padding(.bottom, 2)
@@ -2580,13 +2591,10 @@ struct SettingsSubscriptionView: View {
             (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
-                    LumaTabHeader {
-                        LumaTabTitle(text: "You")
-                    } trailing: {
-                        EmptyView()
-                    }
-                    .padding(.top, LumaTabMetrics.top)
-                    .padding(.bottom, 4)
+                    // The tab's one row: You, then Pro and You (lit here).
+                    LumaTopBar(title: "You")
+                        .padding(.top, LumaTabMetrics.top)
+                        .padding(.bottom, 4)
                 } else {
                     header
                 }
@@ -2714,10 +2722,25 @@ struct SettingsSubscriptionView: View {
 
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
+        ScrollViewReader { proxy in
+            settingsRows
+                // The top bar's Pro badge, tapped while already here.
+                .onReceive(NotificationCenter.default.publisher(for: .lumaShowPlan)) { _ in
+                    withAnimation(.snappy(duration: 0.3)) {
+                        proxy.scrollTo(Self.planRowID, anchor: .top)
+                    }
+                }
+        }
+    }
+
+    private static let planRowID = "plan"
+
+    private var settingsRows: some View {
         List {
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)
+                    .id(Self.planRowID)
             }
 
             Section("Purchases") {
