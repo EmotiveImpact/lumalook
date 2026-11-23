@@ -288,6 +288,12 @@ struct FilterStoreView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
+                if isRoot {
+                    // Opened as a tab, it wears every tab's one row.
+                    LumaTopBar(title: LumaTab.store.title)
+                        .padding(.top, LumaTabMetrics.top)
+                        .padding(.bottom, 4)
+                }
                 hero
                     .frame(height: 214)
                 drawer
@@ -1545,20 +1551,27 @@ struct ProjectLibraryView: View {
 
     // MARK: Top row
 
-    /// The shared top row, in the same spot as every tab's: the title, and +
-    /// for a new video. It stays put while the list scrolls under it.
+    /// The top row, in the same spot as every tab's. On the tab: Projects,
+    /// then Pro and You (New video and New project live in the page).
+    /// Pushed from elsewhere: the title and + for a new video.
     private var header: some View {
-        LumaTabHeader {
-            LumaTabTitle(text: "Projects")
-        } trailing: {
-            Button {
-                app.openSelectClips(.edit)
-                LumaHaptics.shared.tap()
-            } label: {
-                LumaTabGlyph(systemName: "plus")
+        Group {
+            if isRoot {
+                LumaTopBar(title: "Projects")
+            } else {
+                LumaTabHeader {
+                    LumaTabTitle(text: "Projects")
+                } trailing: {
+                    Button {
+                        app.openSelectClips(.edit)
+                        LumaHaptics.shared.tap()
+                    } label: {
+                        LumaTabGlyph(systemName: "plus")
+                    }
+                    .buttonStyle(.lumaPress)
+                    .accessibilityLabel("New video")
+                }
             }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("New video")
         }
         .padding(.top, LumaTabMetrics.top)
         .padding(.bottom, 2)
@@ -1732,12 +1745,14 @@ struct ProjectLibraryView: View {
                 .minimumScaleFactor(0.8)
                 .padding(.leading, isRoot ? 8 : 0)
             Spacer(minLength: 8)
+            // Pick clips first (up to 30 at once), the same door as the empty
+            // state's New video and Home's Edit a clip. A blank timeline is
+            // still one tap away in the editor's own menu.
             Button {
-                app.editor.startNewProject()
-                app.path.append(.editor)
+                app.openSelectClips(.edit)
                 LumaHaptics.shared.tap()
             } label: {
-                Text("New project")
+                Text("New video")
                     .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -2302,13 +2317,10 @@ struct SettingsSubscriptionView: View {
             (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
-                    LumaTabHeader {
-                        LumaTabTitle(text: "You")
-                    } trailing: {
-                        EmptyView()
-                    }
-                    .padding(.top, LumaTabMetrics.top)
-                    .padding(.bottom, 4)
+                    // The tab's one row: You, then Pro and You (lit here).
+                    LumaTopBar(title: "You")
+                        .padding(.top, LumaTabMetrics.top)
+                        .padding(.bottom, 4)
                 } else {
                     header
                 }
@@ -2436,10 +2448,25 @@ struct SettingsSubscriptionView: View {
 
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
+        ScrollViewReader { proxy in
+            settingsRows
+                // The top bar's Pro badge, tapped while already here.
+                .onReceive(NotificationCenter.default.publisher(for: .lumaShowPlan)) { _ in
+                    withAnimation(.snappy(duration: 0.3)) {
+                        proxy.scrollTo(Self.planRowID, anchor: .top)
+                    }
+                }
+        }
+    }
+
+    private static let planRowID = "plan"
+
+    private var settingsRows: some View {
         List {
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)
+                    .id(Self.planRowID)
             }
 
             Section("Purchases") {

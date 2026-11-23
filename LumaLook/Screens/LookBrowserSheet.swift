@@ -462,9 +462,17 @@ struct LookBrowserSheet: View {
     /// all the way down. Nothing floats over the grid.
     private var libraryDrawer: some View {
         VStack(spacing: 0) {
-            pageHeader
-                .padding(.top, LumaTabMetrics.top)
-                .padding(.bottom, 12)
+            Group {
+                if showsBackButton {
+                    pageHeader
+                } else {
+                    // The tab's one row: Looks, then Pro and You. Search is
+                    // the first shelf pill; New look and import are in Mine.
+                    LumaTopBar(title: "Looks")
+                }
+            }
+            .padding(.top, LumaTabMetrics.top)
+            .padding(.bottom, 12)
             shelfPills
                 .padding(.bottom, 14)
             if searchExpanded {
@@ -493,8 +501,8 @@ struct LookBrowserSheet: View {
             + countText(app.lutRepository.collections.count, "collections", size: 12)
     }
 
-    /// Looks tab: the shared top row (the same spot as every tab's), with
-    /// search, import and new look as plain glyphs.
+    /// Looks pushed from another screen (not the tab): the back arrow and the
+    /// title, with search, import and new look as plain glyphs.
     private var pageHeader: some View {
         LumaTabHeader {
             HStack(spacing: 8) {
@@ -541,16 +549,40 @@ struct LookBrowserSheet: View {
         }
     }
 
-    /// Looks tab: the shelves as pills, the current one filled white.
+    /// Looks tab: the shelves as pills, the current one filled white. On the
+    /// tab, search leads the row as a round pill (its header has no glyphs).
     private var shelfPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if !showsBackButton {
+                    searchPill
+                }
                 ForEach(LooksShelf.allCases) { item in
                     shelfPill(item)
                 }
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    /// Opens and closes the search field under the pills; white while open.
+    private var searchPill: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                searchExpanded.toggle()
+                if !searchExpanded { search = "" }
+            }
+            LumaHaptics.shared.tap()
+        } label: {
+            Image(systemName: searchExpanded ? "xmark" : "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(searchExpanded ? LumaTheme.onLight : LumaTheme.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(searchExpanded ? LumaTheme.textPrimary : LumaTheme.chip, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(searchExpanded ? "Close search" : "Search looks")
     }
 
     private func shelfPill(_ item: LooksShelf) -> some View {
@@ -1138,8 +1170,21 @@ struct LookBrowserSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
         }
+        // Import lives here on the tab, next to the LUTs it brings in.
+        LUTImportButton { imported in
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                select(LibraryLook(lut: imported), navigate: false)
+            }
+        } label: {
+            linkRow(symbol: "square.and.arrow.down",
+                    title: "Import a LUT",
+                    detail: "A .cube file from Files")
+        }
+        .accessibilityLabel("Import a LUT")
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
         mineCollections
-            .padding(.top, 18)
+            .padding(.top, 10)
     }
 
     @ViewBuilder

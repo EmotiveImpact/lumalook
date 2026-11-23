@@ -250,6 +250,132 @@ enum LumaTabMetrics {
     static let barBottom: CGFloat = top + rowHeight + 8
 }
 
+/// The one row at the top of every tab. The left says where you are: the
+/// tab's title, or the wordmark when there is none (Home builds the same row
+/// on its photo, see HomeTopBar). The right never changes: Pro, then You.
+/// Anything that belongs to one tab (search, import, new) lives in that
+/// page, never in this row.
+struct LumaTopBar: View {
+    var title: String? = nil
+
+    var body: some View {
+        LumaTabHeader {
+            if let title {
+                LumaTabTitle(text: title)
+            } else {
+                LumaWordmark(size: 20)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Lumalook")
+            }
+        } trailing: {
+            LumaTopBarButtons()
+        }
+    }
+}
+
+/// Pro and You, the right side of every tab's bar. Pro opens the paywall
+/// while free, and once you have Pro it turns into a quiet badge that opens
+/// your plan on the You tab. You jumps to the You tab and lights up white
+/// while you are there.
+///
+/// `onPhoto` runs from 1 (the bar on Home's picture) to 0 (the bar on ink):
+/// on the photo the glyph is white and the Pro badge frosted.
+struct LumaTopBarButtons: View {
+    @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
+    var onPhoto: CGFloat = 0
+    @State private var showPaywall = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            proButton
+            youButton
+        }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    private var proButton: some View {
+        let pro = storeService.isPro
+        return Button {
+            if pro {
+                openYou()
+                // Already on You and scrolled down: bring the plan back up.
+                NotificationCenter.default.post(name: .lumaShowPlan, object: nil)
+            } else {
+                showPaywall = true
+            }
+            LumaHaptics.shared.tap()
+        } label: {
+            LumaProBadge(isPro: pro, onPhoto: onPhoto)
+                .frame(height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(pro ? "Your plan, Pro" : "Get Pro")
+    }
+
+    private var youButton: some View {
+        let here = app.tab == .profile
+        let glyph = LumaTab.profile.icon
+        return Button {
+            openYou()
+            LumaHaptics.shared.tap()
+        } label: {
+            ZStack {
+                LumaTabGlyph(systemName: glyph, active: true)
+                    .opacity(here ? 1 : onPhoto)
+                LumaTabGlyph(systemName: glyph)
+                    .opacity(here ? 0 : 1 - onPhoto)
+            }
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("You")
+        .accessibilityAddTraits(here ? .isSelected : [])
+    }
+
+    private func openYou() {
+        app.path = []
+        app.tab = .profile
+    }
+}
+
+extension Notification.Name {
+    /// Asks the You tab to scroll its plan card into view (the Pro badge).
+    static let lumaShowPlan = Notification.Name("lumalook.showPlan")
+}
+
+/// The Pro button's face: the calm chip from the approved calm mock. A quiet
+/// frosted capsule with white text, the only colour being the small yellow
+/// spark. Free reads "Get Pro"; Pro or Lifetime reads "Pro" on the same chip.
+struct LumaProBadge: View {
+    let isPro: Bool
+    var onPhoto: CGFloat = 0
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(LumaTheme.signal)
+            Text(isPro ? "Pro" : "Get Pro")
+                .font(.luma(size: 13, weight: .semibold))
+                .tracking(-0.1)
+                .lineLimit(1)
+                .foregroundStyle(LumaTheme.textPrimary)
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
+        .frame(height: 32)
+        .background {
+            ZStack {
+                Capsule().fill(.ultraThinMaterial)
+                    .opacity(onPhoto)
+                Capsule().fill(Color.white.opacity(0.12))
+            }
+        }
+        .fixedSize()
+    }
+}
+
 /// The top row every tab shares (Home, Looks, Projects, You): the title on
 /// the left, Home's being the wordmark, and the tab's actions on the right as
 /// plain glyphs, all at one height and one inset.
