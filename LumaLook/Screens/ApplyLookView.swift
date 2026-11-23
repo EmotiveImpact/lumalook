@@ -8,13 +8,14 @@ import AVKit
 // since deleted) was the first pass at the language (category bar, look tiles,
 // instruction bar); it was the STYLE reference here and nothing more.
 // Everything the shipping room could do it still does — the controls moved off
-// the picture and into the drawer, and every scrap of accent colour came out so
-// the footage and the looks are the only coloured things on screen.
+// the picture and into the drawer, and the interface went quiet so the footage
+// and the looks (each in its own colour) are the coloured things on screen.
 //
 // FEATURE INVENTORY — "I'm not trying to lose features." Nothing is dropped.
 //
 //   ✓ Look strip — every tile is the REAL grade of the user's frame (LookThumbs)
-//   ✓ Two-axis browsing — categories swipe left/right, looks scroll along
+//   ✓ Two-axis browsing — categories as text tabs (All looks, Favourites,
+//     Mine, then Recent, Skin first, Purchased, Imported), looks scroll along
 //   ✓ Auto-scroll: the applied look is centred in the strip, never parked off it
 //   ✓ Source badges on tiles (Log / LUT / Saved) so a log cube is never a
 //     surprise
@@ -23,18 +24,21 @@ import AVKit
 //   ✓ ORIGINAL tile — tap latches the grade to 0 and tapping again restores the
 //     previous strength; press-and-hold peeks. It renders the real ungraded
 //     frame, so it is also the corner Compare tile, moved off the picture.
-//   ✓ Full-bleed picture with a diagonal Graded / Original wipe: drag across
-//     the picture to move it, double tap for the whole frame
-//     (GradeWipeStage.swift). Stills only; a playing video fills the stage.
+//   ✓ Full-bleed picture with a straight Original / Graded wipe: a white line
+//     and a glass handle, drag across the picture to move it, double tap for
+//     the whole frame (GradeWipeStage.swift). Stills only; a playing video
+//     fills the stage.
 //   ✓ Press-and-hold anywhere on the picture to peek the original
 //   ✓ Compare tool → BeforeAfterView, the deep-compare surface
 //   ✓ LUT compare grid (LUTCompareView) — same grade, many LUTs, side by side
 //   ✓ Pinned Apply — always enabled, never a dead end (no media ⇢ the picker)
 //   ✓ Favourite — stores look + opacity; for a LUT the opacity is real stored
 //     state, so starring at 62% brings it back at 62% everywhere
-//   ✓ Strength (opacity) row pinned directly above Apply, 0…100 = engine range
-//   ✓ Adjust tools — Grain / Bloom / Halation / Vignette / Lens, each showing
-//     its LIVE VALUE rather than a glyph, edited by one shared ruler dial
+//   ✓ Strength (opacity) row pinned directly above Apply, 0…100 = engine range,
+//     drawn as the ruler or the dial the Appearance setting picks
+//   ✓ Adjust tools — Grain / Bloom / Halation / Vignette / Lens as five quiet
+//     tiles, each showing its LIVE VALUE rather than a glyph, edited by one
+//     shared slider (tap the tile again to put it away)
 //   ✓ Lens panel — eight lens kinds, Pro-locked ones open the paywall
 //   ✓ Auto-grade  ✓ WB eyedropper (tap a neutral in the frame)
 //   ✓ Skin First presets — research-tuned for Black & deep skin, now rendered
@@ -57,30 +61,27 @@ import AVKit
 //     usually have nothing left to draw — the code path is preserved.
 //   ✓ LUMA_SEED_TOOL / LUMA_SEED_BROWSER headless seeding preserved
 //
-// THE LANGUAGE
-//   1. The image is the interface. Media full bleed at the top, edge to edge;
-//      every control lives in the drawer below it. Drawn on the frame: back
-//      and the look chip, the wipe that registers with the picture, and the
-//      transient states (the hold-to-compare peek, the eyedropper's prompt).
-//   2. Monochrome chrome. Black, near-black, white, grey. No accent anywhere.
-//      All colour on this screen comes from the footage and the looks.
-//   3. Stroke means selection and nothing else: the light yellow picked ring
-//      (`pickedRing`) on the applied look. Everything else separates by
-//      surface value.
-//   4. The tile IS the preview — every tile is the real grade, including the
+// THE LANGUAGE (calm, with the colour back: mock v2, 07-grade-room)
+//   1. The image is the interface. Media full bleed at the top, edge to edge,
+//      rounded at the foot; every control lives in the drawer below it. Drawn
+//      on the frame: back, the wipe (a white line and a glass handle), the
+//      "Original" and look labels, and the transient states (the
+//      hold-to-compare peek, the eyedropper's prompt).
+//   2. Quiet chrome: black, glass, white and grey. The colour on this screen
+//      is the footage and the looks: each look's code and name wear the look's
+//      own colour (`LookNameText`, which follows the Names setting).
+//   3. Signal yellow only on the slider's needle and on Apply look, the one
+//      main action (`LumaMainPill`, which follows the Main buttons setting).
+//   4. Stroke means selection and nothing else: the pale yellow picked ring
+//      (`pickedRing`) on the applied look.
+//   5. The tile IS the preview — every tile is the real grade, including the
 //      Skin First presets and the ORIGINAL tile.
-//   5. Two-axis browsing — the current category centred, neighbours faded
-//      either side, swipeable, so the gesture teaches itself.
-//   6. Mono type is for NUMBERS ONLY. Percentages, resolutions, frame rates,
-//      durations. Every label is the system font in sentence case at 11–17pt.
-//      `TechReadout` appears nowhere on this screen: its forced uppercase and
-//      1.2pt kerning cannot look anything but timid at small size.
+//   6. Text tabs for categories: the picked one white on light glass, the
+//      rest grey.
 //   7. Prefer a live value over a glyph. Grain, Bloom, Halation, Vignette, Lens
-//      and Source all show their number — the number is the better icon, and it
-//      is live. Same voice as the camera drawer's value tools.
-//   8. A calm instruction bar: dismiss at one edge, the applied look and its
-//      strength stated in the middle, Apply at the other. Apply is the one
-//      place a filled button is still correct.
+//      and Source all show their number on a quiet tile.
+//   8. A calm bottom row: Cancel at one edge, the applied look in its colour in
+//      the middle, Apply look at the other.
 // =============================================================================
 
 /// Video preview with the live look applied, falling back to the painted
@@ -231,22 +232,26 @@ struct ApplyLookView: View {
     @State private var holdingOriginal = false
     @State private var eyedropping = false
     @State private var stashedIntensity: Double?
-    /// Where the diagonal wipe crosses mid-height, as a fraction of the
-    /// picture's width. Graded on the left, original on the right.
+    /// Where the straight wipe sits, as a fraction of the picture's width.
+    /// Original on the left, graded on the right.
     @State private var wipe: CGFloat = 0.5
 
-    /// Look tiles are portrait (4:5), like the mock: room for a face and the
-    /// look's code over it.
-    private static let tile: CGFloat = 70
-    private static let tileHeight: CGFloat = 88
-    private static let tileRadius: CGFloat = 12
+    /// Look tiles are portrait (4:5), like the mock: room for a face, with the
+    /// look's code and name under it.
+    private static let tile: CGFloat = 62
+    private static let tileHeight: CGFloat = 78
+    private static let tileRadius: CGFloat = 13
+    /// Thumb, the code line and the name line.
+    private static let stripHeight: CGFloat = 116
 
     // MARK: Categories — the second axis
 
     /// The library categories this screen browses, plus the Skin First shelf,
     /// which is a settings preset family rather than a library section.
+    /// Declared in tab order: the three the mock shows first, then the rest,
+    /// which scroll in from the right.
     enum GradeCategory: String, CaseIterable, Identifiable {
-        case looks, favourites, recents, skin, saved, purchased, imported
+        case looks, favourites, saved, recents, skin, purchased, imported
         var id: String { rawValue }
 
         var title: String {
@@ -255,7 +260,7 @@ struct ApplyLookView: View {
             case .favourites: return "Favourites"
             case .recents:    return "Recent"
             case .skin:       return "Skin first"
-            case .saved:      return "Your looks"
+            case .saved:      return "Mine"
             case .purchased:  return "Purchased"
             case .imported:   return "Imported"
             }
@@ -276,7 +281,6 @@ struct ApplyLookView: View {
     }
 
     private var categories: [GradeCategory] { GradeCategory.allCases }
-    private var categoryIndex: Int { categories.firstIndex(of: category) ?? 0 }
 
     /// The look tile the user last tapped in the strip, so the strip does
     /// not scroll after a tile that is already in front of them.
@@ -330,7 +334,7 @@ struct ApplyLookView: View {
     }
 
     /// Loads a technical metadata readout for the selected media:
-    /// `1920×1080 · 30 fps · 00:12` for video, `W×H · Still` for photos.
+    /// `1920 × 1080 · 30 fps · 00:12` for video, `W × H · still` for photos.
     private func loadMediaReadout() async {
         if let url = app.selectedVideoURL {
             let asset = AVURLAsset(url: url)
@@ -347,7 +351,7 @@ struct ApplyLookView: View {
             let w = Int(abs(rect.width).rounded())
             let h = Int(abs(rect.height).rounded())
 
-            var parts = ["\(w)×\(h)"]
+            var parts = ["\(w) × \(h)"]
             if fps > 0 {
                 let rounded = fps.rounded()
                 parts.append(abs(Double(fps) - Double(rounded)) < 0.01
@@ -363,7 +367,7 @@ struct ApplyLookView: View {
             videoAspect = h > 0 ? CGFloat(w) / CGFloat(h) : nil
         } else if let still = app.selectedImage {
             let extent = still.extent
-            mediaReadout = "\(Int(extent.width))×\(Int(extent.height)) · Still"
+            mediaReadout = "\(Int(extent.width)) × \(Int(extent.height)) · still"
             videoAspect = nil
         } else {
             mediaReadout = nil
@@ -448,9 +452,7 @@ struct ApplyLookView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
-                .background(LumaTheme.bar, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(LumaTheme.edge, lineWidth: 1))
+                .background(LumaTheme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 76)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -461,7 +463,7 @@ struct ApplyLookView: View {
         }
     }
 
-    // MARK: Media — full bleed, with the diagonal Graded / Original wipe
+    // MARK: Media — full bleed, with the straight Original / Graded wipe
 
     /// The still on stage at full size (the sample photo until media is
     /// picked); nil while a video plays.
@@ -479,6 +481,11 @@ struct ApplyLookView: View {
             ?? app.selectedLook.signature
     }
 
+    /// The picture's foot is rounded, like the mock's frame.
+    private static let frameShape = UnevenRoundedRectangle(
+        topLeadingRadius: 0, bottomLeadingRadius: 34,
+        bottomTrailingRadius: 34, topTrailingRadius: 0, style: .continuous)
+
     /// Edge to edge and up under the status bar. Drag across the picture to
     /// move the wipe, hold still to peek at the original, double tap to see
     /// the whole frame. The stage owns the eyedropper too, because it knows
@@ -490,9 +497,10 @@ struct ApplyLookView: View {
                        wipe: $wipe,
                        eyedropping: $eyedropping,
                        showsWipe: !holdingOriginal && app.settings.intensity > 0,
-                       code: LookCode.short(currentLookName),
+                       label: currentLookName,
                        signature: currentLookColour,
                        onHold: { pressing in peekOriginal(pressing) })
+            .clipShape(Self.frameShape)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: .top)
             .sensoryFeedback(.impact(weight: .light), trigger: holdingOriginal)
@@ -500,38 +508,37 @@ struct ApplyLookView: View {
             .animation(.easeOut(duration: 0.15), value: eyedropping)
     }
 
-    /// Back on the left, the applied look on the right, and the transient
-    /// "Original" badge between them while a peek is held.
+    /// Back on a glass circle, and the transient "Original" badge in the
+    /// middle while a peek is held. The look itself is labelled on the
+    /// picture and in the bottom row, so nothing else sits up here.
     private var topBar: some View {
-        HStack(spacing: 10) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(.black.opacity(0.45), in: Circle())
-                    .overlay(Circle().strokeBorder(LumaTheme.edge, lineWidth: 1))
-                    .contentShape(Circle())
+        ZStack {
+            HStack(spacing: 0) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .frame(width: 42, height: 42)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color(hex: 0x101114).opacity(0.58), in: Circle())
+                        .environment(\.colorScheme, .dark)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("Back")
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("Back")
-
-            Spacer(minLength: 0)
             if holdingOriginal {
                 Text("Original")
                     .font(.luma(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
-                    .lumaGlassPill()
+                    .modifier(StageGlassLabel())
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
-            Spacer(minLength: 0)
-
-            LookChip(name: currentLookName, colour: currentLookColour, size: 12)
-                .allowsHitTesting(false)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
     }
 
     /// Zeroes strength while held and restores it on release — one stash so a
@@ -596,22 +603,23 @@ struct ApplyLookView: View {
     private var drawer: some View {
         VStack(spacing: 0) {
             statusLine
-                .padding(.top, 12)
-                .padding(.bottom, 12)
+                .padding(.top, 14)
+                .padding(.bottom, 7)
             categoryBar
-                .padding(.bottom, 12)
+                .padding(.bottom, 14)
             tiles
-                .padding(.bottom, 12)
+                .padding(.bottom, 2)
             panelView
             toolRow
-                .padding(.bottom, showsEffectDial ? 6 : 12)
+                .padding(.bottom, 8)
             if showsEffectDial {
-                GradeRulerDial(title: activeTool, value: dialBinding)
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 12)
+                GradeOpacityRow(title: activeTool, value: dialBinding,
+                                format: { "\(Int($0.rounded()))" })
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
             }
             strengthRow
-                .padding(.bottom, 12)
+                .padding(.bottom, 4)
             instructionBar
         }
         .frame(maxWidth: .infinity)
@@ -620,94 +628,123 @@ struct ApplyLookView: View {
         .background { Color.black.ignoresSafeArea(edges: .bottom) }
     }
 
-    /// What the frame IS, in numbers, plus the two states that qualify it.
+    /// What the frame IS, in numbers, on the left; on the right, whether the
+    /// look is free or unlocks at export, plus the two states that qualify it.
     private var statusLine: some View {
         HStack(spacing: 10) {
-            if !hasRealMedia {
-                Text("Sample photo. Pick a clip to grade your own")
-                    .font(.luma(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            } else if let mediaReadout {
-                Text(mediaReadout)
-                    .font(.luma(size: 11.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
+            Group {
+                if !hasRealMedia {
+                    Text("Sample photo. Pick a clip to grade your own")
+                } else if let mediaReadout {
+                    Text(mediaReadout)
+                        .monospacedDigit()
+                }
             }
+            .font(.luma(size: 12, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.42))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+
             Spacer(minLength: 0)
-            if !app.batchItems.isEmpty {
-                HStack(spacing: 4) {
-                    Text("\(app.batchItems.count)")
-                        .font(.luma(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text("clips queued")
+
+            HStack(spacing: 10) {
+                if !app.batchItems.isEmpty {
+                    Text("\(app.batchItems.count) clips queued")
                         .font(.luma(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.6))
                 }
-            }
-            if app.selectedLUT?.isLogTarget == true {
-                Button { showLogExplainer = true } label: {
-                    HStack(spacing: 5) {
-                        Circle().fill(.white.opacity(0.85)).frame(width: 5, height: 5)
-                        Text("Log LUT")
-                            .font(.luma(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
+                if app.selectedLUT?.isLogTarget == true {
+                    Button { showLogExplainer = true } label: {
+                        HStack(spacing: 5) {
+                            Circle().fill(.white.opacity(0.85)).frame(width: 5, height: 5)
+                            Text("Log LUT")
+                                .font(.luma(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.lumaPress)
                 }
-                .buttonStyle(.lumaPress)
+                if let access = lookAccessLine {
+                    Text(access)
+                        .font(.luma(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.42))
+                }
             }
+            .lineLimit(1)
+            .layoutPriority(1)
         }
         // Fixed so the drawer does not jump when the readout finishes loading.
         .frame(height: 16)
         .padding(.horizontal, 20)
     }
 
-    /// The current category centred, its neighbours faded either side — the
-    /// gesture teaches itself because you can see what you would swipe to.
-    private var categoryBar: some View {
-        HStack(spacing: 0) {
-            categoryLabel(at: categoryIndex - 1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(category.title)
-                .font(.luma(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .fixedSize()
-            categoryLabel(at: categoryIndex + 1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+    /// "Free look", or the pack that opens a premium look and the fact that
+    /// it only asks at export ("After Dark · unlocks at export"). Nothing for
+    /// the Original or a LUT file, which are always the user's own.
+    private var lookAccessLine: String? {
+        guard app.settings.intensity > 0 || holdingOriginal else { return nil }
+        if let lock = app.lockedLookInGrade(storeService) {
+            return "\(Self.unlockName(for: lock)) · unlocks at export"
         }
-        .padding(.horizontal, 20)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    let delta = value.translation.width < 0 ? 1 : -1
-                    stepCategory(to: categoryIndex + delta)
-                }
-        )
+        if holdingOriginal, app.selectedLUT == nil,
+           let lock = storeService.lock(forBuiltIn: app.selectedLook) {
+            return "\(Self.unlockName(for: lock)) · unlocks at export"
+        }
+        return app.selectedLUT == nil ? "Free look" : nil
     }
 
-    private func stepCategory(to index: Int) {
-        guard categories.indices.contains(index) else { return }
-        withAnimation(.snappy(duration: 0.22)) { category = categories[index] }
-        LumaHaptics.shared.tap()
-    }
-
-    @ViewBuilder
-    private func categoryLabel(at index: Int) -> some View {
-        if categories.indices.contains(index) {
-            Button { stepCategory(to: index) } label: {
-                Text(categories[index].title)
-                    .font(.luma(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-                    .contentShape(Rectangle())
+    /// The pack that opens a locked look: the pack it names, the pack being
+    /// tried on, else the Pro pack that carries a look of the same name
+    /// (After Dark for Neon Nights), else Pro itself.
+    private static func unlockName(for lock: LookLock) -> String {
+        if let pack = lock.pack { return pack.name }
+        if let id = lock.previewPackID, let pack = PackCatalog.pack(id: id) { return pack.name }
+        let title = lock.lookName.components(separatedBy: " · ").last ?? lock.lookName
+        let proPack = PackCatalog.packs.first { pack in
+            pack.isProIncluded && pack.looks.contains { look in
+                (look.name.components(separatedBy: " · ").last ?? look.name) == title
             }
-            .buttonStyle(.lumaPress)
-        } else {
-            Color.clear.frame(height: 1)
         }
+        return proPack?.name ?? "Pro"
+    }
+
+    /// Text tabs: the picked category white on light glass, the rest grey.
+    /// All looks, Favourites and Mine lead; the rest scroll in.
+    private var categoryBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(categories) { item in
+                    categoryTab(item)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(height: 28)
+    }
+
+    private func categoryTab(_ item: GradeCategory) -> some View {
+        let on = item == category
+        return Button { pickCategory(item) } label: {
+            Text(item.title)
+                .font(.luma(size: 12.5, weight: .semibold))
+                .foregroundStyle(on ? Color.white : Color.white.opacity(0.5))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+                .background(on ? Color.white.opacity(0.13) : Color.clear, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func pickCategory(_ item: GradeCategory) {
+        guard item != category else { return }
+        withAnimation(.snappy(duration: 0.22)) { category = item }
+        LumaHaptics.shared.tap()
     }
 
     // MARK: Tiles — every one of them is the real grade
@@ -755,7 +792,7 @@ struct ApplyLookView: View {
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(new, anchor: .center) }
             }
             // Fixed so the drawer never jumps as categories change.
-            .frame(height: Self.tileHeight + 26)
+            .frame(height: Self.stripHeight)
         }
     }
 
@@ -773,13 +810,29 @@ struct ApplyLookView: View {
             .pickedRing(selected, cornerRadius: Self.tileRadius)
     }
 
-    private func tileCaption(_ text: String, selected: Bool) -> some View {
+    /// The two lines under a tile: the code (a look's in its own colour) and
+    /// the name in grey, brighter on the picked tile.
+    private func tileCaption<Code: View>(name: String, selected: Bool,
+                                         @ViewBuilder code: () -> Code) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            code()
+                .frame(height: 14)
+            Text(name)
+                .font(.luma(size: 10.5, weight: .medium))
+                .foregroundStyle(selected ? Color.white.opacity(0.7) : LumaTheme.textMuted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(width: Self.tile, alignment: .leading)
+    }
+
+    /// A white code line, for the tiles that are not a look.
+    private func plainCode(_ text: String) -> some View {
         Text(text)
-            .font(.luma(size: 11.5, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? LumaTheme.textPrimary : LumaTheme.textMuted)
+            .font(.luma(size: 11, weight: .bold))
+            .foregroundStyle(Color.white.opacity(0.9))
             .lineLimit(1)
-            .minimumScaleFactor(0.82)
-            .frame(width: Self.tile)
+            .minimumScaleFactor(0.8)
     }
 
     /// Tap latches the grade off and tapping again brings the old strength
@@ -798,7 +851,7 @@ struct ApplyLookView: View {
                 }
             }
         } label: {
-            VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 7) {
                 tileFrame(selected: active || holdingOriginal) {
                     Group {
                         if let originalThumb {
@@ -810,7 +863,9 @@ struct ApplyLookView: View {
                         }
                     }
                 }
-                tileCaption("Original", selected: active)
+                tileCaption(name: active ? "Look off" : "No look", selected: active) {
+                    plainCode("Original")
+                }
             }
         }
         .buttonStyle(.lumaPress)
@@ -830,15 +885,13 @@ struct ApplyLookView: View {
             }
             LumaHaptics.shared.tap()
         } label: {
-            VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 7) {
                 tileFrame(selected: selected) {
                     // Color.clear holds the tile's size, so the fill image
-                    // and the shade both sit inside it.
+                    // sits inside it.
                     Color.clear
                         .overlay { lookThumb(look) }
-                        .overlay { tileShade }
                 }
-                .overlay(alignment: .bottomLeading) { tileCode(look) }
                 .overlay(alignment: .topLeading) {
                     if let badge = sourceBadge(look) {
                         Text(badge)
@@ -854,10 +907,15 @@ struct ApplyLookView: View {
                 .overlay(alignment: .topTrailing) {
                     if storeService.isLocked(look) { LookLockGlyph(compact: true) }
                 }
-                tileCaption(look.nameSplit.title, selected: selected)
+                tileCaption(name: look.nameSplit.title, selected: selected) {
+                    LookNameText(LookCode.short(look), colour: look.signature,
+                                 size: 11, weight: .bold)
+                }
             }
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(look.name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -869,28 +927,6 @@ struct ApplyLookView: View {
         } else {
             LumaTheme.surfaceStrong
         }
-    }
-
-    /// Darkens the foot of a tile so its code reads on any frame.
-    private var tileShade: some View {
-        LinearGradient(colors: [.clear, .black.opacity(0.7)],
-                       startPoint: .center, endPoint: .bottom)
-            .allowsHitTesting(false)
-    }
-
-    /// The look's code, big, in its signature colour ("KD2", "Neon").
-    private func tileCode(_ look: LibraryLook) -> some View {
-        Text(LookCode.short(look))
-            .font(.luma(size: 16, weight: .heavy))
-            .kerning(-0.4)
-            .foregroundStyle(look.signature)
-            .lineLimit(1)
-            .minimumScaleFactor(0.55)
-            .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 5)
-            .frame(width: Self.tile, alignment: .leading)
-            .allowsHitTesting(false)
     }
 
     private func sourceBadge(_ look: LibraryLook) -> String? {
@@ -913,7 +949,7 @@ struct ApplyLookView: View {
             }
             LumaHaptics.shared.tap()
         } label: {
-            VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 7) {
                 tileFrame(selected: selected) {
                     Group {
                         if let cg = skinThumbs[preset.rawValue] {
@@ -925,7 +961,9 @@ struct ApplyLookView: View {
                         }
                     }
                 }
-                tileCaption(preset.name, selected: selected)
+                tileCaption(name: "Skin first", selected: selected) {
+                    plainCode(preset.name)
+                }
             }
         }
         .buttonStyle(.lumaPress)
@@ -937,16 +975,18 @@ struct ApplyLookView: View {
             showLookBrowser = true
             LumaHaptics.shared.tap()
         } label: {
-            VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 7) {
                 tileFrame(selected: false) {
-                    LumaTheme.surface
+                    Color.white.opacity(0.055)
                         .overlay {
                             Image(systemName: "square.grid.3x3")
-                                .font(.system(size: 20, weight: .medium))
+                                .font(.system(size: 18, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
                 }
-                tileCaption("All looks", selected: false)
+                tileCaption(name: "\(app.library.all.count) looks", selected: false) {
+                    plainCode("All looks")
+                }
             }
         }
         .buttonStyle(.lumaPress)
@@ -964,25 +1004,35 @@ struct ApplyLookView: View {
         }
     }
 
-    // MARK: Tool row — the number is the better icon, and it is live
+    // MARK: Tool row — five quiet tiles first, the number is the better icon
 
     private var toolRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            HStack(spacing: 8) {
                 valueTool(amount(app.settings.grain), "Grain",
-                          on: app.settings.grain > 0) { selectDial("Grain") }
+                          on: app.settings.grain > 0,
+                          picked: activeTool == "Grain") { selectDial("Grain") }
                 valueTool(amount(app.settings.bloom), "Bloom",
-                          on: app.settings.bloom > 0) { selectDial("Bloom") }
+                          on: app.settings.bloom > 0,
+                          picked: activeTool == "Bloom") { selectDial("Bloom") }
                 valueTool(amount(app.settings.halation), "Halation",
-                          on: app.settings.halation > 0) { selectDial("Halation") }
+                          on: app.settings.halation > 0,
+                          picked: activeTool == "Halation") { selectDial("Halation") }
                 valueTool(amount(app.settings.vignette), "Vignette",
-                          on: app.settings.vignette > 0) { selectDial("Vignette") }
-                valueTool(lensValue, "Lens", on: activeLens != .none) {
-                    activeTool = "Lens"
-                    panel = panel == .lens ? .none : .lens
+                          on: app.settings.vignette > 0,
+                          picked: activeTool == "Vignette") { selectDial("Vignette") }
+                valueTool(lensValue, "Lens", on: activeLens != .none,
+                          picked: activeTool == "Lens") {
+                    if activeTool == "Lens", panel == .lens {
+                        activeTool = "Opacity"
+                        panel = .none
+                    } else {
+                        activeTool = "Lens"
+                        panel = .lens
+                    }
                     LumaHaptics.shared.tap()
                 }
-                valueTool(sourceValue, "Source", on: hasConversion) {
+                valueTool(sourceValue, "Source", on: hasConversion, picked: false) {
                     showConversionPicker = true
                     LumaHaptics.shared.tap()
                 }
@@ -1028,63 +1078,78 @@ struct ApplyLookView: View {
                     app.path.append(.customLook)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 1)
         }
-        .lumaEdgeFade(leading: 16, trailing: 16)
+        .lumaEdgeFade(leading: 20, trailing: 20)
     }
 
+    /// A little more air between the value tiles and the action tiles; no
+    /// rule, because nothing on this screen is outlined.
     private var toolDivider: some View {
-        Rectangle()
-            .fill(.white.opacity(0.12))
-            .frame(width: 1, height: 26)
-            .padding(.horizontal, 6)
+        Color.clear.frame(width: 4, height: 46)
     }
 
-    /// A live value in mono, its name beneath in plain sentence case. Weight and
-    /// contrast do the work that tracked caps at 42% white could not.
-    private func valueTool(_ value: String, _ label: String, on: Bool,
+    private static let toolWidth: CGFloat = 66
+    private static let toolHeight: CGFloat = 46
+    private static let toolRadius: CGFloat = 13
+
+    /// A quiet glass tile: the live value, its name beneath in small caps.
+    /// A tool that is doing something reads brighter; the one on the slider
+    /// sits on lighter glass.
+    private func valueTool(_ value: String, _ label: String, on: Bool, picked: Bool,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 Text(value)
-                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
-                    .foregroundStyle(on ? .white : .white.opacity(0.82))
+                    .font(.luma(size: 14, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(on || picked ? Color.white : Color.white.opacity(0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(label)
-                    .font(.luma(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                toolLabel(label, on: on || picked)
             }
-            .frame(width: 68, height: 46)
-            .contentShape(Rectangle())
+            .frame(width: Self.toolWidth, height: Self.toolHeight)
+            .background(Color.white.opacity(picked ? 0.12 : 0.055),
+                        in: RoundedRectangle(cornerRadius: Self.toolRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.toolRadius, style: .continuous))
         }
         .buttonStyle(.lumaPress)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+        .accessibilityAddTraits(picked ? .isSelected : [])
     }
 
-    /// No box, no chip, no pill — separation is by value alone. An engaged tool
-    /// is simply brighter than a resting one.
+    /// The same quiet tile with a glyph where the value would be.
     private func tool(_ symbol: String, _ label: String, on: Bool,
                       enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 5) {
+            VStack(spacing: 3) {
                 Image(systemName: symbol)
-                    .font(.system(size: 17, weight: .regular))
-                    .frame(height: 20)
-                Text(label)
-                    .font(.luma(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(on ? 0.7 : 0.45))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(on ? Color.white : Color.white.opacity(0.8))
+                    .frame(height: 18)
+                toolLabel(label, on: on)
             }
-            .foregroundStyle(on ? .white : .white.opacity(0.5))
-            .frame(width: 68, height: 46)
-            .contentShape(Rectangle())
+            .frame(width: Self.toolWidth, height: Self.toolHeight)
+            .background(Color.white.opacity(on ? 0.12 : 0.055),
+                        in: RoundedRectangle(cornerRadius: Self.toolRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.toolRadius, style: .continuous))
         }
         .buttonStyle(.lumaPress)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.3)
+        .accessibilityLabel(label)
+    }
+
+    private func toolLabel(_ text: String, on: Bool) -> some View {
+        Text(text.uppercased())
+            .font(.luma(size: 10, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(Color.white.opacity(on ? 0.7 : 0.42))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 3)
     }
 
     private func amount(_ value: Double) -> String { "\(Int(value.rounded()))" }
@@ -1108,8 +1173,10 @@ struct ApplyLookView: View {
         return "None"
     }
 
+    /// Puts a tool on the shared slider; tapping the same tile again puts
+    /// it away and leaves the Strength slider on its own.
     private func selectDial(_ tool: String) {
-        activeTool = tool
+        activeTool = activeTool == tool ? "Opacity" : tool
         if panel == .lens { panel = .none }
         LumaHaptics.shared.tap()
     }
@@ -1138,7 +1205,6 @@ struct ApplyLookView: View {
 
     private var strengthRow: some View {
         GradeOpacityRow(title: "Strength", value: $app.settings.intensity)
-            .padding(.horizontal, 18)
     }
 
     // MARK: Instruction bar — dismiss, the statement, Apply
@@ -1168,18 +1234,17 @@ struct ApplyLookView: View {
         LumaHaptics.shared.tap()
     }
 
+    /// Cancel, the applied look in its own colour, and Apply look: the one
+    /// main action, so it is the one place signal yellow (or the quiet white
+    /// the person picked) appears in the drawer.
     private var instructionBar: some View {
-        let name = app.selectedLUT?.displayName ?? app.selectedLook.name
-        let colour = app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
-            ?? app.selectedLook.signature
         let strength = Int(app.settings.intensity.rounded())
         return HStack(spacing: 10) {
             Button { dismiss() } label: {
                 Text("Cancel")
                     .font(.luma(size: 15, weight: .medium))
-                    .foregroundStyle(LumaTheme.textSecondary)
+                    .foregroundStyle(Color.white.opacity(0.7))
                     .frame(height: 44)
-                    .padding(.horizontal, 6)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.lumaPress)
@@ -1189,10 +1254,10 @@ struct ApplyLookView: View {
             Group {
                 if strength == 0 {
                     Text("Original")
-                        .font(.luma(size: 14, weight: .medium))
+                        .font(.luma(size: 13, weight: .medium))
                         .foregroundStyle(LumaTheme.textMuted)
                 } else {
-                    LookChip(name: name, colour: colour, size: 12)
+                    LookNameText(currentLookName, colour: currentLookColour, size: 13)
                 }
             }
             .lineLimit(1)
@@ -1201,24 +1266,15 @@ struct ApplyLookView: View {
 
             applyButton
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 20)
         .padding(.bottom, 6)
     }
 
-    /// The one filled button on the screen. Apply is never disabled: the
+    /// The one main action on the screen. Apply is never disabled: the
     /// current look at the current strength is always a valid answer.
     private var applyButton: some View {
-        Button { applyAndAdvance() } label: {
-            Text("Apply look")
-                .font(.luma(size: 15, weight: .semibold))
-                .foregroundStyle(LumaTheme.onLight)
-                .padding(.horizontal, 18)
-                .frame(height: 42)
-                .background(LumaTheme.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Apply this look and compare")
+        LumaMainPill(title: "Apply look", height: 36) { applyAndAdvance() }
+            .accessibilityLabel("Apply this look and compare")
     }
 
     /// With no media the forward move is the picker, not a disabled button.
@@ -1270,19 +1326,14 @@ extension ApplyLookView {
         } label: {
             VStack(spacing: 7) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LumaTheme.surface)
+                    .fill(Color.white.opacity(selected ? 0.12 : 0.055))
                     .frame(width: 68, height: 50)
                     .overlay {
                         Image(systemName: lens.icon)
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(selected ? .white : .white.opacity(0.6))
                     }
-                    .overlay {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.white, lineWidth: 2)
-                        }
-                    }
+                    .pickedRing(selected, cornerRadius: 12)
                     .overlay(alignment: .topTrailing) {
                         if locked {
                             Image(systemName: "lock.fill")
@@ -1618,89 +1669,6 @@ private struct GradeSlotRow: View {
     }
 }
 
-// MARK: - Ruler dial
-
-/// Precision dial in the monochrome voice: a tick ruler slides under a fixed
-/// centre indicator, every 5-unit detent ticks. The name is a name; only the
-/// value is mono. Range matches the engine exactly (0…100 → /100), so there is
-/// no dead travel at either end.
-private struct GradeRulerDial: View {
-    let title: String
-    @Binding var value: Double
-    var range: ClosedRange<Double> = 0...100
-
-    @State private var dragStartValue: Double?
-    private let pointsPerUnit: CGFloat = 4.5
-    private var detent: Int { Int(value / 5) }
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.luma(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text("\(Int(value.rounded()))")
-                    .font(.luma(size: 15, weight: .medium, design: .monospaced))
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.15), value: Int(value))
-                    .foregroundStyle(.white)
-            }
-            ZStack {
-                ruler
-                Capsule()
-                    .fill(LumaTheme.signal)
-                    .frame(width: 2.5, height: 22)
-                    .shadow(color: LumaTheme.signal.opacity(0.7), radius: 5)
-            }
-            .frame(height: 30)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { drag in
-                        if dragStartValue == nil { dragStartValue = value }
-                        let delta = Double(-drag.translation.width / pointsPerUnit)
-                        value = min(max(range.lowerBound, (dragStartValue ?? value) + delta),
-                                    range.upperBound)
-                    }
-                    .onEnded { _ in dragStartValue = nil }
-            )
-            .sensoryFeedback(.selection, trigger: detent)
-        }
-        .accessibilityElement()
-        .accessibilityLabel(title)
-        .accessibilityValue("\(Int(value.rounded()))")
-        .accessibilityAdjustableAction { direction in
-            let step: Double = direction == .increment ? 5 : -5
-            value = min(max(range.lowerBound, value + step), range.upperBound)
-        }
-    }
-
-    /// Tick ruler that slides with the value: major tick every 10 units, minor
-    /// every 2, fading at the edges.
-    private var ruler: some View {
-        Canvas { context, size in
-            let centerX = size.width / 2
-            let unitsVisible = size.width / pointsPerUnit
-            let first = max(range.lowerBound, value - Double(unitsVisible / 2) - 2)
-            let last = min(range.upperBound, value + Double(unitsVisible / 2) + 2)
-            var unit = (first / 2).rounded(.down) * 2
-            while unit <= last {
-                let x = centerX + CGFloat(unit - value) * pointsPerUnit
-                let isMajor = Int(unit) % 10 == 0
-                let height: CGFloat = isMajor ? 16 : 8
-                let edgeFade = 1 - abs(x - centerX) / centerX
-                context.fill(
-                    Path(CGRect(x: x - 0.5, y: (size.height - height) / 2,
-                                width: 1, height: height)),
-                    with: .color(.white.opacity((isMajor ? 0.5 : 0.22) * Double(edgeFade)))
-                )
-                unit += 2
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
 // MARK: - Shared pieces
 
 /// Painted-swatch thumbnail cell. Kept for surfaces that have no real graded
@@ -1751,35 +1719,39 @@ struct LookThumbCell: View {
 
 /// The pinned strength row. Shared by the grade room and the compare screen so
 /// the control that decides how strong a look is looks and feels identical in
-/// both: the name and the value on one line, the ruler beneath, its needle in
-/// the look's signature colour.
+/// both. As the Sliders setting says: a "Strength 75%" line over the straight
+/// ruler, or the curved dial, which draws its own title and big value (so the
+/// line is hidden). The needle is signal yellow, the only yellow on the
+/// screen besides the main action. Full width; the line insets itself.
 struct GradeOpacityRow: View {
-    @EnvironmentObject private var app: AppModel
     var title: String = "Strength"
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...100
+    var format: (Double) -> String = { "\(Int($0.rounded()))%" }
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
 
-    private var needle: Color {
-        if let lut = app.selectedLUT { return LookSignature.colour(name: lut.displayName) }
-        return app.selectedLook.signature
+    private var isDial: Bool {
+        (LumaSliderStyle(rawValue: sliderRaw) ?? .ruler) == .dial
     }
 
     var body: some View {
-        VStack(spacing: 2) {
-            HStack {
-                Text(title)
-                    .font(.luma(size: 13, weight: .medium))
-                    .foregroundStyle(LumaTheme.textSecondary)
-                Spacer(minLength: 0)
-                Text("\(Int(value.rounded()))%")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.15), value: Int(value))
-                    .foregroundStyle(LumaTheme.textPrimary)
+        VStack(spacing: 6) {
+            if !isDial {
+                HStack {
+                    Text(title)
+                        .font(.luma(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                    Spacer(minLength: 0)
+                    Text(format(value))
+                        .font(.luma(size: 13, weight: .bold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.snappy(duration: 0.15), value: Int(value))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                }
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 4)
-            LumaStrengthRuler(value: $value, range: range, needle: needle)
+            LumaValueSlider(value: $value, range: range, title: title, format: format)
         }
     }
 }

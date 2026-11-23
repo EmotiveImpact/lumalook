@@ -29,7 +29,7 @@ struct LUTCompareView: View {
                     .font(.luma(size: 17, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
                 Button("Done") { dismiss() }
-                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.accentBright)
+                    .font(.luma(.footnote, weight: .semibold)).foregroundStyle(LumaTheme.textPrimary)
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -73,10 +73,18 @@ struct LUTCompareView: View {
                                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 // The live candidate wears the picked ring.
                                 .pickedRing(isCurrent, cornerRadius: 14)
-                                Text(candidate?.file.displayName ?? "Original")
-                                    .font(.luma(size: 12, weight: isCurrent ? .semibold : .regular))
-                                    .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)
-                                    .lineLimit(1)
+                                // Each LUT's name in its own colour;
+                                // Original stays quiet white.
+                                if let file = candidate?.file {
+                                    LookNameText(file.displayName,
+                                                 colour: LookSignature.colour(name: file.displayName),
+                                                 size: 12, weight: isCurrent ? .semibold : .medium)
+                                } else {
+                                    Text("Original")
+                                        .font(.luma(size: 12, weight: isCurrent ? .semibold : .medium))
+                                        .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)
+                                        .lineLimit(1)
+                                }
                             }
                         }
                         .buttonStyle(.lumaPress)
