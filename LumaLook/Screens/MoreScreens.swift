@@ -2566,12 +2566,13 @@ struct AudioView: View {
 
 // MARK: - 16 Settings / Subscription
 
-/// Settings in the shipping design language. There is no picture to lead with
-/// here, so the language shows up as everything else: monochrome chrome, a
-/// plain Title-Case header, sentence-case rows, and mono reserved strictly for
-/// the numbers — the LUT count, the bytes on disk, the export resolution and
-/// the version. Every legally-required row stays exactly where it was. The
-/// subscription card leads: it is the one thing on this screen that earns.
+/// The You tab, in the calm design (calm mock v2, 04-you.jpg): your plan in
+/// one card, then short groups of quiet glass rows with no outlines.
+/// Preferences leads with Appearance, which shows what is picked
+/// ("Colour · Ruler") and pushes You › Appearance. Get Pro lives once, in
+/// the top bar; the card offers "See what Pro adds" quietly, and Restore
+/// moves into the card so Purchases is no longer a group of one. Every
+/// legally required row (Privacy Policy, Terms of Use) stays.
 struct SettingsSubscriptionView: View {
     var isRoot: Bool = false
     @EnvironmentObject private var app: AppModel
@@ -2587,20 +2588,26 @@ struct SettingsSubscriptionView: View {
     @State private var showStorageDetail = false
     @State private var lutBytes: Int64 = 0
     /// Restore is a network round-trip that usually ends in "nothing to
-    /// restore" — it has to say so, or the row reads as dead.
+    /// restore", so it has to say so, or the pill reads as dead.
     @State private var restoring = false
     @State private var restoreResult: String?
-    /// Shown when no mail client can take the mailto: — otherwise the only
+    /// Shown when no mail client can take the mailto:, otherwise the only
     /// support path in the app dead-ends silently.
     @State private var showSupportFallback = false
-    /// Same store the export spec sheet reads on appear — changing it here
+    /// "Yearly · renews 21 November 2027", read from StoreKit while Pro.
+    @State private var planDetail: String?
+    @State private var planIsLifetime = false
+    /// Same store the export spec sheet reads on appear, so changing it here
     /// really changes the default the exporter uses.
     @AppStorage("lumalook.exportSpec") private var storedSpec = ExportSpec().rawValue
+    /// The Appearance row's value follows the choices live.
+    @AppStorage(LumaAppearance.sliderKey) private var sliderRaw = LumaSliderStyle.ruler.rawValue
+    @AppStorage(LumaAppearance.namesKey) private var namesRaw = LumaNameStyle.colour.rawValue
 
     var body: some View {
         ZStack {
             // The You tab sits on the page's ink like every other tab.
-            (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
+            LumaTheme.background.ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
                     // The tab's one row: You, then Pro and You (lit here).
@@ -2621,16 +2628,16 @@ struct SettingsSubscriptionView: View {
         }
         .sheet(isPresented: $showExportQuality) {
             exportQualitySheet
-                // Three 52pt rows plus the header measure ~271pt at default
-                // type and more at larger sizes, so the sheet is medium and the
+                // Three rows plus the header measure more than a third of the
+                // screen at larger type, so the sheet is medium and the
                 // content scrolls rather than clipping the last resolution.
                 .presentationDetents([.medium])
-                .presentationBackground(Color.black)
+                .presentationBackground(LumaTheme.ink)
         }
         .sheet(isPresented: $showAbout) {
             aboutSheet
                 .presentationDetents([.medium])
-                .presentationBackground(Color.black)
+                .presentationBackground(LumaTheme.ink)
         }
         .sheet(isPresented: $showPhotoCredits) {
             PhotoCreditsSheet()
@@ -2638,8 +2645,8 @@ struct SettingsSubscriptionView: View {
                 .presentationBackground(LumaTheme.ink)
         }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
-        // Every restore says what happened — success, nothing found, or error.
-        .alert("Restore Purchases", isPresented: Binding(
+        // Every restore says what happened: success, nothing found, or error.
+        .alert("Restore purchases", isPresented: Binding(
             get: { restoreResult != nil },
             set: { if !$0 { restoreResult = nil } })) {
             Button("OK", role: .cancel) { restoreResult = nil }
@@ -2647,9 +2654,9 @@ struct SettingsSubscriptionView: View {
             Text(restoreResult ?? "")
         }
         // Fallback when no mail client can take the mailto:.
-        .confirmationDialog("Help & Support", isPresented: $showSupportFallback,
+        .confirmationDialog("Help and support", isPresented: $showSupportFallback,
                             titleVisibility: .visible) {
-            Button("Copy Email Address") {
+            Button("Copy email address") {
                 UIPasteboard.general.string = Self.supportAddress
             }
             Button("Done", role: .cancel) { }
@@ -2657,7 +2664,7 @@ struct SettingsSubscriptionView: View {
             Text("No mail app is set up on this device. Email \(Self.supportAddress) from anywhere and we'll answer.")
         }
         // The row leaves the app, so it says so before it does.
-        .confirmationDialog("App Language", isPresented: $showLanguageNotice,
+        .confirmationDialog("App language", isPresented: $showLanguageNotice,
                             titleVisibility: .visible) {
             Button("Open iOS Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -2668,18 +2675,21 @@ struct SettingsSubscriptionView: View {
         } message: {
             Text("iOS keeps per-app language under Settings › Lumalook. This will leave Lumalook.")
         }
-        // Plain facts about what the LUT library costs on disk — no "clean up"
+        // Plain facts about what the LUT library costs on disk. No "clean up"
         // button, because every byte here is a look the user chose to keep and
         // deleting them belongs in LUT Manager where they can see what goes.
         .confirmationDialog("Storage", isPresented: $showStorageDetail,
                             titleVisibility: .visible) {
-            Button("Manage Imported LUTs") { app.path.append(.lutManager) }
+            Button("Manage imported LUTs") { app.path.append(.lutManager) }
             Button("Done", role: .cancel) { }
         } message: {
             Text("\(app.lutRepository.luts.count) LUTs using \(lutStorageDescription) in Lumalook's documents folder. Removing a LUT frees its space immediately.")
         }
         .task {
             lutBytes = await Self.directorySize(of: app.lutRepository.lutFolderURL)
+        }
+        .task(id: storeService.isPro) {
+            await loadPlanDetail()
         }
         .onAppear {
             #if DEBUG
@@ -2690,27 +2700,22 @@ struct SettingsSubscriptionView: View {
         }
     }
 
+    /// Only when You is pushed rather than shown as the tab (the root view
+    /// normally turns a pushed You into a tab switch).
     private var header: some View {
         ZStack {
-            Text("Settings")
+            Text("You")
                 .font(.luma(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .tracking(-0.25)
+                .foregroundStyle(LumaTheme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             HStack {
-                if !isRoot {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+                SettingsBackCircle { dismiss() }
                 Spacer()
             }
         }
         .frame(height: 44)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 6)
     }
 
@@ -2718,7 +2723,7 @@ struct SettingsSubscriptionView: View {
         ByteCountFormatter.string(fromByteCount: lutBytes, countStyle: .file)
     }
 
-    /// Off the main actor — enumerating the LUT folder touches the filesystem.
+    /// Off the main actor: enumerating the LUT folder touches the filesystem.
     private static func directorySize(of url: URL) async -> Int64 {
         await Task.detached(priority: .utility) {
             guard let files = FileManager.default.enumerator(
@@ -2732,164 +2737,350 @@ struct SettingsSubscriptionView: View {
         }.value
     }
 
-    /// NATIVE inset-grouped List (Apple-native tranche 2).
+    // MARK: The page
+
     private var settingsList: some View {
         ScrollViewReader { proxy in
-            settingsRows
-                // The top bar's Pro badge, tapped while already here.
-                .onReceive(NotificationCenter.default.publisher(for: .lumaShowPlan)) { _ in
-                    withAnimation(.snappy(duration: 0.3)) {
-                        proxy.scrollTo(Self.planRowID, anchor: .top)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    planCard
+                        .id(Self.planRowID)
+                        .padding(.top, 8)
+                    groupLabel("Preferences")
+                    preferencesGroup
+                    groupLabel("Storage")
+                    storageGroup
+                    groupLabel("About")
+                    aboutGroup
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
+            }
+            // The top bar's Pro badge, tapped while already here.
+            .onReceive(NotificationCenter.default.publisher(for: .lumaShowPlan)) { _ in
+                withAnimation(.snappy(duration: 0.3)) {
+                    proxy.scrollTo(Self.planRowID, anchor: .top)
+                }
+            }
         }
     }
 
     private static let planRowID = "plan"
 
-    private var settingsRows: some View {
-        List {
-            Section {
-                subscriptionCard
-                    .listRowBackground(LumaTheme.card)
-                    .id(Self.planRowID)
-            }
+    private func groupLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.luma(size: 13, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.45))
+            .padding(.leading, 16)
+            .padding(.top, 24)
+            .padding(.bottom, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
 
-            Section("Purchases") {
-                // Only shown when there is a subscription to manage — while
-                // free, "Get Pro" in the card above is the single purchase CTA
-                // and a second row to the same paywall is just a decoy.
-                if storeService.isPro {
-                    settingsRow(icon: "creditcard", title: "Manage Subscription",
-                                value: "Pro") {
+    private var appearanceSummary: String {
+        LumaAppearance.summary(names: LumaNameStyle(rawValue: namesRaw) ?? .colour,
+                               slider: LumaSliderStyle(rawValue: sliderRaw) ?? .ruler)
+    }
+
+    private var languageName: String {
+        Locale.current.localizedString(
+            forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en")
+            ?? "English"
+    }
+
+    private var preferencesGroup: some View {
+        SettingsRowGroup {
+            settingsRow(icon: "paintpalette", title: "Appearance",
+                        value: appearanceSummary) {
+                app.path.append(.appearance)
+            }
+            SettingsRowDivider()
+            settingsRow(icon: "4k.tv", title: "Export quality",
+                        value: ExportSpec.from(rawValue: storedSpec).resolution.rawValue) {
+                showExportQuality = true
+            }
+            SettingsRowDivider()
+            settingsRow(icon: "globe", title: "App language",
+                        value: languageName, opensExternally: true) {
+                // Per-app language lives in iOS Settings: confirm first,
+                // because unlike Export quality this leaves the app.
+                showLanguageNotice = true
+            }
+        }
+    }
+
+    private var storageGroup: some View {
+        SettingsRowGroup {
+            settingsRow(icon: "cube", title: "Imported LUTs",
+                        value: "\(app.lutRepository.luts.count)") {
+                app.path.append(.lutManager)
+            }
+            SettingsRowDivider()
+            settingsRow(icon: "internaldrive", title: "Storage used",
+                        value: lutStorageDescription) {
+                showStorageDetail = true
+            }
+        }
+    }
+
+    private var aboutGroup: some View {
+        SettingsRowGroup {
+            settingsRow(icon: "questionmark.circle", title: "Help and support",
+                        opensExternally: true) {
+                openSupportMail()
+            }
+            SettingsRowDivider()
+            settingsRow(icon: "star", title: "Rate Lumalook",
+                        opensExternally: true) {
+                requestReview()
+            }
+            SettingsRowDivider()
+            legalRows
+            SettingsRowDivider()
+            settingsRow(icon: "photo", title: "Photo credits") {
+                showPhotoCredits = true
+            }
+            SettingsRowDivider()
+            settingsRow(icon: "info.circle", title: "About Lumalook",
+                        value: "v\(Self.appVersion)") {
+                showAbout = true
+            }
+        }
+    }
+
+    /// Auto-renewable subscriptions must expose both of these on a reachable
+    /// surface; they are also linked from the paywall.
+    @ViewBuilder
+    private var legalRows: some View {
+        settingsRow(icon: "hand.raised", title: "Privacy Policy",
+                    opensExternally: true) {
+            LumaLegal.open(LumaLegal.privacy)
+        }
+        SettingsRowDivider()
+        settingsRow(icon: "doc.text", title: "Terms of Use",
+                    opensExternally: true) {
+            LumaLegal.open(LumaLegal.terms)
+        }
+    }
+
+    /// One quiet row: glyph, title, the value in grey, then a chevron, or the
+    /// system "leaves the app" glyph when `opensExternally`, so a row that
+    /// ejects to iOS Settings or Mail never wears the same affordance as one
+    /// that opens something in the app.
+    private func settingsRow(icon: String, title: String, value: String? = nil,
+                             opensExternally: Bool = false,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .frame(width: 20)
+                Text(title)
+                    .font(.luma(size: 15, weight: .medium))
+                    .tracking(-0.15)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let value {
+                    Text(value)
+                        .font(.luma(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+                Image(systemName: opensExternally ? "arrow.up.forward.app" : "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.3))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+    }
+
+    // MARK: Plan card
+
+    /// Your plan in one card. Free: what you can export today with a thin
+    /// bar, then "See what Pro adds" and Restore. Pro: when it renews, what
+    /// it includes, then Manage plan and Restore.
+    private var planCard: some View {
+        let pro = storeService.isPro
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                if pro {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(LumaTheme.signal)
+                }
+                Text(pro ? "Lumalook Pro" : "Lumalook Free")
+                    .font(.luma(size: 19, weight: .semibold))
+                    .tracking(-0.4)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            if pro {
+                proDetails
+            } else {
+                freeDetails
+            }
+            planPills
+                .padding(.top, 14)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.06),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    /// Looks this person can export today: every look in a pack they can use
+    /// (the free packs, plus any pack bought on its own).
+    private var exportableLookCount: Int {
+        PackCatalog.packs
+            .filter { storeService.ownsPack($0.id) }
+            .reduce(0) { $0 + $1.looks.count }
+    }
+
+    private var freeDetails: some View {
+        let total = max(PackCatalog.totalLookCount, 1)
+        let usable = min(exportableLookCount, total)
+        let fraction = CGFloat(usable) / CGFloat(total)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Preview every look. Export with \(usable) of the \(total).")
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.55))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.12))
+                    Capsule().fill(Color.white.opacity(0.85))
+                        .frame(width: max(3, geo.size.width * fraction))
+                }
+            }
+            .frame(height: 3)
+            .padding(.top, 14)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var proDetails: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(planDetail ?? "Every look and every pack")
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.55))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .padding(.top, 4)
+            Text("All \(PackCatalog.totalLookCount) looks, every new pack, batch export and .cube out.")
+                .font(.luma(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+        }
+    }
+
+    private var planPills: some View {
+        HStack(spacing: 8) {
+            if storeService.isPro {
+                // A Lifetime purchase has no subscription to manage.
+                if !planIsLifetime {
+                    planPill("Manage plan", icon: "creditcard") {
                         showManageSubscriptions = true
                     }
                 }
-                settingsRow(icon: "arrow.clockwise", title: "Restore Purchases",
-                            busy: restoring, showsAffordance: false) {
-                    performRestore()
-                }
-                .disabled(restoring)
-            }
-            .listRowBackground(LumaTheme.card)
-
-            Section("Preferences") {
-                // A resolution is a size, and a size is a number.
-                settingsRow(icon: "4k.tv", title: "Export Quality",
-                            value: ExportSpec.from(rawValue: storedSpec).resolution.rawValue,
-                            valueIsNumber: true) {
-                    showExportQuality = true
-                }
-                settingsRow(icon: "globe", title: "App Language",
-                            value: Locale.current.localizedString(
-                                forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en")
-                                ?? "English",
-                            opensExternally: true) {
-                    // Per-app language lives in iOS Settings — confirm first,
-                    // because unlike Export Quality above this leaves the app.
-                    showLanguageNotice = true
+            } else {
+                planPill("See what Pro adds", icon: "sparkle", iconColour: LumaTheme.signal) {
+                    showPaywall = true
                 }
             }
-            .listRowBackground(LumaTheme.card)
-
-            Section("Storage") {
-                // LUTManagerView already exists but had no route from here.
-                settingsRow(icon: "square.stack.3d.down.right",
-                            title: "Imported LUTs",
-                            value: "\(app.lutRepository.luts.count)",
-                            valueIsNumber: true) {
-                    app.path.append(.lutManager)
-                }
-                settingsRow(icon: "internaldrive", title: "Storage Used",
-                            value: lutStorageDescription,
-                            valueIsNumber: true) {
-                    showStorageDetail = true
-                }
+            planPill("Restore", icon: "arrow.clockwise", busy: restoring) {
+                performRestore()
             }
-            .listRowBackground(LumaTheme.card)
-
-            Section("About") {
-                settingsRow(icon: "questionmark.circle", title: "Help & Support",
-                            opensExternally: true) {
-                    openSupportMail()
-                }
-                settingsRow(icon: "star", title: "Rate Lumalook",
-                            opensExternally: true) {
-                    requestReview()
-                }
-                // Auto-renewable subscriptions must expose both of these on a
-                // reachable surface — they are also linked from the paywall.
-                settingsRow(icon: "hand.raised", title: "Privacy Policy",
-                            opensExternally: true) {
-                    LumaLegal.open(LumaLegal.privacy)
-                }
-                settingsRow(icon: "doc.text", title: "Terms of Use",
-                            opensExternally: true) {
-                    LumaLegal.open(LumaLegal.terms)
-                }
-                settingsRow(icon: "photo.on.rectangle", title: "Photo credits") {
-                    showPhotoCredits = true
-                }
-                settingsRow(icon: "info.circle", title: "About Lumalook",
-                            value: "v\(Self.appVersion)", valueIsNumber: true) {
-                    showAbout = true
-                }
-            }
-            .listRowBackground(LumaTheme.card)
+            .disabled(restoring)
+            .accessibilityLabel("Restore purchases")
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        // insetGrouped ships with ~35pt between sections and a deep inset above
-        // the first one. Stacked under the header padding that left a hand's
-        // width of empty black under the title and made five short sections
-        // span two screens. 18pt reads as a deliberate group gap.
-        .listSectionSpacing(18)
-        .contentMargins(.top, 2, for: .scrollContent)
-        .environment(\.defaultMinListRowHeight, 52)
     }
 
-    /// `opensExternally` swaps the chevron for the system "leaves the app"
-    /// glyph, so a row that ejects to iOS Settings never wears the same
-    /// affordance as one that opens an in-app sheet.
-    /// `showsAffordance: false` is for rows that perform work in place rather
-    /// than pushing or ejecting — a chevron there promises navigation that
-    /// never happens. `busy` swaps the trailing slot for a spinner.
-    /// `valueIsNumber` puts the trailing value in the instrument face; words
-    /// like "English" or "Pro" stay in the reading face.
-    private func settingsRow(icon: String, title: String, value: String? = nil,
-                             valueIsNumber: Bool = false,
-                             opensExternally: Bool = false,
-                             busy: Bool = false,
-                             showsAffordance: Bool = true,
-                             action: @escaping () -> Void) -> some View {
+    /// A quiet glass pill in the plan card.
+    private func planPill(_ title: String, icon: String,
+                          iconColour: Color = Color.white.opacity(0.92),
+                          busy: Bool = false,
+                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 13) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 28)
-                Text(title)
-                    .font(.luma(size: 16))
-                    .foregroundStyle(.white)
-                Spacer()
-                if let value {
-                    Text(value)
-                        .font(.luma(size: 15, weight: .medium,
-                                      design: valueIsNumber ? .monospaced : .default))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
+            HStack(spacing: 7) {
                 if busy {
                     ProgressView()
-                        .controlSize(.small)
-                        .tint(.white.opacity(0.6))
-                } else if showsAffordance {
-                    Image(systemName: opensExternally ? "arrow.up.forward.app" : "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .controlSize(.mini)
+                        .tint(Color.white.opacity(0.7))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(iconColour)
                 }
+                Text(title)
+                    .font(.luma(size: 14, weight: .semibold))
+                    .tracking(-0.1)
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .lineLimit(1)
             }
+            .padding(.leading, 12)
+            .padding(.trailing, 15)
+            .frame(height: 38)
+            .background(Color.white.opacity(0.1), in: Capsule())
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.lumaPress)
+        .fixedSize()
+    }
+
+    private static let planDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMMM yyyy"
+        return formatter
+    }()
+
+    /// Which Pro this is and when it renews, straight from StoreKit's current
+    /// entitlements (RevenueCat purchases are StoreKit transactions too).
+    /// Leaves the generic line when nothing is found, e.g. a seeded Pro.
+    private func loadPlanDetail() async {
+        guard storeService.isPro else {
+            planDetail = nil
+            planIsLifetime = false
+            return
+        }
+        var detail: String?
+        var lifetime = false
+        for await result in StoreKit.Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  transaction.revocationDate == nil else { continue }
+            let productID = transaction.productID
+            if productID == StoreService.ProductID.proLifetime {
+                detail = "Lifetime · yours for good"
+                lifetime = true
+                break
+            }
+            guard productID == StoreService.ProductID.proYearly
+                    || productID == StoreService.ProductID.proMonthly else { continue }
+            let plan = productID == StoreService.ProductID.proYearly ? "Yearly" : "Monthly"
+            guard let end = transaction.expirationDate else {
+                detail = plan
+                continue
+            }
+            var renews = true
+            if let status = await transaction.subscriptionStatus,
+               case .verified(let renewal) = status.renewalInfo {
+                renews = renewal.willAutoRenew
+            }
+            let date = Self.planDateFormatter.string(from: end)
+            detail = "\(plan) · \(renews ? "renews" : "ends") \(date)"
+        }
+        planDetail = detail
+        planIsLifetime = lifetime
     }
 
     // MARK: Restore / support
@@ -2942,55 +3133,81 @@ struct SettingsSubscriptionView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
 
-    /// Default export resolution — writes into the same stored ExportSpec the
-    /// export sheets load, so the choice sticks everywhere (codec/fps untouched).
+    /// Default export resolution. Writes into the same stored ExportSpec the
+    /// export sheets load, so the choice sticks everywhere (codec/fps
+    /// untouched). Same pattern as every page pushed from You: quiet rows and
+    /// a white tick, no colour.
     private var exportQualitySheet: some View {
         ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Export quality")
-                .font(.luma(size: 19, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.bottom, 2)
-            Text("Default resolution for every export. You can still change it per-export on the export sheet.")
-                .font(.luma(size: 13))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.bottom, 10)
-            ForEach(ExportSpec.Resolution.allCases, id: \.rawValue) { res in
-                let chosen = ExportSpec.from(rawValue: storedSpec).resolution == res
-                Button {
-                    var spec = ExportSpec.from(rawValue: storedSpec)
-                    spec.resolution = res
-                    storedSpec = spec.rawValue
-                    showExportQuality = false
-                } label: {
-                    HStack(spacing: 10) {
-                        // A resolution and its pixel dimensions are both
-                        // numbers, so both keep the instrument voice.
-                        Text(res.rawValue)
-                            .font(.luma(size: 16, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white)
-                        Text(Self.pixelDimensions(res))
-                            .font(.luma(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.45))
-                        Spacer()
-                        if chosen {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Export quality")
+                    .font(.luma(size: 19, weight: .bold))
+                    .tracking(-0.4)
+                    .foregroundStyle(LumaTheme.textPrimary)
+                    .padding(.bottom, 4)
+                Text("The default for every export. You can still change it for one export on the export sheet.")
+                    .font(.luma(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 16)
+                SettingsRowGroup {
+                    ForEach(Self.resolutionOrder, id: \.rawValue) { res in
+                        if res != Self.resolutionOrder.first {
+                            SettingsRowDivider(leading: 14)
                         }
+                        resolutionRow(res)
                     }
-                    .padding(.horizontal, 16)
-                    .frame(height: 52)
-                    .background(Color(white: chosen ? 0.16 : 0.10),
-                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 24)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 22)
-        .padding(.top, 24)
-        .padding(.bottom, 24)
+    }
+
+    /// Smallest first, the way the mock lists them.
+    private static let resolutionOrder: [ExportSpec.Resolution] = [.hd720, .hd1080, .uhd4K]
+
+    private func resolutionRow(_ res: ExportSpec.Resolution) -> some View {
+        let chosen = ExportSpec.from(rawValue: storedSpec).resolution == res
+        return Button {
+            var spec = ExportSpec.from(rawValue: storedSpec)
+            spec.resolution = res
+            storedSpec = spec.rawValue
+            showExportQuality = false
+        } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(res.rawValue)
+                        .font(.luma(size: 15, weight: .medium))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                    Text("\(Self.resolutionDetail(res)) · \(Self.pixelDimensions(res))")
+                        .font(.luma(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                Spacer(minLength: 8)
+                if chosen {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(LumaTheme.textPrimary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 62)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    private static func resolutionDetail(_ res: ExportSpec.Resolution) -> String {
+        switch res {
+        case .hd720: return "Smallest files, quick to send"
+        case .hd1080: return "Sharp on every phone"
+        case .uhd4K: return "Full detail, the largest files"
         }
     }
 
@@ -3009,84 +3226,76 @@ struct SettingsSubscriptionView: View {
     private var aboutSheet: some View {
         VStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(white: 0.13))
+                .fill(Color.white.opacity(0.07))
                 .frame(width: 76, height: 76)
                 .overlay(Image(systemName: "camera.filters")
-                    .font(.luma(size: 34, weight: .medium))
-                    .foregroundStyle(.white))
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(LumaTheme.textPrimary))
                 .padding(.top, 30)
             Text("Lumalook")
                 .font(.luma(size: 24, weight: .bold))
-                .foregroundStyle(.white)
+                .tracking(-0.6)
+                .foregroundStyle(LumaTheme.textPrimary)
             // A version and a build are numbers.
             (wordText("Version ", 14, 0.62, weight: .semibold)
              + numText("\(Self.appVersion) (\(Self.appBuild))", 14, 0.82))
             Text("Cinematic looks, live LUT grading and video editing.\nMade by Emotive Impact.")
                 .font(.luma(size: 14))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(Color.white.opacity(0.5))
                 .multilineTextAlignment(.center)
             Button {
+                // Straight to Mail: the no-mail fallback dialog lives on the
+                // page under this sheet and could not show from here.
                 let subject = "Lumalook Support".addingPercentEncoding(
                     withAllowedCharacters: .urlQueryAllowed) ?? "Lumalook%20Support"
-                if let url = URL(string: "mailto:emotiveimpact@gmail.com?subject=\(subject)") {
+                if let url = URL(string: "mailto:\(Self.supportAddress)?subject=\(subject)") {
                     UIApplication.shared.open(url)
                 }
             } label: {
-                Label("Contact — emotiveimpact@gmail.com", systemImage: "envelope")
+                Label("Email \(Self.supportAddress)", systemImage: "envelope")
                     .font(.luma(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(LumaTheme.textPrimary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 46)
-                    .background(Color(white: 0.13),
-                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .background(Color.white.opacity(0.1), in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.lumaPress)
             .padding(.horizontal, 26)
             .padding(.top, 8)
             Spacer()
         }
         .frame(maxWidth: .infinity)
     }
+}
 
-    private var subscriptionCard: some View {
-        // Profile / subscription card — live StoreKit 2 status (C5). No hue:
-        // Pro reads as full white, Free as grey, and the door to the paywall
-        // is a surface step rather than a filled violet button.
-        HStack(spacing: 14) {
-            Circle()
-                .fill(Color(white: 0.16))
-                .frame(width: 58, height: 58)
-                .overlay(Image(systemName: storeService.isPro ? "crown.fill" : "person.fill")
-                    .font(.luma(size: storeService.isPro ? 22 : 26))
-                    .foregroundStyle(.white.opacity(0.85)))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(storeService.isPro ? "Lumalook Pro" : "Lumalook Free")
-                    .font(.luma(size: 19, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(storeService.isPro ? "Unlimited access" : "Upgrade for every look")
-                    .font(.luma(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(storeService.isPro ? 0.8 : 0.55))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .layoutPriority(1)
-            Spacer()
-            Button {
-                showPaywall = true
-            } label: {
-                Text(storeService.isPro ? "Manage" : "Get Pro")
-                    .font(.luma(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .padding(.horizontal, 18)
-                    .frame(height: 40)
-                    .background(Color(white: 0.20), in: Capsule())
-            }
-            .buttonStyle(.plain)
+/// A group of quiet rows on one glass panel, no outline.
+private struct SettingsRowGroup<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
         }
-        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.045),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+/// The faint line between two rows, starting under the title.
+private struct SettingsRowDivider: View {
+    var leading: CGFloat = 46
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.055))
+            .frame(height: 1)
+            .padding(.leading, leading)
+            .accessibilityHidden(true)
     }
 }
 
