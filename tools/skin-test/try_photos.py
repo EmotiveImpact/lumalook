@@ -1,5 +1,5 @@
-"""Run any photo through looks: as shipped before the fix, True Colour off,
-True Colour on, all from the Mac runner's Core Image bake.
+"""Run any photo through looks: as shipped before the fix, True Colour on,
+True Colour off, all from the Mac runner's Core Image bake.
 
     python3 try_photos.py OUT.jpg PHOTO [PHOTO ...] [--looks id-or-code,...] [--before LOOKS_BEFORE.json]
 
@@ -45,7 +45,7 @@ def versions(look, before_recipe):
         b = dict(look, lut=raw)
         off = dict(look, lut=raw)
         on = dict(look, lut=S.read_baked(OUT / "film_tc" / f"{lid}.u16"))
-    return [("As it shipped", b), ("True Colour off", off), ("True Colour on", on)]
+    return [("As it shipped", b), ("True Colour on", on), ("True Colour off", off)]
 
 
 def main():
