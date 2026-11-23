@@ -1747,12 +1747,14 @@ struct ProjectLibraryView: View {
                 .minimumScaleFactor(0.8)
                 .padding(.leading, isRoot ? 8 : 0)
             Spacer(minLength: 8)
+            // Pick clips first (up to 30 at once), the same door as the empty
+            // state's New video and Home's Edit a clip. A blank timeline is
+            // still one tap away in the editor's own menu.
             Button {
-                app.editor.startNewProject()
-                app.path.append(.editor)
+                app.openSelectClips(.edit)
                 LumaHaptics.shared.tap()
             } label: {
-                Text("New project")
+                Text("New video")
                     .font(.luma(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -2448,10 +2450,25 @@ struct SettingsSubscriptionView: View {
 
     /// NATIVE inset-grouped List (Apple-native tranche 2).
     private var settingsList: some View {
+        ScrollViewReader { proxy in
+            settingsRows
+                // The top bar's Pro badge, tapped while already here.
+                .onReceive(NotificationCenter.default.publisher(for: .lumaShowPlan)) { _ in
+                    withAnimation(.snappy(duration: 0.3)) {
+                        proxy.scrollTo(Self.planRowID, anchor: .top)
+                    }
+                }
+        }
+    }
+
+    private static let planRowID = "plan"
+
+    private var settingsRows: some View {
         List {
             Section {
                 subscriptionCard
                     .listRowBackground(LumaTheme.card)
+                    .id(Self.planRowID)
             }
 
             Section("Purchases") {

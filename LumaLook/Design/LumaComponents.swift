@@ -297,7 +297,13 @@ struct LumaTopBarButtons: View {
     private var proButton: some View {
         let pro = storeService.isPro
         return Button {
-            if pro { openYou() } else { showPaywall = true }
+            if pro {
+                openYou()
+                // Already on You and scrolled down: bring the plan back up.
+                NotificationCenter.default.post(name: .lumaShowPlan, object: nil)
+            } else {
+                showPaywall = true
+            }
             LumaHaptics.shared.tap()
         } label: {
             LumaProBadge(isPro: pro, onPhoto: onPhoto)
@@ -331,6 +337,11 @@ struct LumaTopBarButtons: View {
         app.path = []
         app.tab = .profile
     }
+}
+
+extension Notification.Name {
+    /// Asks the You tab to scroll its plan card into view (the Pro badge).
+    static let lumaShowPlan = Notification.Name("lumalook.showPlan")
 }
 
 /// The Pro button's face. Free: signal yellow, "Get Pro". Pro or Lifetime:
