@@ -93,7 +93,7 @@ struct HomeView: View {
                     }
                 }
                 HomeStatusScrim(height: safeTop)
-                HomeTopBar(scroll: scroll, safeTop: safeTop, onSearch: { openLooks() })
+                HomeTopBar(scroll: scroll, safeTop: safeTop)
                     .accessibilitySortPriority(1)
             }
         }
@@ -590,16 +590,15 @@ private struct HomeScrollTracker: ViewModifier {
     }
 }
 
-/// The wordmark and search, pinned above the page in the same spot as every
-/// tab's top row. At rest it sits on the reel's picture, which runs to the
-/// top of the screen, above the story bars. As the page scrolls the row stays
+/// The wordmark, Pro and You, pinned above the page in the same spot as
+/// every tab's bar (LumaTopBar). At rest it sits on the reel's picture, which
+/// runs to the top of the screen, above the story bars. As the page scrolls the row stays
 /// put and the page's ink fades in behind it, so it becomes the top bar and
 /// everything scrolls underneath.
 private struct HomeTopBar: View {
     @ObservedObject var scroll: HomeScrollProgress
     /// The top safe area inset.
     let safeTop: CGFloat
-    let onSearch: () -> Void
 
     /// Scroll distance over which the ink fades in behind the row.
     static let collapseDistance: CGFloat = 56
@@ -616,7 +615,9 @@ private struct HomeTopBar: View {
                     .accessibilityLabel("lumalook")
                     .accessibilityAddTraits(.isHeader)
             } trailing: {
-                searchButton(collapse: p)
+                // White on the photo, the other tabs' grey once the bar is
+                // solid.
+                LumaTopBarButtons(onPhoto: 1 - p)
             }
             // A soft shadow keeps the row legible on the photo; it goes with
             // the photo.
@@ -641,20 +642,6 @@ private struct HomeTopBar: View {
                 .allowsHitTesting(false)
         }
         .contentShape(Rectangle())
-    }
-
-    /// White on the photo, the other tabs' grey once the bar is solid.
-    private func searchButton(collapse p: CGFloat) -> some View {
-        Button(action: onSearch) {
-            ZStack {
-                LumaTabGlyph(systemName: "magnifyingglass", active: true)
-                    .opacity(1 - p)
-                LumaTabGlyph(systemName: "magnifyingglass")
-                    .opacity(p)
-            }
-        }
-        .buttonStyle(.lumaPress)
-        .accessibilityLabel("Search looks")
     }
 }
 

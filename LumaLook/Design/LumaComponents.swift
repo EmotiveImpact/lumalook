@@ -248,6 +248,119 @@ enum LumaTabMetrics {
     /// The bar's bottom edge below the safe area: the row plus a little air.
     /// Home's story bars start here at rest.
     static let barBottom: CGFloat = top + rowHeight + 8
+    /// Air between the bar and a tab's own title row under it.
+    static let titleGap: CGFloat = 4
+}
+
+/// The bar at the top of every tab: the wordmark on the left and, on the
+/// right, the two buttons that never change, Pro and You. A tab's own title
+/// and actions sit on the row under it, so this row looks the same whichever
+/// tab is open. Home builds the same row on its photo (HomeTopBar).
+struct LumaTopBar: View {
+    var body: some View {
+        LumaTabHeader {
+            LumaWordmark(size: 20)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Lumalook")
+        } trailing: {
+            LumaTopBarButtons()
+        }
+    }
+}
+
+/// Pro and You, the right side of every tab's bar. Pro opens the paywall
+/// while free, and once you have Pro it turns into a quiet badge that opens
+/// your plan on the You tab. You jumps to the You tab and lights up white
+/// while you are there.
+///
+/// `onPhoto` runs from 1 (the bar on Home's picture) to 0 (the bar on ink):
+/// on the photo the glyph is white and the Pro badge frosted.
+struct LumaTopBarButtons: View {
+    @EnvironmentObject private var app: AppModel
+    @EnvironmentObject private var storeService: StoreService
+    var onPhoto: CGFloat = 0
+    @State private var showPaywall = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            proButton
+            youButton
+        }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    private var proButton: some View {
+        let pro = storeService.isPro
+        return Button {
+            if pro { openYou() } else { showPaywall = true }
+            LumaHaptics.shared.tap()
+        } label: {
+            LumaProBadge(isPro: pro, onPhoto: onPhoto)
+                .frame(height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel(pro ? "Your plan, Pro" : "Get Pro")
+    }
+
+    private var youButton: some View {
+        let here = app.tab == .profile
+        let glyph = LumaTab.profile.icon
+        return Button {
+            openYou()
+            LumaHaptics.shared.tap()
+        } label: {
+            ZStack {
+                LumaTabGlyph(systemName: glyph, active: true)
+                    .opacity(here ? 1 : onPhoto)
+                LumaTabGlyph(systemName: glyph)
+                    .opacity(here ? 0 : 1 - onPhoto)
+            }
+        }
+        .buttonStyle(.lumaPress)
+        .accessibilityLabel("You")
+        .accessibilityAddTraits(here ? .isSelected : [])
+    }
+
+    private func openYou() {
+        app.path = []
+        app.tab = .profile
+    }
+}
+
+/// The Pro button's face. Free: signal yellow, "Get Pro". Pro or Lifetime:
+/// the yellow moves into the words on a quiet fill, "Pro".
+struct LumaProBadge: View {
+    let isPro: Bool
+    var onPhoto: CGFloat = 0
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 10, weight: .bold))
+            Text(isPro ? "Pro" : "Get Pro")
+                .font(.luma(size: 13, weight: .semibold))
+                .tracking(-0.1)
+                .lineLimit(1)
+        }
+        .foregroundStyle(isPro ? LumaTheme.signal : LumaTheme.onSignal)
+        .padding(.leading, 9)
+        .padding(.trailing, 11)
+        .frame(height: 28)
+        .background {
+            if isPro {
+                ZStack {
+                    Capsule().fill(LumaTheme.control)
+                        .opacity(1 - onPhoto)
+                    Capsule().fill(Color.white.opacity(0.13))
+                        .opacity(onPhoto)
+                }
+            } else {
+                Capsule().fill(LumaTheme.signal)
+            }
+        }
+        .fixedSize()
+    }
 }
 
 /// The top row every tab shares (Home, Looks, Projects, You): the title on

@@ -288,6 +288,12 @@ struct FilterStoreView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
+                if isRoot {
+                    // Opened as a tab, it wears every tab's bar.
+                    LumaTopBar()
+                        .padding(.top, LumaTabMetrics.top)
+                        .padding(.bottom, LumaTabMetrics.titleGap)
+                }
                 hero
                     .frame(height: 214)
                 drawer
@@ -1547,20 +1553,26 @@ struct ProjectLibraryView: View {
 
     // MARK: Top row
 
-    /// The shared top row, in the same spot as every tab's: the title, and +
-    /// for a new video. It stays put while the list scrolls under it.
+    /// The tab's bar (Lumalook, Pro and You), then the title row: the title
+    /// and + for a new video. Both stay put while the list scrolls under them.
     private var header: some View {
-        LumaTabHeader {
-            LumaTabTitle(text: "Projects")
-        } trailing: {
-            Button {
-                app.openSelectClips(.edit)
-                LumaHaptics.shared.tap()
-            } label: {
-                LumaTabGlyph(systemName: "plus")
+        VStack(spacing: 0) {
+            if isRoot {
+                LumaTopBar()
             }
-            .buttonStyle(.lumaPress)
-            .accessibilityLabel("New video")
+            LumaTabHeader {
+                LumaTabTitle(text: "Projects")
+            } trailing: {
+                Button {
+                    app.openSelectClips(.edit)
+                    LumaHaptics.shared.tap()
+                } label: {
+                    LumaTabGlyph(systemName: "plus")
+                }
+                .buttonStyle(.lumaPress)
+                .accessibilityLabel("New video")
+            }
+            .padding(.top, isRoot ? LumaTabMetrics.titleGap : 0)
         }
         .padding(.top, LumaTabMetrics.top)
         .padding(.bottom, 2)
@@ -2304,12 +2316,15 @@ struct SettingsSubscriptionView: View {
             (isRoot ? LumaTheme.background : Color.black).ignoresSafeArea()
             VStack(spacing: 0) {
                 if isRoot {
+                    // The tab's bar (You lights up here), then the title.
+                    LumaTopBar()
+                        .padding(.top, LumaTabMetrics.top)
                     LumaTabHeader {
                         LumaTabTitle(text: "You")
                     } trailing: {
                         EmptyView()
                     }
-                    .padding(.top, LumaTabMetrics.top)
+                    .padding(.top, LumaTabMetrics.titleGap)
                     .padding(.bottom, 4)
                 } else {
                     header

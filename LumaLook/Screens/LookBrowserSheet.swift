@@ -462,8 +462,13 @@ struct LookBrowserSheet: View {
     /// all the way down. Nothing floats over the grid.
     private var libraryDrawer: some View {
         VStack(spacing: 0) {
+            if !showsBackButton {
+                // The tab's bar: Lumalook, Pro and You, as on every tab.
+                LumaTopBar()
+                    .padding(.top, LumaTabMetrics.top)
+            }
             pageHeader
-                .padding(.top, LumaTabMetrics.top)
+                .padding(.top, showsBackButton ? LumaTabMetrics.top : LumaTabMetrics.titleGap)
                 .padding(.bottom, 12)
             shelfPills
                 .padding(.bottom, 14)
@@ -493,8 +498,8 @@ struct LookBrowserSheet: View {
             + countText(app.lutRepository.collections.count, "collections", size: 12)
     }
 
-    /// Looks tab: the shared top row (the same spot as every tab's), with
-    /// search, import and new look as plain glyphs.
+    /// Looks tab: the title row under the bar, with search, import and new
+    /// look as plain glyphs.
     private var pageHeader: some View {
         LumaTabHeader {
             HStack(spacing: 8) {
