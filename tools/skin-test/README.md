@@ -4,7 +4,8 @@ Runs every Lumalook look over Black and brown skin, in four kinds of light,
 and flags looks that shift skin badly: ashy or grey, green or magenta casts,
 crushed shadows, skin pushed too dark, orange or red oversaturation.
 
-Nothing here changes a look. It measures them and tries proposed fixes.
+It measures looks, tries fixes, and verifies the True Colour engine
+(`LumaLook/Engine/TrueColour.swift`) on the real Core Image bake.
 
 ## What it uses
 
@@ -16,6 +17,14 @@ Nothing here changes a look. It measures them and tries proposed fixes.
   images for bloom, vignette and the intensity dissolve in `out/probes/`.
   `recipe_model.py` fits a model to that bake (exact to 0.00/255), so fixes can
   be tried without a Mac.
+- **True Colour (the shipping engine)**: `bake_truecolour.swift` is compiled
+  on the Mac runner together with the app's own `TrueColour.swift`,
+  `LUTParser.swift` and `LUTDensifier.swift`, so it runs the shipping code:
+  recipe looks with True Colour on (`out/luts_tc`) and off
+  (`out/luts_classic`), and every film cube with the runtime skin guard
+  (`out/film_tc`). `verify.py` judges those and `after_sheets.py` draws the
+  before and after. `out/luts` keeps the bake of the looks as they shipped
+  before the fix (the "before").
 - **Film looks** are the app's own `.cube` files, sampled tetrahedrally (what
   the app's 64-point densify comes to).
 - **Portraits**: 16 photos from Pexels (Pexels Licence), four per light
@@ -36,6 +45,10 @@ python3 sheets.py    RENDER_DIR OUT_DIR  # contact sheets, one per pack
 python3 report.py    RENDER_DIR OUT_DIR  # ranked list (csv and markdown)
 python3 engine_variants.py RENDER_DIR    # engine fix with and without the soft toe
 python3 export_cubes.py RENDER_DIR OUT_DIR  # guarded cubes as .cube files
+
+# after the Mac runner has baked the True Colour engine (skin-test.yml)
+python3 verify.py RENDER_DIR                # before, on, off, and the research targets
+python3 after_sheets.py RENDER_DIR OUT_DIR  # before and after sheets and PDF
 ```
 
 Needs numpy, scipy and Pillow.

@@ -242,7 +242,7 @@ def draw_row(im, d, y, row):
     else:
         d.rectangle([x + 18, y + 4, x + 22, y + TH - 8], fill=YELLOW)
         d.text((x + 40, y + 6), row["title"], font=F[("s", 15)], fill=YELLOW)
-        pill(d, x + 40, y + 32, row["cat"], "WOULD BE " + CAT[row["cat"]][1])
+        pill(d, x + 40, y + 32, row["cat"], row.get("pill_prefix", "WOULD BE ") + CAT[row["cat"]][1])
         yy = y + 64
         for ln in row["lines"]:
             d.text((x + 40, yy), ln, font=F[("r", 15)], fill=MUTED)
