@@ -261,15 +261,59 @@ private struct OnbDetail: View {
 /// Any image, filling the frame it is given and cropped to it.
 private struct OnbFillImage: View {
     let image: Image
+    var alignment: Alignment = .center
 
     var body: some View {
         GeometryReader { geo in
             image
                 .resizable()
                 .scaledToFill()
-                .frame(width: geo.size.width, height: geo.size.height)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: alignment)
                 .clipped()
         }
+    }
+}
+
+/// A sample photo graded with one look at thumbnail size, for step 2's
+/// strip. `GradedHeroImage` always renders at 1200 px, which is far more
+/// than a 62 pt tile needs; this renders at 360 px, off the main thread.
+private struct OnbGradedThumb: View {
+    let photo: HeroPhoto
+    let lookName: String
+    var radius: CGFloat = 12
+
+    @State private var image: CGImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let image {
+                    OnbFillImage(image: Image(decorative: image, scale: 1),
+                                 alignment: photo.cropAlignment)
+                } else {
+                    HeroImage(photo: photo)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .task(id: "\(photo.rawValue)|\(lookName)") {
+                await render()
+            }
+    }
+
+    @MainActor
+    private func render() async {
+        let recipe = MockData.looks.first { $0.name == lookName }?.recipe ?? LookRecipe()
+        let source = photo
+        image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+            guard let ci = source.ciImage else { return nil }
+            let state = LookState()
+            state.recipe = recipe
+            var settings = LookSettings()
+            settings.intensity = 100
+            state.settings = settings
+            return LookPipeline.shared.gradedStill(ci, state: state, maxDimension: 360)
+        }.value
     }
 }
 
@@ -500,7 +544,7 @@ private struct OnbLookTile: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                GradedHeroImage(photo: .campaign, lookName: look.lookName, radius: 12)
+                OnbGradedThumb(photo: .campaign, lookName: look.lookName, radius: 12)
                     .aspectRatio(0.8, contentMode: .fit)
                     .pickedRing(isOn, cornerRadius: 12)
                 LookNameText(look.code, colour: look.colour, size: 11, weight: .bold)
@@ -515,9 +559,10 @@ private struct OnbLookTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.lumaPress)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(look.title)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : [.isButton])
+        // A Button is already one element; `.accessibilityElement(children:
+        // .ignore)` here would replace it and can drop its tap action.
+        .accessibilityLabel("\(look.code), \(look.title)")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
@@ -796,7 +841,7 @@ private struct OnbChip: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.lumaPress)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : [.isButton])
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
