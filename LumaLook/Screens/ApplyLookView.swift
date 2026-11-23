@@ -914,8 +914,16 @@ struct ApplyLookView: View {
             }
         }
         .buttonStyle(.lumaPress)
-        .accessibilityLabel(look.name)
+        .accessibilityLabel(lookTileLabel(look))
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// The look's name, plus what its badges say on screen.
+    private func lookTileLabel(_ look: LibraryLook) -> String {
+        var parts = [look.name]
+        if let badge = sourceBadge(look) { parts.append(badge) }
+        if storeService.isLocked(look) { parts.append("locked look") }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -1469,7 +1477,8 @@ extension ApplyLookView {
             // look's strength — the same value the Strength row and the
             // instruction bar show. Two numbers for one look is a bug.
             GradeSlotRow(kind: "Look",
-                         name: app.selectedLUT?.displayName ?? app.selectedLook.name,
+                         name: currentLookName,
+                         colour: currentLookColour,
                          opacity: app.selectedLUT != nil ? $app.creativeOpacity
                                                          : $app.settings.intensity,
                          isActive: true) {
@@ -1613,6 +1622,8 @@ extension ApplyLookView {
 private struct GradeSlotRow: View {
     let kind: String
     let name: String
+    /// A look's own colour: its name follows the Names setting.
+    var colour: Color? = nil
     @Binding var opacity: Double
     let isActive: Bool
     let onTap: () -> Void
@@ -1626,11 +1637,7 @@ private struct GradeSlotRow: View {
                     .font(.luma(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.45))
                     .frame(width: 52, alignment: .leading)
-                Text(name)
-                    .font(.luma(size: 13, weight: .semibold))
-                    .foregroundStyle(isActive ? .white.opacity(0.95) : .white.opacity(0.4))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                nameText
                 Spacer(minLength: 4)
                 // An empty slot has no strength to report: "Off" matches the
                 // empty track and the dimmed "None" title.
@@ -1666,6 +1673,19 @@ private struct GradeSlotRow: View {
         .sensoryFeedback(.selection, trigger: Int(opacity / 10))
         .animation(.snappy(duration: 0.15), value: opacity)
         .accessibilityLabel("\(kind) slot, \(name)")
+    }
+
+    @ViewBuilder
+    private var nameText: some View {
+        if let colour, isActive {
+            LookNameText(name, colour: colour, size: 13)
+        } else {
+            Text(name)
+                .font(.luma(size: 13, weight: .semibold))
+                .foregroundStyle(isActive ? .white.opacity(0.95) : .white.opacity(0.4))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
     }
 }
 
@@ -1752,6 +1772,16 @@ struct GradeOpacityRow: View {
                 .padding(.horizontal, 20)
             }
             LumaValueSlider(value: $value, range: range, title: title, format: format)
+                // The shared ruler always calls itself "Strength" to
+                // VoiceOver; this row edits Grain, Bloom and the rest too,
+                // so it speaks for itself with its own title.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityValue(format(value))
+                .accessibilityAdjustableAction { direction in
+                    let step: Double = direction == .increment ? 5 : -5
+                    value = min(max(range.lowerBound, value + step), range.upperBound)
+                }
         }
     }
 }
