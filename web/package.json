@@ -13,7 +13,7 @@
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
-    "vercel-build": "cross-env NODE_OPTIONS=--no-deprecation payload migrate && npm run build",
+    "vercel-build": "cross-env NODE_OPTIONS=--no-deprecation payload migrate && if [ \"$SEED_ON_BUILD\" = \"true\" ]; then npm run seed; fi && npm run build",
     "seed": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed/index.ts"
   },
   "dependencies": {
