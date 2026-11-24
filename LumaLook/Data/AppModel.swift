@@ -732,9 +732,13 @@ final class AppModel: ObservableObject {
         let region = CGRect(x: px - 6, y: py - 6, width: 12, height: 12).intersection(ext)
         let sampleImage = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
         guard let m = await Self.meanRGB(of: sampleImage) else { return }
+        // The engine finds the Warmth and Tint that make this colour grey
+        // (LookPipeline.neutralising). The guess that used to sit here took
+        // out under half of a cast and turned Tint the wrong way.
+        let balance = await Task.detached { LookPipeline.shared.neutralising(m) }.value
         var s = settings
-        s.warmth = max(-80, min(80, (m.b - m.r) * 340))
-        s.tint = max(-80, min(80, ((m.r + m.b) / 2 - m.g) * 340))
+        s.warmth = balance.warmth
+        s.tint = balance.tint
         settings = s
         LumaHaptics.shared.tap()
     }

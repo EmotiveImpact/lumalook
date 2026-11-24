@@ -12,6 +12,10 @@
 //   2. Do the colour tools do on screen what their numbers say?
 //   3. Is every look, picked after a preset, the look its thumbnail shows?
 //
+// Later sections ask the same of the film tools and tone sliders (5), of the
+// exported cube and the three picture sizes (6), and of the White balance
+// picker (7).
+//
 //   mkdir -p /tmp/grade && cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
 //   swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
 //       LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
@@ -741,6 +745,38 @@ if mode == "check" {
     } else {
         print("  note  no test portrait in \(portraitDir.path), so the sizes were not compared")
     }
+}
+
+// MARK: - 7. The White balance picker
+
+if mode == "check" {
+    section("7. The White balance picker makes the point it is given grey")
+    // Greys that carry a cast the Warmth and Tint sliders can reach.
+    let casts: [(String, RGB)] = [
+        ("a grey that looks green", (0.48, 0.52, 0.48)),
+        ("a grey that looks magenta", (0.53, 0.48, 0.53)),
+        ("a grey that looks blue", (0.48, 0.50, 0.53)),
+        ("a grey that looks yellow", (0.52, 0.51, 0.47)),
+        ("a light grey that looks blue and green", (0.74, 0.80, 0.82)),
+        ("a dark grey that looks green", (0.17, 0.20, 0.17)),
+    ]
+    func fromGrey(_ c: RGB) -> Double { max(abs(c.0 - c.1), abs(c.2 - c.1)) * 255 }
+    var oldLeft: [String] = []
+    for (name, c) in casts {
+        let wb = pipeline.neutralising((r: c.0, g: c.1, b: c.2))
+        let out = graded([c], state(full { $0.warmth = wb.warmth; $0.tint = wb.tint }))[0]
+        check(fromGrey(out) < 2.0 && abs(wb.warmth) < 80 && abs(wb.tint) < 80,
+              "\(name) comes out grey",
+              "\(tri(c)) with Warmth \(Int(wb.warmth)) and Tint \(Int(wb.tint)) came out \(tri(out)), \(f1(fromGrey(out))) of 255 from grey")
+        // The rule the picker used before, for the record.
+        let warmth = max(-80, min(80, (c.2 - c.0) * 340))
+        let tint = max(-80, min(80, ((c.0 + c.2) / 2 - c.1) * 340))
+        let old = graded([c], state(full { $0.warmth = warmth; $0.tint = tint }))[0]
+        oldLeft.append("\(f1(fromGrey(c))) to \(f1(fromGrey(old)))")
+    }
+    print("  note  the rule it replaces left these as far from grey (of 255, before to after): " + oldLeft.joined(separator: "; "))
+    let grey = pipeline.neutralising((r: 0.5, g: 0.5, b: 0.5))
+    check(grey.warmth == 0 && grey.tint == 0, "a grey that is already grey is left alone")
 }
 
 // MARK: - Pictures

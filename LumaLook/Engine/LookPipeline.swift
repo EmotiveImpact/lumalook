@@ -485,6 +485,59 @@ final class LookPipeline: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
+    /// The Warmth and Tint that turn `sample` grey: what the White balance
+    /// picker sets when a point that should be neutral is tapped. `sample`
+    /// is a colour as a screen shows it, 0 to 1.
+    ///
+    /// It tries the filter itself on that one colour and closes in on grey,
+    /// so the answer is right whatever the filter does with its numbers. The
+    /// rule it replaces guessed from the colour's red, green and blue: it
+    /// took out under half of a blue or yellow cast, and it turned Tint the
+    /// wrong way, so tapping a grey that looked green made it greener.
+    ///
+    /// The sliders reach about 2000 K either way. A cast beyond that is
+    /// taken as far as `limit` allows.
+    func neutralising(_ sample: (r: Double, g: Double, b: Double),
+                      limit: Double = 80) -> (warmth: Double, tint: Double) {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let colour = CIColor(red: CGFloat(min(max(sample.r, 0), 1)),
+                                   green: CGFloat(min(max(sample.g, 0), 1)),
+                                   blue: CGFloat(min(max(sample.b, 0), 1)), colorSpace: space) else { return (0, 0) }
+        let pixel = CGRect(x: 0, y: 0, width: 1, height: 1)
+        let patch = CIImage(color: colour).cropped(to: pixel)
+
+        /// How far from grey the colour is with this Warmth and Tint: red
+        /// against green, and blue against green.
+        func cast(_ warmth: Double, _ tint: Double) -> (red: Double, blue: Double) {
+            let shifted = Self.shiftWhite(patch, towards: 6500 - CGFloat(warmth) * 20, tint: CGFloat(tint))
+            var px = [Float](repeating: 0, count: 4)
+            px.withUnsafeMutableBytes { raw in
+                context.render(shifted, toBitmap: raw.baseAddress!, rowBytes: 16, bounds: pixel,
+                               format: .RGBAf, colorSpace: space)
+            }
+            return (Double(px[0] - px[1]), Double(px[2] - px[1]))
+        }
+
+        var warmth = 0.0, tint = 0.0
+        let step = 2.0
+        for _ in 0..<8 {
+            let now = cast(warmth, tint)
+            if abs(now.red) < 0.001 && abs(now.blue) < 0.001 { break }
+            // How the cast moves with each slider, from one small step of each.
+            let w = cast(warmth + step, tint), t = cast(warmth, tint + step)
+            let a = (w.red - now.red) / step, b = (t.red - now.red) / step
+            let c = (w.blue - now.blue) / step, d = (t.blue - now.blue) / step
+            let det = a * d - b * c
+            guard abs(det) > 1e-10 else { break }
+            let nextWarmth = min(max(warmth - (d * now.red - b * now.blue) / det, -limit), limit)
+            let nextTint = min(max(tint - (a * now.blue - c * now.red) / det, -limit), limit)
+            if abs(nextWarmth - warmth) < 0.05 && abs(nextTint - tint) < 0.05 { break }
+            warmth = nextWarmth
+            tint = nextTint
+        }
+        return (warmth.rounded(), tint.rounded())
+    }
+
     // MARK: - Built-in look recipes
 
     /// `trueColour` is the switch position: the live one unless a caller
