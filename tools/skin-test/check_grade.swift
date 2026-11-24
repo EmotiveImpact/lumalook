@@ -314,7 +314,12 @@ if mode == "check" {
     // A black-and-white film look with nothing else on is black and white.
     let ramp: [RGB] = (0...16).map { let v = Double($0) / 16; return (v, v, v) }
     let warmSkin: [RGB] = [(0.55, 0.38, 0.30), (0.30, 0.19, 0.14), (0.80, 0.62, 0.52), (0.2, 0.4, 0.7)]
-    for code in ["HP400", "TX400", "PM800"] {
+    // Press Mono 800 is the app's own black-and-white cube. It is checked
+    // whenever it is in the app; the two measured stocks always are.
+    let ownMono = ["PM800"].filter {
+        FileManager.default.fileExists(atPath: filmDir.appendingPathComponent("FS_\($0).cube").path)
+    }
+    for code in ["HP400", "TX400"] + ownMono {
         guard let lut = film(code) else { check(false, "\(code): the film file opens"); continue }
         let out = graded(ramp + warmSkin, state(lut: lut, full()))
         let cast = out.map { max(abs($0.0 - $0.1), abs($0.2 - $0.1)) * 255 }.max() ?? 0
