@@ -1,46 +1,34 @@
-import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import type { GetStaticPaths, GetStaticProps } from 'next'
 import { Shell } from '@/components/Chrome'
+import { Meta } from '@/components/Meta'
 import { PostBody } from '@/components/PostBody'
-import { formatDate, mediaAlt, mediaUrl, payload } from '@/lib/payload'
+import type { Post } from '@/payload-types'
+import { formatDate, mediaAlt, mediaUrl } from '@/lib/media'
+import { payload } from '@/lib/payload'
 
-export const dynamic = 'force-static'
-export const dynamicParams = true
+export const config = { runtime: 'nodejs', unstable_runtimeJS: false }
 
-async function getPost(slug: string) {
+type Props = { post: Post }
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const p = await payload()
+  const { docs } = await p.find({ collection: 'posts', where: { _status: { equals: 'published' } }, limit: 500, depth: 0, select: { slug: true, comingSoon: true } })
+  return { paths: docs.filter((d) => !d.comingSoon).map((d) => ({ params: { slug: d.slug } })), fallback: 'blocking' }
+}
+
+export const getStaticProps: GetStaticProps<Props, { slug: string }> = async ({ params }) => {
   const p = await payload()
   const { docs } = await p.find({
     collection: 'posts',
-    where: { and: [{ slug: { equals: slug } }, { _status: { equals: 'published' } }, { comingSoon: { not_equals: true } }] },
+    where: { and: [{ slug: { equals: params?.slug } }, { _status: { equals: 'published' } }, { comingSoon: { not_equals: true } }] },
     limit: 1,
     depth: 1,
   })
-  return docs[0]
+  if (!docs[0]) return { notFound: true, revalidate: 60 }
+  return { props: { post: JSON.parse(JSON.stringify(docs[0])) }, revalidate: 600 }
 }
 
-export async function generateStaticParams() {
-  const p = await payload()
-  const { docs } = await p.find({ collection: 'posts', where: { _status: { equals: 'published' } }, limit: 500, depth: 0, select: { slug: true, comingSoon: true } })
-  return docs.filter((d) => !d.comingSoon).map((d) => ({ slug: d.slug }))
-}
-
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params
-  const post = await getPost(slug)
-  if (!post) return {}
-  const img = mediaUrl(post.cover as never, 'wide')
-  return {
-    title: post.title,
-    description: post.excerpt,
-    alternates: { canonical: `/blog/${post.slug}` },
-    openGraph: { type: 'article', title: post.title, description: post.excerpt, url: `/blog/${post.slug}`, publishedTime: post.publishedAt || undefined, images: img ? [img] : undefined },
-  }
-}
-
-export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params
-  const post = await getPost(slug)
-  if (!post) notFound()
+export default function PostPage({ post }: Props) {
   const cover = mediaUrl(post.cover as never, 'wide')
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -55,6 +43,15 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
     mainEntityOfPage: `https://lumalook.app/blog/${post.slug}`,
   }
   return (
+    <>
+    <Meta
+      title={`${post.title} · Lumalook`}
+      description={post.excerpt}
+      path={`/blog/${post.slug}`}
+      ogType="article"
+      image={cover}
+      publishedTime={post.publishedAt}
+    />
     <Shell active="blog">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
       <section className="article-hero">
@@ -93,5 +90,6 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
         </div>
       </article>
     </Shell>
+    </>
   )
 }

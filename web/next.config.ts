@@ -14,6 +14,7 @@ const security = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: { globalNotFound: true },
   async headers() {
     return [
       { source: '/:path*', headers: security },

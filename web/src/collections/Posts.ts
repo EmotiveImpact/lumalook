@@ -54,7 +54,7 @@ export const Posts: CollectionConfig = {
     },
   ],
   hooks: {
-    afterChange: [({ doc }) => revalidate(['/blog', `/blog/${doc.slug}`, '/sitemap.xml'])],
-    afterDelete: [({ doc }) => revalidate(['/blog', `/blog/${doc.slug}`, '/sitemap.xml'])],
+    afterChange: [({ doc }) => revalidate(['/blog', `/blog/${doc.slug}`])],
+    afterDelete: [({ doc }) => revalidate(['/blog', `/blog/${doc.slug}`])],
   },
 }

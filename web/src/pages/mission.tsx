@@ -1,20 +1,16 @@
-import type { Metadata } from 'next'
+import type { GetStaticProps } from 'next'
 import { Shell } from '@/components/Chrome'
+import { Meta } from '@/components/Meta'
 import { fragments } from '@/content/fragments'
 import { esc } from '@/lib/html'
-import { mediaAlt, mediaUrl, payload } from '@/lib/payload'
+import { mediaAlt, mediaUrl } from '@/lib/media'
+import { payload } from '@/lib/payload'
 
-export const dynamic = 'force-static'
+export const config = { runtime: 'nodejs', unstable_runtimeJS: false }
 
-const description = 'Why Lumalook exists: film looks true to every skin, from the history of the Shirley card to how we test every look on deep skin.'
-export const metadata: Metadata = {
-  title: 'Our mission',
-  description,
-  alternates: { canonical: '/mission' },
-  openGraph: { title: 'Lumalook: film looks true to every skin', description, url: '/mission' },
-}
+type Props = { html: string }
 
-export default async function MissionPage() {
+export const getStaticProps: GetStaticProps<Props> = async () => {
   const p = await payload()
   const m = await p.findGlobal({ slug: 'mission', depth: 1 })
   let founder: string
@@ -27,7 +23,19 @@ export default async function MissionPage() {
   } else {
     founder = `        <p><em class="placeholder">[Founder note: a few lines from Edem on why you started Lumalook, in your own words. We'll put your name and photo here once you've written it.]</em></p>\n`
   }
+  return { props: { html: fragments.missionBefore + founder + fragments.missionAfter }, revalidate: 600 }
+}
+
+export default function MissionPage({ html }: Props) {
   return (
-    <Shell active="mission" html={fragments.missionBefore + founder + fragments.missionAfter} />
+    <>
+      <Meta
+        title="Our mission · Lumalook"
+        description="Why Lumalook exists: film looks true to every skin, from the history of the Shirley card to how we test every look on deep skin."
+        ogTitle="Lumalook: film looks true to every skin"
+        path="/mission"
+      />
+      <Shell active="mission" html={html} />
+    </>
   )
 }

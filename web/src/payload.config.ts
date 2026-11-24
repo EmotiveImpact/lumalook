@@ -33,6 +33,9 @@ export default buildConfig({
     pool: { connectionString: process.env.DATABASE_URL || '' },
     // Schema changes ship as migrations (src/migrations), run before each build.
     push: false,
+    // No transactions: each save is written straight away, so the page rebuild that a
+    // save triggers (src/lib/revalidate.ts) reads the new content, not the old.
+    transactionOptions: false,
     prodMigrations: migrations,
   }),
   sharp,

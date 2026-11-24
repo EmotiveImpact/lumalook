@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { payload } from '@/lib/payload'
 
-export const dynamic = 'force-static'
+export const revalidate = 600
 
 const BASE = 'https://lumalook.app'
 const FIXED = ['', '/mission', '/showcase', '/blog', '/partners', '/founders', '/support', '/privacy', '/terms']

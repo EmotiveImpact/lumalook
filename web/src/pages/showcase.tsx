@@ -1,23 +1,19 @@
-import type { Metadata } from 'next'
+import type { GetStaticProps } from 'next'
 import { Shell } from '@/components/Chrome'
+import { Meta } from '@/components/Meta'
 import { fragments } from '@/content/fragments'
 import { esc, safeHref } from '@/lib/html'
-import { mediaAlt, mediaUrl, payload } from '@/lib/payload'
+import { mediaAlt, mediaUrl } from '@/lib/media'
+import { payload } from '@/lib/payload'
 
-export const dynamic = 'force-static'
-
-const description = 'Photos and films made with Lumalook, shared with permission and credited to the creators who made them.'
-export const metadata: Metadata = {
-  title: 'Showcase',
-  description,
-  alternates: { canonical: '/showcase' },
-  openGraph: { title: 'Made with Lumalook', description, url: '/showcase' },
-}
+export const config = { runtime: 'nodejs', unstable_runtimeJS: false }
 
 const EMPTY = '<div class="show-tile empty"><div><i>+</i><b>Your work here</b><small>Shot or graded with Lumalook</small></div></div>'
 const EMPTY_WIDE = EMPTY.replace('show-tile empty', 'show-tile empty wide')
 
-export default async function ShowcasePage() {
+type Props = { html: string }
+
+export const getStaticProps: GetStaticProps<Props> = async () => {
   const p = await payload()
   const { docs } = await p.find({ collection: 'showcase', where: { published: { equals: true } }, sort: 'order', limit: 60, depth: 1 })
   const tiles = docs.map((d) => {
@@ -46,7 +42,19 @@ export default async function ShowcasePage() {
       ? '      <p class="feat-note" style="margin-top:16px">The first spots go to our Founding Creators.</p>\n'
       : ''
   const grid = `      <div class="show-grid">\n${tiles.join('\n')}\n      </div>\n${note}`
+  return { props: { html: fragments.showcaseBefore + grid + fragments.showcaseAfter }, revalidate: 600 }
+}
+
+export default function ShowcasePage({ html }: Props) {
   return (
-    <Shell active="showcase" html={fragments.showcaseBefore + grid + fragments.showcaseAfter} />
+    <>
+      <Meta
+        title="Showcase · Lumalook"
+        description="Photos and films made with Lumalook, shared with permission and credited to the creators who made them."
+        ogTitle="Made with Lumalook"
+        path="/showcase"
+      />
+      <Shell active="showcase" html={html} />
+    </>
   )
 }
