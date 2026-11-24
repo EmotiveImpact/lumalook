@@ -364,9 +364,6 @@ final class AppModel: ObservableObject {
         // "imported video has no sound" bug. Every media app sets this.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
-        // Before any cube is read: a pack look replaced since this library
-        // installed it gets its new cube.
-        PackInstaller.applyReplacements(in: lutRepository)
         syncLookState()
         applyDebugRoute()
         rebakeRecipeLooksIfNeeded()

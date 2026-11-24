@@ -301,6 +301,12 @@
    "bad_frames": 0,
    "monk10": 0.319
   },
+  "film-mono-archive-hps800": {
+   "full": "true",
+   "default": "true",
+   "bad_frames": 0,
+   "monk10": 0.231
+  },
   "film-mono-archive-ir840": {
    "full": "true",
    "default": "true",
@@ -342,12 +348,6 @@
    "default": "true",
    "bad_frames": 0,
    "monk10": 0.231
-  },
-  "film-mono-archive-pm800": {
-   "full": "true",
-   "default": "true",
-   "bad_frames": 0,
-   "monk10": 0.241
   },
   "film-mono-archive-rir400": {
    "full": "true",

@@ -12,9 +12,8 @@ struct PackLook: Identifiable {
     let name: String            // e.g. "KD2 · Golden Gate"
     let character: String       // "thick contrast in the mids, peachy highlights"
     var recipe: LookRecipe = LookRecipe()
-    /// A bundled .cube (Resources/FilmLUTs) instead of a baked recipe: a
-    /// measured film emulation (CC BY-SA data), or one of Lumalook's own
-    /// looks. FilmLUTs/FILM_LUTS_CREDITS.md says which is which.
+    /// Measured film emulation: a bundled .cube (Resources/FilmLUTs) instead
+    /// of a baked recipe. CC BY-SA data — credits in FilmLUTs/CREDITS.md.
     var cubeFile: String? = nil
 }
 
@@ -276,12 +275,9 @@ enum PackCatalog {
                 PackLook(code: "FP125", name: "FP125 · Classic Mono 125",
                          character: "Box-speed classic since 1968.",
                          cubeFile: "FS_FP125.cube"),
-                // Lumalook's own look (tools/skin-test/make_mono_cube.py). It
-                // took the place of HPS800, whose measured cube was the same
-                // file as HP400 in the free Film Stocks 01.
-                PackLook(code: "PM800", name: "PM800 · Press Mono 800",
-                         character: "Our own press look: skin keeps its light, skies go dark.",
-                         cubeFile: "FS_PM800.cube"),
+                PackLook(code: "HPS800", name: "HPS800 · Press Mono 800",
+                         character: "The old press stock, pushed hard.",
+                         cubeFile: "FS_HPS800.cube"),
                 PackLook(code: "PF50", name: "PF50 · Glass Mono 50",
                          character: "Slow, silvery, impossibly smooth.",
                          cubeFile: "FS_PF50.cube"),
@@ -817,53 +813,6 @@ enum PackInstaller {
             }) else { return nil }
             return BakeJob(url: repository.fileURL(for: lut), recipe: look.recipe, title: look.name)
         }
-    }
-
-    /// A film look that left the catalogue for another one in the same pack.
-    struct Replacement {
-        let packID: String
-        /// The bundled file the old look was installed from.
-        let oldFile: String
-        /// The name the old look was installed under.
-        let oldName: String
-        /// The code of the look that took its place.
-        let newCode: String
-    }
-
-    /// Every film look swapped so far. A library that installed the pack
-    /// before the swap still holds the old cube, and `install` would never
-    /// bring the new one (the pack has as many looks as before).
-    static let replacements = [
-        // Its cube was the same file as HP400 in the free Film Stocks 01.
-        Replacement(packID: "film-mono-archive", oldFile: "FS_HPS800.cube",
-                    oldName: "HPS800 · Press Mono 800", newCode: "PM800"),
-    ]
-
-    /// Swaps each replaced film look in an installed pack for the look that
-    /// took its place, keeping the library entry (favourites, collections
-    /// and projects that use it carry on with the new look). Returns the
-    /// number swapped; a library with nothing to swap is left untouched.
-    @MainActor
-    @discardableResult
-    static func applyReplacements(in repository: LUTRepository) -> Int {
-        var swapped = 0
-        for replacement in replacements {
-            guard let pack = PackCatalog.packs.first(where: { $0.id == replacement.packID }),
-                  let look = pack.looks.first(where: { $0.code == replacement.newCode }),
-                  let cubeFile = look.cubeFile,
-                  let bundled = Bundle.main.url(
-                      forResource: (cubeFile as NSString).deletingPathExtension,
-                      withExtension: "cube") else { continue }
-            for lut in repository.luts
-            where lut.packID == replacement.packID && lut.originalFileName == replacement.oldFile {
-                // A name the person gave the look themselves stays theirs.
-                let name = lut.displayName == replacement.oldName ? look.name : lut.displayName
-                if repository.replaceFile(of: lut, with: bundled, displayName: name) {
-                    swapped += 1
-                }
-            }
-        }
-        return swapped
     }
 
     /// Bakes every look in the pack to a .cube and imports it into the LUT
