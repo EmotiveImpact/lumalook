@@ -474,12 +474,21 @@ struct ApplyLookView: View {
         return app.selectedImage ?? StillCompare.hero
     }
 
+    /// The Skin first preset on the picture, if one is worn. It is picked
+    /// like a look, so while it is on, the picture carries its name. The
+    /// label used to keep the name of the built-in look underneath.
+    private var wornPreset: SkinFirstPreset? {
+        app.selectedLUT == nil ? SkinFirstPreset.worn(by: app.settings) : nil
+    }
+
     private var currentLookName: String {
-        app.selectedLUT?.displayName ?? app.selectedLook.name
+        if let preset = wornPreset { return preset.name }
+        return app.selectedLUT?.displayName ?? app.selectedLook.name
     }
 
     private var currentLookColour: Color {
-        app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+        if let preset = wornPreset { return Color(hex: preset.tintHex) }
+        return app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
             ?? app.selectedLook.signature
     }
 

@@ -235,7 +235,12 @@ extension AppModel {
     /// never read as selected at the same time (camera double-highlight bug).
     func isCurrent(_ look: LibraryLook) -> Bool {
         switch look.source {
-        case .builtIn(let p): return selectedLUT == nil && selectedLook.name == p.name
+        // Not while a Skin first preset is worn over it: then the preset's
+        // own tile is the one that is on, and this look's tile is a pick
+        // that takes the preset off.
+        case .builtIn(let p):
+            return selectedLUT == nil && selectedLook.name == p.name
+                && SkinFirstPreset.worn(by: settings) == nil
         case .lut(let f):     return selectedLUT?.id == f.id
         case .saved(let s):
             return selectedLook.name == s.baseLookName
