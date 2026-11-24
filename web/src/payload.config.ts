@@ -45,7 +45,8 @@ export default buildConfig({
       enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       // Same database columns with or without Blob, so one set of migrations works everywhere.
       alwaysInsertFields: true,
-      collections: { media: true },
+      // Images load straight from the Blob CDN instead of through a server function.
+      collections: { media: { disablePayloadAccessControl: true } },
       token: process.env.BLOB_READ_WRITE_TOKEN,
     }),
   ],
