@@ -426,6 +426,321 @@ if mode == "check" {
           + "\(f1(meanOff)) of 255 on average, \(f1(offBefore.max() ?? 0)) for the worst.")
 }
 
+// MARK: - Measuring helpers (the checks below and the measure mode share them)
+
+func i255(_ v: Double) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
+func tri(_ c: RGB) -> String { "\(i255(c.0)),\(i255(c.1)),\(i255(c.2))" }
+func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: n, withPad: " ", startingAt: 0) }
+
+/// A square picture through the whole pipeline, read back at one pixel.
+func through(_ px: [Float], side: Int, _ st: LookState, at point: (Int, Int)) -> RGB {
+    let source = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) },
+                         bytesPerRow: side * 16, size: CGSize(width: side, height: side),
+                         format: .RGBAf, colorSpace: srgb)
+    let image = pipeline.apply(state: st, to: source, includeSplit: false).cropped(to: source.extent)
+    var buf = [Float](repeating: 0, count: 4)
+    buf.withUnsafeMutableBytes { raw in
+        pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: 16,
+                                bounds: CGRect(x: point.0, y: point.1, width: 1, height: 1),
+                                format: .RGBAf, colorSpace: srgb)
+    }
+    return (Double(buf[0]), Double(buf[1]), Double(buf[2]))
+}
+
+/// A flat square of one colour through the whole pipeline, read back at
+/// its centre (or its corner), so a spatial tool sees no neighbours.
+func flat(_ c: RGB, _ st: LookState, side: Int = 64, corner: Bool = false) -> RGB {
+    var px = [Float](repeating: 1, count: side * side * 4)
+    for i in 0..<(side * side) {
+        px[i * 4] = Float(c.0)
+        px[i * 4 + 1] = Float(c.1)
+        px[i * 4 + 2] = Float(c.2)
+    }
+    let at = corner ? 0 : side / 2
+    return through(px, side: side, st, at: (at, at))
+}
+
+/// How far the cube the app exports for a grade is from the picture that
+/// grade gives, over a spread of colours: the largest and the mean gap, of
+/// 255. Built the way `GradeCubeBaker` builds it: a 33-point lattice through
+/// the pipeline with the spatial tools taken off.
+func cubeDistance(recipe: LookRecipe = LookRecipe(), _ settings: LookSettings)
+    -> (worst: Double, mean: Double, at: String) {
+    let n = 33
+    let width = n * n, height = n
+    var pixels = [Float](repeating: 0, count: width * height * 4)
+    for y in 0..<height {
+        for x in 0..<width {
+            let i = (y * width + x) * 4
+            pixels[i] = Float(x % n) / Float(n - 1)
+            pixels[i + 1] = Float(y) / Float(n - 1)
+            pixels[i + 2] = Float(x / n) / Float(n - 1)
+            pixels[i + 3] = 1
+        }
+    }
+    let identity = CIImage(bitmapData: pixels.withUnsafeBufferPointer { Data(buffer: $0) },
+                           bytesPerRow: width * 16, size: CGSize(width: width, height: height),
+                           format: .RGBAf, colorSpace: srgb)
+    // As GradeCubeBaker strips them.
+    var s = settings
+    s.grain = 0; s.halation = 0; s.bloom = 0; s.vignette = 0; s.sharpness = 0
+    s.lensKind = LensKind.none.rawValue
+    let st = state(recipe: recipe, s)
+    let lattice = pipeline.apply(state: st, to: identity, includeSplit: false).cropped(to: identity.extent)
+    var out = [Float](repeating: 0, count: width * height * 4)
+    out.withUnsafeMutableBytes { raw in
+        pipeline.context.render(lattice, toBitmap: raw.baseAddress!, rowBytes: width * 16,
+                                bounds: CGRect(x: 0, y: 0, width: width, height: height),
+                                format: .RGBAf, colorSpace: srgb)
+    }
+    var worst = 0.0, total = 0.0, count = 0.0
+    var worstAt = ""
+    for b in stride(from: 0, to: n, by: 8) {
+        for g in stride(from: 0, to: n, by: 8) {
+            for r in stride(from: 0, to: n, by: 4) {
+                let i = (g * width + (b * n + r)) * 4
+                let cube: RGB = (Double(out[i]), Double(out[i + 1]), Double(out[i + 2]))
+                let c: RGB = (Double(r) / Double(n - 1), Double(g) / Double(n - 1), Double(b) / Double(n - 1))
+                let truth = flat(c, st, side: 24)
+                let d = gap(cube, truth)
+                total += d
+                count += 1
+                if d > worst {
+                    worst = d
+                    worstAt = "colour \(tri(c)): cube \(tri(cube)), picture \(tri(truth))"
+                }
+            }
+        }
+    }
+    return (worst, total / count, worstAt)
+}
+
+/// The red channel of a 512 pixel window, 0 to 255: its mean, its spread
+/// (standard deviation), its lowest and highest value, and the mean alpha.
+struct Spread {
+    var mean = 0.0, sd = 0.0, lowest = 0.0, highest = 0.0, alpha = 0.0
+    var line: String {
+        "mean \(f1(mean))  spread \(f1(sd))  lowest \(f1(lowest))  highest \(f1(highest))  alpha \(f1(alpha * 100))%"
+    }
+}
+
+func spread(_ image: CIImage, window: CGRect, managed: Bool = true) -> Spread {
+    let w = Int(window.width), h = Int(window.height)
+    var buf = [Float](repeating: 0, count: w * h * 4)
+    buf.withUnsafeMutableBytes { raw in
+        pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: w * 16,
+                                bounds: window, format: .RGBAf, colorSpace: managed ? srgb : nil)
+    }
+    var sum = 0.0, squares = 0.0, lo = 1e9, hi = -1e9, alpha = 0.0
+    let n = Double(w * h)
+    for i in stride(from: 0, to: buf.count, by: 4) {
+        let v = Double(buf[i]) * 255
+        sum += v
+        squares += v * v
+        lo = min(lo, v)
+        hi = max(hi, v)
+        alpha += Double(buf[i + 3])
+    }
+    let mean = sum / n
+    return Spread(mean: mean, sd: max(0, squares / n - mean * mean).squareRoot(),
+                  lowest: lo, highest: hi, alpha: alpha / n)
+}
+
+/// A flat grey the size of the big picture, and a window in the middle of it.
+let bigPicture = CGRect(x: 0, y: 0, width: 1400, height: 1400)
+let middleWindow = CGRect(x: 400, y: 400, width: 512, height: 512)
+func grey(_ v: Double) -> CIImage {
+    CIImage(color: CIColor(red: v, green: v, blue: v, colorSpace: srgb)!).cropped(to: bigPicture)
+}
+
+/// The picture scaled so its long edge is `longEdge`, with its corner at 0, 0.
+func sized(_ image: CIImage, longEdge: CGFloat) -> CIImage {
+    let longest = max(image.extent.width, image.extent.height)
+    let scaled = image.applyingFilter("CILanczosScaleTransform", parameters: [
+        kCIInputScaleKey: longEdge / longest, kCIInputAspectRatioKey: 1.0])
+    let e = scaled.extent
+    return scaled.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
+}
+
+/// How far a grade moves a picture when the picture is `longEdge` pixels
+/// long, judged at look-tile size (220 pixels, one pixel in from the edge):
+/// the mean change and the root-mean-square change, of 255. The same grade
+/// should move a tile, the big picture and a full-size export by the same.
+func change(_ st: LookState, on photo: CIImage, at longEdge: CGFloat) -> (Double, Double) {
+    let thumb = sized(photo, longEdge: 220).extent
+    let tw = max(8, Int(thumb.width.rounded(.down)) - 2)
+    let th = max(8, Int(thumb.height.rounded(.down)) - 2)
+    func small(_ image: CIImage) -> [UInt8] {
+        let down = sized(image, longEdge: 220)
+        var buf = [UInt8](repeating: 0, count: tw * th * 4)
+        buf.withUnsafeMutableBytes { raw in
+            pipeline.context.render(down, toBitmap: raw.baseAddress!, rowBytes: tw * 4,
+                                    bounds: CGRect(x: 1, y: 1, width: tw, height: th),
+                                    format: .RGBA8, colorSpace: srgb)
+        }
+        return buf
+    }
+    let base = sized(photo, longEdge: longEdge)
+    let rect = CGRect(x: 0, y: 0, width: base.extent.width.rounded(.down),
+                      height: base.extent.height.rounded(.down))
+    let cropped = base.cropped(to: rect)
+    let out = pipeline.apply(state: st, to: cropped, includeSplit: false).cropped(to: rect)
+    let a = small(cropped), b = small(out)
+    var sum = 0.0, squares = 0.0, n = 0.0
+    for i in stride(from: 0, to: a.count, by: 4) {
+        for c in 0..<3 {
+            let d = Double(b[i + c]) - Double(a[i + c])
+            sum += abs(d)
+            squares += d * d
+            n += 1
+        }
+    }
+    return (sum / n, (squares / n).squareRoot())
+}
+
+let testPortrait = CIImage(contentsOf: portraitDir.appendingPathComponent("day-pexels-9629932.jpg"),
+                           options: [.applyOrientationProperty: true])
+
+// MARK: - 5. The film tools and the tone sliders do what they say
+
+if mode == "check" {
+    section("5. Halation, grain, Shadows and Highlights do what they say, and nothing else")
+    let deepSkin: RGB = (0.30, 0.19, 0.14), lightSkin: RGB = (0.80, 0.62, 0.52)
+    let grey10: RGB = (0.1, 0.1, 0.1), grey25: RGB = (0.25, 0.25, 0.25)
+    let grey50: RGB = (0.5, 0.5, 0.5), grey75: RGB = (0.75, 0.75, 0.75)
+    let pureBlack: RGB = (0, 0, 0), pureWhite: RGB = (1, 1, 1)
+
+    // Halation is a glow around highlights. With no highlight in the picture
+    // it has nothing to do. It used to take red out of everything below the
+    // highlights: mid grey came out teal (0, 91, 120), deep skin black.
+    let halation = state(full { $0.halation = 50 })
+    var halationWorst = 0.0, halationAt = ""
+    for c in [pureBlack, grey10, grey25, grey50, grey75, deepSkin, lightSkin] {
+        let out = flat(c, halation)
+        if gap(out, c) > halationWorst { halationWorst = gap(out, c); halationAt = "\(tri(c)) came out \(tri(out))" }
+    }
+    check(halationWorst < 1.5, "Halation leaves a picture with no highlights alone (it turned mid grey teal)",
+          halationWorst < 1.5 ? "largest change \(f1(halationWorst)) of 255" : halationAt)
+
+    // Half white, half dark grey: the glow reaches into the dark half, warm,
+    // and nothing in it gets darker.
+    let side = 96
+    var halves = [Float](repeating: 1, count: side * side * 4)
+    for y in 0..<side {
+        for x in (side / 2)..<side {
+            let i = (y * side + x) * 4
+            halves[i] = 0.1; halves[i + 1] = 0.1; halves[i + 2] = 0.1
+        }
+    }
+    let nearEdge = through(halves, side: side, halation, at: (side / 2 + 2, side / 2))
+    check(nearEdge.0 > 0.1 + 2.0 / 255 && nearEdge.0 > nearEdge.1 && nearEdge.1 >= nearEdge.2
+              && nearEdge.1 > 0.1 - 1.0 / 255 && nearEdge.2 > 0.1 - 1.0 / 255,
+          "Halation still glows warm next to a highlight, and darkens nothing",
+          "dark grey 26,26,26 beside white came out \(tri(nearEdge))")
+
+    // Shadows pulled down deepens deep skin and keeps its colour. It used to
+    // take the green and blue out: 77,48,36 became 65,22,0.
+    let down = flat(deepSkin, state(full { $0.shadows = -50 }))
+    let hueBefore = deepSkin.1 / deepSkin.0, hueAfter = down.1 / max(down.0, 1e-6)
+    check(down.0 < deepSkin.0 && down.0 > down.1 && down.1 > down.2 && down.2 > 12.0 / 255
+              && abs(hueAfter - hueBefore) < 0.10,
+          "Shadows at -50 darkens deep skin and keeps its colour (it turned 77,48,36 into 65,22,0)",
+          "came out \(tri(down))")
+
+    // Shadows up: black and white stay, and the greys land where the
+    // slider always put them.
+    let up = state(full { $0.shadows = 50 })
+    let upGreys = [pureBlack, grey25, grey50, pureWhite].map { flat($0, up) }
+    check(gap(upGreys[0], pureBlack) < 1.5 && gap(upGreys[3], pureWhite) < 1.5
+              && abs(upGreys[1].0 * 255 - 97) < 3 && abs(upGreys[2].0 * 255 - 157) < 3,
+          "Shadows at +50 lifts 25% grey to 97 and mid grey to 157, and leaves black and white alone",
+          "black \(tri(upGreys[0])), 25% \(tri(upGreys[1])), mid \(tri(upGreys[2])), white \(tri(upGreys[3]))")
+
+    // Highlights moves the top half by the same amount up or down. Pulled
+    // down it used to move 75% grey by 7 where Shadows moved its own end by 30.
+    let lower = state(full { $0.highlights = -50 }), raise = state(full { $0.highlights = 50 })
+    let lowered = (flat(grey75, lower).0 - 0.75) * 255, raised = (flat(grey75, raise).0 - 0.75) * 255
+    check(lowered < -10 && lowered > -22 && raised > 10 && raised < 22 && abs(lowered + raised) < 4,
+          "Highlights at -50 and +50 move 75% grey by the same amount, down and up",
+          "down \(f1(lowered)), up \(f1(raised)) of 255")
+    var highlightStray = 0.0
+    for st in [lower, raise] {
+        for c in [pureBlack, grey25, grey50, pureWhite] { highlightStray = max(highlightStray, gap(flat(c, st), c)) }
+    }
+    check(highlightStray < 1.5, "Highlights leaves black, the lower half and white where they are",
+          "largest change \(f1(highlightStray)) of 255")
+    let warm = flat(lightSkin, raise)
+    check(abs(warm.1 / warm.0 - lightSkin.1 / lightSkin.0) < 0.03 && abs(warm.2 / warm.0 - lightSkin.2 / lightSkin.0) < 0.04,
+          "Highlights at +50 brightens light skin without changing its colour",
+          "204,158,133 came out \(tri(warm))")
+
+    // Grain roughens the picture. It must not brighten it or leave white
+    // specks: it lifted mid grey from 128 to 139, with specks at 255.
+    for v in [0.25, 0.5, 0.75] {
+        let before = spread(grey(v), window: middleWindow)
+        let after = spread(pipeline.applyGrain(strength: 0.5, to: grey(v)), window: middleWindow)
+        check(abs(after.mean - before.mean) < 1.5 && after.sd > 1.0 && after.sd < 10
+                  && after.highest < before.mean + 40 && after.lowest > before.mean - 40,
+              "Grain at 50 on grey \(i255(v)) roughens it without brightening it or leaving specks",
+              after.line)
+    }
+
+    section("6. The exported .cube is the picture, and a tile is the big picture made small")
+    var cubeWorst = 0.0, cubeAt = ""
+    var grades: [(String, LookSettings)] = SkinFirstPreset.allCases.map { preset in
+        var s = preset.settings
+        s.intensity = 100
+        return (preset.name, s)
+    }
+    grades.append(("shadows +50", full { $0.shadows = 50 }))
+    grades.append(("shadows -50", full { $0.shadows = -50 }))
+    grades.append(("highlights -50", full { $0.highlights = -50 }))
+    grades.append(("highlights +50", full { $0.highlights = 50 }))
+    grades.append(("fade 50", full { $0.fade = 50 }))
+    grades.append(("contrast 60, warmth 30, sharpness 50", full { $0.contrast = 60; $0.warmth = 30; $0.sharpness = 50 }))
+    for (name, settings) in grades {
+        let d = cubeDistance(settings)
+        if d.worst > cubeWorst { cubeWorst = d.worst; cubeAt = "\(name): \(d.at)" }
+    }
+    check(cubeWorst < 1.0,
+          "the exported .cube matches the picture for the 3 presets and for Shadows, Highlights and Fade",
+          cubeWorst < 1.0 ? "largest gap \(f1(cubeWorst)) of 255 over \(grades.count) grades" : cubeAt)
+
+    if let photo = testPortrait {
+        // Sized in pixels, Bloom at 50 moved a tile by 14 of 255, the big
+        // picture by 3 and a full-size export by 1.
+        var tools: [(String, LookState)] = [
+            ("Golden Hour", state(recipe: goldenHour, full())),
+            ("bloom 50", state(full { $0.bloom = 50 })),
+            ("halation 50", state(full { $0.halation = 50 })),
+            ("vignette 50", state(full { $0.vignette = 50 })),
+            ("the soft lens", state(full { $0.lensKind = LensKind.diffusion.rawValue; $0.lensAmount = 75 })),
+            ("the tilt-shift lens", state(full { $0.lensKind = LensKind.tiltShift.rawValue; $0.lensAmount = 75 })),
+            ("the toy lens", state(full { $0.lensKind = LensKind.plastic.rawValue; $0.lensAmount = 75 })),
+        ]
+        if let glow = shipped.filter({ $0.recipe != nil })
+            .max(by: { ($0.recipe?.bloom ?? 0) < ($1.recipe?.bloom ?? 0) }), let r = glow.lookRecipe {
+            tools.append(("\(glow.code), the look with the most bloom", state(recipe: r, full())))
+        }
+        var uneven: [String] = []
+        var widest = 0.0
+        for (name, st) in tools {
+            let sizes = [220.0, 1400.0, 4032.0].map { change(st, on: photo, at: CGFloat($0)).0 }
+            let lo = sizes.min() ?? 0, hi = sizes.max() ?? 0
+            widest = max(widest, hi - lo)
+            // The same to within 1 of 255, or within a quarter of itself.
+            if hi - lo > max(1.0, 0.25 * hi) {
+                uneven.append("\(name): \(sizes.map(f1).joined(separator: " / "))")
+            }
+        }
+        check(uneven.isEmpty,
+              "glow, blur and lenses move a 220 pixel tile, the 1400 pixel big picture and a 4032 pixel export alike",
+              uneven.isEmpty ? "\(tools.count) tools, widest difference \(f1(widest)) of 255" : uneven.joined(separator: "; "))
+    } else {
+        print("  note  no test portrait in \(portraitDir.path), so the sizes were not compared")
+    }
+}
+
 // MARK: - Pictures
 
 /// Writes two test portraits through the presets and two film looks, so a
@@ -473,33 +788,7 @@ func writePictures() {
 // MARK: - Measurements (mode "measure"): what the tools really do
 
 if mode == "measure" {
-    func i255(_ v: Double) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
-    func tri(_ c: RGB) -> String { "\(i255(c.0)),\(i255(c.1)),\(i255(c.2))" }
-    func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: n, withPad: " ", startingAt: 0) }
-
-    /// A flat square of one colour through the whole pipeline, read back at
-    /// its centre (or its corner), so a spatial tool sees no neighbours.
-    func flat(_ c: RGB, _ st: LookState, side: Int = 64, corner: Bool = false) -> RGB {
-        var px = [Float](repeating: 1, count: side * side * 4)
-        for i in 0..<(side * side) {
-            px[i * 4] = Float(c.0)
-            px[i * 4 + 1] = Float(c.1)
-            px[i * 4 + 2] = Float(c.2)
-        }
-        let source = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) },
-                             bytesPerRow: side * 16, size: CGSize(width: side, height: side),
-                             format: .RGBAf, colorSpace: srgb)
-        let image = pipeline.apply(state: st, to: source, includeSplit: false).cropped(to: source.extent)
-        var buf = [Float](repeating: 0, count: 4)
-        let at = corner ? 0 : side / 2
-        buf.withUnsafeMutableBytes { raw in
-            pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: 16,
-                                    bounds: CGRect(x: at, y: at, width: 1, height: 1),
-                                    format: .RGBAf, colorSpace: srgb)
-        }
-        return (Double(buf[0]), Double(buf[1]), Double(buf[2]))
-    }
-
+    setvbuf(stdout, nil, _IOLBF, 0)
     // M1. Each slider on flat colours.
     section("M1. What each slider does to flat colours (0 to 255, as a screen shows them)")
     let patches: [(String, RGB)] = [
@@ -551,49 +840,7 @@ if mode == "measure" {
 
     // M2. The same picture at thumbnail, preview and export size.
     section("M2. How strong each spatial tool looks at thumbnail (220), preview (1400) and export (4032) size")
-    let portraitURL = portraitDir.appendingPathComponent("day-pexels-9629932.jpg")
-    if let photo = CIImage(contentsOf: portraitURL, options: [.applyOrientationProperty: true]) {
-        func sized(_ image: CIImage, longEdge: CGFloat) -> CIImage {
-            let longest = max(image.extent.width, image.extent.height)
-            let scaled = image.applyingFilter("CILanczosScaleTransform", parameters: [
-                kCIInputScaleKey: longEdge / longest, kCIInputAspectRatioKey: 1.0])
-            let e = scaled.extent
-            return scaled.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
-        }
-        // Every size is judged at thumbnail size, one pixel in from the edge.
-        let thumb = sized(photo, longEdge: 220).extent
-        let tw = max(8, Int(thumb.width.rounded(.down)) - 2)
-        let th = max(8, Int(thumb.height.rounded(.down)) - 2)
-        func small(_ image: CIImage) -> [UInt8] {
-            let down = sized(image, longEdge: 220)
-            var buf = [UInt8](repeating: 0, count: tw * th * 4)
-            buf.withUnsafeMutableBytes { raw in
-                pipeline.context.render(down, toBitmap: raw.baseAddress!, rowBytes: tw * 4,
-                                        bounds: CGRect(x: 1, y: 1, width: tw, height: th),
-                                        format: .RGBA8, colorSpace: srgb)
-            }
-            return buf
-        }
-        /// How far the tool moves the picture, seen at one viewing size:
-        /// the mean change and the root-mean-square change, of 255.
-        func effect(_ st: LookState, at longEdge: CGFloat) -> (Double, Double) {
-            let base = sized(photo, longEdge: longEdge)
-            let rect = CGRect(x: 0, y: 0, width: base.extent.width.rounded(.down),
-                              height: base.extent.height.rounded(.down))
-            let cropped = base.cropped(to: rect)
-            let out = pipeline.apply(state: st, to: cropped, includeSplit: false).cropped(to: rect)
-            let a = small(cropped), b = small(out)
-            var sum = 0.0, squares = 0.0, n = 0.0
-            for i in stride(from: 0, to: a.count, by: 4) {
-                for c in 0..<3 {
-                    let d = Double(b[i + c]) - Double(a[i + c])
-                    sum += abs(d)
-                    squares += d * d
-                    n += 1
-                }
-            }
-            return (sum / n, (squares / n).squareRoot())
-        }
+    if let photo = testPortrait {
         var tools: [(String, LookState)] = []
         tools.append(("Golden Hour (the default look)", state(recipe: goldenHour, full())))
         if let glow = shipped.filter({ $0.recipe != nil })
@@ -614,65 +861,20 @@ if mode == "measure" {
         for (name, st) in tools {
             var cells = ""
             for edge in [220.0, 1400.0, 4032.0] {
-                let e = effect(st, at: CGFloat(edge))
+                let e = change(st, on: photo, at: CGFloat(edge))
                 cells += pad("\(f1(e.0)), \(f1(e.1))", 18)
             }
             print("  " + pad(name, 44) + cells)
         }
     } else {
-        print("  note  no portrait at \(portraitURL.path)")
+        print("  note  no test portrait in \(portraitDir.path)")
     }
 
     // M3. The exported cube against the picture.
     section("M3. The exported .cube against the picture it was made from (largest gap, of 255)")
-    func cubeGap(_ name: String, recipe: LookRecipe = LookRecipe(), _ settings: LookSettings) {
-        let n = 33
-        let width = n * n, height = n
-        var pixels = [Float](repeating: 0, count: width * height * 4)
-        for y in 0..<height {
-            for x in 0..<width {
-                let i = (y * width + x) * 4
-                pixels[i] = Float(x % n) / Float(n - 1)
-                pixels[i + 1] = Float(y) / Float(n - 1)
-                pixels[i + 2] = Float(x / n) / Float(n - 1)
-                pixels[i + 3] = 1
-            }
-        }
-        let identity = CIImage(bitmapData: pixels.withUnsafeBufferPointer { Data(buffer: $0) },
-                               bytesPerRow: width * 16, size: CGSize(width: width, height: height),
-                               format: .RGBAf, colorSpace: srgb)
-        // As GradeCubeBaker strips them.
-        var s = settings
-        s.grain = 0; s.halation = 0; s.bloom = 0; s.vignette = 0
-        s.lensKind = LensKind.none.rawValue
-        let st = state(recipe: recipe, s)
-        let lattice = pipeline.apply(state: st, to: identity, includeSplit: false).cropped(to: identity.extent)
-        var out = [Float](repeating: 0, count: width * height * 4)
-        out.withUnsafeMutableBytes { raw in
-            pipeline.context.render(lattice, toBitmap: raw.baseAddress!, rowBytes: width * 16,
-                                    bounds: CGRect(x: 0, y: 0, width: width, height: height),
-                                    format: .RGBAf, colorSpace: srgb)
-        }
-        var worst = 0.0, total = 0.0, count = 0.0
-        var worstAt = ""
-        for b in stride(from: 0, to: n, by: 8) {
-            for g in stride(from: 0, to: n, by: 8) {
-                for r in stride(from: 0, to: n, by: 4) {
-                    let i = (g * width + (b * n + r)) * 4
-                    let cube: RGB = (Double(out[i]), Double(out[i + 1]), Double(out[i + 2]))
-                    let c: RGB = (Double(r) / Double(n - 1), Double(g) / Double(n - 1), Double(b) / Double(n - 1))
-                    let truth = flat(c, st, side: 24)
-                    let d = gap(cube, truth)
-                    total += d
-                    count += 1
-                    if d > worst {
-                        worst = d
-                        worstAt = "colour \(tri(c)): cube \(tri(cube)), picture \(tri(truth))"
-                    }
-                }
-            }
-        }
-        print("  " + pad(name, 30) + pad("worst \(f1(worst))", 14) + pad("mean \(f1(total / count))", 12) + worstAt)
+    func cubeGap(_ name: String, _ settings: LookSettings) {
+        let d = cubeDistance(settings)
+        print("  " + pad(name, 30) + pad("worst \(f1(d.worst))", 14) + pad("mean \(f1(d.mean))", 12) + d.at)
     }
     cubeGap("nothing on", full())
     for preset in SkinFirstPreset.allCases {
@@ -691,41 +893,66 @@ if mode == "measure" {
 
     // M4. Grain: does it shift the picture, or only roughen it?
     section("M4. Grain 50 on flat greys, a 512 pixel window of a 1400 pixel picture (0 to 255)")
-    let big = CGRect(x: 0, y: 0, width: 1400, height: 1400)
-    let window = CGRect(x: 400, y: 400, width: 512, height: 512)
-    func spread(_ image: CIImage, managed: Bool = true) -> String {
-        var buf = [Float](repeating: 0, count: 512 * 512 * 4)
-        buf.withUnsafeMutableBytes { raw in
-            pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: 512 * 16,
-                                    bounds: window, format: .RGBAf, colorSpace: managed ? srgb : nil)
-        }
-        var sum = 0.0, squares = 0.0, lo = 1e9, hi = -1e9, alpha = 0.0
-        let n = Double(512 * 512)
-        for i in stride(from: 0, to: buf.count, by: 4) {
-            let v = Double(buf[i]) * 255
-            sum += v
-            squares += v * v
-            lo = min(lo, v)
-            hi = max(hi, v)
-            alpha += Double(buf[i + 3])
-        }
-        let mean = sum / n
-        let sd = max(0, squares / n - mean * mean).squareRoot()
-        return "mean \(f1(mean))  spread \(f1(sd))  lowest \(f1(lo))  highest \(f1(hi))  alpha \(f1(alpha / n * 100))%"
-    }
-    func grey(_ v: Double) -> CIImage {
-        CIImage(color: CIColor(red: v, green: v, blue: v, colorSpace: srgb)!).cropped(to: big)
-    }
     if let noise = CIFilter.randomGenerator().outputImage {
-        print("  " + pad("raw noise, red channel", 34) + spread(noise.cropped(to: big), managed: false))
+        print("  " + pad("raw noise, red channel", 34) + spread(noise.cropped(to: bigPicture), window: middleWindow, managed: false).line)
         print("  " + pad("raw noise with alpha set to 1", 34)
-              + spread(noise.cropped(to: big).settingAlphaOne(in: big), managed: false))
+              + spread(noise.cropped(to: bigPicture).settingAlphaOne(in: bigPicture),
+                       window: middleWindow, managed: false).line)
     }
     for v in [0.1, 0.25, 0.5, 0.75, 0.9] {
         let base = grey(v)
-        print("  " + pad("grey \(i255(v)) as it is", 34) + spread(base))
-        print("  " + pad("grey \(i255(v)) with grain 50", 34) + spread(pipeline.applyGrain(strength: 0.5, to: base)))
+        print("  " + pad("grey \(i255(v)) as it is", 34) + spread(base, window: middleWindow).line)
+        print("  " + pad("grey \(i255(v)) with grain 50", 34) + spread(pipeline.applyGrain(strength: 0.5, to: base), window: middleWindow).line)
     }
+
+    // M5. The playing video preview used to hand the pipeline a frame with
+    // no bounds (clamped to extent). How far is that from the same frame
+    // with its bounds, which is what the export hands it?
+    section("M5. A frame without bounds (the old video preview) against the same frame with bounds (the export), of 255")
+    if let photo = testPortrait {
+        let rect = CGRect(x: 0, y: 0, width: photo.extent.width.rounded(.down),
+                          height: photo.extent.height.rounded(.down))
+        let frame = photo.transformed(by: CGAffineTransform(translationX: -photo.extent.minX,
+                                                            y: -photo.extent.minY)).cropped(to: rect)
+        func bytes(_ image: CIImage) -> [UInt8] {
+            let w = Int(rect.width), h = Int(rect.height)
+            var buf = [UInt8](repeating: 0, count: w * h * 4)
+            buf.withUnsafeMutableBytes { raw in
+                pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: w * 4,
+                                        bounds: rect, format: .RGBA8, colorSpace: srgb)
+            }
+            return buf
+        }
+        func apart(_ name: String, _ st: LookState, split: Bool = false) {
+            let bounded = bytes(pipeline.apply(state: st, to: frame, includeSplit: split).cropped(to: rect))
+            let unbounded = bytes(pipeline.apply(state: st, to: frame.clampedToExtent(), includeSplit: split)
+                .cropped(to: rect))
+            var sum = 0.0, worst = 0.0
+            for i in stride(from: 0, to: bounded.count, by: 4) {
+                for c in 0..<3 {
+                    let d = abs(Double(bounded[i + c]) - Double(unbounded[i + c]))
+                    sum += d
+                    worst = max(worst, d)
+                }
+            }
+            print("  " + pad(name, 40) + "mean \(f1(sum / Double(bounded.count / 4 * 3)))   worst \(f1(worst))")
+        }
+        apart("nothing on", state(full()))
+        apart("Golden Hour (the default look)", state(recipe: goldenHour, full()))
+        apart("vignette 50", state(full { $0.vignette = 50 }))
+        apart("bloom 50", state(full { $0.bloom = 50 }))
+        apart("grain 50", state(full { $0.grain = 50 }))
+        apart("sharpness 50", state(full { $0.sharpness = 50 }))
+        for lens in LensKind.allCases where lens != .none {
+            apart("lens \(lens.rawValue) 75", state(full { $0.lensKind = lens.rawValue; $0.lensAmount = 75 }))
+        }
+        let wiped = state(recipe: goldenHour, full())
+        wiped.splitFraction = 0.3
+        apart("the before and after wipe at 30%", wiped, split: true)
+        // Halation is left out: its glow is sized against the frame, and
+        // a frame without bounds has no size to give it.
+    }
+
     exit(0)
 }
 

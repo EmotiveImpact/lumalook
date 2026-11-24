@@ -232,6 +232,52 @@ do {
           "a look that changes nothing costs nothing (no filter is made)")
 }
 
+// MARK: - 1b. The Shadows and Highlights curve
+
+section("1b. The Shadows and Highlights curve, at every position of both sliders")
+do {
+    var smallestSlope = 10.0, pinned = true, turnedBack: [String] = []
+    for si in -10...10 {
+        for hi in -10...10 {
+            let s = Double(si) / 10, h = Double(hi) / 10
+            var prev = TrueColour.shadowHighlightCurve(0, shadows: s, highlights: h)
+            if abs(prev) > 1e-9 || abs(TrueColour.shadowHighlightCurve(1, shadows: s, highlights: h) - 1) > 1e-9 {
+                pinned = false
+            }
+            for i in 1...1000 {
+                let y = TrueColour.shadowHighlightCurve(Double(i) / 1000, shadows: s, highlights: h)
+                smallestSlope = min(smallestSlope, (y - prev) * 1000)
+                if y < prev - 1e-12, turnedBack.count < 4 { turnedBack.append("shadows \(s), highlights \(h)") }
+                prev = y
+            }
+        }
+    }
+    check(pinned, "black stays black and white stays white at all 441 settings")
+    check(turnedBack.isEmpty && smallestSlope > 0.05,
+          "the curve never turns back or goes flat (tones never swap places or merge)",
+          turnedBack.isEmpty ? "smallest slope \(f3(smallestSlope))" : turnedBack.joined(separator: "; "))
+
+    func grey(_ v: Double, _ s: Double, _ h: Double) -> Double {
+        TrueColour.shadowHighlightCurve(v / 255, shadows: s, highlights: h) * 255
+    }
+    // What CIHighlightShadowAdjust gave greys at Shadows +50, measured on a
+    // Mac before it was replaced: the slider keeps its feel.
+    let was: [(Double, Double)] = [(26, 45), (64, 97), (128, 157), (191, 202)]
+    let off = was.map { abs(grey($0.0, 0.5, 0) - $0.1) }.max() ?? 0
+    check(off < 1.5, "Shadows at +50 puts greys where the slider always put them, to within 1.5 of 255",
+          "largest difference \(f1(off))")
+    let lowerHalf = [grey(127.5, 0, 0.5) - 127.5, grey(127.5, 0, -0.5) - 127.5, grey(64, 0, 1) - 64,
+                     grey(100, 0, -1) - 100].map { abs($0) }.max() ?? 0
+    check(lowerHalf < 1e-6, "Highlights leaves mid grey and everything below it alone",
+          "largest change \(f3(lowerHalf))")
+    let up = grey(191.25, 0, 0.5) - 191.25, down = grey(191.25, 0, -0.5) - 191.25
+    check(abs(up + down) < 0.01 && up > 12 && up < 20,
+          "Highlights moves 75% grey by the same amount up and down", "up \(f1(up)), down \(f1(down)) of 255")
+    check(grey(26, -0.5, 0) < 26 && grey(26, -0.5, 0) > 12 && grey(26, -1, 0) > 6,
+          "Shadows pulled down deepens the darks without flattening them",
+          "10% grey 26 goes to \(f1(grey(26, -0.5, 0))) at -50 and \(f1(grey(26, -1, 0))) at -100")
+}
+
 // MARK: - 2. The tone cube
 
 section("2. The colour cube the tone curve is baked into, True Colour on and off")
