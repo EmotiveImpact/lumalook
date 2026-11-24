@@ -561,6 +561,50 @@ final class LookPipeline: @unchecked Sendable {
         return source
     }
 
+    // MARK: - Auto
+
+    /// The long edge of the small copy Auto reads. A cast is the same on a
+    /// small copy as on the picture, and a small copy has no sensor noise
+    /// left in it to blur what is grey and what is not.
+    static let balanceEdge: CGFloat = 96
+
+    /// What Auto reads from a picture: whether its neutrals carry a colour
+    /// cast, and which. The reading itself is `TrueColour.readBalance`; this
+    /// makes the small copy it reads from.
+    func readBalance(of source: CIImage, under slot: ConversionSlot = .none) -> TrueColour.Balance {
+        let extent = source.extent
+        guard !extent.isInfinite, extent.width >= 8, extent.height >= 8,
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return .unreadable }
+        let scale = min(1, Self.balanceEdge / max(extent.width, extent.height))
+        let small = asShot(source, under: slot).applyingFilter("CILanczosScaleTransform", parameters: [
+            kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1.0])
+        // Whole pixels inside the copy, so no edge pixel is part picture and
+        // part nothing.
+        let e = small.extent
+        let bounds = CGRect(x: e.minX.rounded(.up), y: e.minY.rounded(.up),
+                            width: e.maxX.rounded(.down) - e.minX.rounded(.up),
+                            height: e.maxY.rounded(.down) - e.minY.rounded(.up))
+        let width = Int(bounds.width), height = Int(bounds.height)
+        guard width >= 4, height >= 4 else { return .unreadable }
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        rgba.withUnsafeMutableBytes { raw in
+            context.render(small, toBitmap: raw.baseAddress!, rowBytes: width * 4, bounds: bounds,
+                           format: .RGBA8, colorSpace: space)
+        }
+        return TrueColour.readBalance(rgba: rgba, width: width, height: height)
+    }
+
+    /// The Warmth and Tint Auto sets for a picture, or nil when it leaves
+    /// the picture alone (its neutrals are neutral, or it has none to go
+    /// by). Auto takes a colour cast off and does nothing else: it reads the
+    /// cast where the picture is nearly grey and cannot be skin, and never
+    /// takes warmth out.
+    func autoBalance(of source: CIImage, under slot: ConversionSlot = .none) -> (warmth: Double, tint: Double)? {
+        guard case .cast(let r, let g, let b) = readBalance(of: source, under: slot) else { return nil }
+        let balance = neutralising((r: r, g: g, b: b))
+        return balance.warmth == 0 && balance.tint == 0 ? nil : balance
+    }
+
     // MARK: - Built-in look recipes
 
     /// `trueColour` is the switch position: the live one unless a caller

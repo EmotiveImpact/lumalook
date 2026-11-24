@@ -1060,14 +1060,19 @@ struct ApplyLookView: View {
 
                 toolDivider
 
+                // Auto takes a colour cast off and nothing else. What it sets
+                // is a white balance, so the White bal. tile next to it lights
+                // up and takes it off again. For a moment its own tile says
+                // what it found, so a tap that changes nothing is not a tap
+                // that did nothing.
                 if LumaFeatures.autoGrade {
-                    tool("wand.and.stars", app.isAutoGrading ? "Working" : "Auto",
-                         on: app.isAutoGrading, enabled: hasRealMedia && !app.isAutoGrading) {
+                    tool("wand.and.stars", autoLabel,
+                         on: app.isAutoGrading || app.autoFound != nil,
+                         enabled: hasRealMedia && !app.isAutoGrading) {
                         guard hasRealMedia else { return }
                         Task { await app.autoGrade() }
-                        LumaHaptics.shared.tap()
                     }
-                    .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
+                    .accessibilityHint(hasRealMedia ? "Takes a colour cast off the picture" : "Pick a photo or video first")
                 }
                 // Lit while a white balance is on, so it is never on unseen
                 // (it carries to the next look and the next photo). Tapping
@@ -1151,6 +1156,16 @@ struct ApplyLookView: View {
         .accessibilityLabel(label)
         .accessibilityValue(value)
         .accessibilityAddTraits(picked ? .isSelected : [])
+    }
+
+    /// The Auto tile's word: what it is doing, or for a moment what it found.
+    private var autoLabel: String {
+        if app.isAutoGrading { return "Working" }
+        switch app.autoFound {
+        case .fixed: return "Fixed"
+        case .nothingToFix: return "No change"
+        case nil: return "Auto"
+        }
     }
 
     /// The same quiet tile with a glyph where the value would be.

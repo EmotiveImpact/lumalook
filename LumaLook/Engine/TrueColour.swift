@@ -544,6 +544,95 @@ enum TrueColour {
         return hasher.finalize()
     }
 
+    // MARK: Auto balance
+
+    /// What Auto reads from a picture.
+    enum Balance: Equatable {
+        /// Nothing in the picture is plainly neutral, so there is nothing to
+        /// go by. The picture is left alone.
+        case unreadable
+        /// Its neutrals are neutral. The picture is left alone.
+        case balanced
+        /// Its neutrals carry a cast: a mid grey in this picture looks like
+        /// this colour (as a screen shows it, 0 to 1). The White balance
+        /// that turns this colour grey takes the cast off.
+        case cast(r: Double, g: Double, b: Double)
+    }
+
+    /// How far from grey, in CIELAB units, a colour may be and still count
+    /// as a neutral that carries a cast.
+    static let balanceReach = 14.0
+    /// The most cast Auto takes off, in CIELAB units. A picture graded on
+    /// purpose (a teal sky behind a portrait) reads like a cast, so Auto
+    /// only ever nudges.
+    static let balanceMost = 5.0
+
+    /// Reads a picture's colour cast from the parts of it that are nearly
+    /// grey and cannot be skin. `rgba` is a small copy of the picture, 8 bits
+    /// a channel, as a screen shows it.
+    ///
+    /// Skin never has a say. The Auto this replaces averaged the whole frame,
+    /// so a portrait full of brown skin looked too warm to it: it cooled 26
+    /// of the 29 test portraits, 9 of them as far as the slider goes. Here
+    /// any colour that could be skin (CIELAB hue 5 to 100 degrees) is left
+    /// out, and warmth is never taken out of a picture: a warm light cannot
+    /// be told from skin by colour, so a cast that leans yellow keeps its
+    /// yellow, and one that leans red as well is left alone altogether.
+    ///
+    /// Three more things keep it from touching a good picture:
+    /// 1. At least 8% of the picture has to be such a neutral.
+    /// 2. At least 60% of those neutrals have to sit together (within 4
+    ///    units of each other). Foliage, neon and mixed light do not.
+    /// 3. A cast under 1.5 units is no cast, and no more than `balanceMost`
+    ///    is ever taken off.
+    static func readBalance(rgba: [UInt8], width: Int, height: Int) -> Balance {
+        let count = width * height
+        guard count > 0, rgba.count >= count * 4 else { return .unreadable }
+        var na: [Double] = [], nb: [Double] = []
+        for i in 0..<count {
+            let r = Double(rgba[i * 4]) / 255, g = Double(rgba[i * 4 + 1]) / 255, b = Double(rgba[i * 4 + 2]) / 255
+            guard max(r, max(g, b)) < 0.98 else { continue }      // clipped: its colour is lost
+            let x = lab(r, g, b)
+            guard x.0 > 25, x.0 < 95 else { continue }
+            let chroma = (x.1 * x.1 + x.2 * x.2).squareRoot()
+            guard chroma < balanceReach else { continue }
+            let hue = atan2(x.2, x.1) * 180 / .pi
+            if chroma > 3, hue > 5, hue < 100 { continue }        // could be skin
+            na.append(x.1)
+            nb.append(x.2)
+        }
+        guard Double(na.count) >= 0.08 * Double(count) else { return .unreadable }
+
+        // Where most of them sit: start at the middle one and close in.
+        var a = na.sorted()[na.count / 2], b = nb.sorted()[nb.count / 2]
+        func near(_ i: Int) -> Bool {
+            let da = na[i] - a, db = nb[i] - b
+            return da * da + db * db < 16
+        }
+        for _ in 0..<12 {
+            var sa = 0.0, sb = 0.0, n = 0.0
+            for i in na.indices where near(i) { sa += na[i]; sb += nb[i]; n += 1 }
+            guard n >= 5 else { break }
+            a = sa / n
+            b = sb / n
+        }
+        var together = 0
+        for i in na.indices where near(i) { together += 1 }
+        guard Double(together) >= 0.6 * Double(na.count) else { return .unreadable }
+
+        let size = (a * a + b * b).squareRoot()
+        guard size >= 1.5 else { return .balanced }
+        let take = min(size - 1.5, balanceMost)
+        var ta = a / size * take, tb = b / size * take
+        if tb > 0 {                 // yellow in the cast: taking it off would cool the picture
+            tb = 0
+            if ta > 0 { ta = 0 }    // and red with it: that is a warm light, or skin
+        }
+        guard (ta * ta + tb * tb).squareRoot() >= 0.5 else { return .balanced }
+        let grey = srgb(55, ta, tb)
+        return .cast(r: min(max(grey.0, 0), 1), g: min(max(grey.1, 0), 1), b: min(max(grey.2, 0), 1))
+    }
+
     // MARK: Colour maths
 
     private static func cubeFilter(_ data: Data, _ size: Int) -> CIFilter {

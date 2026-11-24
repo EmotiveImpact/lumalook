@@ -1023,6 +1023,145 @@ do {
 }
 #endif
 
+// MARK: - 11. Auto balance
+
+section("11. Auto reads a colour cast from neutrals only, and never takes warmth out")
+do {
+    // Made-up pictures, the same on every run.
+    var seed: UInt64 = 88172645463325252
+    func rnd() -> Double {
+        seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17
+        return Double(seed >> 11) / Double(UInt64(1) << 53)
+    }
+    let side = 48
+    typealias Maker = () -> RGB
+
+    /// A picture made of parts: each part is a share of the picture and what
+    /// colours it is made of.
+    func picture(_ parts: [(Double, Maker)]) -> [UInt8] {
+        var out = [UInt8](repeating: 255, count: side * side * 4)
+        for i in 0..<(side * side) {
+            var pick = rnd(), make = parts[parts.count - 1].1
+            for (share, m) in parts {
+                if pick < share { make = m; break }
+                pick -= share
+            }
+            let c = make()
+            out[i * 4] = UInt8((clamp01(c.0) * 255).rounded())
+            out[i * 4 + 1] = UInt8((clamp01(c.1) * 255).rounded())
+            out[i * 4 + 2] = UInt8((clamp01(c.2) * 255).rounded())
+        }
+        return out
+    }
+
+    /// A colour with a light of another colour on it: `cast` is what that
+    /// light does to a grey, as CIELAB a and b.
+    func lit(_ c: RGB, _ cast: (Double, Double)) -> RGB {
+        let x = cielab(c)
+        return screenColour((x.0, x.1 + cast.0, x.2 + cast.1)) ?? c
+    }
+    let tones: [RGB] = monk.map { $0.1 } + [hex("#f3e7db"), hex("#eadaba"), hex("#d7bd96")]
+    /// Skin of every depth, in light and in shade.
+    func skin(_ cast: (Double, Double) = (0, 0)) -> Maker {
+        { lit(darker(tones[Int(rnd() * Double(tones.count)) % tones.count], stops: rnd() * 1.5), cast) }
+    }
+    /// A grey wall, lit unevenly, with a little noise in its colour.
+    func wall(_ cast: (Double, Double) = (0, 0), noise: Double = 0.8) -> Maker {
+        { screenColour((35 + rnd() * 50, cast.0 + (rnd() - 0.5) * 2 * noise, cast.1 + (rnd() - 0.5) * 2 * noise))
+            ?? (0.5, 0.5, 0.5) }
+    }
+    /// Leaves, sky, neon: strong colours of every hue.
+    let colourful: Maker = {
+        let h = rnd() * 2 * Double.pi, c = 30 + rnd() * 20
+        return screenColour((45 + rnd() * 25, c * cos(h), c * sin(h))) ?? (0.2, 0.6, 0.3)
+    }
+
+    func read(_ rgba: [UInt8]) -> TrueColour.Balance { TrueColour.readBalance(rgba: rgba, width: side, height: side) }
+    func says(_ b: TrueColour.Balance) -> String {
+        switch b {
+        case .unreadable: return "nothing to go by"
+        case .balanced: return "balanced"
+        case .cast(let r, let g, let bl):
+            let x = cielab((r, g, bl))
+            return "cast a \(f1(x.1)), b \(f1(x.2))"
+        }
+    }
+    /// The cast Auto read, as CIELAB a and b, or nil when it read none.
+    func castOf(_ b: TrueColour.Balance) -> (Double, Double)? {
+        if case .cast(let r, let g, let bl) = b { let x = cielab((r, g, bl)); return (x.1, x.2) }
+        return nil
+    }
+
+    // A portrait against a grey wall, as shot.
+    let plain = read(picture([(0.55, skin()), (0.45, wall())]))
+    check(plain == .balanced, "a portrait against a grey wall is balanced: the skin does not read as a cast", says(plain))
+    let close = read(picture([(0.85, skin()), (0.15, wall())]))
+    check(close == .balanced, "so is a close portrait that is 85% skin", says(close))
+
+    // The same portrait under a light that is not warm: the cast is found, in
+    // the right direction, and no more of it is taken off than is there.
+    for (name, cast) in [("blue", (-1.0, -8.0)), ("green", (-7.0, 0.0)), ("magenta", (7.0, -3.0)),
+                         ("blue-green", (-6.0, -5.0))] {
+        let got = read(picture([(0.55, skin(cast)), (0.45, wall(cast))]))
+        let size = (cast.0 * cast.0 + cast.1 * cast.1).squareRoot()
+        var ok = false, detail = says(got)
+        if let c = castOf(got) {
+            let read = (c.0 * c.0 + c.1 * c.1).squareRoot()
+            let along = (c.0 * cast.0 + c.1 * cast.1) / (read * size)
+            let want = min(size - 1.5, TrueColour.balanceMost)
+            ok = along > 0.97 && abs(read - want) < 0.6 && read <= size
+            detail += ", \(f1(read)) of the \(f1(size)) put on"
+        }
+        check(ok, "a \(name) light on that portrait is read as a \(name) cast, and only part of it is taken off", detail)
+    }
+
+    // A cast too slight to matter.
+    let slight = read(picture([(0.55, skin((-0.6, -0.9))), (0.45, wall((-0.6, -0.9)))]))
+    check(slight == .balanced, "a cast of about 1 unit is no cast", says(slight))
+
+    // The most it ever takes.
+    var most = 0.0
+    for cast in [(-3.0, -12.0), (-12.0, -2.0), (9.0, -9.0)] {
+        if let c = castOf(read(picture([(0.4, skin(cast)), (0.6, wall(cast))]))) {
+            most = max(most, (c.0 * c.0 + c.1 * c.1).squareRoot())
+        }
+    }
+    check(most > 4 && most <= TrueColour.balanceMost + 0.1, "a heavy cast is only ever nudged",
+          "most taken off \(f1(most)) units, limit \(f1(TrueColour.balanceMost))")
+
+    // Warmth stays. A warm light, a cream wall and skin look alike by colour.
+    var cooled = 0, warmTried = 0
+    for cast in [(1.0, 2.0), (2.0, 5.0), (3.0, 9.0), (4.0, 12.0), (0.5, 2.6), (2.5, 1.0)] {
+        warmTried += 1
+        if castOf(read(picture([(0.55, skin(cast)), (0.45, wall(cast))]))) != nil { cooled += 1 }
+    }
+    check(cooled == 0, "a warm light is never taken off, slight or strong", "\(cooled) of \(warmTried) warm lights touched")
+    var yellowTaken = 0.0, greenTaken = 0.0
+    for cast in [(-6.0, 6.0), (-4.0, 9.0), (-8.0, 3.0)] {
+        if let c = castOf(read(picture([(0.5, skin(cast)), (0.5, wall(cast))]))) {
+            yellowTaken = max(yellowTaken, c.1)
+            greenTaken = max(greenTaken, -c.0)
+        }
+    }
+    check(yellowTaken < 0.3 && greenTaken > 1, "under a yellow-green light only the green is taken off: the yellow stays",
+          "green taken \(f1(greenTaken)), yellow taken \(f1(yellowTaken))")
+
+    // Pictures that give nothing to go by are left alone.
+    let onlySkin = read(picture([(1.0, skin())]))
+    check(onlySkin == .unreadable, "a picture that is all skin gives nothing to go by", says(onlySkin))
+    let busy = read(picture([(0.5, skin()), (0.46, colourful), (0.04, wall())]))
+    check(busy == .unreadable, "nor does skin among strong colours with almost no grey", says(busy))
+    let mixed = read(picture([(0.4, skin()), (0.3, wall((-2.0, -9.0))), (0.3, wall((-8.0, 6.0)))]))
+    check(mixed == .unreadable, "nor do two lights of different colours on the same wall", says(mixed))
+    let blown = read(picture([(0.5, skin()), (0.5, { (1.0, 1.0, 0.99) })]))
+    check(blown == .unreadable, "nor does a blown-out white background", says(blown))
+    let dark = read(picture([(0.5, skin()), (0.5, { screenColour((8 + rnd() * 10, -2, -6)) ?? (0.05, 0.05, 0.07) })]))
+    check(dark == .unreadable, "nor does a near-black background", says(dark))
+    check(TrueColour.readBalance(rgba: [], width: 0, height: 0) == .unreadable
+          && TrueColour.readBalance(rgba: [1, 2, 3], width: 4, height: 4) == .unreadable,
+          "a picture that is empty or cut short is left alone")
+}
+
 // MARK: - Result
 
 print("\n\(checks) checks, \(failed.count) failed, \(Int(Date().timeIntervalSince(started) * 1000)) ms")

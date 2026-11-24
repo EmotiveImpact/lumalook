@@ -8,7 +8,8 @@
 #    LookPipeline.swift: Skin first presets, curves, wheels, HSL bands and
 #    split tone). It also writes pictures of the tools on the look screen
 #    made by this commit's engine and by master's (sheet_pictures.swift),
-#    to look at side by side. Then it bakes every look through that same engine on
+#    to look at side by side, and of Auto on every test portrait
+#    (auto_pictures.swift). Then it bakes every look through that same engine on
 #    real Core Image into small colour cubes, and fetches the licensed test
 #    portraits listed in tools/skin-test/candidates.txt. It hands the
 #    results to the gate and commits them back to the branch
@@ -164,6 +165,29 @@ jobs:
         with:
           name: sheet-pictures
           path: ${{ runner.temp }}/sheet-pictures
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Pictures to look at, not a pass or fail: every test portrait as shot,
+      # after the Auto that was taken out and after the Auto that replaces
+      # it, with one line a portrait on what Auto read (auto.txt).
+      - name: Picture Auto on the test portraits
+        run: |
+          mkdir -p /tmp/auto
+          cp tools/skin-test/auto_pictures.swift /tmp/auto/main.swift
+          swiftc -O -o /tmp/auto/pictures /tmp/auto/main.swift \
+            LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift \
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
+            LumaLook/Engine/LUTDensifier.swift
+          /tmp/auto/pictures tools/skin-test/out/candidates "$RUNNER_TEMP/auto-pictures"
+
+      - name: Keep the pictures of Auto
+        uses: actions/upload-artifact@v5
+        with:
+          name: auto-pictures
+          path: ${{ runner.temp }}/auto-pictures
           if-no-files-found: ignore
           retention-days: 14
 

@@ -14,7 +14,7 @@
 //
 // Later sections ask the same of the film tools and tone sliders (5), of the
 // exported cube and the three picture sizes (6), of the White balance
-// picker (7), and of Strength over log footage (8).
+// picker (7), of Strength over log footage (8), and of Auto (9).
 //
 //   mkdir -p /tmp/grade && cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
 //   swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
@@ -550,6 +550,19 @@ func spread(_ image: CIImage, window: CGRect, managed: Bool = true) -> Spread {
                   lowest: lo, highest: hi, alpha: alpha / n)
 }
 
+/// The mean colour of a whole picture, as a screen shows it.
+func spreadMean(_ image: CIImage) -> RGB {
+    let avg = CIFilter.areaAverage()
+    avg.inputImage = image
+    avg.extent = image.extent
+    var px = [UInt8](repeating: 0, count: 4)
+    if let out = avg.outputImage {
+        pipeline.context.render(out, toBitmap: &px, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                format: .RGBA8, colorSpace: srgb)
+    }
+    return (Double(px[0]) / 255, Double(px[1]) / 255, Double(px[2]) / 255)
+}
+
 /// A flat grey the size of the big picture, and a window in the middle of it.
 let bigPicture = CGRect(x: 0, y: 0, width: 1400, height: 1400)
 let middleWindow = CGRect(x: 400, y: 400, width: 512, height: 512)
@@ -821,6 +834,137 @@ if mode == "check" {
     let wantPlain = zip(footage, shown(nil, goldenHour, strength: 100)).map { half($0, $1) }
     check(widest(plain, wantPlain) < 1.5, "with no conversion, Strength 50 is half way from the picture to the look, as before",
           "widest gap \(f1(widest(plain, wantPlain))) of 255")
+}
+
+// MARK: - 9. Auto
+
+/// CIELAB a and b of a colour as a screen shows it.
+func labAB(_ c: RGB) -> (Double, Double) {
+    func lin(_ e: Double) -> Double { e <= 0.04045 ? e / 12.92 : pow((e + 0.055) / 1.055, 2.4) }
+    let r = lin(min(max(c.0, 0), 1)), g = lin(min(max(c.1, 0), 1)), b = lin(min(max(c.2, 0), 1))
+    let x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047
+    let y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+    let z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883
+    func f(_ t: Double) -> Double { t > 216.0 / 24389.0 ? cbrt(t) : (24389.0 / 27.0 * t + 16) / 116 }
+    return (500 * (f(x) - f(y)), 200 * (f(y) - f(z)))
+}
+
+/// The colour of a whole picture: the mean CIELAB a and b of a small copy.
+func pictureColour(_ image: CIImage) -> (Double, Double) {
+    let small = sized(image, longEdge: 96)
+    let w = max(4, Int(small.extent.width.rounded(.down)) - 2), h = max(4, Int(small.extent.height.rounded(.down)) - 2)
+    var buf = [UInt8](repeating: 0, count: w * h * 4)
+    buf.withUnsafeMutableBytes { raw in
+        pipeline.context.render(small, toBitmap: raw.baseAddress!, rowBytes: w * 4,
+                                bounds: CGRect(x: 1, y: 1, width: w, height: h), format: .RGBA8, colorSpace: srgb)
+    }
+    var a = 0.0, b = 0.0
+    for i in stride(from: 0, to: buf.count, by: 4) {
+        let x = labAB((Double(buf[i]) / 255, Double(buf[i + 1]) / 255, Double(buf[i + 2]) / 255))
+        a += x.0
+        b += x.1
+    }
+    let n = Double(w * h)
+    return (a / n, b / n)
+}
+
+/// The picture as if the light on it had another colour: gains on red,
+/// green and blue in linear light.
+func lit(_ image: CIImage, _ gain: RGB) -> CIImage {
+    image.applyingFilter("CIColorMatrix", parameters: [
+        "inputRVector": CIVector(x: CGFloat(gain.0), y: 0, z: 0, w: 0),
+        "inputGVector": CIVector(x: 0, y: CGFloat(gain.1), z: 0, w: 0),
+        "inputBVector": CIVector(x: 0, y: 0, z: CGFloat(gain.2), w: 0)]).cropped(to: image.extent)
+}
+
+/// The picture with Auto's white balance on it and nothing else.
+func afterAuto(_ image: CIImage, _ wb: (warmth: Double, tint: Double)) -> CIImage {
+    pipeline.apply(state: state(full { $0.warmth = wb.warmth; $0.tint = wb.tint }), to: image, includeSplit: false)
+        .cropped(to: image.extent)
+}
+
+if mode == "check" {
+    section("9. Auto takes a colour cast off, leaves a good portrait alone and never cools one")
+    let names = ((try? FileManager.default.contentsOfDirectory(atPath: portraitDir.path)) ?? [])
+        .filter { $0.hasSuffix(".jpg") }.sorted()
+    var portraits: [(String, CIImage)] = []
+    for name in names {
+        if let image = CIImage(contentsOf: portraitDir.appendingPathComponent(name), options: [.applyOrientationProperty: true]) {
+            portraits.append((String(name.dropLast(4)), sized(image, longEdge: 1400)))
+        }
+    }
+    check(portraits.count >= 20, "the test portraits are here", "\(portraits.count) portraits")
+
+    // As shot. These are good portraits: Auto has little or nothing to do.
+    var left = 0, cooled: [String] = [], touched: [String] = [], furthest = 0.0
+    var readable: [(String, CIImage)] = []
+    var oldCooled = 0
+    for (name, image) in portraits {
+        if pipeline.readBalance(of: image) != .unreadable { readable.append((name, image)) }
+        // The Auto this replaces, for the record: the frame's average colour.
+        let mean = spreadMean(image)
+        if (mean.2 - mean.0) * 320 < -5 { oldCooled += 1 }
+        guard let wb = pipeline.autoBalance(of: image) else { left += 1; continue }
+        let before = pictureColour(image), after = pictureColour(afterAuto(image, wb))
+        let moved = ((after.0 - before.0) * (after.0 - before.0) + (after.1 - before.1) * (after.1 - before.1)).squareRoot()
+        furthest = max(furthest, moved)
+        touched.append("\(name) Warmth \(Int(wb.warmth)) Tint \(Int(wb.tint)), moved \(f1(moved))")
+        if after.1 < before.1 - 1 { cooled.append(name) }
+    }
+    print("  note  the Auto this replaces would have cooled \(oldCooled) of these \(portraits.count) portraits")
+    if !touched.isEmpty { print("  note  as shot, Auto touches: " + touched.joined(separator: "; ")) }
+    check(Double(left) >= 0.8 * Double(portraits.count), "at least four in five of the portraits, as shot, are left exactly as they are",
+          "\(left) of \(portraits.count) left alone")
+    check(furthest <= 7, "and none of the others is moved far", "furthest \(f1(furthest)) CIELAB units")
+    check(cooled.isEmpty, "none of them comes out cooler", cooled.joined(separator: ", "))
+
+    // The portraits Auto can read, under a light that is not warm: the cast
+    // comes off, in part, and the picture ends nearer to how it was shot.
+    let balanced = readable.filter { pipeline.readBalance(of: $0.1) == .balanced }
+    check(balanced.count >= 3, "some of the portraits have a clear neutral to read", "\(balanced.count) of \(portraits.count)")
+    for (light, gain) in [("blue", (0.90, 1.00, 1.14)), ("green", (0.95, 1.08, 0.95)), ("magenta", (1.05, 0.93, 1.05))] {
+        var fixed = 0, worse: [String] = [], taken = 0.0
+        for (name, image) in balanced {
+            let cast = lit(image, gain)
+            guard let wb = pipeline.autoBalance(of: cast) else { continue }
+            let shot = pictureColour(image), on = pictureColour(cast), off = pictureColour(afterAuto(cast, wb))
+            func far(_ p: (Double, Double)) -> Double {
+                ((p.0 - shot.0) * (p.0 - shot.0) + (p.1 - shot.1) * (p.1 - shot.1)).squareRoot()
+            }
+            fixed += 1
+            taken += 1 - far(off) / max(far(on), 0.001)
+            if far(off) >= far(on) { worse.append(name) }
+        }
+        check(fixed >= 2 && worse.isEmpty && taken / Double(max(fixed, 1)) > 0.2,
+              "a \(light) light on a readable portrait: Auto brings it back towards how it was shot",
+              "\(fixed) of \(balanced.count) corrected, \(Int(100 * taken / Double(max(fixed, 1))))% of the cast taken off on average"
+              + (worse.isEmpty ? "" : ", worse: " + worse.joined(separator: ", ")))
+    }
+
+    // A warm light is never taken off: by colour it cannot be told from skin.
+    var warmCooled: [String] = []
+    for (name, image) in portraits {
+        let warm = lit(image, (1.12, 1.00, 0.86))
+        guard let wb = pipeline.autoBalance(of: warm) else { continue }
+        if pictureColour(afterAuto(warm, wb)).1 < pictureColour(warm).1 - 1 { warmCooled.append(name) }
+    }
+    check(warmCooled.isEmpty, "under a warm light no portrait comes out cooler", warmCooled.joined(separator: ", "))
+
+    // The same answer whatever size the picture is.
+    if let first = balanced.first {
+        let cast = lit(first.1, (0.90, 1.00, 1.14))
+        var answers: [(Double, Double)] = []
+        for edge in [220.0, 1400.0, 4032.0] {
+            let wb = pipeline.autoBalance(of: sized(cast, longEdge: CGFloat(edge))) ?? (warmth: 0, tint: 0)
+            answers.append((wb.warmth, wb.tint))
+        }
+        let warmths = answers.map { $0.0 }, tints = answers.map { $0.1 }
+        check((warmths.max() ?? 0) - (warmths.min() ?? 0) <= 4 && (tints.max() ?? 0) - (tints.min() ?? 0) <= 4,
+              "Auto gives the same answer for a tile, the big picture and a full-size photo",
+              answers.map { "Warmth \(Int($0.0)) Tint \(Int($0.1))" }.joined(separator: "; "))
+    }
+    check(pipeline.autoBalance(of: grey(0.5)) == nil && pipeline.autoBalance(of: CIImage.empty()) == nil,
+          "a flat grey and an empty picture are left alone")
 }
 
 // MARK: - Pictures

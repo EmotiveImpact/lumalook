@@ -435,7 +435,7 @@ final class AppModel: ObservableObject {
             selectedImage = CIImage(contentsOf: URL(fileURLWithPath: path))
             Task {
                 await autoGrade()
-                print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
+                print("[LUMA] auto warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) found=\(String(describing: autoFound))")
             }
         }
         // Still cell: load a photo as it is, without the auto grade, for
@@ -697,29 +697,55 @@ final class AppModel: ObservableObject {
         refreshPausedFrame()
     }
 
-    // MARK: - AI Auto-Grade (one-tap correction)
+    // MARK: - Auto (one tap takes a colour cast off)
 
     @Published var isAutoGrading = false
 
-    /// Gray-world auto white-balance + auto-exposure: analyses the current
-    /// frame (UNGRADED) and dials exposure/warmth/tint to neutralise a colour
-    /// cast and centre the midtones. The "magic button".
+    /// What Auto found the last time it ran, for its tile to say for a
+    /// moment. Nil once the moment has passed.
+    @Published var autoFound: AutoFound?
+
+    enum AutoFound: Equatable {
+        /// A cast was found and taken off.
+        case fixed
+        /// The picture is balanced, or gives nothing to go by. Left as it is.
+        case nothingToFix
+    }
+
+    /// Takes a colour cast off the picture, and does nothing else.
+    ///
+    /// It reads the cast from the parts of the picture that are nearly grey
+    /// and cannot be skin, and never takes warmth out
+    /// (`TrueColour.readBalance`). Then it sets the Warmth and Tint the
+    /// White balance picker would set for that colour, so the White bal.
+    /// tile lights up and one tap on it takes Auto off again. A balanced
+    /// picture, or one with no clear neutral, is left exactly as it is.
+    ///
+    /// The Auto this replaces averaged the whole frame (grey world) and set
+    /// exposure and contrast as well. A portrait's average is mostly skin,
+    /// so it cooled 26 of the 29 test portraits and lifted the low-key ones.
     func autoGrade() async {
         guard !isAutoGrading else { return }
         isAutoGrading = true
         defer { isAutoGrading = false }
         guard let frame = previewFrame else { return }
-        guard let m = await Self.meanRGB(of: frame) else { return }
-        let luma = 0.2126 * m.r + 0.7152 * m.g + 0.0722 * m.b
-        var s = settings
-        // Centre midtones near 0.45.
-        s.exposure = (max(-0.6, min(0.6, (0.45 - luma) * 2.2))) * 100
-        // Neutralise cast: warm image (R>B) → cool it; green cast → magenta.
-        s.warmth = max(-70, min(70, (m.b - m.r) * 320))
-        s.tint = max(-70, min(70, ((m.r + m.b) / 2 - m.g) * 320))
-        // A touch of contrast if the frame is flat (mean far from extremes).
-        s.contrast = max(s.contrast, 14)
-        settings = s
+        let slot = lookState.conversionSlot
+        let balance = await Task.detached { LookPipeline.shared.autoBalance(of: frame, under: slot) }.value
+        if let balance {
+            var s = settings
+            s.warmth = balance.warmth
+            s.tint = balance.tint
+            settings = s
+            autoFound = .fixed
+        } else {
+            autoFound = .nothingToFix
+        }
+        LumaHaptics.shared.tap()
+        let said = autoFound
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if self?.autoFound == said { self?.autoFound = nil }
+        }
     }
 
     /// White-balance eyedropper: sample a point the user says is neutral and
