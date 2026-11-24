@@ -675,13 +675,15 @@ if mode == "check" {
           "204,158,133 came out \(tri(warm))")
 
     // Grain roughens the picture. It must not brighten it or leave white
-    // specks: it lifted mid grey from 128 to 139, with specks at 255.
+    // specks: it lifted mid grey from 128 to 139, with specks at 255. It
+    // must also be there to see: with the specks gone and nothing else
+    // changed, Grain at 50 moved mid grey by under 3 of 255.
     for v in [0.25, 0.5, 0.75] {
         let before = spread(grey(v), window: middleWindow)
         let after = spread(pipeline.applyGrain(strength: 0.5, to: grey(v)), window: middleWindow)
-        check(abs(after.mean - before.mean) < 1.5 && after.sd > 1.0 && after.sd < 10
+        check(abs(after.mean - before.mean) < 1.5 && after.sd > 2.5 && after.sd < 10
                   && after.highest < before.mean + 40 && after.lowest > before.mean - 40,
-              "Grain at 50 on grey \(i255(v)) roughens it without brightening it or leaving specks",
+              "Grain at 50 on grey \(i255(v)) can be seen, and roughens it without brightening it or leaving specks",
               after.line)
     }
 

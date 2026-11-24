@@ -701,9 +701,13 @@ final class LookPipeline: @unchecked Sendable {
             .settingAlphaOne(in: reach)
 
         // Monochrome the noise and centre it on mid-grey for overlay blend.
+        // At 0.28 the even grain was too faint to see: what people saw as
+        // grain before was the specks. At 0.62, Grain at 50 moves mid grey
+        // by about 6 of 255 either way, a film grain that can be seen on a
+        // phone and still brightens nothing.
         let mono = CIFilter.colorMatrix()
         mono.inputImage = even
-        let amp = CGFloat(0.28 * strength) * min(1, cell)
+        let amp = CGFloat(0.62 * strength) * min(1, cell)
         mono.rVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.gVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.bVector = CIVector(x: amp, y: 0, z: 0, w: 0)
