@@ -2,6 +2,7 @@ import SwiftUI
 
 /// T2.4 — 2-up/4-up LUT compare: your frame, your grade, different LUTs side
 /// by side. Tap a cell to commit that LUT and return to the grade room.
+/// Each cell is drawn as tapping it leaves the picture (`CompareRenderer`).
 struct LUTCompareView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -73,14 +74,16 @@ struct LUTCompareView: View {
                                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 // The live candidate wears the picked ring.
                                 .pickedRing(isCurrent, cornerRadius: 14)
-                                // Each LUT's name in its own colour;
-                                // Original stays quiet white.
+                                // Each LUT's name in its own colour. The
+                                // cell without a LUT is the built-in look
+                                // tapping it goes back to, so it carries
+                                // that look's name, in quiet white.
                                 if let file = candidate?.file {
                                     LookNameText(file.displayName,
                                                  colour: LookSignature.colour(name: file.displayName),
                                                  size: 12, weight: isCurrent ? .semibold : .medium)
                                 } else {
-                                    Text("Original")
+                                    Text(app.selectedLook.name)
                                         .font(.luma(size: 12, weight: isCurrent ? .semibold : .medium))
                                         .foregroundStyle(isCurrent ? .white : LumaTheme.textSecondary)
                                         .lineLimit(1)
@@ -98,8 +101,15 @@ struct LUTCompareView: View {
         .preferredColorScheme(.dark)
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "")-\(app.lutRepository.luts.count)") {
             // No media yet → compare on the hero frame, same as the strip thumbs.
+            let state = app.lookState
             renderer.render(frame: app.previewFrame ?? HeroPhoto.golden.ciImage,
-                            baseSettings: app.settings,
+                            live: .init(recipe: app.selectedLook.recipe,
+                                        settings: app.settings,
+                                        pickedSettings: app.settingsAfterPick,
+                                        conversionLUT: state.conversionLUT,
+                                        conversionOpacity: state.conversionOpacity,
+                                        conversionProfile: state.conversionProfile),
+                            stamp: "\(app.selectedLook.name)-\(app.conversionLUT?.id.uuidString ?? "")-\(app.conversionOpacity)-\(app.conversionProfile?.rawValue ?? "")",
                             candidates: candidates)
         }
     }

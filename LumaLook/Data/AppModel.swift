@@ -193,7 +193,7 @@ final class AppModel: ObservableObject {
         // Picking a Skin first preset clears the film look, so the two are
         // only ever saved together by the old fault that left a preset on
         // under the looks picked after it. Such a project opens as its look.
-        if selectedLUT != nil { takeOffSkinPreset() }
+        if selectedLUT != nil { settings = SkinFirstPreset.takenOff(settings) }
         if session.isVideo {
             selectedVideoURL = url
         } else {
@@ -257,7 +257,7 @@ final class AppModel: ObservableObject {
 
     /// Starts trying on a pack look (`CameraLooks` decides when).
     func startPackPreview(_ preview: PackLookPreview) {
-        takeOffSkinPreset()
+        takeOffWornGrade()
         packPreview = preview
     }
     /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
@@ -809,20 +809,69 @@ final class AppModel: ObservableObject {
     /// directly from views.
     func select(look: LibraryLook) {
         switch look.source {
-        case .builtIn(let p): takeOffSkinPreset(); selectedLUT = nil; selectedLook = p
-        case .lut(let f):     takeOffSkinPreset(); selectedLUT = f   // remembered strength fires
+        case .builtIn(let p): takeOffWornGrade(); selectedLUT = nil; selectedLook = p
+        case .lut(let f):     takeOffWornGrade(); selectedLUT = f   // remembered strength fires
         case .saved(let s):   applySavedLook(s)
         }
         library.noteUsed(look)
     }
 
-    /// A Skin first preset is picked like a look, so the look picked next
-    /// takes its place: the preset comes off whole, with anything that was
-    /// adjusted on top of it (`SkinFirstPreset.takenOff`). It used to stay on
-    /// underneath every look picked after it.
-    private func takeOffSkinPreset() {
-        let plain = SkinFirstPreset.takenOff(settings)
+    /// A Skin first preset, or a look saved under Mine, replaces the whole
+    /// grade and is picked like a look, so the look picked next takes its
+    /// place: it comes off whole, with anything that was adjusted on top of
+    /// it (`LookSettings.takingOff`). Both used to stay on underneath every
+    /// look picked after them.
+    private func takeOffWornGrade() {
+        guard let whole = wornGrade else { return }
+        let plain = settings.takingOff(whole)
         if plain != settings { settings = plain }
+    }
+
+    /// The grade a look picked now would be shown with: the settings as they
+    /// stand, with a worn preset or saved look taken off. The Compare grid
+    /// draws its LUT cells with it, so a cell is what tapping it gives.
+    var settingsAfterPick: LookSettings {
+        wornGrade.map { settings.takingOff($0) } ?? settings
+    }
+
+    /// The whole grade the settings are wearing, if any: a Skin first
+    /// preset's, or a saved look's.
+    private var wornGrade: LookSettings? {
+        if let preset = SkinFirstPreset.worn(by: settings) { return preset.settings }
+        return store.savedLooks.first { settings.wears($0.settings) }?.settings
+    }
+
+    // MARK: - What is switched on (the look screen's tiles)
+
+    /// True when the white balance is not the one the look or preset gives:
+    /// the picker, Auto or the Warmth and Tint sliders moved it. The White
+    /// bal. tile lights up for it, so it is never on unseen.
+    var whiteBalanceIsOn: Bool {
+        let base = wornGrade ?? LookSettings()
+        return settings.warmth != base.warmth || settings.tint != base.tint
+    }
+
+    /// Puts the white balance back to the one the look or preset gives.
+    func clearWhiteBalance() {
+        let base = wornGrade ?? LookSettings()
+        var s = settings
+        s.warmth = base.warmth
+        s.tint = base.tint
+        settings = s
+    }
+
+    /// True when a colour slider, a curve, the wheels, the bands or the
+    /// split tone is off what the look or preset gives: the More tile lights
+    /// up for it.
+    var gradeIsAdjusted: Bool {
+        settings.isAdjusted(from: wornGrade ?? LookSettings())
+    }
+
+    /// True when the film look in the chain is not at full strength in the
+    /// normal blend (a strength or blend remembered for that look included):
+    /// the Chain tile lights up for it.
+    var chainIsAdjusted: Bool {
+        selectedLUT != nil && (creativeOpacity < 99.5 || creativeBlend != .normal)
     }
 
     /// Editor routing: nil clipID = timeline grade via `select(look:)`;

@@ -1057,19 +1057,29 @@ struct ApplyLookView: View {
                     }
                     .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
                 }
-                tool("eyedropper.halffull", "White bal.", on: eyedropping,
-                     enabled: hasRealMedia) {
-                    guard hasRealMedia else { return }
-                    withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
+                // Lit while a white balance is on, so it is never on unseen
+                // (it carries to the next look and the next photo). Tapping
+                // the lit tile takes it off; tapping again picks a new one.
+                tool("eyedropper.halffull", "White bal.", on: eyedropping || app.whiteBalanceIsOn,
+                     enabled: hasRealMedia || app.whiteBalanceIsOn) {
+                    if app.whiteBalanceIsOn, !eyedropping {
+                        app.clearWhiteBalance()
+                    } else {
+                        guard hasRealMedia else { return }
+                        withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
+                    }
                     LumaHaptics.shared.tap()
                 }
-                .accessibilityHint(hasRealMedia ? "Choose a neutral point in the selected media" : "Pick a photo or video first")
+                .accessibilityValue(app.whiteBalanceIsOn ? "On" : "Off")
+                .accessibilityHint(app.whiteBalanceIsOn && !eyedropping
+                                   ? "Takes the white balance off"
+                                   : (hasRealMedia ? "Choose a neutral point in the selected media" : "Pick a photo or video first"))
                 tool(isFavourite ? "star.fill" : "star",
                      isFavourite ? "Favourited" : "Favourite",
                      on: isFavourite, enabled: currentLibraryLook != nil) {
                     toggleFavourite()
                 }
-                tool("square.stack.3d.down.right", "Chain", on: panel == .chain) {
+                tool("square.stack.3d.down.right", "Chain", on: panel == .chain || app.chainIsAdjusted) {
                     panel = panel == .chain ? .none : .chain
                     LumaHaptics.shared.tap()
                 }
@@ -1085,7 +1095,7 @@ struct ApplyLookView: View {
                     showCompareGrid = true
                     LumaHaptics.shared.tap()
                 }
-                tool("dial.high", "More", on: false) {
+                tool("dial.high", "More", on: app.gradeIsAdjusted) {
                     app.path.append(.customLook)
                 }
             }
