@@ -112,6 +112,14 @@ jobs:
           /tmp/grade/check check tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
             tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
 
+      # Numbers to read, not a pass or fail: what each slider does to flat
+      # colours, how strong each spatial tool looks at thumbnail, preview and
+      # export size, and how far the exported .cube is from the picture.
+      - name: Measure the tools on the look screen
+        run: |
+          /tmp/grade/check measure tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
+
       - name: Keep the pictures of the grade on top of a look
         uses: actions/upload-artifact@v5
         with:

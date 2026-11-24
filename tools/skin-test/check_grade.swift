@@ -149,6 +149,61 @@ if mode == "check" {
         return "\(String(describing: s.curves))|\(String(describing: s.hsl))|\(String(describing: s.splitTone))"
     })
     check(names.count == SkinFirstPreset.allCases.count, "no two presets share a curve, bands and split tone")
+
+    // A look saved under Mine replaces the whole grade in the same way, and
+    // stayed on under the next look in the same way.
+    section("1b. A look saved under Mine comes off when another look is picked")
+
+    // The hand-made grade above, saved as a look and picked again.
+    let saved = handMade
+    check(handMade.wears(saved), "a saved look with a split tone: seen as worn straight after it is picked")
+    check(colourIsNeutral(handMade.takingOff(saved)), "taken off, the grade is a new grade")
+    var savedTuned = withAutoOnTop(saved)
+    savedTuned.grain = 30
+    savedTuned.lensKind = LensKind.vintage.rawValue
+    check(savedTuned.wears(saved), "still seen with a white balance, grain and a lens changed on top")
+    let savedOff = savedTuned.takingOff(saved)
+    check(colourIsNeutral(savedOff) && savedOff.grain == 30 && savedOff.lensKind == LensKind.vintage.rawValue,
+          "taken off, the white balance goes with it and the grain and lens stay")
+    var redrawn = saved
+    redrawn.splitTone?.shadowSat = 0.5
+    check(!redrawn.wears(saved) && redrawn.takingOff(saved) == redrawn,
+          "once its split tone is redrawn by hand it is the person's grade, and is left alone")
+
+    // A saved look made of sliders alone.
+    var slidersOnly = LookSettings()
+    slidersOnly.warmth = 18
+    slidersOnly.contrast = 30
+    slidersOnly.grain = 25
+    check(slidersOnly.wears(slidersOnly), "a saved look made of sliders alone: seen as worn while they are untouched")
+    let slidersOff = slidersOnly.takingOff(slidersOnly)
+    check(colourIsNeutral(slidersOff) && slidersOff.grain == 25, "taken off, the sliders are back to neutral and its grain stays")
+    var nudged = slidersOnly
+    nudged.exposure = 12
+    check(!nudged.wears(slidersOnly) && nudged.takingOff(slidersOnly) == nudged,
+          "with a slider moved by hand since, it is the person's grade, and is left alone")
+    check(!handMade.wears(slidersOnly), "a grade with a shape of its own never wears a sliders-only look")
+
+    // A saved look that sets no colour at all (a film look with grain) has
+    // nothing to take off, and a new grade wears nothing.
+    var grainOnly = LookSettings()
+    grainOnly.grain = 40
+    check(!grainOnly.wears(grainOnly) && !fresh.wears(grainOnly) && !fresh.wears(fresh),
+          "a saved look with no colour of its own is never worn, and a new grade wears nothing")
+
+    // What lights the More tile.
+    var withGrain = fresh
+    withGrain.grain = 40
+    withGrain.intensity = 50
+    var withExposure = fresh
+    withExposure.exposure = 5
+    check(!fresh.isAdjusted(from: fresh) && !withGrain.isAdjusted(from: fresh),
+          "More is not lit for a new grade, or for Strength and grain alone")
+    check(withExposure.isAdjusted(from: fresh) && handMade.isAdjusted(from: fresh),
+          "More is lit when a slider or a split tone is on")
+    let cinema = SkinFirstPreset.richCinema.settings
+    check(!cinema.isAdjusted(from: cinema) && withAutoOnTop(cinema).isAdjusted(from: cinema),
+          "More is not lit for a preset as picked, and is lit once something is changed on top of it")
 }
 
 #if os(macOS)
@@ -413,6 +468,226 @@ func writePictures() {
         }
     }
     print("\nWrote \(written) pictures to \(outDir.path)")
+}
+
+// MARK: - Measurements (mode "measure"): what the tools really do
+
+if mode == "measure" {
+    func i255(_ v: Double) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
+    func tri(_ c: RGB) -> String { "\(i255(c.0)),\(i255(c.1)),\(i255(c.2))" }
+    func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: n, withPad: " ", startingAt: 0) }
+
+    /// A flat square of one colour through the whole pipeline, read back at
+    /// its centre (or its corner), so a spatial tool sees no neighbours.
+    func flat(_ c: RGB, _ st: LookState, side: Int = 64, corner: Bool = false) -> RGB {
+        var px = [Float](repeating: 1, count: side * side * 4)
+        for i in 0..<(side * side) {
+            px[i * 4] = Float(c.0)
+            px[i * 4 + 1] = Float(c.1)
+            px[i * 4 + 2] = Float(c.2)
+        }
+        let source = CIImage(bitmapData: px.withUnsafeBufferPointer { Data(buffer: $0) },
+                             bytesPerRow: side * 16, size: CGSize(width: side, height: side),
+                             format: .RGBAf, colorSpace: srgb)
+        let image = pipeline.apply(state: st, to: source, includeSplit: false).cropped(to: source.extent)
+        var buf = [Float](repeating: 0, count: 4)
+        let at = corner ? 0 : side / 2
+        buf.withUnsafeMutableBytes { raw in
+            pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: 16,
+                                    bounds: CGRect(x: at, y: at, width: 1, height: 1),
+                                    format: .RGBAf, colorSpace: srgb)
+        }
+        return (Double(buf[0]), Double(buf[1]), Double(buf[2]))
+    }
+
+    // M1. Each slider on flat colours.
+    section("M1. What each slider does to flat colours (0 to 255, as a screen shows them)")
+    let patches: [(String, RGB)] = [
+        ("black", (0, 0, 0)), ("10%", (0.1, 0.1, 0.1)), ("25%", (0.25, 0.25, 0.25)),
+        ("mid", (0.5, 0.5, 0.5)), ("75%", (0.75, 0.75, 0.75)), ("white", (1, 1, 1)),
+        ("deep skin", (0.30, 0.19, 0.14)), ("brown skin", (0.55, 0.38, 0.30)),
+        ("light skin", (0.80, 0.62, 0.52))]
+    print("  " + pad("setting", 24) + patches.map { pad($0.0, 13) }.joined())
+    func row(_ name: String, _ st: LookState, corner: Bool = false) {
+        let cells = patches.map { pad(tri(flat($0.1, st, corner: corner)), 13) }
+        print("  " + pad(name, 24) + cells.joined())
+    }
+    row("nothing on", state(full()))
+    row("exposure +50", state(full { $0.exposure = 50 }))
+    row("exposure -50", state(full { $0.exposure = -50 }))
+    row("contrast 60", state(full { $0.contrast = 60 }))
+    row("contrast -40", state(full { $0.contrast = -40 }))
+    row("highlights +50", state(full { $0.highlights = 50 }))
+    row("highlights -50", state(full { $0.highlights = -50 }))
+    row("shadows +50", state(full { $0.shadows = 50 }))
+    row("shadows -50", state(full { $0.shadows = -50 }))
+    row("saturation +50", state(full { $0.saturation = 50 }))
+    row("saturation -50", state(full { $0.saturation = -50 }))
+    row("warmth +50", state(full { $0.warmth = 50 }))
+    row("warmth -50", state(full { $0.warmth = -50 }))
+    row("tint +50", state(full { $0.tint = 50 }))
+    row("tint -50", state(full { $0.tint = -50 }))
+    row("fade 50", state(full { $0.fade = 50 }))
+    row("fade 100", state(full { $0.fade = 100 }))
+    row("sharpness 50", state(full { $0.sharpness = 50 }))
+    row("bloom 50", state(full { $0.bloom = 50 }))
+    row("halation 50", state(full { $0.halation = 50 }))
+    row("vignette 50 centre", state(full { $0.vignette = 50 }))
+    row("vignette 50 corner", state(full { $0.vignette = 50 }), corner: true)
+    row("vignette 100 corner", state(full { $0.vignette = 100 }), corner: true)
+    if let hp = film("HP400") {
+        row("HP400 at 100", state(lut: hp, full()))
+        row("HP400 at 75", state(lut: hp, LookSettings()))
+        let mixed: [String] = patches.map { patch in
+            let g = flat(patch.1, state(lut: hp, full()))
+            let m: RGB = (patch.1.0 * 0.25 + g.0 * 0.75, patch.1.1 * 0.25 + g.1 * 0.75,
+                          patch.1.2 * 0.25 + g.2 * 0.75)
+            return pad(tri(m), 13)
+        }
+        print("  " + pad("(75% of the numbers)", 24) + mixed.joined())
+    }
+    row("Golden Hour at 100", state(recipe: goldenHour, full()))
+    row("Golden Hour at 75", state(recipe: goldenHour, LookSettings()))
+
+    // M2. The same picture at thumbnail, preview and export size.
+    section("M2. How strong each spatial tool looks at thumbnail (220), preview (1400) and export (4032) size")
+    let portraitURL = portraitDir.appendingPathComponent("day-pexels-9629932.jpg")
+    if let photo = CIImage(contentsOf: portraitURL, options: [.applyOrientationProperty: true]) {
+        func sized(_ image: CIImage, longEdge: CGFloat) -> CIImage {
+            let longest = max(image.extent.width, image.extent.height)
+            let scaled = image.applyingFilter("CILanczosScaleTransform", parameters: [
+                kCIInputScaleKey: longEdge / longest, kCIInputAspectRatioKey: 1.0])
+            let e = scaled.extent
+            return scaled.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
+        }
+        // Every size is judged at thumbnail size, one pixel in from the edge.
+        let thumb = sized(photo, longEdge: 220).extent
+        let tw = max(8, Int(thumb.width.rounded(.down)) - 2)
+        let th = max(8, Int(thumb.height.rounded(.down)) - 2)
+        func small(_ image: CIImage) -> [UInt8] {
+            let down = sized(image, longEdge: 220)
+            var buf = [UInt8](repeating: 0, count: tw * th * 4)
+            buf.withUnsafeMutableBytes { raw in
+                pipeline.context.render(down, toBitmap: raw.baseAddress!, rowBytes: tw * 4,
+                                        bounds: CGRect(x: 1, y: 1, width: tw, height: th),
+                                        format: .RGBA8, colorSpace: srgb)
+            }
+            return buf
+        }
+        /// How far the tool moves the picture, seen at one viewing size:
+        /// the mean change and the root-mean-square change, of 255.
+        func effect(_ st: LookState, at longEdge: CGFloat) -> (Double, Double) {
+            let base = sized(photo, longEdge: longEdge)
+            let rect = CGRect(x: 0, y: 0, width: base.extent.width.rounded(.down),
+                              height: base.extent.height.rounded(.down))
+            let cropped = base.cropped(to: rect)
+            let out = pipeline.apply(state: st, to: cropped, includeSplit: false).cropped(to: rect)
+            let a = small(cropped), b = small(out)
+            var sum = 0.0, squares = 0.0, n = 0.0
+            for i in stride(from: 0, to: a.count, by: 4) {
+                for c in 0..<3 {
+                    let d = Double(b[i + c]) - Double(a[i + c])
+                    sum += abs(d)
+                    squares += d * d
+                    n += 1
+                }
+            }
+            return (sum / n, (squares / n).squareRoot())
+        }
+        var tools: [(String, LookState)] = []
+        tools.append(("Golden Hour (the default look)", state(recipe: goldenHour, full())))
+        if let glow = shipped.filter({ $0.recipe != nil })
+            .max(by: { ($0.recipe?.bloom ?? 0) < ($1.recipe?.bloom ?? 0) }), let r = glow.lookRecipe {
+            tools.append(("\(glow.code) \(glow.name) (most bloom, \(r.bloom))", state(recipe: r, full())))
+        }
+        tools.append(("bloom 50", state(full { $0.bloom = 50 })))
+        tools.append(("halation 50", state(full { $0.halation = 50 })))
+        tools.append(("grain 50", state(full { $0.grain = 50 })))
+        tools.append(("sharpness 50", state(full { $0.sharpness = 50 })))
+        tools.append(("vignette 50", state(full { $0.vignette = 50 })))
+        tools.append(("shadows +50", state(full { $0.shadows = 50 })))
+        tools.append(("highlights -50", state(full { $0.highlights = -50 })))
+        for lens in LensKind.allCases where lens != .none {
+            tools.append(("lens \(lens.rawValue) 75", state(full { $0.lensKind = lens.rawValue; $0.lensAmount = 75 })))
+        }
+        print("  " + pad("tool", 44) + pad("at 220", 18) + pad("at 1400", 18) + pad("at 4032", 18) + "(mean change, rms change)")
+        for (name, st) in tools {
+            var cells = ""
+            for edge in [220.0, 1400.0, 4032.0] {
+                let e = effect(st, at: CGFloat(edge))
+                cells += pad("\(f1(e.0)), \(f1(e.1))", 18)
+            }
+            print("  " + pad(name, 44) + cells)
+        }
+    } else {
+        print("  note  no portrait at \(portraitURL.path)")
+    }
+
+    // M3. The exported cube against the picture.
+    section("M3. The exported .cube against the picture it was made from (largest gap, of 255)")
+    func cubeGap(_ name: String, recipe: LookRecipe = LookRecipe(), _ settings: LookSettings) {
+        let n = 33
+        let width = n * n, height = n
+        var pixels = [Float](repeating: 0, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = (y * width + x) * 4
+                pixels[i] = Float(x % n) / Float(n - 1)
+                pixels[i + 1] = Float(y) / Float(n - 1)
+                pixels[i + 2] = Float(x / n) / Float(n - 1)
+                pixels[i + 3] = 1
+            }
+        }
+        let identity = CIImage(bitmapData: pixels.withUnsafeBufferPointer { Data(buffer: $0) },
+                               bytesPerRow: width * 16, size: CGSize(width: width, height: height),
+                               format: .RGBAf, colorSpace: srgb)
+        // As GradeCubeBaker strips them.
+        var s = settings
+        s.grain = 0; s.halation = 0; s.bloom = 0; s.vignette = 0
+        s.lensKind = LensKind.none.rawValue
+        let st = state(recipe: recipe, s)
+        let lattice = pipeline.apply(state: st, to: identity, includeSplit: false).cropped(to: identity.extent)
+        var out = [Float](repeating: 0, count: width * height * 4)
+        out.withUnsafeMutableBytes { raw in
+            pipeline.context.render(lattice, toBitmap: raw.baseAddress!, rowBytes: width * 16,
+                                    bounds: CGRect(x: 0, y: 0, width: width, height: height),
+                                    format: .RGBAf, colorSpace: srgb)
+        }
+        var worst = 0.0, total = 0.0, count = 0.0
+        var worstAt = ""
+        for b in stride(from: 0, to: n, by: 8) {
+            for g in stride(from: 0, to: n, by: 8) {
+                for r in stride(from: 0, to: n, by: 4) {
+                    let i = (g * width + (b * n + r)) * 4
+                    let cube: RGB = (Double(out[i]), Double(out[i + 1]), Double(out[i + 2]))
+                    let c: RGB = (Double(r) / Double(n - 1), Double(g) / Double(n - 1), Double(b) / Double(n - 1))
+                    let truth = flat(c, st, side: 24)
+                    let d = gap(cube, truth)
+                    total += d
+                    count += 1
+                    if d > worst {
+                        worst = d
+                        worstAt = "colour \(tri(c)): cube \(tri(cube)), picture \(tri(truth))"
+                    }
+                }
+            }
+        }
+        print("  " + pad(name, 30) + pad("worst \(f1(worst))", 14) + pad("mean \(f1(total / count))", 12) + worstAt)
+    }
+    cubeGap("nothing on", full())
+    for preset in SkinFirstPreset.allCases {
+        var s = preset.settings
+        s.intensity = 100
+        cubeGap(preset.name, s)
+    }
+    cubeGap("shadows +50", full { $0.shadows = 50 })
+    cubeGap("shadows -50", full { $0.shadows = -50 })
+    cubeGap("highlights -50", full { $0.highlights = -50 })
+    cubeGap("highlights +50", full { $0.highlights = 50 })
+    cubeGap("fade 50", full { $0.fade = 50 })
+    cubeGap("sharpness 50", full { $0.sharpness = 50 })
+    cubeGap("contrast 60, warmth 30", full { $0.contrast = 60; $0.warmth = 30 })
+    exit(0)
 }
 
 writePictures()
