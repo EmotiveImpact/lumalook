@@ -135,6 +135,12 @@ shot 05d-looks-mine 6 "${P}ROUTE=none" "${P}TAB=Looks" "${P}SEED_LOOKSHELF=mine"
 shot 06b-profile-pro 5 "${P}ROUTE=none" "${P}TAB=Profile" "${P}SEED_PRO=1"
 shot 07-select-clip 5 "${P}ROUTE=selectClip"
 shot 08-grade-room 9 "${P}ROUTE=applyLook" "${P}SEED_AUTOGRADE=$MEDIA/hero_golden.jpg"
+# A Skin first preset, then a film look picked after it. The look has to take
+# the preset's place: 08t is black and white, with nothing of 08s left in it.
+shot 08s-grade-skin-preset 9 "${P}ROUTE=applyLook" "${P}SEED_STILL=$MEDIA/hero_golden.jpg" \
+  "${P}SEED_SKINPRESET=richCinema"
+shot 08t-grade-look-after-preset 9 "${P}ROUTE=applyLook" "${P}SEED_STILL=$MEDIA/hero_golden.jpg" \
+  "${P}SEED_SKINPRESET=richCinema" "${P}SEED_PICKLOOK=HP400"
 shot 09-before-after 9 "${P}ROUTE=beforeAfter" "${P}SEED_AUTOGRADE=$MEDIA/hero_campaign.jpg"
 shot 10-editor 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1"
 shot 10b-editor-clip 10 "${P}ROUTE=editor" "${P}SEED_EDITOR_DEMO=1" "${P}SEED_EDITOR_STATE=clip"

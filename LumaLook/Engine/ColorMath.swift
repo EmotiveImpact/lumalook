@@ -1,10 +1,15 @@
 import Foundation
 import CoreImage
 
-/// Pro colour maths for the Grade Room: turns curves, colour wheels and the
-/// 8-band HSL into `CIColorCube` filters. Everything here is PURE COLOUR
-/// (no spatial ops), so it bakes correctly into exported .cube LUTs and adds
-/// nothing when the user hasn't touched a control (identity → nil filter).
+/// Pro colour maths for the Grade Room: turns curves, colour wheels, the
+/// 8-band HSL and split toning into colour-cube filters. Everything here is
+/// PURE COLOUR (no spatial ops), so it bakes correctly into exported .cube
+/// LUTs and adds nothing when the user hasn't touched a control (identity →
+/// nil filter).
+///
+/// Every cube here is worked out on the numbers a screen shows (sRGB), the
+/// numbers the curve editor, the wheels and the HSL bands are drawn in, and
+/// `cubeFilter` applies it to those same numbers.
 enum ColorMath {
 
     // Caches keyed by a cheap content hash so scrubbing a slider doesn't
@@ -291,10 +296,21 @@ enum ColorMath {
 
     // MARK: Helpers
 
+    /// The cube as a filter that reads and writes screen (sRGB) numbers, the
+    /// way `TrueColour.cubeFilter` and the film LUTs are applied.
+    ///
+    /// This was a plain `CIColorCube` until 24 Nov 2026. That filter works on
+    /// Core Image's linear-light values, so every control did far more than
+    /// its number said: a curve lifted 0.025 off black showed as 0.17 on
+    /// screen (44 of 255), and a split tone meant as a hint of teal in the
+    /// shadows flooded them. The three Skin first presets came out milky,
+    /// with Rich Cinema's black at (0, 62, 87). `check_grade.swift` holds the
+    /// numbers; `source_rules.py` stops the plain filter coming back.
     private static func cubeFilter(data: [Float], dimension: Int) -> CIFilter {
-        let filter = CIFilter(name: "CIColorCube")!
+        let filter = CIFilter(name: "CIColorCubeWithColorSpace")!
         filter.setValue(dimension, forKey: "inputCubeDimension")
         filter.setValue(data.withUnsafeBufferPointer { Data(buffer: $0) }, forKey: "inputCubeData")
+        filter.setValue(CGColorSpace(name: CGColorSpace.sRGB), forKey: "inputColorSpace")
         return filter
     }
 

@@ -190,6 +190,10 @@ final class AppModel: ObservableObject {
         creativeOpacity = session.creativeOpacity ?? 100
         creativeBlend = session.creativeBlend.flatMap(LUTBlendMode.init) ?? .normal
         settings = session.settings
+        // Picking a Skin first preset clears the film look, so the two are
+        // only ever saved together by the old fault that left a preset on
+        // under the looks picked after it. Such a project opens as its look.
+        if selectedLUT != nil { takeOffSkinPreset() }
         if session.isVideo {
             selectedVideoURL = url
         } else {
@@ -253,6 +257,7 @@ final class AppModel: ObservableObject {
 
     /// Starts trying on a pack look (`CameraLooks` decides when).
     func startPackPreview(_ preview: PackLookPreview) {
+        takeOffSkinPreset()
         packPreview = preview
     }
     /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
@@ -454,6 +459,27 @@ final class AppModel: ObservableObject {
            let preset = SkinFirstPreset(rawValue: name) {
             settings = preset.settings
             syncLookState()
+        }
+        // Pick cell: LUMA_SEED_PICKLOOK=<part of a look's name> picks that
+        // library look the way a tap does. After LUMA_SEED_SKINPRESET it shows
+        // that the next look takes the preset's place.
+        if let wanted = env["LUMA_SEED_PICKLOOK"] {
+            func find() -> LibraryLook? {
+                library.all.first { $0.name.localizedCaseInsensitiveContains(wanted) }
+            }
+            // A film look lives in a pack; a free one is installed first, as
+            // the Store's "Install free" does.
+            if find() == nil,
+               let pack = PackCatalog.packs.first(where: { pack in
+                   pack.isFree && pack.looks.contains { $0.name.localizedCaseInsensitiveContains(wanted) }
+               }),
+               PackInstaller.install(pack, into: lutRepository) > 0 {
+                packStore.markInstalled(pack)
+            }
+            if let look = find() {
+                select(look: look)
+                syncLookState()
+            }
         }
         // Scope cells: LUMA_SEED_SCOPE=waveform|parade|vectorscope|histogram.
         if let sm = env["LUMA_SEED_SCOPE"] {
@@ -783,11 +809,20 @@ final class AppModel: ObservableObject {
     /// directly from views.
     func select(look: LibraryLook) {
         switch look.source {
-        case .builtIn(let p): selectedLUT = nil; selectedLook = p
-        case .lut(let f):     selectedLUT = f          // remembered strength fires
+        case .builtIn(let p): takeOffSkinPreset(); selectedLUT = nil; selectedLook = p
+        case .lut(let f):     takeOffSkinPreset(); selectedLUT = f   // remembered strength fires
         case .saved(let s):   applySavedLook(s)
         }
         library.noteUsed(look)
+    }
+
+    /// A Skin first preset is picked like a look, so the look picked next
+    /// takes its place: the preset comes off whole, with anything that was
+    /// adjusted on top of it (`SkinFirstPreset.takenOff`). It used to stay on
+    /// underneath every look picked after it.
+    private func takeOffSkinPreset() {
+        let plain = SkinFirstPreset.takenOff(settings)
+        if plain != settings { settings = plain }
     }
 
     /// Editor routing: nil clipID = timeline grade via `select(look:)`;
