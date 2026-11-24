@@ -584,7 +584,12 @@ enum TrueColour {
     /// 2. At least 60% of those neutrals have to sit together (within 4
     ///    units of each other). Foliage, neon and mixed light do not.
     /// 3. A cast under 1.5 units is no cast, and no more than `balanceMost`
-    ///    is ever taken off.
+    ///    is ever taken off: less, the nearer the reading is to limits 1
+    ///    and 2.
+    ///
+    /// What it cannot do is tell a grey wall under a coloured light from a
+    /// wall painted a pale colour. A portrait against a pale teal wall reads
+    /// as a cast and is nudged (2.6 units on the one such test portrait).
     static func readBalance(rgba: [UInt8], width: Int, height: Int) -> Balance {
         let count = width * height
         guard count > 0, rgba.count >= count * 4 else { return .unreadable }
@@ -601,7 +606,8 @@ enum TrueColour {
             na.append(x.1)
             nb.append(x.2)
         }
-        guard Double(na.count) >= 0.08 * Double(count) else { return .unreadable }
+        let share = Double(na.count) / Double(count)
+        guard share >= 0.08 else { return .unreadable }
 
         // Where most of them sit: start at the middle one and close in.
         var a = na.sorted()[na.count / 2], b = nb.sorted()[nb.count / 2]
@@ -618,11 +624,18 @@ enum TrueColour {
         }
         var together = 0
         for i in na.indices where near(i) { together += 1 }
-        guard Double(together) >= 0.6 * Double(na.count) else { return .unreadable }
+        let agree = Double(together) / Double(na.count)
+        guard agree >= 0.6 else { return .unreadable }
+        // How sure the reading is: nothing at the two limits above, full once
+        // twice as much of the picture is neutral (16%) and three quarters of
+        // it sits together. A reading that only just counts moves the picture
+        // only just, so no picture sits on an edge where a pixel either way
+        // decides between nothing and a full correction.
+        let sure = min(1, (share - 0.08) / 0.08, (agree - 0.6) / 0.15)
 
         let size = (a * a + b * b).squareRoot()
         guard size >= 1.5 else { return .balanced }
-        let take = min(size - 1.5, balanceMost)
+        let take = min(size - 1.5, balanceMost) * sure
         var ta = a / size * take, tb = b / size * take
         if tb > 0 {                 // yellow in the cast: taking it off would cool the picture
             tb = 0

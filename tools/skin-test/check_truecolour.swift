@@ -1129,6 +1129,18 @@ do {
     check(most > 4 && most <= TrueColour.balanceMost + 0.1, "a heavy cast is only ever nudged",
           "most taken off \(f1(most)) units, limit \(f1(TrueColour.balanceMost))")
 
+    // The less there is to go by, the less it takes: no edge where one pixel
+    // decides between nothing and a full correction.
+    var taken: [Double] = []
+    for wallShare in [0.07, 0.09, 0.12, 0.20, 0.40] {
+        let got = read(picture([(1 - wallShare, skin((-1.0, -8.0))), (wallShare, wall((-1.0, -8.0)))]))
+        let c = castOf(got) ?? (0, 0)
+        taken.append((c.0 * c.0 + c.1 * c.1).squareRoot())
+    }
+    check(taken[0] == 0 && taken[1] < 1.5 && taken[4] > 4.5 && zip(taken, taken.dropFirst()).allSatisfy { $0 <= $1 + 0.3 },
+          "the less of the picture is grey wall, the less of a cast Auto takes off",
+          "with 7%, 9%, 12%, 20% and 40% wall it takes " + taken.map { f1($0) }.joined(separator: ", ") + " units")
+
     // Warmth stays. A warm light, a cream wall and skin look alike by colour.
     var cooled = 0, warmTried = 0
     for cast in [(1.0, 2.0), (2.0, 5.0), (3.0, 9.0), (4.0, 12.0), (0.5, 2.6), (2.5, 1.0)] {
