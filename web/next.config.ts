@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: security },
+      // Keep search engines on lumalook.app only: previews and the .vercel.app address stay out of results.
+      { source: '/:path*', missing: [{ type: 'host', value: 'lumalook.app' }], headers: [{ key: 'X-Robots-Tag', value: 'noindex' }] },
       { source: '/assets/:file(.*\\.(?:css|js))', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
       { source: '/assets/:dir(fonts|img)/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }] },
     ]
