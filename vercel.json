@@ -4,7 +4,7 @@
   "installCommand": "",
   "buildCommand": "",
   "outputDirectory": "website",
-  "ignoreCommand": "test ! -d website",
+  "ignoreCommand": "git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- website api vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
