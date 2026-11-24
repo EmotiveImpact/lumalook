@@ -43,6 +43,8 @@ export default buildConfig({
     // Uploads go to Vercel Blob when a token is set (production); otherwise to /media on disk.
     vercelBlobStorage({
       enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      // Same database columns with or without Blob, so one set of migrations works everywhere.
+      alwaysInsertFields: true,
       collections: { media: true },
       token: process.env.BLOB_READ_WRITE_TOKEN,
     }),
