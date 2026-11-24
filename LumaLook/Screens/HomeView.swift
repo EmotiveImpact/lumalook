@@ -632,6 +632,9 @@ private final class HomeScrollProgress: ObservableObject {
     /// `offset` is the page's top edge in the scroll view (negative once
     /// scrolled). Steps of 1/40 keep it smooth without publishing every point.
     func follow(_ offset: CGFloat) {
+        // The pull first: while you pull down the bar's collapse stays at 0,
+        // so the early return below would otherwise skip it every time.
+        pull.follow(offset)
         let raw = min(1, max(0, -offset / HomeTopBar.collapseDistance))
         let stepped = (raw * 40).rounded() / 40
         guard stepped != collapse else { return }
@@ -639,7 +642,6 @@ private final class HomeScrollProgress: ObservableObject {
         if stepped == 1 || stepped == 0 { print("[LUMA] HOMEBAR collapse=\(stepped) offset=\(offset)") }
         #endif
         collapse = stepped
-        pull.follow(offset)
     }
 
     /// How far the page is pulled down past its top. Kept in its own object
