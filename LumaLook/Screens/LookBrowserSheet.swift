@@ -235,7 +235,12 @@ extension AppModel {
     /// never read as selected at the same time (camera double-highlight bug).
     func isCurrent(_ look: LibraryLook) -> Bool {
         switch look.source {
-        case .builtIn(let p): return selectedLUT == nil && selectedLook.name == p.name
+        // Not while a Skin first preset is worn over it: then the preset's
+        // own tile is the one that is on, and this look's tile is a pick
+        // that takes the preset off.
+        case .builtIn(let p):
+            return selectedLUT == nil && selectedLook.name == p.name
+                && SkinFirstPreset.worn(by: settings) == nil
         case .lut(let f):     return selectedLUT?.id == f.id
         case .saved(let s):
             return selectedLook.name == s.baseLookName
@@ -371,13 +376,14 @@ struct LookBrowserSheet: View {
                     panelHeight = height
                 }
         }
-        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)-\(app.tileStamp)") {
             // The sheets keep grading the user's own frame. The Looks tab
             // grades every look on its own person, tile by tile, as the tiles
             // scroll in (LookPosterArt); here it only renders the pack covers.
             if isSheet {
                 thumbs.render(source: app.previewFrame, library: app.library.all,
-                              fileURL: { app.lutRepository.fileURL(for: $0) })
+                              fileURL: { app.lutRepository.fileURL(for: $0) },
+                              under: app.lookState.conversionSlot)
             } else {
                 packThumbs.render(packs: PackCatalog.packs, source: nil, maxDimension: 720)
             }

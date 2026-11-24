@@ -193,9 +193,20 @@ before it bakes. It asks three things:
 3. Is every look, picked after each preset, exactly the look its thumbnail
    shows?
 
+Later sections ask the same of the rest of the look screen: Halation, Grain,
+Shadows and Highlights do what their number says (5); the exported cube, a
+look tile, the big picture and a full-size export match (6); the White
+balance picker makes the point it is given grey (7); Strength fades the look
+and never the Source conversion under it (8); and Auto takes a colour cast
+off, leaves a good portrait alone and never cools one (9).
+
 It also writes a few pictures (two test portraits through the presets and
 two film looks), which the Mac runner keeps with its run as
-`grade-pictures`. Run it with `render` in place of `check` to get only the
+`grade-pictures`. Two more tools only make pictures to look at and check
+nothing: `sheet_pictures.swift` (the tools on the look screen by this
+commit's engine and by master's, kept as `sheet-pictures`) and
+`auto_pictures.swift` (every test portrait as shot, after the Auto that was
+taken out and after the one that replaces it, kept as `auto-pictures`). Run it with `render` in place of `check` to get only the
 pictures, for looking at a change before and after. The steps to compile it
 are at the top of the file.
 

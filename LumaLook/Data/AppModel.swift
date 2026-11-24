@@ -193,7 +193,7 @@ final class AppModel: ObservableObject {
         // Picking a Skin first preset clears the film look, so the two are
         // only ever saved together by the old fault that left a preset on
         // under the looks picked after it. Such a project opens as its look.
-        if selectedLUT != nil { takeOffSkinPreset() }
+        if selectedLUT != nil { settings = SkinFirstPreset.takenOff(settings) }
         if session.isVideo {
             selectedVideoURL = url
         } else {
@@ -257,7 +257,7 @@ final class AppModel: ObservableObject {
 
     /// Starts trying on a pack look (`CameraLooks` decides when).
     func startPackPreview(_ preview: PackLookPreview) {
-        takeOffSkinPreset()
+        takeOffWornGrade()
         packPreview = preview
     }
     /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
@@ -435,7 +435,7 @@ final class AppModel: ObservableObject {
             selectedImage = CIImage(contentsOf: URL(fileURLWithPath: path))
             Task {
                 await autoGrade()
-                print("[LUMA] autograde warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) exp=\(Int(settings.exposure))")
+                print("[LUMA] auto warmth=\(Int(settings.warmth)) tint=\(Int(settings.tint)) found=\(String(describing: autoFound))")
             }
         }
         // Still cell: load a photo as it is, without the auto grade, for
@@ -697,29 +697,55 @@ final class AppModel: ObservableObject {
         refreshPausedFrame()
     }
 
-    // MARK: - AI Auto-Grade (one-tap correction)
+    // MARK: - Auto (one tap takes a colour cast off)
 
     @Published var isAutoGrading = false
 
-    /// Gray-world auto white-balance + auto-exposure: analyses the current
-    /// frame (UNGRADED) and dials exposure/warmth/tint to neutralise a colour
-    /// cast and centre the midtones. The "magic button".
+    /// What Auto found the last time it ran, for its tile to say for a
+    /// moment. Nil once the moment has passed.
+    @Published var autoFound: AutoFound?
+
+    enum AutoFound: Equatable {
+        /// A cast was found and taken off.
+        case fixed
+        /// The picture is balanced, or gives nothing to go by. Left as it is.
+        case nothingToFix
+    }
+
+    /// Takes a colour cast off the picture, and does nothing else.
+    ///
+    /// It reads the cast from the parts of the picture that are nearly grey
+    /// and cannot be skin, and never takes warmth out
+    /// (`TrueColour.readBalance`). Then it sets the Warmth and Tint the
+    /// White balance picker would set for that colour, so the White bal.
+    /// tile lights up and one tap on it takes Auto off again. A balanced
+    /// picture, or one with no clear neutral, is left exactly as it is.
+    ///
+    /// The Auto this replaces averaged the whole frame (grey world) and set
+    /// exposure and contrast as well. A portrait's average is mostly skin,
+    /// so it cooled 26 of the 29 test portraits and lifted the low-key ones.
     func autoGrade() async {
         guard !isAutoGrading else { return }
         isAutoGrading = true
         defer { isAutoGrading = false }
         guard let frame = previewFrame else { return }
-        guard let m = await Self.meanRGB(of: frame) else { return }
-        let luma = 0.2126 * m.r + 0.7152 * m.g + 0.0722 * m.b
-        var s = settings
-        // Centre midtones near 0.45.
-        s.exposure = (max(-0.6, min(0.6, (0.45 - luma) * 2.2))) * 100
-        // Neutralise cast: warm image (R>B) → cool it; green cast → magenta.
-        s.warmth = max(-70, min(70, (m.b - m.r) * 320))
-        s.tint = max(-70, min(70, ((m.r + m.b) / 2 - m.g) * 320))
-        // A touch of contrast if the frame is flat (mean far from extremes).
-        s.contrast = max(s.contrast, 14)
-        settings = s
+        let slot = lookState.conversionSlot
+        let balance = await Task.detached { LookPipeline.shared.autoBalance(of: frame, under: slot) }.value
+        if let balance {
+            var s = settings
+            s.warmth = balance.warmth
+            s.tint = balance.tint
+            settings = s
+            autoFound = .fixed
+        } else {
+            autoFound = .nothingToFix
+        }
+        LumaHaptics.shared.tap()
+        let said = autoFound
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if self?.autoFound == said { self?.autoFound = nil }
+        }
     }
 
     /// White-balance eyedropper: sample a point the user says is neutral and
@@ -730,11 +756,19 @@ final class AppModel: ObservableObject {
         let px = point.x * ext.width
         let py = (1 - point.y) * ext.height   // CIImage y is bottom-up
         let region = CGRect(x: px - 6, y: py - 6, width: 12, height: 12).intersection(ext)
-        let sampleImage = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
+        let patch = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
+        // The colour as the White balance meets it. Log footage is converted
+        // first, so the point tapped is the one on screen, not the flat grey
+        // it was recorded as.
+        let sampleImage = LookPipeline.shared.asShot(patch, under: lookState.conversionSlot)
         guard let m = await Self.meanRGB(of: sampleImage) else { return }
+        // The engine finds the Warmth and Tint that make this colour grey
+        // (LookPipeline.neutralising). The guess that used to sit here took
+        // out under half of a cast and turned Tint the wrong way.
+        let balance = await Task.detached { LookPipeline.shared.neutralising(m) }.value
         var s = settings
-        s.warmth = max(-80, min(80, (m.b - m.r) * 340))
-        s.tint = max(-80, min(80, ((m.r + m.b) / 2 - m.g) * 340))
+        s.warmth = balance.warmth
+        s.tint = balance.tint
         settings = s
         LumaHaptics.shared.tap()
     }
@@ -774,9 +808,15 @@ final class AppModel: ObservableObject {
         // The handler reads `state` live, so slider/look changes apply
         // to the running preview without rebuilding the composition.
         let composition = AVMutableVideoComposition(asset: asset) { request in
-            let source = request.sourceImage.clampedToExtent()
+            // The frame goes in with its real bounds, as the export does
+            // (`VideoExporter.export`). It used to go in clamped, which has
+            // no bounds: the lens was skipped, and the vignette, the
+            // halation and the wipe had no frame to measure against, so the
+            // playing preview was not the clip that got saved. The blurs
+            // clamp their own input where they sample past the edge.
+            let source = request.sourceImage
             let filtered = pipeline.apply(state: state, to: source)
-            request.finish(with: filtered.cropped(to: request.sourceImage.extent), context: pipeline.context)
+            request.finish(with: filtered.cropped(to: source.extent), context: pipeline.context)
         }
         composition.applySDRColorPolicy()
         item.videoComposition = composition
@@ -809,20 +849,85 @@ final class AppModel: ObservableObject {
     /// directly from views.
     func select(look: LibraryLook) {
         switch look.source {
-        case .builtIn(let p): takeOffSkinPreset(); selectedLUT = nil; selectedLook = p
-        case .lut(let f):     takeOffSkinPreset(); selectedLUT = f   // remembered strength fires
+        case .builtIn(let p): takeOffWornGrade(); selectedLUT = nil; selectedLook = p
+        case .lut(let f):     takeOffWornGrade(); selectedLUT = f   // remembered strength fires
         case .saved(let s):   applySavedLook(s)
         }
         library.noteUsed(look)
     }
 
-    /// A Skin first preset is picked like a look, so the look picked next
-    /// takes its place: the preset comes off whole, with anything that was
-    /// adjusted on top of it (`SkinFirstPreset.takenOff`). It used to stay on
-    /// underneath every look picked after it.
-    private func takeOffSkinPreset() {
-        let plain = SkinFirstPreset.takenOff(settings)
+    /// A Skin first preset, or a look saved under Mine, replaces the whole
+    /// grade and is picked like a look, so the look picked next takes its
+    /// place: it comes off whole, with anything that was adjusted on top of
+    /// it (`LookSettings.takingOff`). Both used to stay on underneath every
+    /// look picked after them.
+    private func takeOffWornGrade() {
+        guard let whole = wornGrade else { return }
+        let plain = settings.takingOff(whole)
         if plain != settings { settings = plain }
+    }
+
+    /// The grade a look picked now would be shown with: the settings as they
+    /// stand, with a worn preset or saved look taken off. The Compare grid
+    /// draws its LUT cells with it, so a cell is what tapping it gives.
+    var settingsAfterPick: LookSettings {
+        wornGrade.map { settings.takingOff($0) } ?? settings
+    }
+
+    /// Changes whenever a look tile would be drawn differently for the same
+    /// frame and library: the conversion slot under every look, or a film
+    /// look's remembered strength or blend. Screens add it to the id of the
+    /// task that renders their tiles.
+    var tileStamp: String {
+        var hasher = Hasher()
+        hasher.combine(conversionLUT?.id)
+        hasher.combine(conversionOpacity)
+        hasher.combine(conversionProfile?.rawValue)
+        for lut in lutRepository.luts {
+            hasher.combine(lut.defaultOpacity)
+            hasher.combine(lut.defaultBlend)
+        }
+        return String(hasher.finalize())
+    }
+
+    /// The whole grade the settings are wearing, if any: a Skin first
+    /// preset's, or a saved look's.
+    private var wornGrade: LookSettings? {
+        if let preset = SkinFirstPreset.worn(by: settings) { return preset.settings }
+        return store.savedLooks.first { settings.wears($0.settings) }?.settings
+    }
+
+    // MARK: - What is switched on (the look screen's tiles)
+
+    /// True when the white balance is not the one the look or preset gives:
+    /// the picker, Auto or the Warmth and Tint sliders moved it. The White
+    /// bal. tile lights up for it, so it is never on unseen.
+    var whiteBalanceIsOn: Bool {
+        let base = wornGrade ?? LookSettings()
+        return settings.warmth != base.warmth || settings.tint != base.tint
+    }
+
+    /// Puts the white balance back to the one the look or preset gives.
+    func clearWhiteBalance() {
+        let base = wornGrade ?? LookSettings()
+        var s = settings
+        s.warmth = base.warmth
+        s.tint = base.tint
+        settings = s
+    }
+
+    /// True when a colour slider, a curve, the wheels, the bands or the
+    /// split tone is off what the look or preset gives: the More tile lights
+    /// up for it.
+    var gradeIsAdjusted: Bool {
+        settings.isAdjusted(from: wornGrade ?? LookSettings())
+    }
+
+    /// True when the film look in the chain is not at full strength in the
+    /// normal blend (a strength or blend remembered for that look included):
+    /// the Chain tile lights up for it.
+    var chainIsAdjusted: Bool {
+        selectedLUT != nil && (creativeOpacity < 99.5 || creativeBlend != .normal)
     }
 
     /// Editor routing: nil clipID = timeline grade via `select(look:)`;
@@ -852,11 +957,13 @@ final class AppModel: ObservableObject {
     }
 
     /// True when the grade-room grade changes the picture at all. Strength 0
-    /// dissolves the look and the user adjustments back to the original; a
-    /// lens sits outside that blend, so it counts on its own.
+    /// dissolves the look and the user adjustments back to the footage. A
+    /// lens sits outside that blend, and so does a Source conversion, so
+    /// each counts on its own.
     var gradeIsApplied: Bool {
         let lens = LensKind(rawValue: settings.lensKind) ?? .none
         return settings.intensity > 0 || lens != .none
+            || conversionProfile != nil || conversionLUT != nil
     }
 
     // MARK: - Grade stash (editor ✕)

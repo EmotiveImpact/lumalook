@@ -135,6 +135,16 @@ enum TrueColour {
 
     private static func buildTone(contrast c: Double, saturation s: Double,
                                   brightness b: Double, protectSkin: Bool) -> Data {
+        buildCurveCube(saturation: s, protectSkin: protectSkin) {
+            curve($0, contrast: c, brightness: b)
+        }
+    }
+
+    /// A colour cube from a tone curve on gamma-encoded values. With
+    /// `protectSkin` the curve moves lightness only (hue and chroma hold);
+    /// without it, it runs on each channel, as CIColorControls did.
+    private static func buildCurveCube(saturation s: Double, protectSkin: Bool,
+                                       curve: (Double) -> Double) -> Data {
         let n = toneSize
         var out = [Float](repeating: 1, count: n * n * n * 4)
         // Lightness map, tabulated: grey L -> encoded -> curve -> back to L.
@@ -142,7 +152,7 @@ enum TrueColour {
         let lightness: [Double] = (0..<tableSize).map { i in
             let L = Double(i) / Double(tableSize - 1)
             let e = encode(L * L * L)
-            return cbrt(decode(curve(e, contrast: c, brightness: b)))
+            return cbrt(decode(curve(e)))
         }
         func mapL(_ L: Double) -> Double {
             let x = min(max(L, 0), 1) * Double(tableSize - 1)
@@ -164,9 +174,9 @@ enum TrueColour {
                         // Classic: CIColorControls' saturation, then the
                         // curve per channel, all on encoded values.
                         let w = 0.2125 * er + 0.7154 * eg + 0.0721 * eb
-                        rgb = (curve(w + s * (er - w), contrast: c, brightness: b),
-                               curve(w + s * (eg - w), contrast: c, brightness: b),
-                               curve(w + s * (eb - w), contrast: c, brightness: b))
+                        rgb = (curve(w + s * (er - w)),
+                               curve(w + s * (eg - w)),
+                               curve(w + s * (eb - w)))
                     }
                     // Clamped: rounding left a few lightness-only values a
                     // hair above 1 (1.0000005).
@@ -179,6 +189,66 @@ enum TrueColour {
         }
         return out.withUnsafeBufferPointer { Data(buffer: $0) }
     }
+
+    // MARK: Shadows and Highlights
+
+    /// The Shadows and Highlights sliders as one colour cube, or nil when
+    /// both are at rest. Each runs from -1 to 1.
+    ///
+    /// They used to be CIHighlightShadowAdjust, which works on each channel
+    /// in linear light around a small blur. Shadows pulled down took the
+    /// green and blue out of deep skin (77, 48, 36 became 65, 22, 0),
+    /// Highlights pulled down did a tenth of what Shadows did, and an
+    /// exported cube was up to 25 of 255 away from the picture, because a
+    /// blur has no meaning on a lattice of colours. As a curve on lightness
+    /// they hold hue, do the same at every size and bake exactly.
+    static func shadowHighlightFilter(shadows: Double, highlights: Double,
+                                      protectSkin: Bool = TrueColour.isOn) -> CIFilter? {
+        let s = min(max(shadows, -1), 1), h = min(max(highlights, -1), 1)
+        if abs(s) < 1e-4 && abs(h) < 1e-4 { return nil }
+        let key = ShadowKey(s: Int((s * 10_000).rounded()), h: Int((h * 10_000).rounded()),
+                            skin: protectSkin)
+        lock.lock()
+        if let data = shadowCache[key] { lock.unlock(); return cubeFilter(data, toneSize) }
+        lock.unlock()
+
+        let data = buildCurveCube(saturation: 1, protectSkin: protectSkin) {
+            shadowHighlightCurve($0, shadows: s, highlights: h)
+        }
+        lock.lock()
+        if shadowCache.count >= 32 { shadowCache.removeAll() }
+        shadowCache[key] = data
+        lock.unlock()
+        return cubeFilter(data, toneSize)
+    }
+
+    /// The curve on gamma-encoded values. Black, white and (for Highlights)
+    /// everything below mid grey stay where they are, and the curve never
+    /// turns back on itself at any setting.
+    ///
+    /// Shadows up follows what the slider always did to greys, to within
+    /// 1 of 255: a lift that peaks a third of the way up. Shadows down
+    /// deepens the bottom without flattening it. Highlights moves the top
+    /// half, most at three quarters, by the same amount up or down.
+    static func shadowHighlightCurve(_ e: Double, shadows s: Double, highlights h: Double) -> Double {
+        let x = min(max(e, 0), 1)
+        var y = x
+        if s > 0 {
+            y = x + 1.83 * s * x * (1 - x) * (1 - x)
+        } else if s < 0 {
+            let up = 1 - x
+            y = x * (1 + 0.9 * s * up * up * up)
+        }
+        y = min(max(y, 0), 1)
+        if h != 0, y > 0.5 {
+            let bump = sin(Double.pi * (y - 0.5) / 0.5)
+            y += 0.125 * h * bump * bump
+        }
+        return min(max(y, 0), 1)
+    }
+
+    private struct ShadowKey: Hashable { let s: Int, h: Int, skin: Bool }
+    private static var shadowCache: [ShadowKey: Data] = [:]
 
     /// Lightness-only tone: Oklab L through the curve, a and b scaled by
     /// saturation and otherwise kept, so hue and chroma hold. A colour that
@@ -472,6 +542,108 @@ enum TrueColour {
             while i < floats.count { hasher.combine(floats[i].bitPattern); i += step }
         }
         return hasher.finalize()
+    }
+
+    // MARK: Auto balance
+
+    /// What Auto reads from a picture.
+    enum Balance: Equatable {
+        /// Nothing in the picture is plainly neutral, so there is nothing to
+        /// go by. The picture is left alone.
+        case unreadable
+        /// Its neutrals are neutral. The picture is left alone.
+        case balanced
+        /// Its neutrals carry a cast: a mid grey in this picture looks like
+        /// this colour (as a screen shows it, 0 to 1). The White balance
+        /// that turns this colour grey takes the cast off.
+        case cast(r: Double, g: Double, b: Double)
+    }
+
+    /// How far from grey, in CIELAB units, a colour may be and still count
+    /// as a neutral that carries a cast.
+    static let balanceReach = 14.0
+    /// The most cast Auto takes off, in CIELAB units. A picture graded on
+    /// purpose (a teal sky behind a portrait) reads like a cast, so Auto
+    /// only ever nudges.
+    static let balanceMost = 5.0
+
+    /// Reads a picture's colour cast from the parts of it that are nearly
+    /// grey and cannot be skin. `rgba` is a small copy of the picture, 8 bits
+    /// a channel, as a screen shows it.
+    ///
+    /// Skin never has a say. The Auto this replaces averaged the whole frame,
+    /// so a portrait full of brown skin looked too warm to it: it cooled 26
+    /// of the 29 test portraits, 9 of them as far as the slider goes. Here
+    /// any colour that could be skin (CIELAB hue 5 to 100 degrees) is left
+    /// out, and warmth is never taken out of a picture: a warm light cannot
+    /// be told from skin by colour, so a cast that leans yellow keeps its
+    /// yellow, and one that leans red as well is left alone altogether.
+    ///
+    /// Three more things keep it from touching a good picture:
+    /// 1. At least 8% of the picture has to be such a neutral.
+    /// 2. At least 60% of those neutrals have to sit together (within 4
+    ///    units of each other). Foliage, neon and mixed light do not.
+    /// 3. A cast under 1.5 units is no cast, and no more than `balanceMost`
+    ///    is ever taken off: less, the nearer the reading is to limits 1
+    ///    and 2.
+    ///
+    /// What it cannot do is tell a grey wall under a coloured light from a
+    /// wall painted a pale colour. A portrait against a pale teal wall reads
+    /// as a cast and is nudged (2.6 units on the one such test portrait).
+    static func readBalance(rgba: [UInt8], width: Int, height: Int) -> Balance {
+        let count = width * height
+        guard count > 0, rgba.count >= count * 4 else { return .unreadable }
+        var na: [Double] = [], nb: [Double] = []
+        for i in 0..<count {
+            let r = Double(rgba[i * 4]) / 255, g = Double(rgba[i * 4 + 1]) / 255, b = Double(rgba[i * 4 + 2]) / 255
+            guard max(r, max(g, b)) < 0.98 else { continue }      // clipped: its colour is lost
+            let x = lab(r, g, b)
+            guard x.0 > 25, x.0 < 95 else { continue }
+            let chroma = (x.1 * x.1 + x.2 * x.2).squareRoot()
+            guard chroma < balanceReach else { continue }
+            let hue = atan2(x.2, x.1) * 180 / .pi
+            if chroma > 3, hue > 5, hue < 100 { continue }        // could be skin
+            na.append(x.1)
+            nb.append(x.2)
+        }
+        let share = Double(na.count) / Double(count)
+        guard share >= 0.08 else { return .unreadable }
+
+        // Where most of them sit: start at the middle one and close in.
+        var a = na.sorted()[na.count / 2], b = nb.sorted()[nb.count / 2]
+        func near(_ i: Int) -> Bool {
+            let da = na[i] - a, db = nb[i] - b
+            return da * da + db * db < 16
+        }
+        for _ in 0..<12 {
+            var sa = 0.0, sb = 0.0, n = 0.0
+            for i in na.indices where near(i) { sa += na[i]; sb += nb[i]; n += 1 }
+            guard n >= 5 else { break }
+            a = sa / n
+            b = sb / n
+        }
+        var together = 0
+        for i in na.indices where near(i) { together += 1 }
+        let agree = Double(together) / Double(na.count)
+        guard agree >= 0.6 else { return .unreadable }
+        // How sure the reading is: nothing at the two limits above, full once
+        // twice as much of the picture is neutral (16%) and three quarters of
+        // it sits together. A reading that only just counts moves the picture
+        // only just, so no picture sits on an edge where a pixel either way
+        // decides between nothing and a full correction.
+        let sure = min(1, (share - 0.08) / 0.08, (agree - 0.6) / 0.15)
+
+        let size = (a * a + b * b).squareRoot()
+        guard size >= 1.5 else { return .balanced }
+        let take = min(size - 1.5, balanceMost) * sure
+        var ta = a / size * take, tb = b / size * take
+        if tb > 0 {                 // yellow in the cast: taking it off would cool the picture
+            tb = 0
+            if ta > 0 { ta = 0 }    // and red with it: that is a warm light, or skin
+        }
+        guard (ta * ta + tb * tb).squareRoot() >= 0.5 else { return .balanced }
+        let grey = srgb(55, ta, tb)
+        return .cast(r: min(max(grey.0, 0), 1), g: min(max(grey.1, 0), 1), b: min(max(grey.2, 0), 1))
     }
 
     // MARK: Colour maths

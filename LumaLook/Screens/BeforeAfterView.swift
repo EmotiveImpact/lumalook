@@ -155,7 +155,7 @@ struct BeforeAfterView: View {
     }
 
     private var thumbStamp: String {
-        "\(mediaIdentity)-\(app.library.all.count)"
+        "\(mediaIdentity)-\(app.library.all.count)-\(app.tileStamp)"
     }
 
     /// The still on stage at full size. While a mask is placed it is the
@@ -230,6 +230,7 @@ struct BeforeAfterView: View {
                 thumbs.render(source: app.previewFrame,
                               library: app.library.all,
                               fileURL: { app.lutRepository.fileURL(for: $0) },
+                              under: app.lookState.conversionSlot,
                               maxDimension: 160)
             }
             .onAppear {

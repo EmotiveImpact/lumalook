@@ -6,7 +6,10 @@
 #    LUTDensifier.swift) and the checks on the grade that sits on top of a
 #    look (tools/skin-test/check_grade.swift, compiled with the app's own
 #    LookPipeline.swift: Skin first presets, curves, wheels, HSL bands and
-#    split tone). Then it bakes every look through that same engine on
+#    split tone). It also writes pictures of the tools on the look screen
+#    made by this commit's engine and by master's (sheet_pictures.swift),
+#    to look at side by side, and of Auto on every test portrait
+#    (auto_pictures.swift). Then it bakes every look through that same engine on
 #    real Core Image into small colour cubes, and fetches the licensed test
 #    portraits listed in tools/skin-test/candidates.txt. It hands the
 #    results to the gate and commits them back to the branch
@@ -112,12 +115,80 @@ jobs:
           /tmp/grade/check check tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
             tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
 
+      # Numbers to read, not a pass or fail: what each slider does to flat
+      # colours, how strong each spatial tool looks at thumbnail, preview and
+      # export size, and how far the exported .cube is from the picture.
+      - name: Measure the tools on the look screen
+        run: |
+          /tmp/grade/check measure tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
+
       - name: Keep the pictures of the grade on top of a look
         uses: actions/upload-artifact@v5
         with:
           name: grade-pictures
           path: ${{ runner.temp }}/grade-pictures
           if-no-files-found: warn
+          retention-days: 14
+
+      # Pictures to look at, not a pass or fail: one test portrait through
+      # the tools on the look screen, made by this commit's engine and by
+      # master's, so a change to how a tool looks can be put side by side.
+      # Skipped when the engine is the same as master's.
+      - name: Picture the tools with this engine and with master's
+        run: |
+          ENGINE="LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift
+            LumaLook/Engine/LUTDensifier.swift"
+          git fetch --quiet --depth=1 origin master
+          if git diff --quiet FETCH_HEAD HEAD -- $ENGINE; then
+            echo "The engine is the same as master's, so there is nothing to compare."
+            exit 0
+          fi
+          mkdir -p /tmp/sheet /tmp/master-engine
+          cp tools/skin-test/sheet_pictures.swift /tmp/sheet/main.swift
+          swiftc -O -o /tmp/sheet/now /tmp/sheet/main.swift $ENGINE
+          /tmp/sheet/now tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/sheet-pictures/now"
+          git archive FETCH_HEAD $ENGINE | tar -x -C /tmp/master-engine
+          if (cd /tmp/master-engine && swiftc -O -o /tmp/sheet/before /tmp/sheet/main.swift $ENGINE); then
+            /tmp/sheet/before tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+              tools/skin-test/out/candidates "$RUNNER_TEMP/sheet-pictures/before"
+          else
+            echo "::notice::master's engine does not build with sheet_pictures.swift, so only this commit's pictures were written."
+          fi
+
+      - name: Keep the pictures of the tools, before and after
+        uses: actions/upload-artifact@v5
+        with:
+          name: sheet-pictures
+          path: ${{ runner.temp }}/sheet-pictures
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Pictures to look at, not a pass or fail: every test portrait as shot,
+      # after the Auto that was taken out and after the Auto that replaces
+      # it, with one line a portrait on what Auto read (auto.txt).
+      - name: Picture Auto on the test portraits
+        run: |
+          mkdir -p /tmp/auto
+          cp tools/skin-test/auto_pictures.swift /tmp/auto/main.swift
+          swiftc -O -o /tmp/auto/pictures /tmp/auto/main.swift \
+            LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift \
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
+            LumaLook/Engine/LUTDensifier.swift
+          /tmp/auto/pictures tools/skin-test/out/candidates "$RUNNER_TEMP/auto-pictures"
+
+      - name: Keep the pictures of Auto
+        uses: actions/upload-artifact@v5
+        with:
+          name: auto-pictures
+          path: ${{ runner.temp }}/auto-pictures
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Bake every look through the app's True Colour engine

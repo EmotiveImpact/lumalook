@@ -20,6 +20,17 @@ sources and fails on the known ways to do that:
      said. That made the Skin first presets milky and teal (24 Nov 2026).
      They go through CIColorCubeWithColorSpace, as True Colour's cubes do.
      tools/skin-test/check_grade.swift checks the result on real Core Image.
+  4. The Shadows and Highlights sliders going back to Apple's
+     CIHighlightShadowAdjust filter. It works on each channel in raw light
+     values around a blur: Shadows pulled down took the green and blue out
+     of deep skin, Highlights pulled down did a tenth of what Shadows did,
+     and an exported cube did not match the picture. They are one curve on
+     lightness, TrueColour.shadowHighlightFilter.
+  5. A playing preview handing the pipeline a frame clamped to its extent.
+     Such a frame has no bounds, so the lens was skipped and the vignette,
+     halation and wipe had nothing to measure against: the preview was not
+     the clip that got saved. Frames go in with their bounds, as the export
+     sends them; the blurs clamp their own input.
 
 gate.py runs this too. Exit code 0 when the rules hold, 1 when one is broken.
 """
@@ -45,6 +56,8 @@ PIPELINE_MUST_CALL = {
     "TrueColour.toneFilter(": 4,
     # the creative LUT slot, with the skin guard
     "TrueColour.lutData(": 1,
+    # the Shadows and Highlights sliders
+    "TrueColour.shadowHighlightFilter(": 1,
 }
 
 
@@ -87,6 +100,20 @@ def check(app=APP):
                 problems.append(
                     f"LookPipeline.swift calls {call}...) {n} time{'s' if n != 1 else ''}, fewer than the {least} it "
                     "needs: a recipe, slider, overlay, lens or LUT path has stopped going through True Colour.")
+        if re.search(r'highlightShadowAdjust\s*\(|"CIHighlightShadowAdjust"', code):
+            problems.append(
+                "LookPipeline.swift uses Apple's CIHighlightShadowAdjust filter. It works on each channel in raw "
+                "light values around a blur: it takes the colour out of deep skin when shadows are pulled down, "
+                "and an exported cube cannot carry it. Shadows and Highlights go through "
+                "TrueColour.shadowHighlightFilter.")
+    for path in sorted(app.rglob("*.swift")):
+        code = code_only(path.read_text(errors="replace"))
+        if re.search(r"\.apply\(\s*state:", code) and re.search(r"sourceImage\s*\.clampedToExtent\(\)", code):
+            problems.append(
+                f"{path.relative_to(app).as_posix()} clamps a video frame to its extent and grades it. A clamped "
+                "frame has no bounds, so the lens is skipped and the vignette, halation and wipe are drawn "
+                "against nothing: the preview stops matching the saved clip. Hand the pipeline the frame as it "
+                "is (request.sourceImage); its blurs clamp their own input.")
     for name in SCREEN_NUMBER_CUBES:
         path = app / name
         if not path.exists():

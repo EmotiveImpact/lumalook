@@ -17,8 +17,9 @@ by one:
   4. A film LUT that sets its own input range is turned away, by the gate's
      rule and by check_look.py.
   5. source_rules.py notices a new CIColorControls, a look path that no
-     longer goes through True Colour, and the Grade Room's cubes going back
-     to the plain cube filter.
+     longer goes through True Colour, the Grade Room's cubes going back
+     to the plain cube filter, Shadows and Highlights going back to Apple's
+     filter, and a preview that grades a frame without bounds.
 
 It adds two entries to looks.json and four small files under out/ while it
 runs and takes them away again. Exit code 0 when everything holds.
@@ -147,7 +148,20 @@ def source():
         found = R.check(app)
         check(len(found) == 1 and "TrueColour.lutData(" in found[0],
               "a creative LUT that stops going through the skin guard is caught")
+        pipeline.write_text(text.replace("TrueColour.shadowHighlightFilter(", "old(", 1)
+                            + "\nlet hs = CIFilter.highlightShadowAdjust()\n")
+        found = R.check(app)
+        check(len(found) == 2 and any("TrueColour.shadowHighlightFilter(" in f for f in found)
+              and any("CIHighlightShadowAdjust" in f for f in found),
+              "Shadows and Highlights going back to Apple's CIHighlightShadowAdjust filter is caught")
         pipeline.write_text(text)
+        (app / "Screens" / "Player.swift").write_text(
+            "let source = request.sourceImage.clampedToExtent()\n"
+            "let out = pipeline.apply(state: state, to: source)\n")
+        found = R.check(app)
+        check(len(found) == 1 and "Screens/Player.swift" in found[0] and "no bounds" in found[0],
+              "a preview that clamps a video frame to its extent before grading it is caught")
+        (app / "Screens" / "Player.swift").unlink()
         maths = app / "Engine" / "ColorMath.swift"
         text = maths.read_text()
         maths.write_text(text.replace('CIFilter(name: "CIColorCubeWithColorSpace")', 'CIFilter(name: "CIColorCube")', 1))

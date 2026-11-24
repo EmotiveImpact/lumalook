@@ -92,11 +92,7 @@ enum SkinFirstPreset: String, CaseIterable, Identifiable {
     /// hide it. Once the person reshapes the curve, the bands, the split tone
     /// or the wheels by hand it is their own grade and no longer a preset.
     static func worn(by settings: LookSettings) -> SkinFirstPreset? {
-        allCases.first { preset in
-            let own = preset.settings
-            return settings.curves == own.curves && settings.wheels == own.wheels
-                && settings.hsl == own.hsl && settings.splitTone == own.splitTone
-        }
+        allCases.first { settings.wears($0.settings) }
     }
 
     /// The grade with its preset taken off: every colour adjustment back to
@@ -105,28 +101,11 @@ enum SkinFirstPreset: String, CaseIterable, Identifiable {
     /// are the person's own and stay. A grade wearing no preset comes back
     /// unchanged.
     ///
-    /// A preset is picked like a look, so the next look picked has to take
-    /// its place (`AppModel.select(look:)`). Until 24 Nov 2026 it stayed on
-    /// underneath, and every look picked after Rich Cinema came out teal and
-    /// milky while its thumbnail was right.
+    /// The rule is `LookSettings.takingOff`, shared with the looks saved
+    /// under Mine, which replace the whole grade in the same way.
     static func takenOff(_ settings: LookSettings) -> LookSettings {
         guard let preset = worn(by: settings) else { return settings }
-        let fresh = LookSettings()
-        var plain = settings
-        plain.exposure = fresh.exposure
-        plain.contrast = fresh.contrast
-        plain.highlights = fresh.highlights
-        plain.shadows = fresh.shadows
-        plain.saturation = fresh.saturation
-        plain.warmth = fresh.warmth
-        plain.tint = fresh.tint
-        plain.fade = fresh.fade
-        plain.curves = fresh.curves
-        plain.wheels = fresh.wheels
-        plain.hsl = fresh.hsl
-        plain.splitTone = fresh.splitTone
-        if settings.intensity == preset.settings.intensity { plain.intensity = fresh.intensity }
-        return plain
+        return settings.takingOff(preset.settings)
     }
 
     /// One-screen guidance shown in the Skin First tip card.
