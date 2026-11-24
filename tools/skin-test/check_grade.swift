@@ -14,7 +14,8 @@
 //
 // Later sections ask the same of the film tools and tone sliders (5), of the
 // exported cube and the three picture sizes (6), of the White balance
-// picker (7), of Strength over log footage (8), and of Auto (9).
+// picker (7), of Strength over log footage (8), of Auto (9), and of Exposure
+// and the white balance under Strength (10).
 //
 //   mkdir -p /tmp/grade && cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
 //   swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
@@ -977,6 +978,88 @@ if mode == "check" {
     }
     check(pipeline.autoBalance(of: grey(0.5)) == nil && pipeline.autoBalance(of: CIImage.empty()) == nil,
           "a flat grey and an empty picture are left alone")
+}
+
+// MARK: - 10. Exposure, and the white balance under Strength
+
+if mode == "check" {
+    section("10. Exposure leaves black and white alone, and Strength leaves the white balance alone")
+    func lin(_ e: Double) -> Double { e <= 0.04045 ? e / 12.92 : pow((e + 0.055) / 1.055, 2.4) }
+    func enc(_ v: Double) -> Double { v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055 }
+    /// Half way between two colours, in the light Core Image dissolves in.
+    func half(_ a: RGB, _ b: RGB) -> RGB {
+        (enc((lin(a.0) + lin(b.0)) / 2), enc((lin(a.1) + lin(b.1)) / 2), enc((lin(a.2) + lin(b.2)) / 2))
+    }
+    func widest(_ a: [RGB], _ b: [RGB]) -> Double { zip(a, b).map { gap($0, $1) }.max() ?? 0 }
+    func fromGrey(_ c: RGB) -> Double { max(abs(c.0 - c.1), abs(c.2 - c.1)) * 255 }
+    func hue(_ c: RGB) -> Double { let x = labAB(c); return atan2(x.1, x.0) * 180 / .pi }
+    func chroma(_ c: RGB) -> Double { let x = labAB(c); return (x.0 * x.0 + x.1 * x.1).squareRoot() }
+
+    // Exposure used to be an added brightness: at +50 black came out at 43
+    // of 255, a grey veil, and at -50 white came out at 213.
+    let black: RGB = (0, 0, 0), white: RGB = (1, 1, 1), mid: RGB = (0.5, 0.5, 0.5)
+    let deepSkin: RGB = (0.30, 0.19, 0.14)
+    let tones = [black, mid, white, deepSkin]
+    let up = graded(tones, state(full { $0.exposure = 50 }))
+    let down = graded(tones, state(full { $0.exposure = -50 }))
+    check(gap(up[0], black) < 1.5 && gap(up[2], white) < 1.5 && gap(down[0], black) < 1.5 && gap(down[2], white) < 1.5,
+          "Exposure at +50 and at -50 leaves black on black and white on white (it put black at 43, and white at 213)",
+          "at +50 black \(tri(up[0])) and white \(tri(up[2])); at -50 black \(tri(down[0])) and white \(tri(down[2]))")
+    check(abs(up[1].0 * 255 - 170) < 3 && abs(down[1].0 * 255 - 85) < 3 && fromGrey(up[1]) < 1.5 && fromGrey(down[1]) < 1.5,
+          "Exposure at +50 and at -50 moves mid grey to 170 and 85, and keeps it grey",
+          "came out \(tri(up[1])) and \(tri(down[1]))")
+    check(up[3].0 > deepSkin.0 + 0.08 && abs(hue(up[3]) - hue(deepSkin)) < 5 && abs(chroma(up[3]) - chroma(deepSkin)) < 3
+              && down[3].0 < deepSkin.0 - 0.05 && abs(hue(down[3]) - hue(deepSkin)) < 5,
+          "Exposure brightens and darkens deep skin without changing its colour",
+          "77,48,36 came out \(tri(up[3])) at +50 and \(tri(down[3])) at -50")
+
+    // Strength fades the look. The white balance the person set is a
+    // correction to the picture, so it stays in full: faded with the look,
+    // a point picked at the 75 a look opens with kept a quarter of its cast.
+    let tapped: RGB = (0.48, 0.50, 0.53)
+    let wb = pipeline.neutralising((r: tapped.0, g: tapped.1, b: tapped.2))
+    func withBalance(strength: Double, on base: LookSettings = LookSettings()) -> LookSettings {
+        var s = base
+        s.intensity = strength
+        s.warmth += wb.warmth
+        s.tint += wb.tint
+        return s
+    }
+    var left: [String] = []
+    var worstLeft = 0.0
+    for strength in [0.0, 50.0, 75.0, 100.0] {
+        let out = graded([tapped], state(withBalance(strength: strength)))[0]
+        worstLeft = max(worstLeft, fromGrey(out))
+        left.append("\(Int(strength)): \(f1(fromGrey(out)))")
+    }
+    check(worstLeft < 2.0 && fromGrey(tapped) > 6,
+          "with no look on, a point picked for white balance comes out grey at Strength 0, 50, 75 and 100",
+          "of 255 from grey at Strength " + left.joined(separator: ", ") + "; it started \(f1(fromGrey(tapped))) away")
+
+    // A look on: half Strength is half way between the white-balanced
+    // picture and the look.
+    let colours: [RGB] = [tapped, (0.30, 0.30, 0.33), (0.62, 0.52, 0.48), deepSkin, (0.80, 0.80, 0.84)]
+    let underLook = graded(colours, state(withBalance(strength: 100)))
+    let fullLook = graded(colours, state(recipe: goldenHour, withBalance(strength: 100)))
+    let halfLook = graded(colours, state(recipe: goldenHour, withBalance(strength: 50)))
+    let want = zip(underLook, fullLook).map { half($0, $1) }
+    check(widest(halfLook, want) < 1.5,
+          "under Golden Hour, Strength 50 is half way from the white-balanced picture to the look",
+          "widest gap \(f1(widest(halfLook, want))) of 255")
+
+    // A Skin first preset's own warmth is part of its look and fades with
+    // it; a white balance picked on top of the preset does not.
+    var presetLeft = 0.0
+    for preset in SkinFirstPreset.allCases {
+        var s = preset.settings
+        s.intensity = 0
+        presetLeft = max(presetLeft, widest(graded(colours, state(s)), colours))
+    }
+    check(presetLeft < 1.0, "a Skin first preset's own warmth fades with it: at Strength 0 nothing of the preset is left",
+          "widest change \(f1(presetLeft)) of 255")
+    let kept = graded([tapped], state(withBalance(strength: 0, on: SkinFirstPreset.melaninGlow.settings)))[0]
+    check(fromGrey(kept) < 2.0, "a white balance picked on top of a preset stays when the preset is faded out",
+          "\(f1(fromGrey(kept))) of 255 from grey")
 }
 
 // MARK: - Pictures

@@ -197,8 +197,10 @@ Later sections ask the same of the rest of the look screen: Halation, Grain,
 Shadows and Highlights do what their number says (5); the exported cube, a
 look tile, the big picture and a full-size export match (6); the White
 balance picker makes the point it is given grey (7); Strength fades the look
-and never the Source conversion under it (8); and Auto takes a colour cast
-off, leaves a good portrait alone and never cools one (9).
+and never the Source conversion under it (8); Auto takes a colour cast
+off, leaves a good portrait alone and never cools one (9); and Exposure
+leaves black and white where they are, while Strength leaves the white
+balance the person set in full (10).
 
 It also writes a few pictures (two test portraits through the presets and
 two film looks), which the Mac runner keeps with its run as

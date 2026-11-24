@@ -83,20 +83,24 @@ enum TrueColour {
 
     // MARK: Tone
 
-    /// Saturation, contrast and brightness as one colour cube, or nil when
-    /// they do nothing. `contrast` 1 and `brightness` 0 are neutral, as in
-    /// CIColorControls, so recipes and sliders keep their numbers.
+    /// Saturation, contrast, brightness and exposure as one colour cube, or
+    /// nil when they do nothing. `contrast` 1 and `brightness` 0 are neutral,
+    /// as in CIColorControls, so recipes keep their numbers. `exposure` is
+    /// the Exposure slider (see `expose`); recipes do not use it.
     static func toneFilter(contrast: Float, saturation: Float, brightness: Float,
+                           exposure: Float = 0,
                            protectSkin: Bool = TrueColour.isOn) -> CIFilter? {
-        let c = Double(contrast), s = Double(saturation), b = Double(brightness)
-        if abs(c - 1) < 1e-4 && abs(s - 1) < 1e-4 && abs(b) < 1e-4 { return nil }
+        let c = Double(contrast), s = Double(saturation), b = Double(brightness), x = Double(exposure)
+        if abs(c - 1) < 1e-4 && abs(s - 1) < 1e-4 && abs(b) < 1e-4 && abs(x) < 1e-4 { return nil }
         let key = ToneKey(c: Int((c * 10_000).rounded()), s: Int((s * 10_000).rounded()),
-                          b: Int((b * 10_000).rounded()), skin: protectSkin)
+                          b: Int((b * 10_000).rounded()), x: Int((x * 10_000).rounded()),
+                          skin: protectSkin)
         lock.lock()
         if let data = toneCache[key] { lock.unlock(); return cubeFilter(data, toneSize) }
         lock.unlock()
 
-        let data = buildTone(contrast: c, saturation: s, brightness: b, protectSkin: protectSkin)
+        let data = buildTone(contrast: c, saturation: s, brightness: b, exposure: x,
+                             protectSkin: protectSkin)
         lock.lock()
         if toneCache.count >= 32 { toneCache.removeAll() }
         toneCache[key] = data
@@ -128,15 +132,34 @@ enum TrueColour {
         return y + k * (y - t) * (y - t)
     }
 
-    private struct ToneKey: Hashable { let c: Int, s: Int, b: Int, skin: Bool }
+    /// The Exposure slider, on gamma-encoded values: brighter or darker
+    /// with black left on black and white left on white. `x` is how far mid
+    /// grey moves, which is what the slider's number has always meant, so a
+    /// setting is as strong in the middle of the picture as it was.
+    ///
+    /// Exposure used to be `brightness`: the same amount added to every
+    /// tone. At +50 that put black at 43 of 255, a grey veil over the whole
+    /// picture, and at -50 it turned white into a light grey. This curve
+    /// has a slope of g at black and 1/g at white, so it never turns back
+    /// and never clips.
+    static func expose(_ e: Double, by x: Double) -> Double {
+        let v = min(max(e, 0), 1)
+        let x = min(max(x, -0.45), 0.45)
+        guard abs(x) > 1e-9 else { return v }
+        let g = (0.5 + x) / (0.5 - x)
+        return g * v / (1 + (g - 1) * v)
+    }
+
+    private struct ToneKey: Hashable { let c: Int, s: Int, b: Int, x: Int, skin: Bool }
     private static let toneSize = 33
     private static let lock = NSLock()
     private static var toneCache: [ToneKey: Data] = [:]
 
     private static func buildTone(contrast c: Double, saturation s: Double,
-                                  brightness b: Double, protectSkin: Bool) -> Data {
+                                  brightness b: Double, exposure x: Double,
+                                  protectSkin: Bool) -> Data {
         buildCurveCube(saturation: s, protectSkin: protectSkin) {
-            curve($0, contrast: c, brightness: b)
+            expose(curve($0, contrast: c, brightness: b), by: x)
         }
     }
 

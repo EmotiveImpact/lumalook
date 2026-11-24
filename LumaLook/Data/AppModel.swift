@@ -958,12 +958,14 @@ final class AppModel: ObservableObject {
 
     /// True when the grade-room grade changes the picture at all. Strength 0
     /// dissolves the look and the user adjustments back to the footage. A
-    /// lens sits outside that blend, and so does a Source conversion, so
-    /// each counts on its own.
+    /// lens sits outside that blend, and so do a Source conversion and the
+    /// white balance the person set, so each counts on its own.
     var gradeIsApplied: Bool {
         let lens = LensKind(rawValue: settings.lensKind) ?? .none
+        let balance = LookPipeline.ownBalance(settings)
         return settings.intensity > 0 || lens != .none
             || conversionProfile != nil || conversionLUT != nil
+            || balance.warmth != 0 || balance.tint != 0
     }
 
     // MARK: - Grade stash (editor ✕)

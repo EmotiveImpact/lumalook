@@ -185,4 +185,64 @@ if let mono = try? pipeline.loadLUT(at: filmDir.appendingPathComponent("FS_HP400
     big("hp400-at-100", grade(lut: mono, strength: 100))
 }
 
+// The choices that change how a look feels (24 Nov 2026). This engine and
+// master's each write them, so a sheet can show how it is beside a proposal.
+
+// Exposure, up and down.
+big("exposure-plus-50", grade { $0.exposure = 50 })
+big("exposure-minus-50", grade { $0.exposure = -50 })
+
+// A Skin first preset on its own, and over three built-in looks: it sits on
+// top of whichever one was picked last.
+func worn(_ preset: SkinFirstPreset, over recipe: LookRecipe = LookRecipe()) -> LookState {
+    let s = LookState()
+    s.recipe = recipe
+    s.settings = preset.settings
+    return s
+}
+for preset in SkinFirstPreset.allCases {
+    big("preset-\(preset.rawValue)-alone", worn(preset))
+}
+for (tag, code, name) in [("golden-hour", "KD2", "Golden Hour"), ("london-rain", "AG60", "London Rain"),
+                          ("documentary-grit", "BW32", "Documentary Grit")] {
+    if let recipe = shipped.first(where: { $0.code == code && $0.name == name })?.lookRecipe {
+        big("preset-deepTrue-over-\(tag)", worn(.deepTrue, over: recipe))
+        big("look-\(tag)", grade(recipe: recipe))
+    }
+}
+
+// The white balance under Strength: a portrait with a grey wall under a blue
+// light, with the white balance a tap on something grey gives, at the 75 a
+// look opens with and at 100, with no look and under Golden Hour.
+if let wallPhoto = CIImage(contentsOf: portraitDir.appendingPathComponent("day-pexels-3973059.jpg"),
+                           options: [.applyOrientationProperty: true]) {
+    func lin(_ e: Double) -> Double { e <= 0.04045 ? e / 12.92 : pow((e + 0.055) / 1.055, 2.4) }
+    func enc(_ v: Double) -> Double { v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055 }
+    let gain = (0.90, 1.00, 1.14)
+    let wall = sized(wallPhoto, longEdge: 1400)
+    let cast = wall.applyingFilter("CIColorMatrix", parameters: [
+        "inputRVector": CIVector(x: CGFloat(gain.0), y: 0, z: 0, w: 0),
+        "inputGVector": CIVector(x: 0, y: CGFloat(gain.1), z: 0, w: 0),
+        "inputBVector": CIVector(x: 0, y: 0, z: CGFloat(gain.2), w: 0)]).cropped(to: wall.extent)
+    // Mid grey under that light: what a tap on something grey would read.
+    let grey = lin(0.5)
+    let wb = pipeline.neutralising((r: enc(grey * gain.0), g: enc(grey * gain.1), b: enc(grey * gain.2)))
+    print("  (white balance for the blue light: Warmth \(Int(wb.warmth)) Tint \(Int(wb.tint)))")
+    func balanced(_ st: LookState) -> CIImage {
+        pipeline.apply(state: st, to: cast, includeSplit: false).cropped(to: cast.extent)
+    }
+    write(wall, "wall-as-shot__big")
+    write(cast, "wall-blue-light__big")
+    for strength in [75.0, 100.0] {
+        write(balanced(grade(strength: strength) { $0.warmth = wb.warmth; $0.tint = wb.tint }),
+              "wall-blue-light-balanced-at-\(Int(strength))__big")
+    }
+    if let golden = shipped.first(where: { $0.code == "KD2" })?.lookRecipe {
+        for strength in [75.0, 100.0] {
+            write(balanced(grade(recipe: golden, strength: strength) { $0.warmth = wb.warmth; $0.tint = wb.tint }),
+                  "wall-blue-light-golden-hour-balanced-at-\(Int(strength))__big")
+        }
+    }
+}
+
 print("Wrote \(written) pictures to \(outDir.path)")

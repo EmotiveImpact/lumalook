@@ -168,7 +168,8 @@ final class LookPipeline: @unchecked Sendable {
     }
 
     /// Applies the full look (LUT or built-in recipe + user settings) to a frame,
-    /// blending with the frame as converted (slot 1) by `settings.intensity`.
+    /// blending with the frame as converted (slot 1) and white balanced by
+    /// `settings.intensity`.
     func apply(state: LookState, to image: CIImage, includeSplit: Bool = true) -> CIImage {
         let settings = state.settings
         var graded = image
@@ -201,10 +202,22 @@ final class LookPipeline: @unchecked Sendable {
 
         // Intensity blend: dissolve between the converted frame and the
         // graded one.
+        //
+        // The white balance the person set is a correction to the picture,
+        // like the Source conversion, so Strength does not fade it: the
+        // frame the look fades back to carries it in full. It used to fade
+        // with the look, so at the 75 a look opens with the White balance
+        // picker took off three quarters of a cast and left the rest.
         let intensity = min(max(settings.intensity / 100.0, 0), 1)
         if intensity < 0.999 {
+            var under = converted
+            let own = Self.ownBalance(settings)
+            if own.warmth != 0 || own.tint != 0 {
+                under = Self.shiftWhite(converted, towards: 6500 - CGFloat(own.warmth) * 20,
+                                        tint: CGFloat(own.tint))
+            }
             let dissolve = CIFilter.dissolveTransition()
-            dissolve.inputImage = converted
+            dissolve.inputImage = under
             dissolve.targetImage = graded
             dissolve.time = Float(intensity)
             graded = dissolve.outputImage ?? graded
@@ -492,6 +505,15 @@ final class LookPipeline: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
+    /// The white balance that is the person's own: Warmth and Tint as they
+    /// stand, less what a Skin first preset being worn sets for itself. A
+    /// preset's warmth is part of its look and fades with Strength; what the
+    /// picker, Auto or the sliders add on top does not (see `apply`).
+    static func ownBalance(_ settings: LookSettings) -> (warmth: Double, tint: Double) {
+        let worn = SkinFirstPreset.worn(by: settings)?.settings
+        return (settings.warmth - (worn?.warmth ?? 0), settings.tint - (worn?.tint ?? 0))
+    }
+
     /// The Warmth and Tint that turn `sample` grey: what the White balance
     /// picker sets when a point that should be neutral is tapped. `sample`
     /// is a colour as a screen shows it, 0 to 1.
@@ -656,12 +678,15 @@ final class LookPipeline: @unchecked Sendable {
 
         // Exposure, Contrast and Saturation sliders: the same True Colour
         // tone as the looks, so the Contrast slider no longer crushes deep
-        // skin and Exposure no longer greys it.
+        // skin. Exposure moves mid grey as far as it always did and leaves
+        // black and white where they are (`TrueColour.expose`); it used to
+        // be an added brightness, which lifted black into a grey veil.
         let hasColourChange = settings.exposure != 0 || settings.contrast != 10 || settings.saturation != 0
         if hasColourChange,
            let tone = TrueColour.toneFilter(contrast: Float(1.0 + (settings.contrast - 10) / 200.0),
                                             saturation: Float(1.0 + settings.saturation / 100.0),
-                                            brightness: Float(settings.exposure / 300.0)) {
+                                            brightness: 0,
+                                            exposure: Float(settings.exposure / 300.0)) {
             tone.setValue(output, forKey: kCIInputImageKey)
             output = tone.outputImage ?? output
         }
