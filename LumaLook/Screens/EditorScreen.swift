@@ -3112,7 +3112,7 @@ private struct EditorContent: View {
         // Picking a look while the edit is graded OFF has to bring the
         // strength back, or the tile reads as dead.
         if clipID == nil, app.settings.intensity == 0 {
-            app.settings.intensity = stashedIntensity ?? 75
+            app.settings.intensity = stashedIntensity ?? app.openingStrength
             stashedIntensity = nil
         }
         app.select(look: look, forClip: clipID)
@@ -3145,7 +3145,7 @@ private struct EditorContent: View {
             if let clipID {
                 editor.setClipGrade(id: clipID, nil)
             } else if active {
-                app.settings.intensity = stashedIntensity ?? 75
+                app.settings.intensity = stashedIntensity ?? app.openingStrength
                 stashedIntensity = nil
             } else {
                 stashedIntensity = app.settings.intensity
@@ -3342,7 +3342,7 @@ private struct EditorContent: View {
             HStack(spacing: 10) {
                 ForEach(app.library.stripLooks()) { look in
                     Button {
-                        editor.addAdjustmentLayer(grade: look.clipGrade())
+                        editor.addAdjustmentLayer(grade: app.clipGrade(for: look))
                         LumaHaptics.shared.tap()
                     } label: {
                         VStack(spacing: 6) {
@@ -3379,7 +3379,7 @@ private struct EditorContent: View {
                 Section(group.section.title) {
                     ForEach(group.looks) { look in
                         Button {
-                            editor.addAdjustmentLayer(grade: look.clipGrade())
+                            editor.addAdjustmentLayer(grade: app.clipGrade(for: look))
                             LumaHaptics.shared.tap()
                         } label: { Text(look.name) }
                     }

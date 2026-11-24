@@ -19,7 +19,8 @@ by one:
   5. source_rules.py notices a new CIColorControls, a look path that no
      longer goes through True Colour, the Grade Room's cubes going back
      to the plain cube filter, Shadows and Highlights going back to Apple's
-     filter, and a preview that grades a frame without bounds.
+     filter, a preview that grades a frame without bounds, and a place that
+     grades video frames without their time.
 
 It adds two entries to looks.json and four small files under out/ while it
 runs and takes them away again. Exit code 0 when everything holds.
@@ -128,9 +129,12 @@ def source():
     with tempfile.TemporaryDirectory() as tmp:
         app = Path(tmp) / "LumaLook"
         (app / "Engine").mkdir(parents=True)
-        for name in ("LookPipeline.swift", "EffectRenderer.swift", "LumaCompositor.swift", "ColorMath.swift"):
+        (app / "Data").mkdir()
+        for name in ("LookPipeline.swift", "EffectRenderer.swift", "LumaCompositor.swift", "ColorMath.swift",
+                     "VideoExporter.swift", "CameraController.swift"):
             shutil.copy(engine / name, app / "Engine" / name)
-        check(not R.check(app), "a copy of the four files that matter passes on its own")
+        shutil.copy(R.APP / "Data" / "AppModel.swift", app / "Data" / "AppModel.swift")
+        check(not R.check(app), "a copy of the seven files that matter passes on its own")
         (app / "Screens").mkdir()
         (app / "Screens" / "New.swift").write_text(
             "// CIColorControls in a comment is fine\nlet f = CIFilter.colorControls()\nf.contrast = 1.2\n")
@@ -162,6 +166,13 @@ def source():
         check(len(found) == 1 and "Screens/Player.swift" in found[0] and "no bounds" in found[0],
               "a preview that clamps a video frame to its extent before grading it is caught")
         (app / "Screens" / "Player.swift").unlink()
+        editor = app / "Engine" / "LumaCompositor.swift"
+        text = editor.read_text()
+        editor.write_text(text.replace("includeSplit: false, at: seconds)", "includeSplit: false)", 1))
+        found = R.check(app)
+        check(len(found) == 1 and "Engine/LumaCompositor.swift" in found[0] and "grain" in found[0],
+              "a place that grades video frames without telling the pipeline when each frame is, is caught")
+        editor.write_text(text)
         maths = app / "Engine" / "ColorMath.swift"
         text = maths.read_text()
         maths.write_text(text.replace('CIFilter(name: "CIColorCubeWithColorSpace")', 'CIFilter(name: "CIColorCube")', 1))

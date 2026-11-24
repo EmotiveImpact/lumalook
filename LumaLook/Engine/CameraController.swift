@@ -1403,7 +1403,10 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate,
             : source)
         let graded: CIImage
         if let lookState {
-            graded = pipeline.apply(state: lookState, to: source, includeSplit: false)
+            // The frame's own time, so grain moves in the viewfinder and in
+            // the take as it does in a graded clip.
+            graded = pipeline.apply(state: lookState, to: source, includeSplit: false,
+                                    at: CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds)
                 .cropped(to: source.extent)
         } else {
             graded = source

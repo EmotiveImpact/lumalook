@@ -170,7 +170,11 @@ final class LookPipeline: @unchecked Sendable {
     /// Applies the full look (LUT or built-in recipe + user settings) to a frame,
     /// blending with the frame as converted (slot 1) and white balanced by
     /// `settings.intensity`.
-    func apply(state: LookState, to image: CIImage, includeSplit: Bool = true) -> CIImage {
+    ///
+    /// `time` is where the frame sits in a video, in seconds, and nil for a
+    /// still. Only the grain reads it (`applyGrain`).
+    func apply(state: LookState, to image: CIImage, includeSplit: Bool = true,
+               at time: Double? = nil) -> CIImage {
         let settings = state.settings
         var graded = image
 
@@ -191,14 +195,20 @@ final class LookPipeline: @unchecked Sendable {
         let converted = graded
 
         // Slot 2 — creative: imported LUT or built-in recipe.
+        //
+        // A Skin first preset is a whole grade and stands on no look: while
+        // one is worn, the built-in look's recipe is left out. It used to
+        // sit on top of whichever look was picked before it, so the same
+        // preset came out different each time, with nothing on screen to
+        // say which look was underneath.
         if let lut = state.lut {
             graded = applyLUT(lut, to: graded, opacity: state.lutOpacity, blend: state.lutBlend,
                               protectSkin: true)
-        } else {
+        } else if SkinFirstPreset.worn(by: settings) == nil {
             graded = applyRecipe(state.recipe, to: graded)
         }
 
-        graded = applyUserAdjustments(settings, to: graded)
+        graded = applyUserAdjustments(settings, to: graded, at: time)
 
         // Intensity blend: dissolve between the converted frame and the
         // graded one.
@@ -673,7 +683,8 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - User slider adjustments on top of the look
 
-    private func applyUserAdjustments(_ settings: LookSettings, to image: CIImage) -> CIImage {
+    private func applyUserAdjustments(_ settings: LookSettings, to image: CIImage,
+                                      at time: Double? = nil) -> CIImage {
         var output = image
 
         // Exposure, Contrast and Saturation sliders: the same True Colour
@@ -766,7 +777,7 @@ final class LookPipeline: @unchecked Sendable {
         }
 
         if settings.grain > 0 {
-            output = applyGrain(strength: settings.grain / 100.0, to: output)
+            output = applyGrain(strength: settings.grain / 100.0, to: output, at: time)
         }
 
         return output
@@ -822,9 +833,21 @@ final class LookPipeline: @unchecked Sendable {
 
     /// Film grain: luminance-only noise, softened a touch, overlay-blended
     /// so it lives in the midtones like silver halide — not RGB confetti.
-    func applyGrain(strength: Double, to image: CIImage) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage,
+    ///
+    /// On video the grain moves, as film grain does: `time` (the frame's
+    /// place in the video, in seconds) picks which part of the noise the
+    /// frame takes its grain from, a new part 60 times a second. The same
+    /// moment always gets the same grain, so a paused frame holds still and
+    /// the saved file matches the preview. It used to be one pattern on
+    /// every frame, which sat on a moving picture like dust on the glass.
+    /// A still has no time and keeps the one pattern, so its tile, the big
+    /// picture and the saved photo carry the same grain.
+    func applyGrain(strength: Double, to image: CIImage, at time: Double? = nil) -> CIImage {
+        guard var noise = CIFilter.randomGenerator().outputImage,
               !image.extent.isInfinite else { return image }
+        if let shift = Self.grainShift(at: time) {
+            noise = noise.transformed(by: CGAffineTransform(translationX: shift.x, y: shift.y))
+        }
 
         // A grain is 1.6 pixels across on the big picture (slightly coarser
         // than 1:1, so it reads as grain, not sensor noise) and keeps that
@@ -866,6 +889,24 @@ final class LookPipeline: @unchecked Sendable {
         overlay.inputImage = grainField
         overlay.backgroundImage = image
         return overlay.outputImage?.cropped(to: image.extent) ?? image
+    }
+
+    /// How far the noise is slid for a video frame at `time`, in whole
+    /// grains; nil for a still, or a time that is not a number.
+    ///
+    /// The pattern changes 60 times a second of video, so every frame of a
+    /// 24, 25, 30 or 60 frame clip gets its own. The two steps are those of
+    /// the R2 sequence (built on the plastic number): they never repeat and
+    /// never line up, so one frame's grain shares nothing with the next
+    /// one's.
+    static func grainShift(at time: Double?) -> CGPoint? {
+        guard let time, time.isFinite else { return nil }
+        let tick = (time * 60).rounded()
+        func part(_ step: Double) -> CGFloat {
+            let turn = (tick * step).truncatingRemainder(dividingBy: 1)
+            return CGFloat(((turn < 0 ? turn + 1 : turn) * 4096).rounded())
+        }
+        return CGPoint(x: part(0.7548776662466927), y: part(0.5698402909980532))
     }
 
     func renderCGImage(from image: CIImage) -> CGImage? {

@@ -213,7 +213,11 @@ final class StoreService: ObservableObject {
     /// The built-in look a stored grade resolves to (LUT grades are owned
     /// files, so only recipe grades can be locked).
     func lock(for grade: ClipGrade) -> LookLock? {
+        // A Skin first preset stands on no look (`LookPipeline.apply`), so a
+        // grade wearing one has nothing sold in its picture, whatever look
+        // it was saved over.
         guard grade.lutID == nil, grade.settings.intensity > 0,
+              SkinFirstPreset.worn(by: grade.settings) == nil,
               let preset = MockData.looks.first(where: { $0.name == grade.baseLookName })
         else { return nil }
         return lock(forBuiltIn: preset)

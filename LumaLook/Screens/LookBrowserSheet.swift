@@ -242,8 +242,11 @@ extension AppModel {
             return selectedLUT == nil && selectedLook.name == p.name
                 && SkinFirstPreset.worn(by: settings) == nil
         case .lut(let f):     return selectedLUT?.id == f.id
+        // A saved look that wears a Skin first preset opens on no built-in
+        // look (`MockData.base`), whatever look it was saved over.
         case .saved(let s):
-            return selectedLook.name == s.baseLookName
+            let base = MockData.base(named: s.baseLookName, under: s.settings)?.name ?? s.baseLookName
+            return selectedLook.name == base
                 && selectedLUT?.id == s.lutID && settings == s.settings
         }
     }
@@ -1064,7 +1067,7 @@ struct LookBrowserSheet: View {
             return
         }
         if app.settings.intensity == 0 {
-            app.settings.intensity = noneStashedIntensity ?? 75
+            app.settings.intensity = noneStashedIntensity ?? app.openingStrength
             noneStashedIntensity = nil
         } else {
             noneStashedIntensity = app.settings.intensity
@@ -1554,7 +1557,14 @@ struct LookBrowserSheet: View {
 
     private func lookOpenedPage(_ look: LibraryLook) -> some View {
         let lock = lockInfo(look)
-        let strength = app.settings.intensity > 0 ? app.settings.intensity : LookSettings().intensity
+        // The Strength the look comes up at when it is tried from here: on
+        // one clip it opens fresh, on the whole grade it follows the pick.
+        let strength: Double
+        if case .editorClip = context {
+            strength = app.openingStrength(of: look)
+        } else {
+            strength = app.strengthOnPicking(look)
+        }
         var meta = "Strength \(Int(strength.rounded()))%"
         if lock != nil { meta += " · free to try, unlocks at export" }
         return LookOpenedPage(

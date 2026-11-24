@@ -31,6 +31,10 @@ sources and fails on the known ways to do that:
      halation and wipe had nothing to measure against: the preview was not
      the clip that got saved. Frames go in with their bounds, as the export
      sends them; the blurs clamp their own input.
+  6. A place that grades video frames not telling the pipeline when each
+     frame is (`apply(state:to:includeSplit:at:)`). Without the time, grain
+     is the same pattern on every frame and sits on a moving picture like
+     dust on the glass. Stills pass no time, so a photo keeps one pattern.
 
 gate.py runs this too. Exit code 0 when the rules hold, 1 when one is broken.
 """
@@ -61,6 +65,19 @@ PIPELINE_MUST_CALL = {
 }
 
 
+# Where video frames are graded, as file -> how many times it has to hand the
+# pipeline the frame's time (`at:`), so the grain moves there.
+VIDEO_FRAME_GRADES = {
+    # the look screen's playing preview
+    "Data/AppModel.swift": 1,
+    # the saved single clip
+    "Engine/VideoExporter.swift": 1,
+    # the editor: the picture, adjustment layers, picture in picture, transitions
+    "Engine/LumaCompositor.swift": 4,
+    # the camera's viewfinder and its take
+    "Engine/CameraController.swift": 1,
+}
+
 # Files whose cubes are worked out on screen (sRGB) numbers, so must be
 # applied to screen numbers.
 SCREEN_NUMBER_CUBES = ["Engine/ColorMath.swift"]
@@ -70,6 +87,19 @@ def code_only(text):
     """Swift source with comments blanked out (strings are left alone)."""
     text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
     return "\n".join(re.sub(r"//.*$", "", line) for line in text.splitlines())
+
+
+def timed_grades(code):
+    """How many `.apply(state: ...)` calls in `code` pass the frame's time."""
+    timed = 0
+    for match in re.finditer(r"\.apply\(\s*state:", code):
+        depth, i = 1, match.end()
+        while i < len(code) and depth:
+            depth += {"(": 1, ")": -1}.get(code[i], 0)
+            i += 1
+        if re.search(r"\bat:", code[match.end():i]):
+            timed += 1
+    return timed
 
 
 def check(app=APP):
@@ -114,6 +144,19 @@ def check(app=APP):
                 "frame has no bounds, so the lens is skipped and the vignette, halation and wipe are drawn "
                 "against nothing: the preview stops matching the saved clip. Hand the pipeline the frame as it "
                 "is (request.sourceImage); its blurs clamp their own input.")
+    for name, least in VIDEO_FRAME_GRADES.items():
+        path = app / name
+        if not path.exists():
+            problems.append(f"LumaLook/{name} is missing; update VIDEO_FRAME_GRADES in "
+                            "tools/skin-test/source_rules.py to point at the file that grades those video frames.")
+            continue
+        n = timed_grades(code_only(path.read_text(errors="replace")))
+        if n < least:
+            problems.append(
+                f"{name} hands the pipeline a video frame's time {n} time{'s' if n != 1 else ''}, fewer than the "
+                f"{least} it needs. A frame graded without its time gets the same grain as every other frame, "
+                "so the grain stops moving there. Pass the frame's time: "
+                "pipeline.apply(state:to:includeSplit:at:).")
     for name in SCREEN_NUMBER_CUBES:
         path = app / name
         if not path.exists():

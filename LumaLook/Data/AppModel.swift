@@ -180,9 +180,6 @@ final class AppModel: ObservableObject {
             return
         }
         isRestoringSession = true
-        if let base = MockData.looks.first(where: { $0.name == session.baseLookName }) {
-            selectedLook = base
-        }
         selectedLUT = session.lutID.flatMap { id in lutRepository.luts.first { $0.id == id } }
         conversionLUT = session.conversionLUTID.flatMap { id in lutRepository.luts.first { $0.id == id } }
         conversionOpacity = session.conversionOpacity ?? 100
@@ -194,6 +191,11 @@ final class AppModel: ObservableObject {
         // only ever saved together by the old fault that left a preset on
         // under the looks picked after it. Such a project opens as its look.
         if selectedLUT != nil { settings = SkinFirstPreset.takenOff(settings) }
+        // A preset still on stands on no built-in look, whatever look the
+        // project was saved over (`MockData.base`).
+        if let base = MockData.base(named: session.baseLookName, under: settings) {
+            selectedLook = base
+        }
         if session.isVideo {
             selectedVideoURL = url
         } else {
@@ -257,8 +259,7 @@ final class AppModel: ObservableObject {
 
     /// Starts trying on a pack look (`CameraLooks` decides when).
     func startPackPreview(_ preview: PackLookPreview) {
-        takeOffWornGrade()
-        packPreview = preview
+        pick { packPreview = preview }
     }
     /// Guards the per-LUT-strength write-back while we're APPLYING a remembered
     /// value (so restoring 62% doesn't immediately re-save 62%).
@@ -457,7 +458,7 @@ final class AppModel: ObservableObject {
         // Skin-preset cell: apply a Skin First preset for verification.
         if let name = env["LUMA_SEED_SKINPRESET"],
            let preset = SkinFirstPreset(rawValue: name) {
-            settings = preset.settings
+            wear(preset)
             syncLookState()
         }
         // Pick cell: LUMA_SEED_PICKLOOK=<part of a look's name> picks that
@@ -815,7 +816,8 @@ final class AppModel: ObservableObject {
             // playing preview was not the clip that got saved. The blurs
             // clamp their own input where they sample past the edge.
             let source = request.sourceImage
-            let filtered = pipeline.apply(state: state, to: source)
+            let filtered = pipeline.apply(state: state, to: source,
+                                          at: request.compositionTime.seconds)
             request.finish(with: filtered.cropped(to: source.extent), context: pipeline.context)
         }
         composition.applySDRColorPolicy()
@@ -849,11 +851,98 @@ final class AppModel: ObservableObject {
     /// directly from views.
     func select(look: LibraryLook) {
         switch look.source {
-        case .builtIn(let p): takeOffWornGrade(); selectedLUT = nil; selectedLook = p
-        case .lut(let f):     takeOffWornGrade(); selectedLUT = f   // remembered strength fires
+        case .builtIn(let p): pick { selectedLUT = nil; selectedLook = p }
+        case .lut(let f):     pick { selectedLUT = f }   // remembered strength fires
         case .saved(let s):   applySavedLook(s)
         }
         library.noteUsed(look)
+    }
+
+    /// Runs the pick of a built-in or film look: the whole grade worn before
+    /// it comes off (`takeOffWornGrade`), and Strength follows the look.
+    ///
+    /// A look opens at 75 and a black and white look at 100
+    /// (`LookSettings.openingStrength`). Strength the person set for
+    /// themselves is theirs and stays through every pick. Strength still
+    /// where the grade before opened (that look, or the preset or saved look
+    /// worn over it) moves to where the picked look opens. So does Strength
+    /// 0: a look picked while the grade is switched off has to show, or its
+    /// tile reads as dead.
+    private func pick(_ change: () -> Void) {
+        let follows = strengthFollowsLook
+        takeOffWornGrade()
+        change()
+        let opening = openingStrength
+        if follows, settings.intensity != opening { settings.intensity = opening }
+    }
+
+    /// True while Strength is not the person's own: it is where the grade on
+    /// the picture opened, or the grade is switched off.
+    var strengthFollowsLook: Bool {
+        let opened = wornGrade?.intensity ?? openingStrength
+        return settings.intensity == opened || settings.intensity == 0
+    }
+
+    /// The Strength a look would come up at if it were picked now.
+    func strengthOnPicking(_ look: LibraryLook) -> Double {
+        if case .saved(let saved) = look.source { return saved.settings.intensity }
+        return strengthFollowsLook ? openingStrength(of: look) : settings.intensity
+    }
+
+    /// The Strength a library look opens at. A saved look carries its own.
+    func openingStrength(of look: LibraryLook) -> Double {
+        switch look.source {
+        case .builtIn(let p):
+            return LookSettings.openingStrength(monochrome: p.recipe.isMonochrome)
+        case .lut(let f):
+            let lut = try? LookPipeline.shared.loadLUT(at: lutRepository.fileURL(for: f))
+            return LookSettings.openingStrength(monochrome: lut.map(TrueColour.isMonochrome) ?? false)
+        case .saved(let saved):
+            return saved.settings.intensity
+        }
+    }
+
+    /// True when the look on the picture is black and white: a film look
+    /// whose cube takes the colour out, or a built-in look whose recipe does.
+    /// `lookState` holds whichever of the two is on, a pack try-on included.
+    var gradeLookIsMonochrome: Bool {
+        if let lut = lookState.lut { return TrueColour.isMonochrome(lut) }
+        return lookState.recipe.isMonochrome
+    }
+
+    /// The Strength the look on the picture opens at.
+    var openingStrength: Double {
+        LookSettings.openingStrength(monochrome: gradeLookIsMonochrome)
+    }
+
+    /// What Reset gives: the grade the look on the picture opens with. A
+    /// Skin first preset is its own look, so it goes back to the preset as
+    /// picked; any other look goes back to nothing on, at its opening
+    /// Strength.
+    var resetSettings: LookSettings {
+        if selectedLUT == nil, let preset = SkinFirstPreset.worn(by: settings) { return preset.settings }
+        var fresh = LookSettings()
+        fresh.intensity = openingStrength
+        return fresh
+    }
+
+    /// A look as the grade of one clip or of an adjustment layer, at the
+    /// Strength it opens at.
+    func clipGrade(for look: LibraryLook) -> ClipGrade {
+        var grade = look.clipGrade()
+        grade.settings.intensity = openingStrength(of: look)
+        return grade
+    }
+
+    /// Puts a Skin first preset on. A preset is a whole grade and stands on
+    /// its own: the film look comes off, and so does the built-in look, so
+    /// the same preset is the same picture whatever was picked before it.
+    /// With the built-in look gone from the grade (not only from the
+    /// picture), reshaping the preset's curve by hand cannot bring it back.
+    func wear(_ preset: SkinFirstPreset) {
+        selectedLUT = nil
+        selectedLook = MockData.plainLook
+        settings = preset.settings
     }
 
     /// A Skin first preset, or a look saved under Mine, replaces the whole
@@ -934,7 +1023,7 @@ final class AppModel: ObservableObject {
     /// set = per-clip ClipGrade via the one `clipGrade()` converter.
     func select(look: LibraryLook, forClip clipID: UUID?) {
         if let clipID {
-            editor.setClipGrade(id: clipID, look.clipGrade())
+            editor.setClipGrade(id: clipID, clipGrade(for: look))
             library.noteUsed(look)
         } else {
             select(look: look)
@@ -944,7 +1033,7 @@ final class AppModel: ObservableObject {
     /// Saved-branch implementation of `select(look:)` — views should call
     /// `select(look:)` instead so recents record.
     func applySavedLook(_ saved: SavedLook) {
-        if let base = MockData.looks.first(where: { $0.name == saved.baseLookName }) {
+        if let base = MockData.base(named: saved.baseLookName, under: saved.settings) {
             selectedLook = base
         }
         if let lutID = saved.lutID,
@@ -1161,7 +1250,12 @@ final class AppModel: ObservableObject {
         selectedVideoURL = nil
         selectedImage = nil
         selectedLUT = nil
-        settings = LookSettings()
+        // A Skin first preset goes with the grade it was: the next picture
+        // starts on the look a new install opens with.
+        if selectedLook == MockData.plainLook { selectedLook = MockData.defaultLook }
+        var fresh = LookSettings()
+        fresh.intensity = openingStrength
+        settings = fresh
     }
 
     /// Store → Library hand-off (F1): the pack name the Looks tab should open

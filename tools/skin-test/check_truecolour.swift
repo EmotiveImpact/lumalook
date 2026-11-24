@@ -684,6 +684,19 @@ do {
           "a muted colour look is not mistaken for black-and-white: skin gets its colour back",
           "\(rep.rawBroken) skin colours restored")
 
+    // The app reads which looks are black and white from the cube itself,
+    // and opens those at full Strength: at the 75 a colour look opens with,
+    // a quarter of the picture's colour stayed in a black and white look.
+    let toned = makeLUT(64) { c in let y = luma(c); return (clamp01(y * 1.05), y, clamp01(y * 0.92)) }
+    let small = makeLUT(13) { c in let y = luma(c); return (y, y, y) }
+    check(TrueColour.isMonochrome(mono) && TrueColour.isMonochrome(toned) && TrueColour.isMonochrome(small),
+          "a black and white look is read as black and white: plain, lightly toned, and 13 points a side")
+    let plain = makeLUT(64) { $0 }
+    check(!TrueColour.isMonochrome(muted) && !TrueColour.isMonochrome(gentle) && !TrueColour.isMonochrome(plain),
+          "a colour look is not: muted to half its colour, gentle, or changing nothing")
+    let cut = ParsedLUT(size: 64, rgbaFloatData: Data(count: 100))
+    check(!TrueColour.isMonochrome(cut), "a cube file that is cut short is not read at all")
+
     let worstLook = hostile[0].1
     let ours = makeLUT(64, baked: true) { c in
         (clamp01(pow(c.0, 1.5) * 0.8), clamp01(pow(c.1, 1.2)), clamp01(pow(c.2, 1.2) * 1.05)) }

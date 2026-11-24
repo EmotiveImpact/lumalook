@@ -198,9 +198,12 @@ Shadows and Highlights do what their number says (5); the exported cube, a
 look tile, the big picture and a full-size export match (6); the White
 balance picker makes the point it is given grey (7); Strength fades the look
 and never the Source conversion under it (8); Auto takes a colour cast
-off, leaves a good portrait alone and never cools one (9); and Exposure
+off, leaves a good portrait alone and never cools one (9); Exposure
 leaves black and white where they are, while Strength leaves the white
-balance the person set in full (10).
+balance the person set in full (10); a Skin first preset is the same picture
+whatever look was picked before it (11); every black and white look the app
+ships is read as one and opens at Strength 100 (12); and grain moves from
+frame to frame on video while a photo keeps one pattern (13).
 
 It also writes a few pictures (two test portraits through the presets and
 two film looks), which the Mac runner keeps with its run as

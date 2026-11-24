@@ -515,11 +515,32 @@ enum TrueColour {
         }
     }
 
+    /// Whether a film look is black and white, or toned close to it (the
+    /// rule below). The guard treats such a look differently, and the app
+    /// opens it at full Strength (`LookSettings.openingStrength`): at the 75
+    /// a colour look opens with, a quarter of the picture's colour stayed.
+    static func isMonochrome(_ lut: ParsedLUT) -> Bool {
+        let n = lut.size
+        guard n >= 2, lut.rgbaFloatData.count >= n * n * n * 16 else { return false }
+        return lut.rgbaFloatData.withUnsafeBytes { raw in
+            isMonochrome(n) { i in
+                (raw.loadUnaligned(fromByteOffset: i * 4, as: Float.self),
+                 raw.loadUnaligned(fromByteOffset: i * 4 + 4, as: Float.self),
+                 raw.loadUnaligned(fromByteOffset: i * 4 + 8, as: Float.self))
+            }
+        }
+    }
+
+    private static func isMonochrome(_ values: [Float], _ n: Int) -> Bool {
+        isMonochrome(n) { i in (values[i], values[i + 1], values[i + 2]) }
+    }
+
     /// Black and white, or toned close to it: colourful inputs keep under
     /// 15% of their chroma (median over a sample of the cube). The film cubes
     /// split cleanly: mono and toned mono sit at 0 to 8%, the most muted
     /// colour look (MS15) at 28%, everything else above 50%.
-    private static func isMonochrome(_ values: [Float], _ n: Int) -> Bool {
+    /// `colour` reads the cube's colour whose red value is at index `i`.
+    private static func isMonochrome(_ n: Int, _ colour: (Int) -> (Float, Float, Float)) -> Bool {
         var ratios: [Double] = []
         let step = max(1, n / 9)
         for bi in stride(from: 0, to: n, by: step) {
@@ -529,8 +550,8 @@ enum TrueColour {
                                 Double(bi) / Double(n - 1))
                     let Cx = (x.1 * x.1 + x.2 * x.2).squareRoot()
                     guard Cx > 20 else { continue }
-                    let i = ((bi * n + gi) * n + ri) * 4
-                    let y = lab(Double(values[i]), Double(values[i + 1]), Double(values[i + 2]))
+                    let out = colour(((bi * n + gi) * n + ri) * 4)
+                    let y = lab(Double(out.0), Double(out.1), Double(out.2))
                     ratios.append((y.1 * y.1 + y.2 * y.2).squareRoot() / Cx)
                 }
             }

@@ -1729,7 +1729,7 @@ struct CustomLookBuilderView: View {
 
             HStack {
                 Button {
-                    app.settings = LookSettings()
+                    app.settings = app.resetSettings
                 } label: {
                     Text("Reset")
                         .font(.luma(size: 17, weight: .semibold))
@@ -1741,7 +1741,7 @@ struct CustomLookBuilderView: View {
                 .buttonStyle(.plain)
                 Spacer()
                 Button {
-                    app.settings = LookSettings()
+                    app.settings = app.resetSettings
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 20, weight: .semibold))

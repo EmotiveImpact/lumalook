@@ -184,7 +184,8 @@ final class VideoExporter: ObservableObject {
             // Finite extent: spatial ops (lens et al.) need real frame bounds.
             let source = request.sourceImage
             // includeSplit: false — the Before/After wipe never bakes into exports.
-            let filtered = pipeline.apply(state: lookState, to: source, includeSplit: false)
+            let filtered = pipeline.apply(state: lookState, to: source, includeSplit: false,
+                                          at: request.compositionTime.seconds)
             var output = filtered.cropped(to: request.sourceImage.extent)
             if let strip {
                 output = EdgeStripRenderer.apply(strip, to: output, rect: request.sourceImage.extent,

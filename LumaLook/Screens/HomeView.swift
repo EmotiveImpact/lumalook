@@ -495,7 +495,7 @@ struct HomeView: View {
     /// strength to zero); trying a look on should show the look.
     private func restoreStrengthIfOff() {
         if app.settings.intensity == 0 {
-            app.settings.intensity = LookSettings().intensity
+            app.settings.intensity = app.openingStrength
         }
     }
 
