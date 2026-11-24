@@ -687,6 +687,45 @@ if mode == "measure" {
     cubeGap("fade 50", full { $0.fade = 50 })
     cubeGap("sharpness 50", full { $0.sharpness = 50 })
     cubeGap("contrast 60, warmth 30", full { $0.contrast = 60; $0.warmth = 30 })
+    cubeGap("shadows +50, highlights -50", full { $0.shadows = 50; $0.highlights = -50 })
+
+    // M4. Grain: does it shift the picture, or only roughen it?
+    section("M4. Grain 50 on flat greys, a 512 pixel window of a 1400 pixel picture (0 to 255)")
+    let big = CGRect(x: 0, y: 0, width: 1400, height: 1400)
+    let window = CGRect(x: 400, y: 400, width: 512, height: 512)
+    func spread(_ image: CIImage, managed: Bool = true) -> String {
+        var buf = [Float](repeating: 0, count: 512 * 512 * 4)
+        buf.withUnsafeMutableBytes { raw in
+            pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: 512 * 16,
+                                    bounds: window, format: .RGBAf, colorSpace: managed ? srgb : nil)
+        }
+        var sum = 0.0, squares = 0.0, lo = 1e9, hi = -1e9, alpha = 0.0
+        let n = Double(512 * 512)
+        for i in stride(from: 0, to: buf.count, by: 4) {
+            let v = Double(buf[i]) * 255
+            sum += v
+            squares += v * v
+            lo = min(lo, v)
+            hi = max(hi, v)
+            alpha += Double(buf[i + 3])
+        }
+        let mean = sum / n
+        let sd = max(0, squares / n - mean * mean).squareRoot()
+        return "mean \(f1(mean))  spread \(f1(sd))  lowest \(f1(lo))  highest \(f1(hi))  alpha \(f1(alpha / n * 100))%"
+    }
+    func grey(_ v: Double) -> CIImage {
+        CIImage(color: CIColor(red: v, green: v, blue: v, colorSpace: srgb)!).cropped(to: big)
+    }
+    if let noise = CIFilter.randomGenerator().outputImage {
+        print("  " + pad("raw noise, red channel", 34) + spread(noise.cropped(to: big), managed: false))
+        print("  " + pad("raw noise with alpha set to 1", 34)
+              + spread(noise.cropped(to: big).settingAlphaOne(in: big), managed: false))
+    }
+    for v in [0.1, 0.25, 0.5, 0.75, 0.9] {
+        let base = grey(v)
+        print("  " + pad("grey \(i255(v)) as it is", 34) + spread(base))
+        print("  " + pad("grey \(i255(v)) with grain 50", 34) + spread(pipeline.applyGrain(strength: 0.5, to: base)))
+    }
     exit(0)
 }
 
