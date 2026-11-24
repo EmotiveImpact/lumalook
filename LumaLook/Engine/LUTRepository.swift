@@ -197,6 +197,30 @@ final class LUTRepository: ObservableObject {
         return file
     }
 
+    /// Puts another cube in the place of a stored one, keeping the library
+    /// entry: its id, favourite, tags, collections and remembered strength.
+    /// Used when a pack look is replaced (`PackInstaller.applyReplacements`).
+    /// The stored file is only written once the new cube has parsed, so a
+    /// bad source leaves everything as it was. Returns whether it swapped.
+    @discardableResult
+    func replaceFile(of lut: LUTFile, with sourceURL: URL, displayName: String) -> Bool {
+        guard let index = luts.firstIndex(where: { $0.id == lut.id }),
+              let parsed = try? LUTParser.parseCubeFile(at: sourceURL),
+              let data = try? Data(contentsOf: sourceURL) else { return false }
+        let destination = fileURL(for: luts[index])
+        do {
+            try data.write(to: destination, options: .atomic)
+        } catch {
+            return false
+        }
+        luts[index].displayName = displayName
+        luts[index].originalFileName = sourceURL.lastPathComponent
+        luts[index].cubeSize = parsed.size
+        luts[index].fileSizeBytes = data.count
+        save()
+        return true
+    }
+
     /// Renames an imported LUT's display name (the stored file is untouched).
     func rename(_ lut: LUTFile, to newName: String) {
         guard let index = luts.firstIndex(where: { $0.id == lut.id }) else { return }

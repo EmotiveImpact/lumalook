@@ -800,14 +800,14 @@
   "cube": "FS_FP125.cube"
  },
  {
-  "id": "film-mono-archive-hps800",
-  "code": "HPS800",
+  "id": "film-mono-archive-pm800",
+  "code": "PM800",
   "name": "Press Mono 800",
   "section": "Mono Archive",
   "pack": "film-mono-archive",
   "free": false,
   "recipe": null,
-  "cube": "FS_HPS800.cube"
+  "cube": "FS_PM800.cube"
  },
  {
   "id": "film-mono-archive-pf50",

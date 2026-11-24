@@ -56,6 +56,7 @@ python3 try_photos.py OUT.jpg PHOTO...      # any photo: as shipped, True Colour
 # the rules for new looks
 python3 gate.py                             # every look against the rules and baseline.json
 python3 check_look.py NEW.cube              # a new film LUT, no Mac needed
+python3 make_mono_cube.py --to DIR          # Lumalook's own black-and-white film cubes
 python3 selftest_gate.py                    # the gate itself, on two pretend new looks
 python3 source_rules.py                     # nothing in the app goes around True Colour
 ```
@@ -98,6 +99,33 @@ agree. If it passes, put the file in
 `LumaLook/Resources/FilmLUTs/`, add the look to its pack in `LookPacks.swift`
 and push to a `claude/` branch. The Mac runner bakes it through the app's own
 code and the gate has the last word.
+
+**A black-and-white film look of our own**
+
+`make_mono_cube.py` makes a film cube from a few numbers: how light red, green
+and blue come out (the colour filter on the lens) and a tone curve from black
+to white. Add the look to `LOOKS` in that file, then:
+
+```sh
+python3 tools/skin-test/make_mono_cube.py --to /tmp/try
+python3 tools/skin-test/check_look.py /tmp/try/FS_NAME.cube --sheet try.jpg
+python3 tools/skin-test/make_mono_cube.py        # writes it into the app
+```
+
+After that it is a film LUT like any other (pack entry in `LookPacks.swift`,
+the file in the Xcode project, a line in `FILM_LUTS_CREDITS.md` saying it is
+ours). Keep the `FS_` at the start of the file name: the app copies any
+other bundled cube into a new library as a basic LUT. Press Mono 800
+(`FS_PM800.cube`) is made this way. A cube cannot carry grain; grain is a
+separate control in the app.
+
+**When a pack look is replaced by another**
+
+Someone who installed the pack already holds the old cube, and installing
+again does nothing (the pack has as many looks as before). Add a line to
+`PackInstaller.replacements` in `LookPacks.swift`: at the next launch the old
+entry in their library gets the new cube and name, and keeps its place in
+favourites, collections and projects.
 
 **A recipe look (warmth, contrast and so on)**
 
