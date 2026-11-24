@@ -3,7 +3,10 @@
 # 1. bake (Mac). Core Image only exists on Apple platforms, so this job first
 #    runs the engine's own checks (tools/skin-test/check_truecolour.swift,
 #    compiled together with the app's TrueColour.swift, LUTParser.swift and
-#    LUTDensifier.swift), then bakes every look through that same engine on
+#    LUTDensifier.swift) and the checks on the grade that sits on top of a
+#    look (tools/skin-test/check_grade.swift, compiled with the app's own
+#    LookPipeline.swift: Skin first presets, curves, wheels, HSL bands and
+#    split tone). Then it bakes every look through that same engine on
 #    real Core Image into small colour cubes, and fetches the licensed test
 #    portraits listed in tools/skin-test/candidates.txt. It hands the
 #    results to the gate and commits them back to the branch
@@ -18,10 +21,10 @@
 # The gate always judges the commit this run is for, with the bake made from
 # that same commit, so starting an old run again cannot read a newer branch.
 #
-# It runs when a look, a film LUT, the engine or the test itself changes. A
-# change elsewhere in the app cannot change a bake; the rules that stop such
-# a change going around True Colour (source_rules.py) run in the Build
-# workflow, on every pull request.
+# It runs when a look, a film LUT, the engine, the grade on top of a look or
+# the test itself changes. A change elsewhere in the app cannot change a
+# bake; the rules that stop such a change going around True Colour
+# (source_rules.py) run in the Build workflow, on every pull request.
 name: Skin test bake
 
 on:
@@ -91,9 +94,12 @@ jobs:
           /tmp/tc-check/check
 
       # The grade on top of a look: the Skin first presets and the Grade Room
-      # colour tools, through the app's own pipeline. This run only writes
-      # its pictures, as the app makes them before the fix to ColorMath.swift.
-      - name: Pictures of the grade on top of a look, before the fix
+      # colour tools (curves, wheels, HSL bands, split tone), through the
+      # app's own pipeline. Stops the job if a preset stays on under the next
+      # look, a colour tool does more on screen than its number says, or any
+      # look picked after a preset differs from its thumbnail. Then it writes
+      # a few pictures to look at, kept with the run as "grade-pictures".
+      - name: Check the grade on top of a look
         run: |
           mkdir -p /tmp/grade
           cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
@@ -103,8 +109,16 @@ jobs:
             LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
             LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
             LumaLook/Engine/LUTDensifier.swift
-          /tmp/grade/check render tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
-            tools/skin-test/out/candidates tools/skin-test/out/grade/before
+          /tmp/grade/check check tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
+
+      - name: Keep the pictures of the grade on top of a look
+        uses: actions/upload-artifact@v5
+        with:
+          name: grade-pictures
+          path: ${{ runner.temp }}/grade-pictures
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Bake every look through the app's True Colour engine
         run: |

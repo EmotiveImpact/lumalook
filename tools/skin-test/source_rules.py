@@ -3,10 +3,9 @@
     python3 source_rules.py
 
 The skin test bakes looks through TrueColour.swift, LUTParser.swift and
-LUTDensifier.swift. It cannot compile the rest of the app (LookPipeline needs
-the whole of it), so a change there could bring the old deep-skin bug back
-without any look's bake changing. This reads the Swift sources and fails on
-the known ways to do that:
+LUTDensifier.swift only, so a change elsewhere in the app could bring the old
+deep-skin bug back without any look's bake changing. This reads the Swift
+sources and fails on the known ways to do that:
 
   1. Apple's stock CIColorControls filter anywhere it is not listed below.
      Its contrast and brightness work on raw light values and crush deep skin
@@ -14,6 +13,13 @@ the known ways to do that:
      TrueColour.toneFilter.
   2. LookPipeline no longer sending recipes, the sliders and overlays through
      TrueColour.toneFilter, or creative LUTs through the skin guard.
+  3. The Grade Room's colour cubes (curves, wheels, HSL bands, split tone, in
+     ColorMath.swift) applied with Apple's plain CIColorCube filter. Those
+     cubes hold the numbers a screen shows; the plain filter works on raw
+     light values, where every control did several times what its number
+     said. That made the Skin first presets milky and teal (24 Nov 2026).
+     They go through CIColorCubeWithColorSpace, as True Colour's cubes do.
+     tools/skin-test/check_grade.swift checks the result on real Core Image.
 
 gate.py runs this too. Exit code 0 when the rules hold, 1 when one is broken.
 """
@@ -40,6 +46,11 @@ PIPELINE_MUST_CALL = {
     # the creative LUT slot, with the skin guard
     "TrueColour.lutData(": 1,
 }
+
+
+# Files whose cubes are worked out on screen (sRGB) numbers, so must be
+# applied to screen numbers.
+SCREEN_NUMBER_CUBES = ["Engine/ColorMath.swift"]
 
 
 def code_only(text):
@@ -76,6 +87,22 @@ def check(app=APP):
                 problems.append(
                     f"LookPipeline.swift calls {call}...) {n} time{'s' if n != 1 else ''}, fewer than the {least} it "
                     "needs: a recipe, slider, overlay, lens or LUT path has stopped going through True Colour.")
+    for name in SCREEN_NUMBER_CUBES:
+        path = app / name
+        if not path.exists():
+            problems.append(f"LumaLook/{name} is missing; update SCREEN_NUMBER_CUBES in "
+                            "tools/skin-test/source_rules.py to point at the file that builds the Grade Room's cubes.")
+            continue
+        code = code_only(path.read_text(errors="replace"))
+        plain = len(re.findall(r'"CIColorCube"|\.colorCube\s*\(', code))
+        spaced = len(re.findall(r'"CIColorCubeWithColorSpace"|\.colorCubeWithColorSpace\s*\(', code))
+        if plain or not spaced:
+            problems.append(
+                f"{name} applies a colour cube with Apple's plain CIColorCube filter"
+                + (f" ({plain} time{'s' if plain != 1 else ''})" if plain else " (no CIColorCubeWithColorSpace found)")
+                + ". Its cubes hold the numbers a screen shows, and the plain filter works on raw light values: "
+                "curves, wheels, HSL bands and split tones come out several times too strong. "
+                "Use CIColorCubeWithColorSpace with sRGB.")
     return problems
 
 

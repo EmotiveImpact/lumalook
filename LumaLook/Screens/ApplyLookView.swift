@@ -40,7 +40,8 @@ import AVKit
 //     tiles, each showing its LIVE VALUE rather than a glyph, edited by one
 //     shared slider (tap the tile again to put it away)
 //   ✓ Lens panel — eight lens kinds, Pro-locked ones open the paywall
-//   ✓ Auto-grade  ✓ WB eyedropper (tap a neutral in the frame)
+//   ✓ Auto-grade (off behind LumaFeatures.autoGrade until it leaves skin alone)
+//   ✓ WB eyedropper (tap a neutral in the frame)
 //   ✓ Skin First presets — research-tuned for Black & deep skin, now rendered
 //     as real graded tiles instead of painted swatches
 //   ✓ Slot chain — Slot 1 conversion × Slot 2 creative, per-slot strength by
@@ -1047,13 +1048,15 @@ struct ApplyLookView: View {
 
                 toolDivider
 
-                tool("wand.and.stars", app.isAutoGrading ? "Working" : "Auto",
-                     on: app.isAutoGrading, enabled: hasRealMedia && !app.isAutoGrading) {
-                    guard hasRealMedia else { return }
-                    Task { await app.autoGrade() }
-                    LumaHaptics.shared.tap()
+                if LumaFeatures.autoGrade {
+                    tool("wand.and.stars", app.isAutoGrading ? "Working" : "Auto",
+                         on: app.isAutoGrading, enabled: hasRealMedia && !app.isAutoGrading) {
+                        guard hasRealMedia else { return }
+                        Task { await app.autoGrade() }
+                        LumaHaptics.shared.tap()
+                    }
+                    .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
                 }
-                .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
                 tool("eyedropper.halffull", "White bal.", on: eyedropping,
                      enabled: hasRealMedia) {
                     guard hasRealMedia else { return }

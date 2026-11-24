@@ -20,12 +20,13 @@
 //       LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
 //       LumaLook/Engine/LUTDensifier.swift
 //   /tmp/grade/check check  tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
-//       tools/skin-test/out/candidates tools/skin-test/out/grade
+//       tools/skin-test/out/candidates /tmp/grade/pictures
 //
-// "check" runs the checks, exits 1 if any fails, and then writes a few
-// pictures (two test portraits through the presets and two film looks) to the
-// last folder. "render" writes only the pictures, for looking at a change
-// before and after.
+// "check" runs the checks, writes a few pictures (two test portraits through
+// the presets and two film looks) to the last folder, and exits 1 if any
+// check failed. "render" writes only the pictures, for looking at a change
+// before and after. The Mac runner keeps the pictures with its run, as
+// "grade-pictures".
 //
 // Run it whenever SkinFirstPresets.swift, ColorMath.swift, LookPipeline.swift
 // or the settings in LumaModels.swift change. Part 1 needs no Mac.
@@ -404,48 +405,12 @@ func writePictures() {
         for code in ["HP400", "PR100"] {
             guard let lut = film(code) else { continue }
             save("look-\(code)", state(lut: lut, full()))
-            // The same look with Rich Cinema, and Auto's cooler white balance,
-            // left on underneath: the state the fault was found in.
-            var stuck = withAutoOnTop(SkinFirstPreset.richCinema.settings)
-            stuck.intensity = 100
-            save("look-\(code)-preset-left-on", state(lut: lut, stuck))
         }
     }
     print("\nWrote \(written) pictures to \(outDir.path)")
 }
 
 writePictures()
-
-// TEMPORARY (one run): the picture on the phone in numbers, to compare with
-// the screenshots of 24 Nov 2026. Removed with the fix to ColorMath.swift.
-if mode == "render", let lut = film("HP400") {
-    let ramp: [RGB] = (0...255).map { let v = Double($0) / 255; return (v, v, v) }
-    func table(_ label: String, _ change: (inout LookSettings) -> Void) {
-        var s = SkinFirstPreset.richCinema.settings
-        s.intensity = 100
-        change(&s)
-        let out = graded(ramp, state(lut: lut, s))
-        var row = label + ":"
-        for g in stride(from: 75, through: 225, by: 15) {
-            let i = out.indices.min { abs(out[$0].1 * 255 - Double(g)) < abs(out[$1].1 * 255 - Double(g)) }!
-            row += " G\(g)=(\(Int((out[i].0 * 255).rounded())),\(Int((out[i].2 * 255).rounded())))"
-        }
-        print(row + "  black \(show(out[0]))")
-    }
-    print("\nDIAG HP400 + Rich Cinema, red and blue where green is G (phone: G75=(2,99) G90=(29,112) "
-          + "G105=(60,126) G120=(88,140) G135=(111,155) G150=(131,166) G165=(154,180) G180=(174,193) "
-          + "G195=(193,208) G210=(213,221) G225=(228,230), black (1,63,90))")
-    table("exact") { _ in }
-    for (w, t) in [(-20.0, 0.0), (-45, 0), (-45, 16), (-45, -16), (-70, 0), (-70, 13), (-70, -13), (-80, 7),
-                   (0, 16), (0, -16), (0, 40), (0, -40)] {
-        table("warmth \(Int(w)) tint \(Int(t))") { $0.warmth = w; $0.tint = t }
-    }
-    print("DIAG white balance alone on mid grey 128 (no look):")
-    for (w, t) in [(6.0, 2.0), (-20, 0), (-45, 0), (-45, 16), (-70, 0), (-70, 13), (-80, 7), (0, 16), (0, -16), (40, 0)] {
-        let out = graded([(0.5, 0.5, 0.5)], state(full { $0.warmth = w; $0.tint = t }))[0]
-        print("  warmth \(Int(w)) tint \(Int(t)): \(show(out))")
-    }
-}
 
 #endif
 

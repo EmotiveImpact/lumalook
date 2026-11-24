@@ -168,12 +168,21 @@ cube itself. A look that cannot pass at 75% does not ship.
 - No new colour filter that skips `TrueColour`. If a look needs something
   new, add it there, with a check in `check_truecolour.swift`.
 
-  `source_rules.py` reads the app's Swift sources for both: any new use of
-  `CIColorControls`, and `LookPipeline.swift` no longer sending recipes,
-  sliders, overlays and LUTs through `TrueColour`. It runs in the gate and,
-  on every pull request, in the Build workflow. It is a tripwire for the
-  known ways round, not a render of the whole app: the Mac programs compile
-  the three engine files only, because `LookPipeline` needs the whole app.
+- No plain `CIColorCube` for the Grade Room's cubes (`ColorMath.swift`:
+  curves, wheels, HSL bands, split tone). Those cubes hold the numbers a
+  screen shows. The plain filter works on raw light values, where every
+  control did several times what its number said: that made the Skin first
+  presets milky and teal (24 Nov 2026). They go through
+  `CIColorCubeWithColorSpace`, as True Colour's cubes do.
+
+  `source_rules.py` reads the app's Swift sources for these: any new use of
+  `CIColorControls`, `LookPipeline.swift` no longer sending recipes,
+  sliders, overlays and LUTs through `TrueColour`, and `ColorMath.swift`
+  going back to the plain cube filter. It runs in the gate and, on every
+  pull request, in the Build workflow. It is a tripwire for the known ways
+  round, not a render of the whole app: the bake compiles the three engine
+  files only, and `check_grade.swift` compiles the pipeline but checks only
+  the grade on top of a look.
 - No `gate.py --accept` to make a failure go away. It records a decision
   that somebody made on purpose, and the baseline change shows in the pull
   request.
@@ -194,6 +203,29 @@ cube itself. A look that cannot pass at 75% does not ship.
    `python3 tools/skin-test/check_look.py --self-test` has to pass, which
    proves the Python copy of the guard (`fixes.skin_guard`) still matches.
    The workflow runs both, and `selftest_gate.py`, on every push.
+
+**When the grade on top of a look changes** (`SkinFirstPresets.swift`,
+`ColorMath.swift`, `LookPipeline.swift`, the settings in `LumaModels.swift`)
+
+`check_grade.swift` has to pass. It is compiled with the app's own
+`LookPipeline.swift` and the files that needs, and the Mac runner runs it
+before it bakes. It asks three things:
+
+1. Does a Skin first preset come off, whole, when another look is picked
+   (`SkinFirstPreset.worn(by:)` and `takenOff(_:)`, which
+   `AppModel.select(look:)` calls)? A preset used to stay on under every
+   look picked after it. This part needs no Mac.
+2. Do the Grade Room colour tools do on screen what their numbers say? A
+   curve lifted to 0.1 at black has to show 0.1, and a preset's black has
+   to stay dark.
+3. Is every look, picked after each preset, exactly the look its thumbnail
+   shows?
+
+It also writes a few pictures (two test portraits through the presets and
+two film looks), which the Mac runner keeps with its run as
+`grade-pictures`. Run it with `render` in place of `check` to get only the
+pictures, for looking at a change before and after. The steps to compile it
+are at the top of the file.
 
 **What the skin guard cannot do**
 

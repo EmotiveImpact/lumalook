@@ -96,7 +96,7 @@ struct CurvePoint: Codable, Equatable {
 }
 
 /// Per-channel tone curves. An empty channel means identity (no remap).
-/// Applied as a single separable CIColorCube: channel(master(v)).
+/// Applied as a single separable colour cube: channel(master(v)).
 struct CurveSet: Codable, Equatable {
     var master: [CurvePoint] = []
     var red: [CurvePoint] = []
@@ -125,7 +125,7 @@ struct ColorWheels: Codable, Equatable {
 
 /// Eight-band HSL secondary (Lightroom-style): per band a hue shift,
 /// saturation and luminance offset in −1…1. Identity = all zero. Hue-
-/// dependent, so it bakes a small 3-D CIColorCube of its own.
+/// dependent, so it bakes a small 3-D colour cube of its own.
 struct HSLBands: Codable, Equatable {
     /// red, orange, yellow, green, aqua, blue, purple, magenta.
     static let names = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]

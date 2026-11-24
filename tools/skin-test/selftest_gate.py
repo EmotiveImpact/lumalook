@@ -16,8 +16,9 @@ by one:
      rounded one.
   4. A film LUT that sets its own input range is turned away, by the gate's
      rule and by check_look.py.
-  5. source_rules.py notices a new CIColorControls and a look path that no
-     longer goes through True Colour.
+  5. source_rules.py notices a new CIColorControls, a look path that no
+     longer goes through True Colour, and the Grade Room's cubes going back
+     to the plain cube filter.
 
 It adds two entries to looks.json and four small files under out/ while it
 runs and takes them away again. Exit code 0 when everything holds.
@@ -126,9 +127,9 @@ def source():
     with tempfile.TemporaryDirectory() as tmp:
         app = Path(tmp) / "LumaLook"
         (app / "Engine").mkdir(parents=True)
-        for name in ("LookPipeline.swift", "EffectRenderer.swift", "LumaCompositor.swift"):
+        for name in ("LookPipeline.swift", "EffectRenderer.swift", "LumaCompositor.swift", "ColorMath.swift"):
             shutil.copy(engine / name, app / "Engine" / name)
-        check(not R.check(app), "a copy of the three files that matter passes on its own")
+        check(not R.check(app), "a copy of the four files that matter passes on its own")
         (app / "Screens").mkdir()
         (app / "Screens" / "New.swift").write_text(
             "// CIColorControls in a comment is fine\nlet f = CIFilter.colorControls()\nf.contrast = 1.2\n")
@@ -146,6 +147,16 @@ def source():
         found = R.check(app)
         check(len(found) == 1 and "TrueColour.lutData(" in found[0],
               "a creative LUT that stops going through the skin guard is caught")
+        pipeline.write_text(text)
+        maths = app / "Engine" / "ColorMath.swift"
+        text = maths.read_text()
+        maths.write_text(text.replace('CIFilter(name: "CIColorCubeWithColorSpace")', 'CIFilter(name: "CIColorCube")', 1))
+        found = R.check(app)
+        check(len(found) == 1 and "Engine/ColorMath.swift" in found[0] and "plain CIColorCube" in found[0],
+              "the Grade Room's cubes going back to Apple's plain CIColorCube filter is caught "
+              "(a mention in a comment is not)")
+        maths.write_text(text)
+        check(not R.check(app), "and put back, the copy passes again")
 
 
 if __name__ == "__main__":
