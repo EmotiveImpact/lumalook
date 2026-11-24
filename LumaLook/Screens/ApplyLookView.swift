@@ -949,7 +949,7 @@ struct ApplyLookView: View {
     /// they bake cleanly. Rendered through the real pipeline like everything
     /// else on this row.
     private func skinTile(_ preset: SkinFirstPreset) -> some View {
-        let selected = app.selectedLUT == nil && app.settings == preset.settings
+        let selected = app.selectedLUT == nil && SkinFirstPreset.worn(by: app.settings) == preset
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 app.selectedLUT = nil

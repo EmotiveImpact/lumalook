@@ -82,6 +82,53 @@ enum SkinFirstPreset: String, CaseIterable, Identifiable {
         return s
     }
 
+    // MARK: Wearing a preset, and taking it off
+
+    /// The preset this grade is wearing, if any.
+    ///
+    /// A preset is known by the three things nothing else on the look screen
+    /// sets: its curve, its HSL bands and its split tone. Strength, the film
+    /// tools, and an Auto or white-balance change made on top of it do not
+    /// hide it. Once the person reshapes the curve, the bands, the split tone
+    /// or the wheels by hand it is their own grade and no longer a preset.
+    static func worn(by settings: LookSettings) -> SkinFirstPreset? {
+        allCases.first { preset in
+            let own = preset.settings
+            return settings.curves == own.curves && settings.wheels == own.wheels
+                && settings.hsl == own.hsl && settings.splitTone == own.splitTone
+        }
+    }
+
+    /// The grade with its preset taken off: every colour adjustment back to
+    /// neutral, and the preset's full strength back to the strength a look
+    /// opens at. Grain, bloom, halation, vignette, sharpening and the lens
+    /// are the person's own and stay. A grade wearing no preset comes back
+    /// unchanged.
+    ///
+    /// A preset is picked like a look, so the next look picked has to take
+    /// its place (`AppModel.select(look:)`). Until 24 Nov 2026 it stayed on
+    /// underneath, and every look picked after Rich Cinema came out teal and
+    /// milky while its thumbnail was right.
+    static func takenOff(_ settings: LookSettings) -> LookSettings {
+        guard let preset = worn(by: settings) else { return settings }
+        let fresh = LookSettings()
+        var plain = settings
+        plain.exposure = fresh.exposure
+        plain.contrast = fresh.contrast
+        plain.highlights = fresh.highlights
+        plain.shadows = fresh.shadows
+        plain.saturation = fresh.saturation
+        plain.warmth = fresh.warmth
+        plain.tint = fresh.tint
+        plain.fade = fresh.fade
+        plain.curves = fresh.curves
+        plain.wheels = fresh.wheels
+        plain.hsl = fresh.hsl
+        plain.splitTone = fresh.splitTone
+        if settings.intensity == preset.settings.intensity { plain.intensity = fresh.intensity }
+        return plain
+    }
+
     /// One-screen guidance shown in the Skin First tip card.
     static let guidance: [(String, String)] = [
         ("Expose brighter than the meter says", "Deep skin is usually under-exposed. Aim for skin at ~40–60% on the histogram; don't let auto-exposure darken the face."),

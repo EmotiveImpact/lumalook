@@ -36,6 +36,13 @@ on:
       - 'LumaLook/Engine/TrueColour.swift'
       - 'LumaLook/Engine/LUTParser.swift'
       - 'LumaLook/Engine/LUTDensifier.swift'
+      # the grade on top of a look (check_grade.swift)
+      - 'LumaLook/Engine/SkinFirstPresets.swift'
+      - 'LumaLook/Engine/ColorMath.swift'
+      - 'LumaLook/Engine/LookPipeline.swift'
+      - 'LumaLook/Engine/LogNormalizer.swift'
+      - 'LumaLook/Engine/OverlayEffects.swift'
+      - 'LumaLook/Models/LumaModels.swift'
       # the test
       - 'tools/skin-test/*.swift'
       - 'tools/skin-test/*.py'
@@ -82,6 +89,22 @@ jobs:
           swiftc -O -o /tmp/tc-check/check /tmp/tc-check/main.swift LumaLook/Engine/TrueColour.swift \
             LumaLook/Engine/LUTParser.swift LumaLook/Engine/LUTDensifier.swift
           /tmp/tc-check/check
+
+      # The grade on top of a look: the Skin first presets and the Grade Room
+      # colour tools, through the app's own pipeline. This run only writes
+      # its pictures, as the app makes them before the fix to ColorMath.swift.
+      - name: Pictures of the grade on top of a look, before the fix
+        run: |
+          mkdir -p /tmp/grade
+          cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
+          swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
+            LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift \
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
+            LumaLook/Engine/LUTDensifier.swift
+          /tmp/grade/check render tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates tools/skin-test/out/grade/before
 
       - name: Bake every look through the app's True Colour engine
         run: |
