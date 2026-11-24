@@ -59,9 +59,10 @@ struct CollectionsView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { selectDefaultIfNeeded() }
-        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)-\(app.tileStamp)") {
             thumbs.render(source: app.previewFrame, library: app.library.all,
-                          fileURL: { app.lutRepository.fileURL(for: $0) })
+                          fileURL: { app.lutRepository.fileURL(for: $0) },
+                          under: app.lookState.conversionSlot)
         }
         .alert("New collection", isPresented: $showNewAlert) {
             TextField("Name", text: $newName)

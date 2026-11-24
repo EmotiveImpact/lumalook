@@ -371,13 +371,14 @@ struct LookBrowserSheet: View {
                     panelHeight = height
                 }
         }
-        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)") {
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.library.all.count)-\(app.tileStamp)") {
             // The sheets keep grading the user's own frame. The Looks tab
             // grades every look on its own person, tile by tile, as the tiles
             // scroll in (LookPosterArt); here it only renders the pack covers.
             if isSheet {
                 thumbs.render(source: app.previewFrame, library: app.library.all,
-                              fileURL: { app.lutRepository.fileURL(for: $0) })
+                              fileURL: { app.lutRepository.fileURL(for: $0) },
+                              under: app.lookState.conversionSlot)
             } else {
                 packThumbs.render(packs: PackCatalog.packs, source: nil, maxDimension: 720)
             }

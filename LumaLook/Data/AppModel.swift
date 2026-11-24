@@ -834,6 +834,22 @@ final class AppModel: ObservableObject {
         wornGrade.map { settings.takingOff($0) } ?? settings
     }
 
+    /// Changes whenever a look tile would be drawn differently for the same
+    /// frame and library: the conversion slot under every look, or a film
+    /// look's remembered strength or blend. Screens add it to the id of the
+    /// task that renders their tiles.
+    var tileStamp: String {
+        var hasher = Hasher()
+        hasher.combine(conversionLUT?.id)
+        hasher.combine(conversionOpacity)
+        hasher.combine(conversionProfile?.rawValue)
+        for lut in lutRepository.luts {
+            hasher.combine(lut.defaultOpacity)
+            hasher.combine(lut.defaultBlend)
+        }
+        return String(hasher.finalize())
+    }
+
     /// The whole grade the settings are wearing, if any: a Skin first
     /// preset's, or a saved look's.
     private var wornGrade: LookSettings? {

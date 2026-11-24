@@ -22,9 +22,8 @@ final class CompareRenderer: ObservableObject {
         var settings: LookSettings
         /// The grade a picked LUT is shown with.
         var pickedSettings: LookSettings
-        var conversionLUT: ParsedLUT?
-        var conversionOpacity: Double
-        var conversionProfile: LogProfile?
+        /// What sits under every cell: a pick never touches it.
+        var conversion: ConversionSlot
     }
 
     @Published var images: [String: CGImage] = [:]
@@ -32,10 +31,9 @@ final class CompareRenderer: ObservableObject {
     private var lastStamp = ""
 
     /// `nil` in `candidates` = the cell without a creative LUT.
-    func render(frame: CIImage?, live: Live, stamp liveStamp: String,
-                candidates: [(file: LUTFile, url: URL)?]) {
+    func render(frame: CIImage?, live: Live, candidates: [(file: LUTFile, url: URL)?]) {
         guard let frame else { return }
-        let stamp = "\(frame.extent)-\(liveStamp)-\(live.settings)-\(live.pickedSettings)-"
+        let stamp = "\(frame.extent)-\(live.recipe)-\(live.conversion.stamp)-\(live.settings)-\(live.pickedSettings)-"
             + candidates.compactMap { c in
                 c.map { "\($0.file.id.uuidString):\($0.file.defaultOpacity ?? 100):\($0.file.defaultBlend ?? "")" }
             }.joined()
@@ -48,9 +46,7 @@ final class CompareRenderer: ObservableObject {
             for candidate in candidates {
                 if Task.isCancelled { return }
                 let state = LookState()
-                state.conversionLUT = live.conversionLUT
-                state.conversionOpacity = live.conversionOpacity
-                state.conversionProfile = live.conversionProfile
+                state.conversionSlot = live.conversion
                 if let candidate {
                     guard let parsed = try? pipeline.loadLUT(at: candidate.url) else { continue }
                     state.settings = live.pickedSettings

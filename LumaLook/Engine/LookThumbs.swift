@@ -52,15 +52,20 @@ final class LookThumbs: ObservableObject {
         let recipe: LookRecipe?
         let settings: LookSettings
         let lutURL: URL?
+        /// The strength and blend the film look opens with when it is picked
+        /// (`AppModel.applyRememberedStrength`), so the tile is the pick.
+        var lutOpacity: Double = 1
+        var lutBlend: LUTBlendMode = .normal
     }
 
     /// A small pixel digest makes equal-sized clips distinct, while recipe,
     /// settings and LUT file metadata invalidate thumbnails when a look is
     /// edited or its cube is replaced in place.
     private static func renderStamp(frame: CIImage, isFallback: Bool,
-                                    jobs: [Job]) -> String {
+                                    conversion: ConversionSlot, jobs: [Job]) -> String {
         var hasher = Hasher()
         hasher.combine(isFallback)
+        hasher.combine(conversion.stamp)
         // The True Colour switch changes every grade, so it re-renders them.
         hasher.combine(TrueColour.isOn)
         // CGRect is only Hashable from iOS 18; hash its parts so iOS 17
@@ -92,6 +97,8 @@ final class LookThumbs: ObservableObject {
         for job in jobs {
             hasher.combine(job.key)
             hasher.combine(job.recipe)
+            hasher.combine(job.lutOpacity)
+            hasher.combine(job.lutBlend.rawValue)
             if let settings = try? encoder.encode(job.settings) {
                 settings.withUnsafeBytes { hasher.combine(bytes: $0) }
             }
@@ -110,9 +117,17 @@ final class LookThumbs: ObservableObject {
     /// pipeline: builtIn → recipe, lut → cube, saved → recipe + the user's
     /// saved settings + optional cube. `fileURL` resolves a LUT's cube path
     /// (pass `lutRepository.fileURL(for:)`).
+    ///
+    /// `under` is the conversion slot the source frame is shown through on
+    /// the big picture (`AppModel.lookState.conversionSlot`). Pass it
+    /// wherever the source is the person's own frame, so a tile made from
+    /// log footage is converted like the picture above it. The reference
+    /// swatch is never log, so it is drawn without one.
     func render(source: CIImage?, library: [LibraryLook], fileURL: (LUTFile) -> URL,
+                under slot: ConversionSlot = .none,
                 maxDimension: CGFloat = 220) {
         let frame = source ?? Self.fallbackFrame
+        let conversion = source == nil ? ConversionSlot.none : slot
         var fullStrength = LookSettings()
         fullStrength.intensity = 100
         // Saved looks reference their cube by id — resolve against the
@@ -131,16 +146,23 @@ final class LookThumbs: ObservableObject {
                            settings: fullStrength, lutURL: nil)
             case .lut(let f):
                 return Job(key: look.thumbKey, recipe: nil,
-                           settings: fullStrength, lutURL: fileURL(f))
+                           settings: fullStrength, lutURL: fileURL(f),
+                           lutOpacity: (f.defaultOpacity ?? 100) / 100,
+                           lutBlend: f.defaultBlend.flatMap(LUTBlendMode.init) ?? .normal)
             case .saved(let s):
                 let recipe = MockData.looks.first { $0.name == s.baseLookName }?.recipe
-                let url = s.lutID.flatMap { lutByID[$0] }.map(fileURL)
+                // Picking a saved look selects its film look, which opens at
+                // that film look's remembered strength.
+                let file = s.lutID.flatMap { lutByID[$0] }
                 return Job(key: look.thumbKey, recipe: recipe,
-                           settings: s.settings, lutURL: url)
+                           settings: s.settings, lutURL: file.map(fileURL),
+                           lutOpacity: (file?.defaultOpacity ?? 100) / 100,
+                           lutBlend: file?.defaultBlend.flatMap(LUTBlendMode.init) ?? .normal)
             }
         }
 
-        let stamp = Self.renderStamp(frame: frame, isFallback: source == nil, jobs: jobs)
+        let stamp = Self.renderStamp(frame: frame, isFallback: source == nil,
+                                     conversion: conversion, jobs: jobs)
         guard stamp != lastStamp else { return }
         lastStamp = stamp
 
@@ -151,11 +173,14 @@ final class LookThumbs: ObservableObject {
             for job in jobs {
                 if Task.isCancelled { return }
                 let state = LookState()
+                state.conversionSlot = conversion
                 if let recipe = job.recipe { state.recipe = recipe }
                 state.settings = job.settings
                 if let url = job.lutURL {
                     guard let parsed = try? pipeline.loadLUT(at: url) else { continue }
                     state.lut = parsed
+                    state.lutOpacity = job.lutOpacity
+                    state.lutBlend = job.lutBlend
                 }
                 if let cg = pipeline.gradedStill(frame, state: state, maxDimension: maxDimension),
                    !Task.isCancelled {

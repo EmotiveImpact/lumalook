@@ -101,15 +101,11 @@ struct LUTCompareView: View {
         .preferredColorScheme(.dark)
         .task(id: "\(app.previewFrame?.extent.debugDescription ?? "")-\(app.lutRepository.luts.count)") {
             // No media yet → compare on the hero frame, same as the strip thumbs.
-            let state = app.lookState
             renderer.render(frame: app.previewFrame ?? HeroPhoto.golden.ciImage,
                             live: .init(recipe: app.selectedLook.recipe,
                                         settings: app.settings,
                                         pickedSettings: app.settingsAfterPick,
-                                        conversionLUT: state.conversionLUT,
-                                        conversionOpacity: state.conversionOpacity,
-                                        conversionProfile: state.conversionProfile),
-                            stamp: "\(app.selectedLook.name)-\(app.conversionLUT?.id.uuidString ?? "")-\(app.conversionOpacity)-\(app.conversionProfile?.rawValue ?? "")",
+                                        conversion: app.lookState.conversionSlot),
                             candidates: candidates)
         }
     }

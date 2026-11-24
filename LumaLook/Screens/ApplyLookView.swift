@@ -307,7 +307,7 @@ struct ApplyLookView: View {
     // MARK: Media identity
 
     private var thumbStamp: String {
-        "\(mediaKey)-\(app.library.all.count)"
+        "\(mediaKey)-\(app.library.all.count)-\(app.tileStamp)"
     }
 
     private var mediaKey: String {
@@ -392,11 +392,12 @@ struct ApplyLookView: View {
         .task(id: thumbStamp) {
             thumbs.render(source: app.previewFrame,
                           library: app.library.all,
-                          fileURL: { app.lutRepository.fileURL(for: $0) })
+                          fileURL: { app.lutRepository.fileURL(for: $0) },
+                          under: app.lookState.conversionSlot)
         }
         .task(id: mediaKey) { await loadMediaReadout() }
         .task(id: mediaKey) { renderOriginalThumb() }
-        .task(id: "\(mediaKey)|\(app.selectedLook.id)|\(category == .skin)") {
+        .task(id: "\(mediaKey)|\(app.selectedLook.id)|\(category == .skin)|\(app.tileStamp)") {
             await renderSkinThumbs()
         }
         .onAppear {
@@ -581,12 +582,14 @@ struct ApplyLookView: View {
         // Never hand an infinite (clamped) extent to the pipeline's spatial ops.
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else { return }
         let recipe = app.selectedLook.recipe
+        let conversion = app.lookState.conversionSlot
         let jobs = SkinFirstPreset.allCases.map { ($0.rawValue, $0.settings) }
         let rendered = await Task.detached(priority: .userInitiated) { () -> [String: CGImage] in
             var out: [String: CGImage] = [:]
             for (key, settings) in jobs {
                 if Task.isCancelled { break }
                 let state = LookState()
+                state.conversionSlot = conversion
                 state.recipe = recipe
                 state.settings = settings
                 if let cg = LookPipeline.shared.gradedStill(frame, state: state, maxDimension: 220) {

@@ -72,6 +72,34 @@ final class LookState: @unchecked Sendable {
     }
 }
 
+/// Slot 1 of a look state on its own: what sits under every look (a log
+/// profile, or a conversion LUT, and how much of it). A thumbnail, a Compare
+/// cell or an exported cube has to carry it, or it is drawn from footage the
+/// big picture never shows.
+struct ConversionSlot: @unchecked Sendable {
+    var lut: ParsedLUT?
+    var opacity: Double = 1
+    var profile: LogProfile?
+
+    static let none = ConversionSlot()
+
+    /// Changes whenever the slot would draw differently.
+    var stamp: String {
+        "\(profile?.rawValue ?? "")-\(opacity)-\(lut?.size ?? 0)-\(lut?.rgbaFloatData.hashValue ?? 0)"
+    }
+}
+
+extension LookState {
+    var conversionSlot: ConversionSlot {
+        get { ConversionSlot(lut: conversionLUT, opacity: conversionOpacity, profile: conversionProfile) }
+        set {
+            conversionLUT = newValue.lut
+            conversionOpacity = newValue.opacity
+            conversionProfile = newValue.profile
+        }
+    }
+}
+
 final class LookPipeline: @unchecked Sendable {
     static let shared = LookPipeline()
 

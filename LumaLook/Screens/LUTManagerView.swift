@@ -145,10 +145,11 @@ struct LUTManagerView: View {
         }
         // Real rendered thumbnails (same renderer as every apply surface) —
         // the rows used to show index-rotated stock art.
-        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)") {
+        .task(id: "\(app.previewFrame?.extent.debugDescription ?? "none")-\(app.lutRepository.luts.count)-\(app.tileStamp)") {
             thumbs.render(source: app.previewFrame,
                           library: app.lutRepository.luts.map { LibraryLook(lut: $0) },
-                          fileURL: { app.lutRepository.fileURL(for: $0) })
+                          fileURL: { app.lutRepository.fileURL(for: $0) },
+                          under: app.lookState.conversionSlot)
         }
         .alert("New Collection", isPresented: $showNewCollection) {
             TextField("Name", text: $newCollectionName)
