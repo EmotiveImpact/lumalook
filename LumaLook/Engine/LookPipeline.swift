@@ -314,10 +314,15 @@ final class LookPipeline: @unchecked Sendable {
         case .plastic:
             // Toy camera: popped saturation, crushed corner falloff, and a
             // cheap-lens softness ramp toward the edges.
-            let popped = image.applyingFilter("CIColorControls", parameters: [
-                kCIInputSaturationKey: 1 + 0.35 * a,
-                kCIInputContrastKey: 1 + 0.12 * a,
-            ])
+            // Through True Colour like every other contrast in the app:
+            // CIColorControls works in linear light and crushed deep skin.
+            var popped = image
+            if let pop = TrueColour.toneFilter(contrast: Float(1 + 0.12 * a),
+                                               saturation: Float(1 + 0.35 * a),
+                                               brightness: 0) {
+                pop.setValue(image, forKey: kCIInputImageKey)
+                popped = pop.outputImage ?? image
+            }
             let radial = CIFilter(name: "CIRadialGradient", parameters: [
                 kCIInputCenterKey: CIVector(x: center.x, y: center.y),
                 "inputRadius0": min(extent.width, extent.height) * 0.30,
@@ -434,7 +439,10 @@ final class LookPipeline: @unchecked Sendable {
 
     // MARK: - Built-in look recipes
 
-    func applyRecipe(_ recipe: LookRecipe, to image: CIImage) -> CIImage {
+    /// `trueColour` is the switch position: the live one unless a caller
+    /// baking a batch of cubes holds it still (PackInstaller.cubeText).
+    func applyRecipe(_ recipe: LookRecipe, to image: CIImage,
+                     trueColour: Bool = TrueColour.isOn) -> CIImage {
         var output = image
 
         if recipe.temperature != 6500 || recipe.tint != 0 {
@@ -448,7 +456,8 @@ final class LookPipeline: @unchecked Sendable {
         // its brightness greyed it. See TrueColour.swift.
         if let tone = TrueColour.toneFilter(contrast: recipe.contrast,
                                             saturation: recipe.saturation,
-                                            brightness: recipe.brightness) {
+                                            brightness: recipe.brightness,
+                                            protectSkin: trueColour) {
             tone.setValue(output, forKey: kCIInputImageKey)
             output = tone.outputImage ?? output
         }

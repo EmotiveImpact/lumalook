@@ -1,5 +1,5 @@
-"""Run any photo through looks: as shipped before the fix, True Colour off,
-True Colour on, all from the Mac runner's Core Image bake.
+"""Run any photo through looks: as shipped before the fix, True Colour on,
+True Colour off, all from the Mac runner's Core Image bake.
 
     python3 try_photos.py OUT.jpg PHOTO [PHOTO ...] [--looks id-or-code,...] [--before LOOKS_BEFORE.json]
 
@@ -37,15 +37,18 @@ def load(path, long_side=900):
 def versions(look, before_recipe):
     lid = look["id"]
     if look["recipe"]:
-        b = dict(look, lut=S.read_baked(OUT / "luts" / f"{lid}.u16"), recipe=before_recipe or look["recipe"])
         off = dict(look, lut=S.read_baked(OUT / "luts_classic" / f"{lid}.u16"))
         on = dict(look, lut=S.read_baked(OUT / "luts_tc" / f"{lid}.u16"))
+        if S.before_bake(lid).exists():
+            b = dict(look, lut=S.read_baked(S.before_bake(lid)), recipe=before_recipe or look["recipe"])
+        else:
+            b = on                  # added since True Colour: it shipped with it on
     else:
         raw = S.read_cube(S.FILM_DIR / look["cube"])
         b = dict(look, lut=raw)
         off = dict(look, lut=raw)
         on = dict(look, lut=S.read_baked(OUT / "film_tc" / f"{lid}.u16"))
-    return [("As it shipped", b), ("True Colour off", off), ("True Colour on", on)]
+    return [("As it shipped", b), ("True Colour on", on), ("True Colour off", off)]
 
 
 def main():

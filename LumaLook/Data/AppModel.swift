@@ -579,24 +579,53 @@ final class AppModel: ObservableObject {
     /// engine that baked them (or the True Colour switch) has changed, bake
     /// them again, off the main thread, so they match the live looks. Runs at
     /// launch and whenever the switch flips.
+    ///
+    /// The books are kept by `TrueColour.Rebake`. The saved stamp is cleared
+    /// before the first cube is overwritten and saved again only once every
+    /// cube is back on disk, so closing the app half way through, or moving
+    /// the switch back, never leaves some looks baked one way under a stamp
+    /// that says the other. One bake runs at a time and bakes every cube
+    /// with the switch as it stood at the start; if the switch moved while
+    /// it ran, it runs once more for the new setting.
     func rebakeRecipeLooksIfNeeded() {
-        let stamp = TrueColour.bakeStamp
-        guard UserDefaults.standard.string(forKey: TrueColour.bakedKey) != stamp else { return }
-        UserDefaults.standard.set(stamp, forKey: TrueColour.bakedKey)
+        guard TrueColour.Rebake.isNeeded else { return }
+        guard !rebakeInFlight else { return }
         let jobs = PackInstaller.recipeBakeJobs(in: lutRepository)
-        guard !jobs.isEmpty else { return }
+        guard !jobs.isEmpty else {
+            TrueColour.Rebake.finish(bakedOn: TrueColour.Rebake.begin(), complete: true)
+            // Nothing installed to bake, but every live look just changed.
+            objectWillChange.send()
+            return
+        }
+        rebakeInFlight = true
+        let trueColour = TrueColour.Rebake.begin()
         Task.detached(priority: .utility) { [weak self] in
+            var allWritten = true
             for job in jobs {
-                guard let text = PackInstaller.cubeText(for: job.recipe, title: job.title) else { continue }
-                try? text.write(to: job.url, atomically: true, encoding: .utf8)
+                guard let text = PackInstaller.cubeText(for: job.recipe, title: job.title,
+                                                        trueColour: trueColour) else {
+                    allWritten = false
+                    continue
+                }
+                do {
+                    try text.write(to: job.url, atomically: true, encoding: .utf8)
+                } catch {
+                    allWritten = false
+                }
             }
+            let finished = allWritten
             await MainActor.run {
+                guard let self else { return }
+                self.rebakeInFlight = false
+                let switchMoved = TrueColour.Rebake.finish(bakedOn: trueColour, complete: finished)
                 LookPipeline.shared.clearLUTCache()
-                self?.syncLookState()
-                self?.objectWillChange.send()
+                self.syncLookState()
+                self.objectWillChange.send()
+                if switchMoved { self.rebakeRecipeLooksIfNeeded() }
             }
         }
     }
+    private var rebakeInFlight = false
 
     private func syncLookState() {
         lookState.recipe = selectedLook.recipe

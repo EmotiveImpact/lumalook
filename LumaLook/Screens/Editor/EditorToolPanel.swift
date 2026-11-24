@@ -274,10 +274,12 @@ struct EditorMoreToolsSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 16)
             }
-            templateBand
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
-                .padding(.bottom, 12)
+            if LumaFeatures.templates {
+                templateBand
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 12)
+            }
         }
         .background(LumaTheme.panel.ignoresSafeArea())
     }

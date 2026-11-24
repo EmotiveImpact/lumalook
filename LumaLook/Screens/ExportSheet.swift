@@ -75,7 +75,7 @@ enum GradeCubeBaker {
         var lines = [String]()
         lines.reserveCapacity(n * n * n + 6)
         lines.append("TITLE \"\(title)\"")
-        lines.append("# Exported from Lumalook — the app's exact grade, colour only.")
+        lines.append(LUTParser.exportedHeader)
         lines.append("LUT_3D_SIZE \(n)")
         lines.append("DOMAIN_MIN 0.0 0.0 0.0")
         lines.append("DOMAIN_MAX 1.0 1.0 1.0")
