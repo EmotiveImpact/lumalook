@@ -13,8 +13,8 @@
 //   3. Is every look, picked after a preset, the look its thumbnail shows?
 //
 // Later sections ask the same of the film tools and tone sliders (5), of the
-// exported cube and the three picture sizes (6), and of the White balance
-// picker (7).
+// exported cube and the three picture sizes (6), of the White balance
+// picker (7), and of Strength over log footage (8).
 //
 //   mkdir -p /tmp/grade && cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
 //   swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
@@ -777,6 +777,50 @@ if mode == "check" {
     print("  note  the rule it replaces left these as far from grey (of 255, before to after): " + oldLeft.joined(separator: "; "))
     let grey = pipeline.neutralising((r: 0.5, g: 0.5, b: 0.5))
     check(grey.warmth == 0 && grey.tint == 0, "a grey that is already grey is left alone")
+}
+
+// MARK: - 8. Strength and the Source conversion
+
+if mode == "check" {
+    section("8. Strength fades the look, never the Source conversion under it")
+    func lin(_ e: Double) -> Double { e <= 0.04045 ? e / 12.92 : pow((e + 0.055) / 1.055, 2.4) }
+    func enc(_ v: Double) -> Double { v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055 }
+    /// Half way between two colours, in the light Core Image dissolves in.
+    func half(_ a: RGB, _ b: RGB) -> RGB {
+        (enc((lin(a.0) + lin(b.0)) / 2), enc((lin(a.1) + lin(b.1)) / 2), enc((lin(a.2) + lin(b.2)) / 2))
+    }
+    // Colours as log footage records them: flat, and close to mid grey.
+    let footage: [RGB] = [(0.30, 0.30, 0.30), (0.45, 0.45, 0.45), (0.60, 0.60, 0.60),
+                          (0.52, 0.44, 0.40), (0.44, 0.38, 0.35), (0.40, 0.46, 0.55)]
+    func shown(_ profile: LogProfile?, _ recipe: LookRecipe, strength: Double) -> [RGB] {
+        let st = state(recipe: recipe, full { $0.intensity = strength })
+        st.conversionProfile = profile
+        return graded(footage, st)
+    }
+    func widest(_ a: [RGB], _ b: [RGB]) -> Double { zip(a, b).map { gap($0, $1) }.max() ?? 0 }
+
+    for profile in [LogProfile.appleLog, .slog3] {
+        let converted = shown(profile, LookRecipe(), strength: 100)
+        let flat = widest(converted, footage)
+        check(flat > 8, "\(profile.label): the conversion changes the footage, so there is something to lose",
+              "moves these colours by up to \(f1(flat)) of 255")
+        // No look on: Strength has nothing to fade, whatever it is set to.
+        let none = max(widest(shown(profile, LookRecipe(), strength: 0), converted),
+                       widest(shown(profile, LookRecipe(), strength: 75), converted))
+        check(none < 1.0, "\(profile.label) with no look: the footage is converted in full at any Strength",
+              "widest gap from the converted footage \(f1(none)) of 255 (it was \(f1(flat)) at Strength 0, and a quarter of that at 75)")
+        // A look on: half Strength is half way between the converted footage and the look.
+        let fullLook = shown(profile, goldenHour, strength: 100)
+        let want = zip(converted, fullLook).map { half($0, $1) }
+        let got = shown(profile, goldenHour, strength: 50)
+        check(widest(got, want) < 1.5, "\(profile.label) under Golden Hour: Strength 50 is half way from the converted footage to the look",
+              "widest gap \(f1(widest(got, want))) of 255")
+    }
+    // Footage that needs no conversion is as it always was.
+    let plain = shown(nil, goldenHour, strength: 50)
+    let wantPlain = zip(footage, shown(nil, goldenHour, strength: 100)).map { half($0, $1) }
+    check(widest(plain, wantPlain) < 1.5, "with no conversion, Strength 50 is half way from the picture to the look, as before",
+          "widest gap \(f1(widest(plain, wantPlain))) of 255")
 }
 
 // MARK: - Pictures

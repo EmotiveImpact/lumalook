@@ -730,7 +730,11 @@ final class AppModel: ObservableObject {
         let px = point.x * ext.width
         let py = (1 - point.y) * ext.height   // CIImage y is bottom-up
         let region = CGRect(x: px - 6, y: py - 6, width: 12, height: 12).intersection(ext)
-        let sampleImage = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
+        let patch = region.isNull || region.isEmpty ? frame : frame.cropped(to: region)
+        // The colour as the White balance meets it. Log footage is converted
+        // first, so the point tapped is the one on screen, not the flat grey
+        // it was recorded as.
+        let sampleImage = LookPipeline.shared.asShot(patch, under: lookState.conversionSlot)
         guard let m = await Self.meanRGB(of: sampleImage) else { return }
         // The engine finds the Warmth and Tint that make this colour grey
         // (LookPipeline.neutralising). The guess that used to sit here took
@@ -927,11 +931,13 @@ final class AppModel: ObservableObject {
     }
 
     /// True when the grade-room grade changes the picture at all. Strength 0
-    /// dissolves the look and the user adjustments back to the original; a
-    /// lens sits outside that blend, so it counts on its own.
+    /// dissolves the look and the user adjustments back to the footage. A
+    /// lens sits outside that blend, and so does a Source conversion, so
+    /// each counts on its own.
     var gradeIsApplied: Bool {
         let lens = LensKind(rawValue: settings.lensKind) ?? .none
         return settings.intensity > 0 || lens != .none
+            || conversionProfile != nil || conversionLUT != nil
     }
 
     // MARK: - Grade stash (editor ✕)

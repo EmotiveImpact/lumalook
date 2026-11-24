@@ -168,7 +168,7 @@ final class LookPipeline: @unchecked Sendable {
     }
 
     /// Applies the full look (LUT or built-in recipe + user settings) to a frame,
-    /// blending with the original by `settings.intensity`.
+    /// blending with the frame as converted (slot 1) by `settings.intensity`.
     func apply(state: LookState, to image: CIImage, includeSplit: Bool = true) -> CIImage {
         let settings = state.settings
         var graded = image
@@ -182,6 +182,12 @@ final class LookPipeline: @unchecked Sendable {
         } else if let conversion = state.conversionLUT {
             graded = applyLUT(conversion, to: graded, opacity: state.conversionOpacity)
         }
+        // What Strength fades back to: the footage as converted. The Source
+        // slot has its own amount, and turning a look down must not undo it.
+        // Strength used to fade back to the frame as recorded, so log
+        // footage at the 75 a look opens with was a quarter flat log, on
+        // screen and in the saved file, with Source reading 100.
+        let converted = graded
 
         // Slot 2 — creative: imported LUT or built-in recipe.
         if let lut = state.lut {
@@ -193,11 +199,12 @@ final class LookPipeline: @unchecked Sendable {
 
         graded = applyUserAdjustments(settings, to: graded)
 
-        // Intensity blend: dissolve between original and graded frame.
+        // Intensity blend: dissolve between the converted frame and the
+        // graded one.
         let intensity = min(max(settings.intensity / 100.0, 0), 1)
         if intensity < 0.999 {
             let dissolve = CIFilter.dissolveTransition()
-            dissolve.inputImage = image
+            dissolve.inputImage = converted
             dissolve.targetImage = graded
             dissolve.time = Float(intensity)
             graded = dissolve.outputImage ?? graded
@@ -536,6 +543,22 @@ final class LookPipeline: @unchecked Sendable {
             tint = nextTint
         }
         return (warmth.rounded(), tint.rounded())
+    }
+
+    // MARK: - The picture under the look
+
+    /// The picture as the White balance meets it: through the conversion
+    /// slot and nothing else. Log footage is flat and nearly grey until it
+    /// is converted, so anything that reads colour from a frame has to read
+    /// it from this, not from the frame itself.
+    func asShot(_ source: CIImage, under slot: ConversionSlot = .none) -> CIImage {
+        if let profile = slot.profile {
+            return LogNormalizer.apply(profile, to: source, opacity: slot.opacity)
+        }
+        if let conversion = slot.lut {
+            return applyLUT(conversion, to: source, opacity: slot.opacity)
+        }
+        return source
     }
 
     // MARK: - Built-in look recipes
