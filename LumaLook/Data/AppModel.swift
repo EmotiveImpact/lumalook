@@ -774,9 +774,15 @@ final class AppModel: ObservableObject {
         // The handler reads `state` live, so slider/look changes apply
         // to the running preview without rebuilding the composition.
         let composition = AVMutableVideoComposition(asset: asset) { request in
-            let source = request.sourceImage.clampedToExtent()
+            // The frame goes in with its real bounds, as the export does
+            // (`VideoExporter.export`). It used to go in clamped, which has
+            // no bounds: the lens was skipped, and the vignette, the
+            // halation and the wipe had no frame to measure against, so the
+            // playing preview was not the clip that got saved. The blurs
+            // clamp their own input where they sample past the edge.
+            let source = request.sourceImage
             let filtered = pipeline.apply(state: state, to: source)
-            request.finish(with: filtered.cropped(to: request.sourceImage.extent), context: pipeline.context)
+            request.finish(with: filtered.cropped(to: source.extent), context: pipeline.context)
         }
         composition.applySDRColorPolicy()
         item.videoComposition = composition
