@@ -280,7 +280,7 @@ enum PackCatalog {
                 // took the place of HPS800, whose measured cube was the same
                 // file as HP400 in the free Film Stocks 01.
                 PackLook(code: "PM800", name: "PM800 · Press Mono 800",
-                         character: "Our own press look, pushed hard: luminous skin, dark skies.",
+                         character: "Our own press look: skin keeps its light, skies go dark.",
                          cubeFile: "FS_PM800.cube"),
                 PackLook(code: "PF50", name: "PF50 · Glass Mono 50",
                          character: "Slow, silvery, impossibly smooth.",

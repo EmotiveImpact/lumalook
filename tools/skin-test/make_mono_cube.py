@@ -37,15 +37,17 @@ import skinlib as S
 POINTS = 17
 
 LOOKS = {
-    # Press Mono 800: a press look, pushed hard. Orange-filter sensitivity
-    # keeps Black and brown skin luminous while skies and blues go dark; the
-    # middle of the curve is steep, the toe is short but never closes, and the
-    # highlights run bright without clipping.
+    # Press Mono 800: a press look through an orange filter. Skin comes out
+    # about as light as it was shot (deep skin a touch lighter, so a face
+    # keeps its light), while skies, blues and greens go darker around it.
+    # The curve sits a little under a straight line through the skin tones,
+    # which is what stops brown skin in bright light from going white, and
+    # the toe is short but never closes.
     "FS_PM800.cube": {
         "title": "Lumalook Press Mono 800",
-        "weights": (0.55, 0.40, 0.05),
-        "curve": [(0.00, 0.012), (0.10, 0.052), (0.20, 0.135), (0.30, 0.260), (0.40, 0.425), (0.50, 0.610),
-                  (0.60, 0.765), (0.70, 0.870), (0.80, 0.935), (0.90, 0.972), (1.00, 0.992)],
+        "weights": (0.56, 0.39, 0.05),
+        "curve": [(0.00, 0.008), (0.10, 0.074), (0.20, 0.165), (0.30, 0.255), (0.40, 0.345), (0.50, 0.440),
+                  (0.60, 0.550), (0.70, 0.675), (0.80, 0.795), (0.90, 0.900), (1.00, 0.985)],
     },
 }
 
