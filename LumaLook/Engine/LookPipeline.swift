@@ -228,10 +228,6 @@ final class LookPipeline: @unchecked Sendable {
         return graded.cropped(to: image.extent)
     }
 
-    // MARK: - Lens simulation (medium transformation)
-
-    /// Optical character of real glass, built from Core Image primitives.
-    /// All spatial — never part of cube bakes (like grain/bloom/vignette).
     // MARK: - Sizes that follow the picture
 
     /// The long edge the big picture on the look screen is graded at
@@ -251,6 +247,10 @@ final class LookPipeline: @unchecked Sendable {
         return max(extent.width, extent.height) / referenceEdge
     }
 
+    // MARK: - Lens simulation (medium transformation)
+
+    /// Optical character of real glass, built from Core Image primitives.
+    /// All spatial — never part of cube bakes (like grain/bloom/vignette).
     func applyLens(_ kind: LensKind, amount: Double, to image: CIImage) -> CIImage {
         let a = CGFloat(min(max(amount, 0), 1))
         guard a > 0.01 else { return image }
@@ -678,7 +678,8 @@ final class LookPipeline: @unchecked Sendable {
     /// Film grain: luminance-only noise, softened a touch, overlay-blended
     /// so it lives in the midtones like silver halide — not RGB confetti.
     func applyGrain(strength: Double, to image: CIImage) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
+        guard let noise = CIFilter.randomGenerator().outputImage,
+              !image.extent.isInfinite else { return image }
 
         // A grain is 1.6 pixels across on the big picture (slightly coarser
         // than 1:1, so it reads as grain, not sensor noise) and keeps that
@@ -688,9 +689,20 @@ final class LookPipeline: @unchecked Sendable {
         let cell = 1.6 * Self.sizeScale(image.extent)
         let size = max(1, cell)
 
+        // The generator's alpha is noise too, and a colour matrix divides
+        // by alpha before it multiplies. Left as it was, half the grains came
+        // out brighter than the brightest grain asked for and a tenth came
+        // out white: Grain at 50 lifted mid grey from 128 to 139 and
+        // sprinkled it with white specks. With alpha at 1 the noise is what
+        // the numbers below say: even, and centred on mid grey.
+        let reach = image.extent.insetBy(dx: -4 * size, dy: -4 * size)
+        let even = noise.transformed(by: CGAffineTransform(scaleX: size, y: size))
+            .cropped(to: reach)
+            .settingAlphaOne(in: reach)
+
         // Monochrome the noise and centre it on mid-grey for overlay blend.
         let mono = CIFilter.colorMatrix()
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: size, y: size))
+        mono.inputImage = even
         let amp = CGFloat(0.28 * strength) * min(1, cell)
         mono.rVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.gVector = CIVector(x: amp, y: 0, z: 0, w: 0)
