@@ -17,6 +17,11 @@
 #   ASC_KEY_P8      the whole text of the downloaded AuthKey_<key ID>.p8 file
 # Without them the job stops after the compile check. The upload never runs
 # for pull requests, and GitHub never hands secrets to pull requests from forks.
+#
+# A second, small job reads the app's Swift sources for anything that goes
+# around True Colour (tools/skin-test/source_rules.py). The skin test bakes
+# looks through the engine files only, so this is what notices a change
+# elsewhere in the app that would bring the old deep-skin bug back.
 name: Build
 
 on:
@@ -35,6 +40,15 @@ permissions:
   contents: read
 
 jobs:
+  true-colour-rules:
+    name: Nothing goes around True Colour
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read the app's sources against the True Colour rules
+        run: python3 tools/skin-test/source_rules.py
+
   build:
     name: Archive (Release, iPhone)
     runs-on: macos-26

@@ -20,8 +20,9 @@ import Foundation
 //    keeps its hue and chroma as it gets lighter or darker, saturation scales
 //    Oklab chroma, and film and imported LUTs get a skin guard that holds
 //    skin hue, chroma and shadow depth close to the photo where the LUT
-//    strays too far. Off: classic per-channel contrast (which adds a little
-//    saturation, like print film) and every LUT exactly as authored.
+//    strays too far, smoothly, so a face never breaks into patches. Off:
+//    classic per-channel contrast (which adds a little saturation, like
+//    print film) and every LUT exactly as authored.
 //
 // Everything here is pure colour, built into small cubes on the CPU once per
 // setting and cached, then applied with the stock `colorCubeWithColorSpace`
@@ -38,9 +39,47 @@ enum TrueColour {
 
     /// Installed recipe looks are baked into cubes at install time. This
     /// stamp says which engine and switch position baked them; when it
-    /// differs from `bakeStamp`, AppModel bakes them again.
+    /// differs from `bakeStamp`, AppModel bakes them again (see `Rebake`).
     static let bakedKey = "lumalook.trueColour.bakedWith"
-    static var bakeStamp: String { "tone2-" + (isOn ? "on" : "off") }
+    static var bakeStamp: String { stamp(on: isOn) }
+    static func stamp(on: Bool) -> String { "tone2-" + (on ? "on" : "off") }
+
+    /// The books for baking installed recipe looks again. The saved stamp
+    /// has to mean "every cube on disk was baked this way", and a batch
+    /// overwrites the cubes one by one, so:
+    ///
+    /// - `begin` clears the stamp before the first cube is overwritten. If
+    ///   the app closes half way, or the switch goes back to where it was,
+    ///   the cubes are still known to be a mix and get baked again.
+    /// - one batch bakes every cube with the switch position `begin`
+    ///   returned, whatever the switch does meanwhile.
+    /// - `finish` saves the stamp only for a whole batch that still matches
+    ///   the switch.
+    enum Rebake {
+        /// True while the cubes on disk are not known to match the switch.
+        static var isNeeded: Bool {
+            UserDefaults.standard.string(forKey: bakedKey) != bakeStamp
+        }
+
+        /// Call before the first cube is overwritten. Returns the switch
+        /// position to bake the whole batch with.
+        static func begin() -> Bool {
+            UserDefaults.standard.removeObject(forKey: bakedKey)
+            return isOn
+        }
+
+        /// Call when the batch ends: `bakedOn` is what `begin` returned and
+        /// `complete` says whether every cube was written. Returns true when
+        /// the switch moved during the batch, so another one is due.
+        @discardableResult
+        static func finish(bakedOn: Bool, complete: Bool) -> Bool {
+            let moved = isOn != bakedOn
+            if complete && !moved {
+                UserDefaults.standard.set(stamp(on: bakedOn), forKey: bakedKey)
+            }
+            return moved
+        }
+    }
 
     // MARK: Tone
 
@@ -96,6 +135,16 @@ enum TrueColour {
 
     private static func buildTone(contrast c: Double, saturation s: Double,
                                   brightness b: Double, protectSkin: Bool) -> Data {
+        buildCurveCube(saturation: s, protectSkin: protectSkin) {
+            curve($0, contrast: c, brightness: b)
+        }
+    }
+
+    /// A colour cube from a tone curve on gamma-encoded values. With
+    /// `protectSkin` the curve moves lightness only (hue and chroma hold);
+    /// without it, it runs on each channel, as CIColorControls did.
+    private static func buildCurveCube(saturation s: Double, protectSkin: Bool,
+                                       curve: (Double) -> Double) -> Data {
         let n = toneSize
         var out = [Float](repeating: 1, count: n * n * n * 4)
         // Lightness map, tabulated: grey L -> encoded -> curve -> back to L.
@@ -103,7 +152,7 @@ enum TrueColour {
         let lightness: [Double] = (0..<tableSize).map { i in
             let L = Double(i) / Double(tableSize - 1)
             let e = encode(L * L * L)
-            return cbrt(decode(curve(e, contrast: c, brightness: b)))
+            return cbrt(decode(curve(e)))
         }
         func mapL(_ L: Double) -> Double {
             let x = min(max(L, 0), 1) * Double(tableSize - 1)
@@ -125,19 +174,81 @@ enum TrueColour {
                         // Classic: CIColorControls' saturation, then the
                         // curve per channel, all on encoded values.
                         let w = 0.2125 * er + 0.7154 * eg + 0.0721 * eb
-                        rgb = (curve(w + s * (er - w), contrast: c, brightness: b),
-                               curve(w + s * (eg - w), contrast: c, brightness: b),
-                               curve(w + s * (eb - w), contrast: c, brightness: b))
+                        rgb = (curve(w + s * (er - w)),
+                               curve(w + s * (eg - w)),
+                               curve(w + s * (eb - w)))
                     }
-                    out[idx] = Float(rgb.0)
-                    out[idx + 1] = Float(rgb.1)
-                    out[idx + 2] = Float(rgb.2)
+                    // Clamped: rounding left a few lightness-only values a
+                    // hair above 1 (1.0000005).
+                    out[idx] = Float(min(max(rgb.0, 0), 1))
+                    out[idx + 1] = Float(min(max(rgb.1, 0), 1))
+                    out[idx + 2] = Float(min(max(rgb.2, 0), 1))
                     idx += 4
                 }
             }
         }
         return out.withUnsafeBufferPointer { Data(buffer: $0) }
     }
+
+    // MARK: Shadows and Highlights
+
+    /// The Shadows and Highlights sliders as one colour cube, or nil when
+    /// both are at rest. Each runs from -1 to 1.
+    ///
+    /// They used to be CIHighlightShadowAdjust, which works on each channel
+    /// in linear light around a small blur. Shadows pulled down took the
+    /// green and blue out of deep skin (77, 48, 36 became 65, 22, 0),
+    /// Highlights pulled down did a tenth of what Shadows did, and an
+    /// exported cube was up to 25 of 255 away from the picture, because a
+    /// blur has no meaning on a lattice of colours. As a curve on lightness
+    /// they hold hue, do the same at every size and bake exactly.
+    static func shadowHighlightFilter(shadows: Double, highlights: Double,
+                                      protectSkin: Bool = TrueColour.isOn) -> CIFilter? {
+        let s = min(max(shadows, -1), 1), h = min(max(highlights, -1), 1)
+        if abs(s) < 1e-4 && abs(h) < 1e-4 { return nil }
+        let key = ShadowKey(s: Int((s * 10_000).rounded()), h: Int((h * 10_000).rounded()),
+                            skin: protectSkin)
+        lock.lock()
+        if let data = shadowCache[key] { lock.unlock(); return cubeFilter(data, toneSize) }
+        lock.unlock()
+
+        let data = buildCurveCube(saturation: 1, protectSkin: protectSkin) {
+            shadowHighlightCurve($0, shadows: s, highlights: h)
+        }
+        lock.lock()
+        if shadowCache.count >= 32 { shadowCache.removeAll() }
+        shadowCache[key] = data
+        lock.unlock()
+        return cubeFilter(data, toneSize)
+    }
+
+    /// The curve on gamma-encoded values. Black, white and (for Highlights)
+    /// everything below mid grey stay where they are, and the curve never
+    /// turns back on itself at any setting.
+    ///
+    /// Shadows up follows what the slider always did to greys, to within
+    /// 1 of 255: a lift that peaks a third of the way up. Shadows down
+    /// deepens the bottom without flattening it. Highlights moves the top
+    /// half, most at three quarters, by the same amount up or down.
+    static func shadowHighlightCurve(_ e: Double, shadows s: Double, highlights h: Double) -> Double {
+        let x = min(max(e, 0), 1)
+        var y = x
+        if s > 0 {
+            y = x + 1.83 * s * x * (1 - x) * (1 - x)
+        } else if s < 0 {
+            let up = 1 - x
+            y = x * (1 + 0.9 * s * up * up * up)
+        }
+        y = min(max(y, 0), 1)
+        if h != 0, y > 0.5 {
+            let bump = sin(Double.pi * (y - 0.5) / 0.5)
+            y += 0.125 * h * bump * bump
+        }
+        return min(max(y, 0), 1)
+    }
+
+    private struct ShadowKey: Hashable { let s: Int, h: Int, skin: Bool }
+    private static var shadowCache: [ShadowKey: Data] = [:]
 
     /// Lightness-only tone: Oklab L through the curve, a and b scaled by
     /// saturation and otherwise kept, so hue and chroma hold. A colour that
@@ -171,8 +282,13 @@ enum TrueColour {
     /// on, exactly as authored when it is off. Colour LUTs get the skin
     /// guard; black-and-white LUTs get a shadow floor instead (the deepest
     /// tones keep their separation), since there is no skin colour to hold.
+    ///
+    /// Two kinds of cube are always left as authored: one this app made
+    /// itself (its tone already went through True Colour), and one with its
+    /// own input range (DOMAIN_MIN/MAX), where a point of the cube is not a
+    /// plain sRGB colour, so there is no "skin" to recognise by position.
     static func lutData(for lut: ParsedLUT) -> Data {
-        guard isOn, !lut.bakedByLumalook else { return lut.rgbaFloatData }
+        guard isOn, !lut.bakedByLumalook, !lut.hasCustomDomain else { return lut.rgbaFloatData }
         let key = contentKey(lut)
         guardLock.lock()
         if let cached = guardCache[key] { guardLock.unlock(); return cached }
@@ -189,18 +305,37 @@ enum TrueColour {
     private static var guardCache: [Int: Data] = [:]
 
     /// Skin is chosen by the INPUT colour: CIELAB hue 20 to 85 degrees
-    /// (feathered 5 to 100), chroma 4 to 70, lightness under 88. On those
-    /// colours the LUT's output is pulled back towards the input only where
-    /// it strays outside a tolerance, by 80%:
-    ///   hue    more than 6 degrees away
-    ///   chroma under 0.85x or over 1.2x the input
-    ///   depth  darker than 0.8x the input lightness in the shadows (L* < 45)
-    /// Inside the tolerance the look is untouched, so its character stays.
+    /// (feathered 5 to 100), chroma 4 to 70, lightness under 88. For those
+    /// colours the guard works out the nearest colour that is still fair to
+    /// the skin tone that went in:
+    ///   hue    within 6 degrees of it
+    ///   chroma between 0.85x and 1.2x of it
+    ///   depth  no darker than 0.8x its lightness in the shadows (L* < 45)
+    /// and moves the LUT's output 80% of the way there. Where the LUT is
+    /// already inside that tolerance the nearest fair colour is its own
+    /// output, so nothing moves and the look keeps its character.
+    ///
+    /// Three things keep the result smooth, so a face does not break into
+    /// patches (found by tools/skin-test/check_truecolour.swift):
+    /// 1. The move is a straight blend of colours (CIELAB a and b), not a turn
+    ///    of the hue angle. A turn has to pick a direction, and where a look
+    ///    sends skin to its opposite colour (a cold look turning warm shadows
+    ///    teal) the direction flipped between two neighbouring colours, one
+    ///    going green and the next red.
+    /// 2. The edge of the skin range is never sharper than 8 CIELAB units
+    ///    (`skinHue`).
+    /// 3. The correction is then spread a little over neighbouring colours
+    ///    (`smoothCorrection`).
+    /// What is left is a limit of judging skin by colour alone: the deepest
+    /// skin tones sit a few steps from neutral grey, so "protect this, leave
+    /// that" has to turn within those few steps. A guard that knows where the
+    /// people are in the picture would not have that limit.
     private static func guarded(_ lut: ParsedLUT) -> Data {
         let n = lut.size
         guard n >= 2, lut.rgbaFloatData.count >= n * n * n * 16 else { return lut.rgbaFloatData }
         var values = [Float](repeating: 0, count: n * n * n * 4)
         _ = values.withUnsafeMutableBytes { lut.rgbaFloatData.copyBytes(to: $0) }
+        let authored = values
         let strength = 0.8
         let mono = isMonochrome(values, n)
         var idx = 0
@@ -223,35 +358,138 @@ enum TrueColour {
                     }
                     let Cx = (x.1 * x.1 + x.2 * x.2).squareRoot()
                     let hx = atan2(x.2, x.1) * 180 / .pi
-                    let w = smoothstep(5, 20, hx) * (1 - smoothstep(85, 100, hx))
+                    let w = skinHue(hx, Cx)
                         * smoothstep(3, 8, Cx) * (1 - smoothstep(60, 75, Cx))
                         * (1 - smoothstep(85, 92, x.0)) * strength
-                    guard w > 0 else { continue }
+                    guard w > 0 else { continue }       // so Cx is above 3 from here on
                     let y = lab(Double(values[idx]), Double(values[idx + 1]), Double(values[idx + 2]))
                     let Cy = (y.1 * y.1 + y.2 * y.2).squareRoot()
                     let hy = atan2(y.2, y.1) * 180 / .pi
-                    // hue: keep the part of the shift inside +-6 degrees
                     var dh = (hy - hx + 180).truncatingRemainder(dividingBy: 360)
                     if dh < 0 { dh += 360 }
                     dh -= 180
-                    let dhOK = min(max(dh, -6), 6)
-                    let h = (hx + dhOK + (dh - dhOK) * (1 - w)) * .pi / 180
-                    // chroma: hold the ratio between 0.85x and 1.2x
-                    var C = Cy
-                    if Cx >= 1e-3 {
-                        let ratio = Cy / Cx
-                        let rOK = min(max(ratio, 0.85), 1.2)
-                        C = Cx * (rOK + (ratio - rOK) * (1 - w))
-                    }
+                    // The nearest fair colour. It may keep up to 6 degrees of
+                    // the LUT's hue shift, but that allowance fades out where
+                    // the LUT's hue says nothing reliable: when it lands
+                    // opposite the skin tone (the +6 or -6 choice would flip
+                    // there), and when the output is nearly grey (a grey has
+                    // no hue to keep).
+                    let ratio = Cy / Cx
+                    let kept = min(max(dh, -6), 6) * (1 - smoothstep(90, 180, abs(dh)))
+                        * smoothstep(0.1, 0.4, ratio)
+                    let hFair = (hx + kept) * .pi / 180
+                    let cFair = Cx * min(max(ratio, 0.85), 1.2)
+                    let a = y.1 + w * (cFair * cos(hFair) - y.1)
+                    let b = y.2 + w * (cFair * sin(hFair) - y.2)
                     // depth: in the shadows skin keeps 0.8x its lightness
                     var L = y.0
                     let floor = x.0 * 0.8
                     if L < floor { L += (floor - L) * w * (1 - smoothstep(35, 50, x.0)) }
-                    write(srgb(L, C * cos(h), C * sin(h)), into: &values, at: idx)
+                    write(srgb(L, a, b), into: &values, at: idx)
                 }
             }
         }
+        if !mono && guardSmoothing > 0 { smoothCorrection(&values, authored: authored, n) }
         return values.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
+    /// How much a colour's hue says "skin", 0 to 1. Fully inside 20 to 85
+    /// degrees. Outside, it fades over 15 degrees or over 8 CIELAB units of
+    /// colour distance from that range, whichever is gentler. The second
+    /// rule matters in dark, barely coloured tones, where 15 degrees is less
+    /// than one step of an 8-bit picture: with the angle alone the guard was
+    /// fully on for one colour and fully off for its neighbour.
+    private static func skinHue(_ hue: Double, _ chroma: Double) -> Double {
+        let byAngle = smoothstep(5, 20, hue) * (1 - smoothstep(85, 100, hue))
+        var off = abs(hue - 52.5)                   // degrees from the middle of the range
+        if off > 180 { off = 360 - off }
+        let outside = max(0, off - 32.5)            // degrees outside it
+        let distance = outside >= 90 ? chroma : chroma * sin(outside * .pi / 180)
+        return max(byAngle, 1 - smoothstep(0, 8, distance))
+    }
+
+    /// How far each correction is spread, as a share of the colour range
+    /// (0.012 is about 3 steps of 255). Chosen with the skin test on every
+    /// film look (tools/skin-test/gate.py): at 0.02 and above the spread
+    /// thins the correction at the edge of the skin range and four looks go
+    /// ashy on deep skin; at 0.012 none is worse than with no spread at all,
+    /// and the rough steps between neighbouring colours fall by about 85%.
+    /// Change it only with the gate.
+    static let guardSmoothing = 0.012
+
+    /// Spreads the guard's correction (guarded minus authored) over
+    /// neighbouring colours with a Gaussian along red, green and blue, then
+    /// adds it back. A colour whose whole neighbourhood needed no correction
+    /// is left exactly as authored, bit for bit.
+    ///
+    /// Some film cubes store values a little outside 0...1 (a blue of -0.07
+    /// in a deep orange). The guard writes colours a screen can show, so on
+    /// skin it has already brought those into range. That is not a
+    /// correction, and it is measured out here (`shown`) so it is never
+    /// passed on to the colours next door.
+    private static func smoothCorrection(_ values: inout [Float], authored: [Float], _ n: Int) {
+        func shown(_ x: Float) -> Float { min(max(x, 0), 1) }
+        let sigma = guardSmoothing * Double(n - 1)
+        let radius = max(1, Int(3 * sigma + 0.5))
+        var kernel = (-radius...radius).map { Float(exp(-0.5 * Double($0 * $0) / (sigma * sigma))) }
+        let total = kernel.reduce(0, +)
+        kernel = kernel.map { $0 / total }
+
+        let count = n * n * n
+        var delta = [Float](repeating: 0, count: count * 3)
+        for i in 0..<count {
+            delta[i * 3] = values[i * 4] - shown(authored[i * 4])
+            delta[i * 3 + 1] = values[i * 4 + 1] - shown(authored[i * 4 + 1])
+            delta[i * 3 + 2] = values[i * 4 + 2] - shown(authored[i * 4 + 2])
+        }
+
+        var line = [Float](repeating: 0, count: n * 3)
+        let strides = [1, n, n * n]                 // red, green, blue
+        for axis in 0..<3 {
+            let step = strides[axis]
+            let outer = strides[(axis + 1) % 3], inner = strides[(axis + 2) % 3]
+            for u in 0..<n {
+                for v in 0..<n {
+                    let start = u * outer + v * inner
+                    var busy = false
+                    for k in 0..<n {
+                        let p = (start + k * step) * 3
+                        line[k * 3] = delta[p]
+                        line[k * 3 + 1] = delta[p + 1]
+                        line[k * 3 + 2] = delta[p + 2]
+                        if delta[p] != 0 || delta[p + 1] != 0 || delta[p + 2] != 0 { busy = true }
+                    }
+                    guard busy else { continue }        // most of the cube is not skin
+                    for k in 0..<n {
+                        var r: Float = 0, g: Float = 0, b: Float = 0
+                        for t in -radius...radius {
+                            let j = min(max(k + t, 0), n - 1) * 3
+                            let weight = kernel[t + radius]
+                            r += weight * line[j]
+                            g += weight * line[j + 1]
+                            b += weight * line[j + 2]
+                        }
+                        let p = (start + k * step) * 3
+                        delta[p] = r
+                        delta[p + 1] = g
+                        delta[p + 2] = b
+                    }
+                }
+            }
+        }
+
+        for i in 0..<count {
+            let d = (delta[i * 3], delta[i * 3 + 1], delta[i * 3 + 2])
+            guard d.0 != 0 || d.1 != 0 || d.2 != 0 else {
+                values[i * 4] = authored[i * 4]
+                values[i * 4 + 1] = authored[i * 4 + 1]
+                values[i * 4 + 2] = authored[i * 4 + 2]
+                continue
+            }
+            values[i * 4] = shown(shown(authored[i * 4]) + d.0)
+            values[i * 4 + 1] = shown(shown(authored[i * 4 + 1]) + d.1)
+            values[i * 4 + 2] = shown(shown(authored[i * 4 + 2]) + d.2)
+        }
     }
 
     /// Black and white, or toned close to it: colourful inputs keep under
@@ -285,18 +523,127 @@ enum TrueColour {
         values[i + 2] = Float(min(max(rgb.2, 0), 1))
     }
 
-    /// A cheap fingerprint of a LUT: size, length and a stride of its values.
-    private static func contentKey(_ lut: ParsedLUT) -> Int {
+    /// A cheap fingerprint of a LUT: size, length and about 8,000 of its
+    /// values. The step is ODD on purpose. A cube holds four floats a colour
+    /// and its sides are usually a power of two (64), so an even step such as
+    /// 256 kept landing on the same channel of the same column: only red,
+    /// only where red-in is 0. Two LUTs that agreed there (any pair of plain
+    /// per-channel curves with the same black) shared one fingerprint, and
+    /// one look would have been shown with the other's guarded colours. An
+    /// odd step walks through every channel and across the whole cube.
+    static func contentKey(_ lut: ParsedLUT) -> Int {
         var hasher = Hasher()
         hasher.combine(lut.size)
         hasher.combine(lut.rgbaFloatData.count)
         lut.rgbaFloatData.withUnsafeBytes { raw in
             let floats = raw.bindMemory(to: Float.self)
-            let stride = max(1, floats.count / 4096)
+            let step = (floats.count / 8192) | 1
             var i = 0
-            while i < floats.count { hasher.combine(floats[i].bitPattern); i += stride }
+            while i < floats.count { hasher.combine(floats[i].bitPattern); i += step }
         }
         return hasher.finalize()
+    }
+
+    // MARK: Auto balance
+
+    /// What Auto reads from a picture.
+    enum Balance: Equatable {
+        /// Nothing in the picture is plainly neutral, so there is nothing to
+        /// go by. The picture is left alone.
+        case unreadable
+        /// Its neutrals are neutral. The picture is left alone.
+        case balanced
+        /// Its neutrals carry a cast: a mid grey in this picture looks like
+        /// this colour (as a screen shows it, 0 to 1). The White balance
+        /// that turns this colour grey takes the cast off.
+        case cast(r: Double, g: Double, b: Double)
+    }
+
+    /// How far from grey, in CIELAB units, a colour may be and still count
+    /// as a neutral that carries a cast.
+    static let balanceReach = 14.0
+    /// The most cast Auto takes off, in CIELAB units. A picture graded on
+    /// purpose (a teal sky behind a portrait) reads like a cast, so Auto
+    /// only ever nudges.
+    static let balanceMost = 5.0
+
+    /// Reads a picture's colour cast from the parts of it that are nearly
+    /// grey and cannot be skin. `rgba` is a small copy of the picture, 8 bits
+    /// a channel, as a screen shows it.
+    ///
+    /// Skin never has a say. The Auto this replaces averaged the whole frame,
+    /// so a portrait full of brown skin looked too warm to it: it cooled 26
+    /// of the 29 test portraits, 9 of them as far as the slider goes. Here
+    /// any colour that could be skin (CIELAB hue 5 to 100 degrees) is left
+    /// out, and warmth is never taken out of a picture: a warm light cannot
+    /// be told from skin by colour, so a cast that leans yellow keeps its
+    /// yellow, and one that leans red as well is left alone altogether.
+    ///
+    /// Three more things keep it from touching a good picture:
+    /// 1. At least 8% of the picture has to be such a neutral.
+    /// 2. At least 60% of those neutrals have to sit together (within 4
+    ///    units of each other). Foliage, neon and mixed light do not.
+    /// 3. A cast under 1.5 units is no cast, and no more than `balanceMost`
+    ///    is ever taken off: less, the nearer the reading is to limits 1
+    ///    and 2.
+    ///
+    /// What it cannot do is tell a grey wall under a coloured light from a
+    /// wall painted a pale colour. A portrait against a pale teal wall reads
+    /// as a cast and is nudged (2.6 units on the one such test portrait).
+    static func readBalance(rgba: [UInt8], width: Int, height: Int) -> Balance {
+        let count = width * height
+        guard count > 0, rgba.count >= count * 4 else { return .unreadable }
+        var na: [Double] = [], nb: [Double] = []
+        for i in 0..<count {
+            let r = Double(rgba[i * 4]) / 255, g = Double(rgba[i * 4 + 1]) / 255, b = Double(rgba[i * 4 + 2]) / 255
+            guard max(r, max(g, b)) < 0.98 else { continue }      // clipped: its colour is lost
+            let x = lab(r, g, b)
+            guard x.0 > 25, x.0 < 95 else { continue }
+            let chroma = (x.1 * x.1 + x.2 * x.2).squareRoot()
+            guard chroma < balanceReach else { continue }
+            let hue = atan2(x.2, x.1) * 180 / .pi
+            if chroma > 3, hue > 5, hue < 100 { continue }        // could be skin
+            na.append(x.1)
+            nb.append(x.2)
+        }
+        let share = Double(na.count) / Double(count)
+        guard share >= 0.08 else { return .unreadable }
+
+        // Where most of them sit: start at the middle one and close in.
+        var a = na.sorted()[na.count / 2], b = nb.sorted()[nb.count / 2]
+        func near(_ i: Int) -> Bool {
+            let da = na[i] - a, db = nb[i] - b
+            return da * da + db * db < 16
+        }
+        for _ in 0..<12 {
+            var sa = 0.0, sb = 0.0, n = 0.0
+            for i in na.indices where near(i) { sa += na[i]; sb += nb[i]; n += 1 }
+            guard n >= 5 else { break }
+            a = sa / n
+            b = sb / n
+        }
+        var together = 0
+        for i in na.indices where near(i) { together += 1 }
+        let agree = Double(together) / Double(na.count)
+        guard agree >= 0.6 else { return .unreadable }
+        // How sure the reading is: nothing at the two limits above, full once
+        // twice as much of the picture is neutral (16%) and three quarters of
+        // it sits together. A reading that only just counts moves the picture
+        // only just, so no picture sits on an edge where a pixel either way
+        // decides between nothing and a full correction.
+        let sure = min(1, (share - 0.08) / 0.08, (agree - 0.6) / 0.15)
+
+        let size = (a * a + b * b).squareRoot()
+        guard size >= 1.5 else { return .balanced }
+        let take = min(size - 1.5, balanceMost) * sure
+        var ta = a / size * take, tb = b / size * take
+        if tb > 0 {                 // yellow in the cast: taking it off would cool the picture
+            tb = 0
+            if ta > 0 { ta = 0 }    // and red with it: that is a warm light, or skin
+        }
+        guard (ta * ta + tb * tb).squareRoot() >= 0.5 else { return .balanced }
+        let grey = srgb(55, ta, tb)
+        return .cast(r: min(max(grey.0, 0), 1), g: min(max(grey.1, 0), 1), b: min(max(grey.2, 0), 1))
     }
 
     // MARK: Colour maths

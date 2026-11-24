@@ -72,6 +72,34 @@ final class LookState: @unchecked Sendable {
     }
 }
 
+/// Slot 1 of a look state on its own: what sits under every look (a log
+/// profile, or a conversion LUT, and how much of it). A thumbnail, a Compare
+/// cell or an exported cube has to carry it, or it is drawn from footage the
+/// big picture never shows.
+struct ConversionSlot: @unchecked Sendable {
+    var lut: ParsedLUT?
+    var opacity: Double = 1
+    var profile: LogProfile?
+
+    static let none = ConversionSlot()
+
+    /// Changes whenever the slot would draw differently.
+    var stamp: String {
+        "\(profile?.rawValue ?? "")-\(opacity)-\(lut?.size ?? 0)-\(lut?.rgbaFloatData.hashValue ?? 0)"
+    }
+}
+
+extension LookState {
+    var conversionSlot: ConversionSlot {
+        get { ConversionSlot(lut: conversionLUT, opacity: conversionOpacity, profile: conversionProfile) }
+        set {
+            conversionLUT = newValue.lut
+            conversionOpacity = newValue.opacity
+            conversionProfile = newValue.profile
+        }
+    }
+}
+
 final class LookPipeline: @unchecked Sendable {
     static let shared = LookPipeline()
 
@@ -140,7 +168,7 @@ final class LookPipeline: @unchecked Sendable {
     }
 
     /// Applies the full look (LUT or built-in recipe + user settings) to a frame,
-    /// blending with the original by `settings.intensity`.
+    /// blending with the frame as converted (slot 1) by `settings.intensity`.
     func apply(state: LookState, to image: CIImage, includeSplit: Bool = true) -> CIImage {
         let settings = state.settings
         var graded = image
@@ -154,6 +182,12 @@ final class LookPipeline: @unchecked Sendable {
         } else if let conversion = state.conversionLUT {
             graded = applyLUT(conversion, to: graded, opacity: state.conversionOpacity)
         }
+        // What Strength fades back to: the footage as converted. The Source
+        // slot has its own amount, and turning a look down must not undo it.
+        // Strength used to fade back to the frame as recorded, so log
+        // footage at the 75 a look opens with was a quarter flat log, on
+        // screen and in the saved file, with Source reading 100.
+        let converted = graded
 
         // Slot 2 — creative: imported LUT or built-in recipe.
         if let lut = state.lut {
@@ -165,11 +199,12 @@ final class LookPipeline: @unchecked Sendable {
 
         graded = applyUserAdjustments(settings, to: graded)
 
-        // Intensity blend: dissolve between original and graded frame.
+        // Intensity blend: dissolve between the converted frame and the
+        // graded one.
         let intensity = min(max(settings.intensity / 100.0, 0), 1)
         if intensity < 0.999 {
             let dissolve = CIFilter.dissolveTransition()
-            dissolve.inputImage = image
+            dissolve.inputImage = converted
             dissolve.targetImage = graded
             dissolve.time = Float(intensity)
             graded = dissolve.outputImage ?? graded
@@ -200,6 +235,25 @@ final class LookPipeline: @unchecked Sendable {
         return graded.cropped(to: image.extent)
     }
 
+    // MARK: - Sizes that follow the picture
+
+    /// The long edge the big picture on the look screen is graded at
+    /// (`gradedStill(maxDimension: 1400)`). Every blur, glow and grain size
+    /// below is written for a picture this big.
+    static let referenceEdge: CGFloat = 1400
+
+    /// How much bigger or smaller this picture is than the reference. Glow,
+    /// blur and grain used to be a fixed number of pixels, so the same
+    /// setting was about twice as strong on a 220 pixel look tile as on the
+    /// big picture, and nearly gone in a full-size export (Bloom at 50 moved
+    /// a tile by 14 of 255, the big picture by 3 and a 4032 pixel export by
+    /// 1). Sized against the picture, a tile is a small copy of the big
+    /// picture and the export is a large one.
+    static func sizeScale(_ extent: CGRect) -> CGFloat {
+        guard !extent.isInfinite, extent.width > 0, extent.height > 0 else { return 1 }
+        return max(extent.width, extent.height) / referenceEdge
+    }
+
     // MARK: - Lens simulation (medium transformation)
 
     /// Optical character of real glass, built from Core Image primitives.
@@ -210,6 +264,7 @@ final class LookPipeline: @unchecked Sendable {
         let extent = image.extent
         guard extent.width > 4, extent.height > 4, !extent.isInfinite else { return image }
         let center = CGPoint(x: extent.midX, y: extent.midY)
+        let scale = Self.sizeScale(extent)
 
         switch kind {
         case .none:
@@ -231,7 +286,7 @@ final class LookPipeline: @unchecked Sendable {
                 ])
             let streak = highlights.clampedToExtent()
                 .applyingFilter("CIMotionBlur", parameters: [
-                    kCIInputRadiusKey: 14 + extent.width * 0.045 * a,
+                    kCIInputRadiusKey: 14 * scale + extent.width * 0.045 * a,
                     kCIInputAngleKey: 0,
                 ])
                 .applyingFilter("CIColorMatrix", parameters: [
@@ -275,7 +330,7 @@ final class LookPipeline: @unchecked Sendable {
         case .diffusion:
             // Pro-mist: soft glow screened over the frame + a gentle lift.
             let glow = image.clampedToExtent()
-                .applyingGaussianBlur(sigma: 8 + 22 * a)
+                .applyingGaussianBlur(sigma: (8 + 22 * a) * scale)
                 .applyingFilter("CIColorMatrix", parameters: [
                     "inputRVector": CIVector(x: 0.75 * a, y: 0, z: 0, w: 0),
                     "inputGVector": CIVector(x: 0, y: 0.75 * a, z: 0, w: 0),
@@ -314,10 +369,15 @@ final class LookPipeline: @unchecked Sendable {
         case .plastic:
             // Toy camera: popped saturation, crushed corner falloff, and a
             // cheap-lens softness ramp toward the edges.
-            let popped = image.applyingFilter("CIColorControls", parameters: [
-                kCIInputSaturationKey: 1 + 0.35 * a,
-                kCIInputContrastKey: 1 + 0.12 * a,
-            ])
+            // Through True Colour like every other contrast in the app:
+            // CIColorControls works in linear light and crushed deep skin.
+            var popped = image
+            if let pop = TrueColour.toneFilter(contrast: Float(1 + 0.12 * a),
+                                               saturation: Float(1 + 0.35 * a),
+                                               brightness: 0) {
+                pop.setValue(image, forKey: kCIInputImageKey)
+                popped = pop.outputImage ?? image
+            }
             let radial = CIFilter(name: "CIRadialGradient", parameters: [
                 kCIInputCenterKey: CIVector(x: center.x, y: center.y),
                 "inputRadius0": min(extent.width, extent.height) * 0.30,
@@ -328,7 +388,7 @@ final class LookPipeline: @unchecked Sendable {
             let soft = popped.clampedToExtent()
                 .applyingFilter("CIMaskedVariableBlur", parameters: [
                     "inputMask": radial.cropped(to: extent),
-                    kCIInputRadiusKey: 9 * a,
+                    kCIInputRadiusKey: 9 * a * scale,
                 ])
                 .cropped(to: extent)
             return soft.applyingFilter("CIVignette", parameters: [
@@ -359,7 +419,7 @@ final class LookPipeline: @unchecked Sendable {
             return image.clampedToExtent()
                 .applyingFilter("CIMaskedVariableBlur", parameters: [
                     "inputMask": mask,
-                    kCIInputRadiusKey: 14 * a,
+                    kCIInputRadiusKey: 14 * a * scale,
                 ])
                 .cropped(to: extent)
         }
@@ -432,9 +492,125 @@ final class LookPipeline: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
+    /// The Warmth and Tint that turn `sample` grey: what the White balance
+    /// picker sets when a point that should be neutral is tapped. `sample`
+    /// is a colour as a screen shows it, 0 to 1.
+    ///
+    /// It tries the filter itself on that one colour and closes in on grey,
+    /// so the answer is right whatever the filter does with its numbers. The
+    /// rule it replaces guessed from the colour's red, green and blue: it
+    /// took out under half of a blue or yellow cast, and it turned Tint the
+    /// wrong way, so tapping a grey that looked green made it greener.
+    ///
+    /// The sliders reach about 2000 K either way. A cast beyond that is
+    /// taken as far as `limit` allows.
+    func neutralising(_ sample: (r: Double, g: Double, b: Double),
+                      limit: Double = 80) -> (warmth: Double, tint: Double) {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let colour = CIColor(red: CGFloat(min(max(sample.r, 0), 1)),
+                                   green: CGFloat(min(max(sample.g, 0), 1)),
+                                   blue: CGFloat(min(max(sample.b, 0), 1)), colorSpace: space) else { return (0, 0) }
+        let pixel = CGRect(x: 0, y: 0, width: 1, height: 1)
+        let patch = CIImage(color: colour).cropped(to: pixel)
+
+        /// How far from grey the colour is with this Warmth and Tint: red
+        /// against green, and blue against green.
+        func cast(_ warmth: Double, _ tint: Double) -> (red: Double, blue: Double) {
+            let shifted = Self.shiftWhite(patch, towards: 6500 - CGFloat(warmth) * 20, tint: CGFloat(tint))
+            var px = [Float](repeating: 0, count: 4)
+            px.withUnsafeMutableBytes { raw in
+                context.render(shifted, toBitmap: raw.baseAddress!, rowBytes: 16, bounds: pixel,
+                               format: .RGBAf, colorSpace: space)
+            }
+            return (Double(px[0] - px[1]), Double(px[2] - px[1]))
+        }
+
+        var warmth = 0.0, tint = 0.0
+        let step = 2.0
+        for _ in 0..<8 {
+            let now = cast(warmth, tint)
+            if abs(now.red) < 0.001 && abs(now.blue) < 0.001 { break }
+            // How the cast moves with each slider, from one small step of each.
+            let w = cast(warmth + step, tint), t = cast(warmth, tint + step)
+            let a = (w.red - now.red) / step, b = (t.red - now.red) / step
+            let c = (w.blue - now.blue) / step, d = (t.blue - now.blue) / step
+            let det = a * d - b * c
+            guard abs(det) > 1e-10 else { break }
+            let nextWarmth = min(max(warmth - (d * now.red - b * now.blue) / det, -limit), limit)
+            let nextTint = min(max(tint - (a * now.blue - c * now.red) / det, -limit), limit)
+            if abs(nextWarmth - warmth) < 0.05 && abs(nextTint - tint) < 0.05 { break }
+            warmth = nextWarmth
+            tint = nextTint
+        }
+        return (warmth.rounded(), tint.rounded())
+    }
+
+    // MARK: - The picture under the look
+
+    /// The picture as the White balance meets it: through the conversion
+    /// slot and nothing else. Log footage is flat and nearly grey until it
+    /// is converted, so anything that reads colour from a frame has to read
+    /// it from this, not from the frame itself.
+    func asShot(_ source: CIImage, under slot: ConversionSlot = .none) -> CIImage {
+        if let profile = slot.profile {
+            return LogNormalizer.apply(profile, to: source, opacity: slot.opacity)
+        }
+        if let conversion = slot.lut {
+            return applyLUT(conversion, to: source, opacity: slot.opacity)
+        }
+        return source
+    }
+
+    // MARK: - Auto
+
+    /// The long edge of the small copy Auto reads. A cast is the same on a
+    /// small copy as on the picture, and a small copy has no sensor noise
+    /// left in it to blur what is grey and what is not.
+    static let balanceEdge: CGFloat = 96
+
+    /// What Auto reads from a picture: whether its neutrals carry a colour
+    /// cast, and which. The reading itself is `TrueColour.readBalance`; this
+    /// makes the small copy it reads from.
+    func readBalance(of source: CIImage, under slot: ConversionSlot = .none) -> TrueColour.Balance {
+        let extent = source.extent
+        guard !extent.isInfinite, extent.width >= 8, extent.height >= 8,
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return .unreadable }
+        let scale = min(1, Self.balanceEdge / max(extent.width, extent.height))
+        let small = asShot(source, under: slot).applyingFilter("CILanczosScaleTransform", parameters: [
+            kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1.0])
+        // Whole pixels inside the copy, so no edge pixel is part picture and
+        // part nothing.
+        let e = small.extent
+        let bounds = CGRect(x: e.minX.rounded(.up), y: e.minY.rounded(.up),
+                            width: e.maxX.rounded(.down) - e.minX.rounded(.up),
+                            height: e.maxY.rounded(.down) - e.minY.rounded(.up))
+        let width = Int(bounds.width), height = Int(bounds.height)
+        guard width >= 4, height >= 4 else { return .unreadable }
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        rgba.withUnsafeMutableBytes { raw in
+            context.render(small, toBitmap: raw.baseAddress!, rowBytes: width * 4, bounds: bounds,
+                           format: .RGBA8, colorSpace: space)
+        }
+        return TrueColour.readBalance(rgba: rgba, width: width, height: height)
+    }
+
+    /// The Warmth and Tint Auto sets for a picture, or nil when it leaves
+    /// the picture alone (its neutrals are neutral, or it has none to go
+    /// by). Auto takes a colour cast off and does nothing else: it reads the
+    /// cast where the picture is nearly grey and cannot be skin, and never
+    /// takes warmth out.
+    func autoBalance(of source: CIImage, under slot: ConversionSlot = .none) -> (warmth: Double, tint: Double)? {
+        guard case .cast(let r, let g, let b) = readBalance(of: source, under: slot) else { return nil }
+        let balance = neutralising((r: r, g: g, b: b))
+        return balance.warmth == 0 && balance.tint == 0 ? nil : balance
+    }
+
     // MARK: - Built-in look recipes
 
-    func applyRecipe(_ recipe: LookRecipe, to image: CIImage) -> CIImage {
+    /// `trueColour` is the switch position: the live one unless a caller
+    /// baking a batch of cubes holds it still (PackInstaller.cubeText).
+    func applyRecipe(_ recipe: LookRecipe, to image: CIImage,
+                     trueColour: Bool = TrueColour.isOn) -> CIImage {
         var output = image
 
         if recipe.temperature != 6500 || recipe.tint != 0 {
@@ -448,7 +624,8 @@ final class LookPipeline: @unchecked Sendable {
         // its brightness greyed it. See TrueColour.swift.
         if let tone = TrueColour.toneFilter(contrast: recipe.contrast,
                                             saturation: recipe.saturation,
-                                            brightness: recipe.brightness) {
+                                            brightness: recipe.brightness,
+                                            protectSkin: trueColour) {
             tone.setValue(output, forKey: kCIInputImageKey)
             output = tone.outputImage ?? output
         }
@@ -457,7 +634,7 @@ final class LookPipeline: @unchecked Sendable {
             let bloom = CIFilter.bloom()
             bloom.inputImage = output.clampedToExtent()
             bloom.intensity = recipe.bloom
-            bloom.radius = 8
+            bloom.radius = Float(8 * Self.sizeScale(image.extent))
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -514,7 +691,7 @@ final class LookPipeline: @unchecked Sendable {
             let bloom = CIFilter.bloom()
             bloom.inputImage = output.clampedToExtent()
             bloom.intensity = Float(settings.bloom / 100.0)
-            bloom.radius = 10
+            bloom.radius = Float(10 * Self.sizeScale(image.extent))
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -526,27 +703,26 @@ final class LookPipeline: @unchecked Sendable {
             output = vignette.outputImage ?? output
         }
 
-        // Highlights / shadows: shadow lift-crush via highlightShadowAdjust,
-        // highlight energy via a gentle tone-curve shoulder.
-        if settings.shadows != 0 || settings.highlights < 0 {
-            let hs = CIFilter.highlightShadowAdjust()
-            hs.inputImage = output
-            hs.shadowAmount = Float(settings.shadows / 100.0)
-            // Negative highlights = recovery (industry convention).
-            hs.highlightAmount = Float(1.0 + min(0, settings.highlights) / 100.0 * 0.7)
-            hs.radius = 1.5
-            output = hs.outputImage ?? output
+        // Shadows and Highlights: one curve on lightness (TrueColour), so
+        // deep skin keeps its colour when shadows are pulled down, the two
+        // sliders are as strong as each other, and an exported cube carries
+        // them exactly. They used to be CIHighlightShadowAdjust.
+        if settings.shadows != 0 || settings.highlights != 0,
+           let curve = TrueColour.shadowHighlightFilter(shadows: settings.shadows / 100.0,
+                                                        highlights: settings.highlights / 100.0) {
+            curve.setValue(output, forKey: kCIInputImageKey)
+            output = curve.outputImage ?? output
         }
 
-        if settings.highlights > 0 || settings.fade > 0 {
+        // Fade: lifted blacks, the matte-film look.
+        if settings.fade > 0 {
             let curve = CIFilter.toneCurve()
             curve.inputImage = output
             let lift = CGFloat(settings.fade / 100.0 * 0.12)
-            let shoulder = CGFloat(0.8 + settings.highlights / 100.0 * 0.13)
             curve.point0 = CGPoint(x: 0, y: lift)
             curve.point1 = CGPoint(x: 0.25, y: 0.25 + lift * 0.5)
             curve.point2 = CGPoint(x: 0.5, y: 0.5)
-            curve.point3 = CGPoint(x: 0.8, y: min(0.98, shoulder))
+            curve.point3 = CGPoint(x: 0.8, y: 0.8)
             curve.point4 = CGPoint(x: 1, y: 1)
             output = curve.outputImage ?? output
         }
@@ -555,6 +731,8 @@ final class LookPipeline: @unchecked Sendable {
             let sharpen = CIFilter.sharpenLuminance()
             sharpen.inputImage = output
             sharpen.sharpness = Float(settings.sharpness / 100.0 * 0.9)
+            // 1.69 is the filter's own radius, kept for the big picture.
+            sharpen.radius = Float(max(0.5, 1.69 * Self.sizeScale(image.extent)))
             output = sharpen.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -583,7 +761,16 @@ final class LookPipeline: @unchecked Sendable {
         threshold.gVector = CIVector(x: 0, y: gain, z: 0, w: 0)
         threshold.bVector = CIVector(x: 0, y: 0, z: gain, w: 0)
         threshold.biasVector = CIVector(x: -1.35, y: -1.35, z: -1.35, w: 0)
-        guard let highlights = threshold.outputImage else { return image }
+        // Everything below the threshold comes out of that matrix NEGATIVE.
+        // Unclamped, the glow below took red out of the whole frame instead
+        // of adding it around the highlights: Halation at 50 turned mid grey
+        // into teal (0, 91, 120) and deep skin into black. The mask is
+        // highlights only, so it stops at zero.
+        guard let highlights = threshold.outputImage?
+            .applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+            ]) else { return image }
 
         // 2. Wide soft blur, scaled with image size so it looks the same in
         //    thumbnails and 4K exports.
@@ -611,20 +798,43 @@ final class LookPipeline: @unchecked Sendable {
     /// Film grain: luminance-only noise, softened a touch, overlay-blended
     /// so it lives in the midtones like silver halide — not RGB confetti.
     func applyGrain(strength: Double, to image: CIImage) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
+        guard let noise = CIFilter.randomGenerator().outputImage,
+              !image.extent.isInfinite else { return image }
+
+        // A grain is 1.6 pixels across on the big picture (slightly coarser
+        // than 1:1, so it reads as grain, not sensor noise) and keeps that
+        // share of the frame at every size. It cannot be finer than a pixel:
+        // on a small tile each pixel holds several grains, which average
+        // out, so there the grain fades instead of staying pixel-sharp.
+        let cell = 1.6 * Self.sizeScale(image.extent)
+        let size = max(1, cell)
+
+        // The generator's alpha is noise too, and a colour matrix divides
+        // by alpha before it multiplies. Left as it was, half the grains came
+        // out brighter than the brightest grain asked for and a tenth came
+        // out white: Grain at 50 lifted mid grey from 128 to 139 and
+        // sprinkled it with white specks. With alpha at 1 the noise is what
+        // the numbers below say: even, and centred on mid grey.
+        let reach = image.extent.insetBy(dx: -4 * size, dy: -4 * size)
+        let even = noise.transformed(by: CGAffineTransform(scaleX: size, y: size))
+            .cropped(to: reach)
+            .settingAlphaOne(in: reach)
 
         // Monochrome the noise and centre it on mid-grey for overlay blend.
+        // At 0.28 the even grain was too faint to see: what people saw as
+        // grain before was the specks. At 0.62, Grain at 50 moves mid grey
+        // by about 6 of 255 either way, a film grain that can be seen on a
+        // phone and still brightens nothing.
         let mono = CIFilter.colorMatrix()
-        // Slightly coarser than 1:1 pixels so it reads as grain, not sensor noise.
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: 1.6, y: 1.6))
-        let amp = CGFloat(0.28 * strength)
+        mono.inputImage = even
+        let amp = CGFloat(0.62 * strength) * min(1, cell)
         mono.rVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.gVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.bVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
         mono.biasVector = CIVector(x: 0.5 - amp / 2, y: 0.5 - amp / 2, z: 0.5 - amp / 2, w: 1)
         guard let grainField = mono.outputImage?
-            .applyingGaussianBlur(sigma: 0.4)
+            .applyingGaussianBlur(sigma: 0.25 * size)
             .cropped(to: image.extent) else { return image }
 
         let overlay = CIFilter.overlayBlendMode()

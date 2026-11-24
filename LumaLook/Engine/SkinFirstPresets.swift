@@ -82,6 +82,32 @@ enum SkinFirstPreset: String, CaseIterable, Identifiable {
         return s
     }
 
+    // MARK: Wearing a preset, and taking it off
+
+    /// The preset this grade is wearing, if any.
+    ///
+    /// A preset is known by the three things nothing else on the look screen
+    /// sets: its curve, its HSL bands and its split tone. Strength, the film
+    /// tools, and an Auto or white-balance change made on top of it do not
+    /// hide it. Once the person reshapes the curve, the bands, the split tone
+    /// or the wheels by hand it is their own grade and no longer a preset.
+    static func worn(by settings: LookSettings) -> SkinFirstPreset? {
+        allCases.first { settings.wears($0.settings) }
+    }
+
+    /// The grade with its preset taken off: every colour adjustment back to
+    /// neutral, and the preset's full strength back to the strength a look
+    /// opens at. Grain, bloom, halation, vignette, sharpening and the lens
+    /// are the person's own and stay. A grade wearing no preset comes back
+    /// unchanged.
+    ///
+    /// The rule is `LookSettings.takingOff`, shared with the looks saved
+    /// under Mine, which replace the whole grade in the same way.
+    static func takenOff(_ settings: LookSettings) -> LookSettings {
+        guard let preset = worn(by: settings) else { return settings }
+        return settings.takingOff(preset.settings)
+    }
+
     /// One-screen guidance shown in the Skin First tip card.
     static let guidance: [(String, String)] = [
         ("Expose brighter than the meter says", "Deep skin is usually under-exposed. Aim for skin at ~40–60% on the histogram; don't let auto-exposure darken the face."),

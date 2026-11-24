@@ -71,49 +71,79 @@ def smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
+GUARD_SMOOTHING = 0.012     # TrueColour.guardSmoothing
+
+
+def skin_hue(hue, chroma):
+    """How much a colour's hue says "skin", 0 to 1 (TrueColour.skinHue). Fully
+    inside 20 to 85 degrees; outside it fades over 15 degrees or over 8 Lab
+    units of colour distance from that range, whichever is gentler."""
+    by_angle = smoothstep(5, 20, hue) * (1 - smoothstep(85, 100, hue))
+    off = np.abs(hue - 52.5)
+    off = np.where(off > 180, 360 - off, off)
+    outside = np.maximum(0, off - 32.5)
+    distance = np.where(outside >= 90, chroma, chroma * np.sin(np.radians(np.minimum(outside, 90))))
+    return np.maximum(by_angle, 1 - smoothstep(0, 8, distance))
+
+
 def skin_guard(cube, strength=0.8):
-    """Return a guarded copy of `cube` ([b][g][r] -> rgb, any size).
+    """Return a guarded copy of `cube` ([b][g][r] -> rgb, any size). A copy of
+    TrueColour.guarded in the app; check_look.py --self-test compares the two.
 
     Skin is selected by the INPUT colour: Lab hue 20 to 85 degrees (feathered),
-    chroma 4 to 70, lightness below 88. On those colours the look's output is
-    pulled back towards the input wherever it strays outside a tolerance:
-      hue    more than 6 degrees away
-      chroma below 0.85x or above 1.2x the input
-      depth  darker than 0.8x the input lightness in the shadows (L* < 45)
-    Inside the tolerance the look is untouched, so its character stays."""
+    chroma 4 to 70, lightness below 88. For those colours the guard works out
+    the nearest colour that is still fair to the skin tone that went in:
+      hue    within 6 degrees of it
+      chroma between 0.85x and 1.2x of it
+      depth  no darker than 0.8x its lightness in the shadows (L* < 45)
+    and moves the look's output 80% of the way there, as a straight blend of
+    colours (Lab a and b). Inside the tolerance the nearest fair colour is the
+    look's own output, so nothing moves. The correction is then spread over
+    neighbouring colours, so two colours side by side are never pulled apart."""
+    from scipy.ndimage import gaussian_filter1d
     n = cube.shape[0]
     x = S.identity_cube(n).reshape(-1, 3)
     y = cube.reshape(-1, 3)
-    lx, ly = S.srgb_to_lab(x), S.srgb_to_lab(y)
+    lx, ly = S.srgb_to_lab(x).astype(np.float64), S.srgb_to_lab(y).astype(np.float64)
     Cx, Cy = np.hypot(lx[:, 1], lx[:, 2]), np.hypot(ly[:, 1], ly[:, 2])
     hx = np.degrees(np.arctan2(lx[:, 2], lx[:, 1]))
     hy = np.degrees(np.arctan2(ly[:, 2], ly[:, 1]))
-    w = (smoothstep(5, 20, hx) * (1 - smoothstep(85, 100, hx))
+    w = (skin_hue(hx, Cx)
          * smoothstep(3, 8, Cx) * (1 - smoothstep(60, 75, Cx))
          * (1 - smoothstep(85, 92, lx[:, 0])))
     w = w * strength
-    # hue: keep the part of the shift inside +-6 degrees
+    # the nearest fair colour: up to 6 degrees of the look's hue shift, less
+    # where its hue says nothing reliable (opposite the skin tone, or grey)
     dh = (hy - hx + 180) % 360 - 180
-    dh_ok = np.clip(dh, -6, 6)
-    h_new = hx + dh_ok + (dh - dh_ok) * (1 - w)
-    # chroma: clamp the ratio, softly
     ratio = Cy / np.maximum(Cx, 1e-3)
-    r_ok = np.clip(ratio, 0.85, 1.2)
-    C_new = Cx * (r_ok + (ratio - r_ok) * (1 - w))
-    C_new = np.where(Cx < 1e-3, Cy, C_new)
+    kept = np.clip(dh, -6, 6) * (1 - smoothstep(90, 180, np.abs(dh))) * smoothstep(0.1, 0.4, ratio)
+    h_fair = np.radians(hx + kept)
+    C_fair = Cx * np.clip(ratio, 0.85, 1.2)
+    a = ly[:, 1] + w * (C_fair * np.cos(h_fair) - ly[:, 1])
+    b = ly[:, 2] + w * (C_fair * np.sin(h_fair) - ly[:, 2])
     # depth: in the shadows do not let skin drop below 0.8x its lightness
     floor = lx[:, 0] * 0.8
     shadow = 1 - smoothstep(35, 50, lx[:, 0])
     L_new = np.where(ly[:, 0] < floor, ly[:, 0] + (floor - ly[:, 0]) * w * shadow, ly[:, 0])
-    a = C_new * np.cos(np.radians(h_new))
-    b = C_new * np.sin(np.radians(h_new))
-    out = S.lab_to_srgb(np.stack([L_new, a, b], -1).astype(np.float32))
-    return out.reshape(cube.shape).astype(np.float32)
+    out = np.clip(S.lab_to_srgb(np.stack([L_new, a, b], -1).astype(np.float32)), 0, 1)
+    if GUARD_SMOOTHING <= 0:
+        return np.where((w > 0)[:, None], out, y).reshape(cube.shape).astype(np.float32)
+    # Spread the correction over neighbouring colours. A look may store values
+    # a little outside 0..1; bringing those into range is not a correction,
+    # so the correction is measured from the colour as a screen shows it.
+    shown = np.clip(y, 0, 1)
+    delta = (np.where((w > 0)[:, None], out, shown) - shown).reshape(cube.shape).astype(np.float64)
+    for axis in range(3):
+        delta = gaussian_filter1d(delta, GUARD_SMOOTHING * (n - 1), axis=axis, mode="nearest", truncate=3.0)
+    return np.where(np.any(delta != 0, -1, keepdims=True),
+                    np.clip(shown.reshape(cube.shape) + delta, 0, 1), cube).astype(np.float32)
 
 
-def resample(cube, n):
+def resample(cube, n, clip=True):
+    """`cube` on an n-point lattice. clip=False keeps values outside 0..1, as
+    the app's own densify does (LUTDensifier)."""
     g = S.identity_cube(n)
-    return S.sample_tetra(cube, g).astype(np.float32)
+    return S.sample_tetra(cube, g, clip=clip).astype(np.float32)
 
 
 # ---------------------------------------------------------------- measuring
@@ -301,6 +331,8 @@ if __name__ == "__main__":
         ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text()) if l["recipe"]]
     elif ONLY:
         ids = [i for i in ids if any(s in i for s in ONLY)]
+    cubes = {l["id"]: l["cube"] for l in json.loads((HERE / "looks.json").read_text())}
+    ids = [i for i in ids if cubes[i] or S.before_bake(i).exists()]   # recipes added since have no "before" to fix
     results = {}
     if ONLY and (RENDER / "fixes.json").exists():
         results = json.loads((RENDER / "fixes.json").read_text())

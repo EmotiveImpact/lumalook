@@ -26,6 +26,10 @@ enum GradeCubeBaker {
         // were dropped here, so an exported cube didn't match what the user
         // saw. Carry them so cube == preview.
         clean.conversionLUT = state.conversionLUT
+        // The built-in log profiles share that slot and were left out, so a
+        // cube made over Apple Log or HLG footage lacked the conversion the
+        // preview showed.
+        clean.conversionProfile = state.conversionProfile
         clean.conversionOpacity = state.conversionOpacity
         clean.lutOpacity = state.lutOpacity
         clean.lutBlend = state.lutBlend
@@ -34,6 +38,7 @@ enum GradeCubeBaker {
         settings.halation = 0
         settings.bloom = 0
         settings.vignette = 0
+        settings.sharpness = 0                       // spatial: sharpens one lattice colour against the next
         settings.lensKind = LensKind.none.rawValue   // spatial: corrupts lattices
         clean.settings = settings
         clean.splitFraction = nil
@@ -75,7 +80,7 @@ enum GradeCubeBaker {
         var lines = [String]()
         lines.reserveCapacity(n * n * n + 6)
         lines.append("TITLE \"\(title)\"")
-        lines.append("# Exported from Lumalook — the app's exact grade, colour only.")
+        lines.append(LUTParser.exportedHeader)
         lines.append("LUT_3D_SIZE \(n)")
         lines.append("DOMAIN_MIN 0.0 0.0 0.0")
         lines.append("DOMAIN_MAX 1.0 1.0 1.0")

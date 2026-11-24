@@ -96,7 +96,7 @@ struct CurvePoint: Codable, Equatable {
 }
 
 /// Per-channel tone curves. An empty channel means identity (no remap).
-/// Applied as a single separable CIColorCube: channel(master(v)).
+/// Applied as a single separable colour cube: channel(master(v)).
 struct CurveSet: Codable, Equatable {
     var master: [CurvePoint] = []
     var red: [CurvePoint] = []
@@ -125,7 +125,7 @@ struct ColorWheels: Codable, Equatable {
 
 /// Eight-band HSL secondary (Lightroom-style): per band a hue shift,
 /// saturation and luminance offset in −1…1. Identity = all zero. Hue-
-/// dependent, so it bakes a small 3-D CIColorCube of its own.
+/// dependent, so it bakes a small 3-D colour cube of its own.
 struct HSLBands: Codable, Equatable {
     /// red, orange, yellow, green, aqua, blue, purple, magenta.
     static let names = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
@@ -226,6 +226,77 @@ struct LookSettings: Codable, Equatable {
         wheels = try c.decodeIfPresent(ColorWheels.self, forKey: .wheels)
         hsl = try c.decodeIfPresent(HSLBands.self, forKey: .hsl)
         splitTone = try c.decodeIfPresent(SplitTone.self, forKey: .splitTone)
+    }
+}
+
+// MARK: Wearing a whole grade, and taking it off
+
+extension LookSettings {
+    /// The colour sliders a whole grade sets. Grain, bloom, halation,
+    /// vignette, sharpening and the lens are film tools: each shows its own
+    /// value on the look screen, and they stay the person's own.
+    private var colourSliders: [Double] {
+        [exposure, contrast, highlights, shadows, saturation, warmth, tint, fade]
+    }
+
+    /// A curve, colour wheels, HSL bands or a split tone: the parts of a
+    /// grade that no slider on the look screen sets.
+    private var hasShape: Bool {
+        curves != nil || wheels != nil || hsl != nil || splitTone != nil
+    }
+
+    /// True while this grade still carries the colour grade that `whole` put
+    /// on. `whole` is the settings of a look that replaces the entire grade
+    /// when it is picked: a Skin first preset, or a look saved under Mine.
+    ///
+    /// A grade with a shape is known by its shape, so Strength, the film
+    /// tools and a white-balance change made on top do not hide it; once the
+    /// shape is redrawn by hand it is the person's own grade. A grade made of
+    /// sliders alone is worn only while those sliders are untouched.
+    func wears(_ whole: LookSettings) -> Bool {
+        if whole.hasShape {
+            return curves == whole.curves && wheels == whole.wheels
+                && hsl == whole.hsl && splitTone == whole.splitTone
+        }
+        return !hasShape && whole.colourSliders != LookSettings().colourSliders
+            && colourSliders == whole.colourSliders
+    }
+
+    /// This grade with `whole` taken off: every colour adjustment back to
+    /// neutral, and the strength `whole` set back to the strength a look
+    /// opens at. The film tools and the lens stay. A grade that is not
+    /// wearing `whole` comes back unchanged.
+    ///
+    /// A whole grade is picked like a look, so the look picked next has to
+    /// take its place (`AppModel.select(look:)`). Until 24 Nov 2026 it stayed
+    /// on underneath, and every look picked after Rich Cinema came out teal
+    /// and milky while its thumbnail was right.
+    func takingOff(_ whole: LookSettings) -> LookSettings {
+        guard wears(whole) else { return self }
+        let fresh = LookSettings()
+        var plain = self
+        plain.exposure = fresh.exposure
+        plain.contrast = fresh.contrast
+        plain.highlights = fresh.highlights
+        plain.shadows = fresh.shadows
+        plain.saturation = fresh.saturation
+        plain.warmth = fresh.warmth
+        plain.tint = fresh.tint
+        plain.fade = fresh.fade
+        plain.curves = fresh.curves
+        plain.wheels = fresh.wheels
+        plain.hsl = fresh.hsl
+        plain.splitTone = fresh.splitTone
+        if intensity == whole.intensity { plain.intensity = fresh.intensity }
+        return plain
+    }
+
+    /// True when any colour adjustment differs from `base` (the whole grade
+    /// being worn, or a new grade): what the More tile lights up for.
+    func isAdjusted(from base: LookSettings) -> Bool {
+        colourSliders != base.colourSliders || sharpness != base.sharpness
+            || curves != base.curves || wheels != base.wheels
+            || hsl != base.hsl || splitTone != base.splitTone
     }
 }
 

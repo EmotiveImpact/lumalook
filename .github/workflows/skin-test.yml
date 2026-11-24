@@ -1,22 +1,58 @@
-# Skin test: the Mac half of tools/skin-test.
+# Skin test: the check every look and the True Colour engine go through.
 #
-# Core Image only exists on Apple platforms, so this job bakes every look
-# through the app's own True Colour engine on real Core Image (TrueColour.swift
-# compiled in, the same code path as LookPipeline) into small colour cubes,
-# and fetches the licensed test portraits listed in
-# tools/skin-test/candidates.txt. It commits the results back to the branch
-# (tools/skin-test/out) so the rest of the test, which is plain Python, can
-# run anywhere. It only runs when the skin-test inputs change.
+# 1. bake (Mac). Core Image only exists on Apple platforms, so this job first
+#    runs the engine's own checks (tools/skin-test/check_truecolour.swift,
+#    compiled together with the app's TrueColour.swift, LUTParser.swift and
+#    LUTDensifier.swift) and the checks on the grade that sits on top of a
+#    look (tools/skin-test/check_grade.swift, compiled with the app's own
+#    LookPipeline.swift: Skin first presets, curves, wheels, HSL bands and
+#    split tone). It also writes pictures of the tools on the look screen
+#    made by this commit's engine and by master's (sheet_pictures.swift),
+#    to look at side by side, and of Auto on every test portrait
+#    (auto_pictures.swift). Then it bakes every look through that same engine on
+#    real Core Image into small colour cubes, and fetches the licensed test
+#    portraits listed in tools/skin-test/candidates.txt. It hands the
+#    results to the gate and commits them back to the branch
+#    (tools/skin-test/out), where the tools that need no Mac read them.
+# 2. gate (Linux). Judges every look on the test portraits and the Monk
+#    skin-tone chart (tools/skin-test/gate.py) and fails if a look needs
+#    rework, got worse than tools/skin-test/baseline.json, or is new and not
+#    skin-true at the app's 75% default. Then it checks the gate itself on
+#    two pretend new looks (selftest_gate.py) and that check_look.py still
+#    matches the app.
+#
+# The gate always judges the commit this run is for, with the bake made from
+# that same commit, so starting an old run again cannot read a newer branch.
+#
+# It runs when a look, a film LUT, the engine, the grade on top of a look or
+# the test itself changes. A change elsewhere in the app cannot change a
+# bake; the rules that stop such a change going around True Colour
+# (source_rules.py) run in the Build workflow, on every pull request.
 name: Skin test bake
 
 on:
   push:
     branches: ['claude/**']
     paths:
-      - 'tools/skin-test/bake_recipes.swift'
-      - 'tools/skin-test/bake_truecolour.swift'
+      # the looks
+      - 'LumaLook/Data/MockData.swift'
+      - 'LumaLook/Engine/LookPacks.swift'
+      - 'LumaLook/Resources/FilmLUTs/**'
+      # the engine
       - 'LumaLook/Engine/TrueColour.swift'
-      - 'tools/skin-test/extract_looks.py'
+      - 'LumaLook/Engine/LUTParser.swift'
+      - 'LumaLook/Engine/LUTDensifier.swift'
+      # the grade on top of a look (check_grade.swift)
+      - 'LumaLook/Engine/SkinFirstPresets.swift'
+      - 'LumaLook/Engine/ColorMath.swift'
+      - 'LumaLook/Engine/LookPipeline.swift'
+      - 'LumaLook/Engine/LogNormalizer.swift'
+      - 'LumaLook/Engine/OverlayEffects.swift'
+      - 'LumaLook/Models/LumaModels.swift'
+      # the test
+      - 'tools/skin-test/*.swift'
+      - 'tools/skin-test/*.py'
+      - 'tools/skin-test/*.json'
       - 'tools/skin-test/candidates.txt'
       - '.github/workflows/skin-test.yml'
   workflow_dispatch:
@@ -32,6 +68,13 @@ jobs:
   bake:
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      # Everything a bake is made from. Used below to tell whether the branch
+      # has moved on since this run's commit.
+      BAKED_FROM: >-
+        LumaLook/Data/MockData.swift LumaLook/Engine/LookPacks.swift LumaLook/Resources/FilmLUTs
+        LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift LumaLook/Engine/LUTDensifier.swift
+        tools/skin-test/bake_truecolour.swift tools/skin-test/extract_looks.py tools/skin-test/candidates.txt
     steps:
       - uses: actions/checkout@v5
 
@@ -42,6 +85,111 @@ jobs:
       # before the True Colour fix (bake_recipes.swift, the old linear-light
       # CIColorControls path). They are the "before" of the skin test, so they
       # are kept, not baked again. Run bake_recipes.swift by hand to redo them.
+
+      # Before anything is baked: does the engine keep its promises on looks
+      # built to be hard on skin? Stops the job if any check fails.
+      - name: Check the True Colour engine itself
+        run: |
+          mkdir -p /tmp/tc-check
+          cp tools/skin-test/check_truecolour.swift /tmp/tc-check/main.swift
+          swiftc -O -o /tmp/tc-check/check /tmp/tc-check/main.swift LumaLook/Engine/TrueColour.swift \
+            LumaLook/Engine/LUTParser.swift LumaLook/Engine/LUTDensifier.swift
+          /tmp/tc-check/check
+
+      # The grade on top of a look: the Skin first presets and the Grade Room
+      # colour tools (curves, wheels, HSL bands, split tone), through the
+      # app's own pipeline. Stops the job if a preset stays on under the next
+      # look, a colour tool does more on screen than its number says, or any
+      # look picked after a preset differs from its thumbnail. Then it writes
+      # a few pictures to look at, kept with the run as "grade-pictures".
+      - name: Check the grade on top of a look
+        run: |
+          mkdir -p /tmp/grade
+          cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
+          swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
+            LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift \
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
+            LumaLook/Engine/LUTDensifier.swift
+          /tmp/grade/check check tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
+
+      # Numbers to read, not a pass or fail: what each slider does to flat
+      # colours, how strong each spatial tool looks at thumbnail, preview and
+      # export size, and how far the exported .cube is from the picture.
+      - name: Measure the tools on the look screen
+        run: |
+          /tmp/grade/check measure tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/grade-pictures"
+
+      - name: Keep the pictures of the grade on top of a look
+        uses: actions/upload-artifact@v5
+        with:
+          name: grade-pictures
+          path: ${{ runner.temp }}/grade-pictures
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Pictures to look at, not a pass or fail: one test portrait through
+      # the tools on the look screen, made by this commit's engine and by
+      # master's, so a change to how a tool looks can be put side by side.
+      # Skipped when the engine is the same as master's.
+      - name: Picture the tools with this engine and with master's
+        run: |
+          ENGINE="LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift
+            LumaLook/Engine/LUTDensifier.swift"
+          git fetch --quiet --depth=1 origin master
+          if git diff --quiet FETCH_HEAD HEAD -- $ENGINE; then
+            echo "The engine is the same as master's, so there is nothing to compare."
+            exit 0
+          fi
+          mkdir -p /tmp/sheet /tmp/master-engine
+          cp tools/skin-test/sheet_pictures.swift /tmp/sheet/main.swift
+          swiftc -O -o /tmp/sheet/now /tmp/sheet/main.swift $ENGINE
+          /tmp/sheet/now tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+            tools/skin-test/out/candidates "$RUNNER_TEMP/sheet-pictures/now"
+          git archive FETCH_HEAD $ENGINE | tar -x -C /tmp/master-engine
+          if (cd /tmp/master-engine && swiftc -O -o /tmp/sheet/before /tmp/sheet/main.swift $ENGINE); then
+            /tmp/sheet/before tools/skin-test/looks.json LumaLook/Resources/FilmLUTs \
+              tools/skin-test/out/candidates "$RUNNER_TEMP/sheet-pictures/before"
+          else
+            echo "::notice::master's engine does not build with sheet_pictures.swift, so only this commit's pictures were written."
+          fi
+
+      - name: Keep the pictures of the tools, before and after
+        uses: actions/upload-artifact@v5
+        with:
+          name: sheet-pictures
+          path: ${{ runner.temp }}/sheet-pictures
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Pictures to look at, not a pass or fail: every test portrait as shot,
+      # after the Auto that was taken out and after the Auto that replaces
+      # it, with one line a portrait on what Auto read (auto.txt).
+      - name: Picture Auto on the test portraits
+        run: |
+          mkdir -p /tmp/auto
+          cp tools/skin-test/auto_pictures.swift /tmp/auto/main.swift
+          swiftc -O -o /tmp/auto/pictures /tmp/auto/main.swift \
+            LumaLook/Models/LumaModels.swift LumaLook/Engine/SkinFirstPresets.swift \
+            LumaLook/Engine/ColorMath.swift LumaLook/Engine/LookPipeline.swift \
+            LumaLook/Engine/LogNormalizer.swift LumaLook/Engine/OverlayEffects.swift \
+            LumaLook/Engine/TrueColour.swift LumaLook/Engine/LUTParser.swift \
+            LumaLook/Engine/LUTDensifier.swift
+          /tmp/auto/pictures tools/skin-test/out/candidates "$RUNNER_TEMP/auto-pictures"
+
+      - name: Keep the pictures of Auto
+        uses: actions/upload-artifact@v5
+        with:
+          name: auto-pictures
+          path: ${{ runner.temp }}/auto-pictures
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Bake every look through the app's True Colour engine
         run: |
@@ -73,15 +221,88 @@ jobs:
           done
           du -sh tools/skin-test/out/candidates
 
+      # The gate reads the bake from here, not from the branch: this is the
+      # bake of exactly this run's commit, whatever the branch holds by the
+      # time the gate runs (or is run again).
+      - name: Hand the bake to the gate
+        uses: actions/upload-artifact@v5
+        with:
+          name: skin-test-bake
+          path: |
+            tools/skin-test/looks.json
+            tools/skin-test/out/luts_tc
+            tools/skin-test/out/luts_classic
+            tools/skin-test/out/film_tc
+            tools/skin-test/out/candidates
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+
       - name: Commit the results back to the branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add tools/skin-test/out tools/skin-test/looks.json
           if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          # A run started again after the branch has moved on bakes old
+          # sources. The gate below still judges that bake, for this commit,
+          # but it must not be written over the newer one on the branch.
+          git fetch --quiet origin "${GITHUB_REF_NAME}"
+          if ! git diff --quiet "${GITHUB_SHA}" FETCH_HEAD -- ${BAKED_FROM}; then
+            echo "::notice::The branch has changed its looks, engine or bake since this commit, so this bake is not committed to it. The gate still judges it for this commit."
+            exit 0
+          fi
           git commit -m "Skin test: True Colour bake on Core Image (from the Mac runner)"
           for i in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
             sleep 5
           done
           exit 1
+
+  # The Linux half: judge every look on the portraits. It checks out the commit
+  # this run is for and lays the bake the job above made from that commit over
+  # it. It never reads the branch, so a run started again later still judges
+  # the revision it reports on.
+  gate:
+    needs: bake
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Clear any older bake out of the way
+        run: rm -rf tools/skin-test/out/luts_tc tools/skin-test/out/luts_classic tools/skin-test/out/film_tc
+
+      - name: Take the bake of this commit from the Mac job
+        uses: actions/download-artifact@v5
+        with:
+          name: skin-test-bake
+          path: tools/skin-test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Pinned, so a look near a threshold reads the same here as on the
+      # machine that recorded baseline.json.
+      - name: Install the measuring tools
+        run: pip install numpy==2.5.3 pillow==12.3.0 scipy==1.18.1
+
+      - name: Prepare the test portraits
+        run: python3 tools/skin-test/prep_portraits.py
+
+      - name: Every look has to pass the gate
+        run: python3 tools/skin-test/gate.py
+
+      # The gate only ever sees looks already in the app. This pretends two
+      # were just added (one that should pass, one that should not) and
+      # checks the smaller rules one by one.
+      - name: The gate itself still works on a look nobody has added yet
+        run: python3 tools/skin-test/selftest_gate.py
+
+      # check_look.py judges a new film LUT without a Mac, with a Python copy
+      # of the skin guard. This compares that copy with the bake above.
+      - name: The no-Mac look checker still matches the app
+        run: python3 tools/skin-test/check_look.py --self-test

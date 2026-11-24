@@ -16,6 +16,17 @@ enum LumaFeatures {
     /// best editors (Edem, 23 Nov 2026). Projects and edits already made
     /// from a template still open as normal.
     static let templates = false
+
+    /// Auto on the look screen. The first Auto set exposure and white
+    /// balance from the picture's average colour. A portrait's average is
+    /// mostly skin, so it took warm skin for a colour cast and cooled it,
+    /// and nothing on screen showed it was on or took it off again (found
+    /// 24 Nov 2026 on Edem's own picture). It is rebuilt: Auto now takes a
+    /// colour cast off and nothing else, reads the cast only where the
+    /// picture is nearly grey and cannot be skin, and never takes warmth
+    /// out (`TrueColour.readBalance`, `AppModel.autoGrade`). Off until Edem
+    /// has seen it on real pictures and said yes.
+    static let autoGrade = false
 }
 
 /// One clip slot in a template — a recipe for a single timeline clip, not a clip

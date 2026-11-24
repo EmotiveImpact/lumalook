@@ -143,7 +143,8 @@ if __name__ == "__main__":
         Image.fromarray((im * 255 + 0.5).astype(np.uint8)).resize(THUMB, Image.LANCZOS).save(
             RENDER / "thumbs" / "original" / f"{pid}.jpg", quality=88)
     np.save(RENDER / "chart" / "original.npy", CHART)
-    ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text())]
+    ids = [l["id"] for l in json.loads((HERE / "looks.json").read_text())
+           if l["cube"] or S.before_bake(l["id"]).exists()]      # this is the test of the looks as they shipped
     results = {}
     with Pool(4, initializer=_init) as pool:
         for i, (lid, res) in enumerate(pool.imap_unordered(run_look, ids)):

@@ -40,7 +40,8 @@ import AVKit
 //     tiles, each showing its LIVE VALUE rather than a glyph, edited by one
 //     shared slider (tap the tile again to put it away)
 //   ✓ Lens panel — eight lens kinds, Pro-locked ones open the paywall
-//   ✓ Auto-grade  ✓ WB eyedropper (tap a neutral in the frame)
+//   ✓ Auto-grade (off behind LumaFeatures.autoGrade until it leaves skin alone)
+//   ✓ WB eyedropper (tap a neutral in the frame)
 //   ✓ Skin First presets — research-tuned for Black & deep skin, now rendered
 //     as real graded tiles instead of painted swatches
 //   ✓ Slot chain — Slot 1 conversion × Slot 2 creative, per-slot strength by
@@ -306,7 +307,7 @@ struct ApplyLookView: View {
     // MARK: Media identity
 
     private var thumbStamp: String {
-        "\(mediaKey)-\(app.library.all.count)"
+        "\(mediaKey)-\(app.library.all.count)-\(app.tileStamp)"
     }
 
     private var mediaKey: String {
@@ -391,11 +392,12 @@ struct ApplyLookView: View {
         .task(id: thumbStamp) {
             thumbs.render(source: app.previewFrame,
                           library: app.library.all,
-                          fileURL: { app.lutRepository.fileURL(for: $0) })
+                          fileURL: { app.lutRepository.fileURL(for: $0) },
+                          under: app.lookState.conversionSlot)
         }
         .task(id: mediaKey) { await loadMediaReadout() }
         .task(id: mediaKey) { renderOriginalThumb() }
-        .task(id: "\(mediaKey)|\(app.selectedLook.id)|\(category == .skin)") {
+        .task(id: "\(mediaKey)|\(app.selectedLook.id)|\(category == .skin)|\(app.tileStamp)") {
             await renderSkinThumbs()
         }
         .onAppear {
@@ -472,12 +474,21 @@ struct ApplyLookView: View {
         return app.selectedImage ?? StillCompare.hero
     }
 
+    /// The Skin first preset on the picture, if one is worn. It is picked
+    /// like a look, so while it is on, the picture carries its name. The
+    /// label used to keep the name of the built-in look underneath.
+    private var wornPreset: SkinFirstPreset? {
+        app.selectedLUT == nil ? SkinFirstPreset.worn(by: app.settings) : nil
+    }
+
     private var currentLookName: String {
-        app.selectedLUT?.displayName ?? app.selectedLook.name
+        if let preset = wornPreset { return preset.name }
+        return app.selectedLUT?.displayName ?? app.selectedLook.name
     }
 
     private var currentLookColour: Color {
-        app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
+        if let preset = wornPreset { return Color(hex: preset.tintHex) }
+        return app.selectedLUT.map { LookSignature.colour(name: $0.displayName) }
             ?? app.selectedLook.signature
     }
 
@@ -580,12 +591,14 @@ struct ApplyLookView: View {
         // Never hand an infinite (clamped) extent to the pipeline's spatial ops.
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else { return }
         let recipe = app.selectedLook.recipe
+        let conversion = app.lookState.conversionSlot
         let jobs = SkinFirstPreset.allCases.map { ($0.rawValue, $0.settings) }
         let rendered = await Task.detached(priority: .userInitiated) { () -> [String: CGImage] in
             var out: [String: CGImage] = [:]
             for (key, settings) in jobs {
                 if Task.isCancelled { break }
                 let state = LookState()
+                state.conversionSlot = conversion
                 state.recipe = recipe
                 state.settings = settings
                 if let cg = LookPipeline.shared.gradedStill(frame, state: state, maxDimension: 220) {
@@ -949,7 +962,7 @@ struct ApplyLookView: View {
     /// they bake cleanly. Rendered through the real pipeline like everything
     /// else on this row.
     private func skinTile(_ preset: SkinFirstPreset) -> some View {
-        let selected = app.selectedLUT == nil && app.settings == preset.settings
+        let selected = app.selectedLUT == nil && SkinFirstPreset.worn(by: app.settings) == preset
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 app.selectedLUT = nil
@@ -1047,26 +1060,43 @@ struct ApplyLookView: View {
 
                 toolDivider
 
-                tool("wand.and.stars", app.isAutoGrading ? "Working" : "Auto",
-                     on: app.isAutoGrading, enabled: hasRealMedia && !app.isAutoGrading) {
-                    guard hasRealMedia else { return }
-                    Task { await app.autoGrade() }
+                // Auto takes a colour cast off and nothing else. What it sets
+                // is a white balance, so the White bal. tile next to it lights
+                // up and takes it off again. For a moment its own tile says
+                // what it found, so a tap that changes nothing is not a tap
+                // that did nothing.
+                if LumaFeatures.autoGrade {
+                    tool("wand.and.stars", autoLabel,
+                         on: app.isAutoGrading || app.autoFound != nil,
+                         enabled: hasRealMedia && !app.isAutoGrading) {
+                        guard hasRealMedia else { return }
+                        Task { await app.autoGrade() }
+                    }
+                    .accessibilityHint(hasRealMedia ? "Takes a colour cast off the picture" : "Pick a photo or video first")
+                }
+                // Lit while a white balance is on, so it is never on unseen
+                // (it carries to the next look and the next photo). Tapping
+                // the lit tile takes it off; tapping again picks a new one.
+                tool("eyedropper.halffull", "White bal.", on: eyedropping || app.whiteBalanceIsOn,
+                     enabled: hasRealMedia || app.whiteBalanceIsOn) {
+                    if app.whiteBalanceIsOn, !eyedropping {
+                        app.clearWhiteBalance()
+                    } else {
+                        guard hasRealMedia else { return }
+                        withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
+                    }
                     LumaHaptics.shared.tap()
                 }
-                .accessibilityHint(hasRealMedia ? "Automatically grades the selected media" : "Pick a photo or video first")
-                tool("eyedropper.halffull", "White bal.", on: eyedropping,
-                     enabled: hasRealMedia) {
-                    guard hasRealMedia else { return }
-                    withAnimation(.easeOut(duration: 0.15)) { eyedropping.toggle() }
-                    LumaHaptics.shared.tap()
-                }
-                .accessibilityHint(hasRealMedia ? "Choose a neutral point in the selected media" : "Pick a photo or video first")
+                .accessibilityValue(app.whiteBalanceIsOn ? "On" : "Off")
+                .accessibilityHint(app.whiteBalanceIsOn && !eyedropping
+                                   ? "Takes the white balance off"
+                                   : (hasRealMedia ? "Choose a neutral point in the selected media" : "Pick a photo or video first"))
                 tool(isFavourite ? "star.fill" : "star",
                      isFavourite ? "Favourited" : "Favourite",
                      on: isFavourite, enabled: currentLibraryLook != nil) {
                     toggleFavourite()
                 }
-                tool("square.stack.3d.down.right", "Chain", on: panel == .chain) {
+                tool("square.stack.3d.down.right", "Chain", on: panel == .chain || app.chainIsAdjusted) {
                     panel = panel == .chain ? .none : .chain
                     LumaHaptics.shared.tap()
                 }
@@ -1082,7 +1112,7 @@ struct ApplyLookView: View {
                     showCompareGrid = true
                     LumaHaptics.shared.tap()
                 }
-                tool("dial.high", "More", on: false) {
+                tool("dial.high", "More", on: app.gradeIsAdjusted) {
                     app.path.append(.customLook)
                 }
             }
@@ -1126,6 +1156,16 @@ struct ApplyLookView: View {
         .accessibilityLabel(label)
         .accessibilityValue(value)
         .accessibilityAddTraits(picked ? .isSelected : [])
+    }
+
+    /// The Auto tile's word: what it is doing, or for a moment what it found.
+    private var autoLabel: String {
+        if app.isAutoGrading { return "Working" }
+        switch app.autoFound {
+        case .fixed: return "Fixed"
+        case .nothingToFix: return "No change"
+        case nil: return "Auto"
+        }
     }
 
     /// The same quiet tile with a glyph where the value would be.
