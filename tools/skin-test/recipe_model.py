@@ -131,7 +131,7 @@ def apply_model(rgb, r, M, space="linear", toe=0.0):
 
 
 if __name__ == "__main__":
-    looks = [l for l in S.load_looks() if l["recipe"]]
+    looks = [l for l in S.load_looks() if l["recipe"] and l["lut"] is not None]
     errs = {}
     for lk in looks:
         M = fit_tt_matrix(lk)

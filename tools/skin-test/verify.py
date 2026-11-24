@@ -65,6 +65,27 @@ def targets(look):
     )
 
 
+def judge_variants(look, variants, mono, thumbs_id=None):
+    """Judge one look in each of its versions ({"on": cube, "off": cube}).
+    `mono` True or False when the look says what it is (recipes), None to
+    find out from the pictures (film cubes)."""
+    out = {}
+    for name, lut in variants.items():
+        lk = dict(look, lut=lut)
+        thumbs = (RENDER / "thumbs_tc" / thumbs_id
+                  if thumbs_id and name == "on" and not os.environ.get("VERIFY_NO_THUMBS") else None)
+        res, ch = F.measure(lk, (1.0, 0.75), thumbs)
+        if thumbs_id and name == "on":
+            np.save(RENDER / "chart_fix" / f"tc_{thumbs_id}.npy", ch)
+        v, m = F.judge(res, mono)
+        if mono is None and name == "off":
+            mono = m
+        out[name] = F.brief(v)
+        out[name + "75"] = F.brief(F.judge(res, m, "portraits75")[0])
+        out[name + "_targets"] = targets(dict(lk, _mono=m))
+    return out
+
+
 def job(lid):
     look = dict(F._LOOKS[lid])
     out = {"id": lid, "kind": "recipe" if look["recipe"] else "film cube"}
@@ -77,24 +98,15 @@ def job(lid):
         mono = None
         variants["on"] = S.read_baked(OUT / "film_tc" / f"{lid}.u16")
         variants["off"] = look["lut"]
-    for name, lut in variants.items():
-        lk = dict(look, lut=lut)
-        thumbs = RENDER / "thumbs_tc" / lid if name == "on" else None
-        res, ch = F.measure(lk, (1.0, 0.75), thumbs)
-        if name == "on":
-            np.save(RENDER / "chart_fix" / f"tc_{lid}.npy", ch)
-        v, m = F.judge(res, mono)
-        if mono is None and name == "off":
-            mono = m
-        out[name] = F.brief(v)
-        out[name + "75"] = F.brief(F.judge(res, m, "portraits75")[0])
-        out[name + "_targets"] = targets(dict(lk, _mono=m))
+    out.update(judge_variants(look, variants, mono, lid))
     return out
 
 
 if __name__ == "__main__":
     (RENDER / "chart_fix").mkdir(parents=True, exist_ok=True)
-    before = {v["id"]: v for v in json.loads((RENDER / "verdicts.json").read_text())}
+    # The verdicts as the looks first shipped; absent on a fresh checkout.
+    before_file = RENDER / "verdicts.json"
+    before = {v["id"]: v for v in json.loads(before_file.read_text())} if before_file.exists() else {}
     ids = [l["id"] for l in json.loads((F.HERE / "looks.json").read_text())]
     res = {}
     if F.ONLY:      # re-check a few looks, keep the rest of the last run

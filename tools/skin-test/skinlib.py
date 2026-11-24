@@ -90,7 +90,24 @@ def read_baked(path: Path, n: int = 25) -> np.ndarray:
     return raw.reshape(n, n, n, 3)
 
 
-def sample_tetra(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+def sample_trilinear(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+    """Trilinear interpolation of `cube` ([b][g][r] -> rgb) at sRGB `rgb`, which
+    is how Core Image's colour cube reads a cube in the app."""
+    n = cube.shape[0]
+    p = np.clip(rgb.reshape(-1, 3), 0, 1) * (n - 1)
+    i0 = np.clip(np.floor(p).astype(np.int32), 0, n - 2)
+    f = p - i0
+    out = 0
+    for db in (0, 1):
+        for dg in (0, 1):
+            for dr in (0, 1):
+                w = ((f[:, 0] if dr else 1 - f[:, 0]) * (f[:, 1] if dg else 1 - f[:, 1])
+                     * (f[:, 2] if db else 1 - f[:, 2]))
+                out = out + cube[i0[:, 2] + db, i0[:, 1] + dg, i0[:, 0] + dr] * w[:, None]
+    return np.clip(out, 0, 1).reshape(rgb.shape).astype(np.float32)
+
+
+def sample_tetra(cube: np.ndarray, rgb: np.ndarray, clip: bool = True) -> np.ndarray:
     """Tetrahedral interpolation of `cube` ([b][g][r] -> rgb) at sRGB `rgb`."""
     n = cube.shape[0]
     shp = rgb.shape
@@ -110,7 +127,7 @@ def sample_tetra(cube: np.ndarray, rgb: np.ndarray) -> np.ndarray:
         v = v.copy()
         v[rows, order[:, k]] += 1
         out += at(v) * w[:, k + 1:k + 2]
-    return np.clip(out, 0, 1).reshape(shp)
+    return (np.clip(out, 0, 1) if clip else out).reshape(shp)
 
 
 def identity_cube(n: int) -> np.ndarray:
@@ -121,14 +138,50 @@ def identity_cube(n: int) -> np.ndarray:
 
 # ---------------------------------------------------------------- looks
 
+def before_bake(look_id):
+    """Where a recipe look's bake from before True Colour lives (out/luts)."""
+    return BAKE_DIR / "luts" / f"{look_id}.u16"
+
+
 def load_looks():
+    """Every look, with a colour cube under "lut": a film look's own .cube
+    file, or a recipe look's bake as it shipped before True Colour (out/luts,
+    the "before" of the skin test, which is never baked again).
+
+    A recipe added since then has no "before", so its "lut" is None. The gate
+    and verify.py do not need it: they judge the bakes of today's engine
+    (out/luts_tc, out/luts_classic). The tools that draw or measure the
+    "before" leave such a look out."""
     looks = json.loads((HERE / "looks.json").read_text())
     for lk in looks:
         if lk["cube"]:
             lk["lut"] = read_cube(FILM_DIR / lk["cube"])
         else:
-            lk["lut"] = read_baked(BAKE_DIR / "luts" / f"{lk['id']}.u16")
+            path = before_bake(lk["id"])
+            lk["lut"] = read_baked(path) if path.exists() else None
     return looks
+
+
+def own_input_range(path):
+    """True when a .cube file sets its own input range (DOMAIN_MIN/MAX other
+    than 0 and 1). The app stretches the picture into that range before the
+    cube and shows such a LUT without the skin guard (TrueColour.lutData), so
+    a lattice point of the cube is not a plain screen colour and the skin test
+    cannot read it as one."""
+    for line in Path(path).read_text(errors="replace").splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith("#"):
+            continue
+        if parts[0].upper() in ("DOMAIN_MIN", "DOMAIN_MAX"):
+            want = 0.0 if parts[0].upper() == "DOMAIN_MIN" else 1.0
+            try:
+                if any(abs(float(v) - want) > 1e-6 for v in parts[1:4]):
+                    return True
+            except ValueError:
+                return True
+        elif parts[0][0] in "+-.0123456789":
+            break                   # the colour table has started; the header is over
+    return False
 
 
 def _vignette_profile():
