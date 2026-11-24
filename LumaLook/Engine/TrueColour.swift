@@ -135,6 +135,16 @@ enum TrueColour {
 
     private static func buildTone(contrast c: Double, saturation s: Double,
                                   brightness b: Double, protectSkin: Bool) -> Data {
+        buildCurveCube(saturation: s, protectSkin: protectSkin) {
+            curve($0, contrast: c, brightness: b)
+        }
+    }
+
+    /// A colour cube from a tone curve on gamma-encoded values. With
+    /// `protectSkin` the curve moves lightness only (hue and chroma hold);
+    /// without it, it runs on each channel, as CIColorControls did.
+    private static func buildCurveCube(saturation s: Double, protectSkin: Bool,
+                                       curve: (Double) -> Double) -> Data {
         let n = toneSize
         var out = [Float](repeating: 1, count: n * n * n * 4)
         // Lightness map, tabulated: grey L -> encoded -> curve -> back to L.
@@ -142,7 +152,7 @@ enum TrueColour {
         let lightness: [Double] = (0..<tableSize).map { i in
             let L = Double(i) / Double(tableSize - 1)
             let e = encode(L * L * L)
-            return cbrt(decode(curve(e, contrast: c, brightness: b)))
+            return cbrt(decode(curve(e)))
         }
         func mapL(_ L: Double) -> Double {
             let x = min(max(L, 0), 1) * Double(tableSize - 1)
@@ -164,9 +174,9 @@ enum TrueColour {
                         // Classic: CIColorControls' saturation, then the
                         // curve per channel, all on encoded values.
                         let w = 0.2125 * er + 0.7154 * eg + 0.0721 * eb
-                        rgb = (curve(w + s * (er - w), contrast: c, brightness: b),
-                               curve(w + s * (eg - w), contrast: c, brightness: b),
-                               curve(w + s * (eb - w), contrast: c, brightness: b))
+                        rgb = (curve(w + s * (er - w)),
+                               curve(w + s * (eg - w)),
+                               curve(w + s * (eb - w)))
                     }
                     // Clamped: rounding left a few lightness-only values a
                     // hair above 1 (1.0000005).
@@ -179,6 +189,66 @@ enum TrueColour {
         }
         return out.withUnsafeBufferPointer { Data(buffer: $0) }
     }
+
+    // MARK: Shadows and Highlights
+
+    /// The Shadows and Highlights sliders as one colour cube, or nil when
+    /// both are at rest. Each runs from -1 to 1.
+    ///
+    /// They used to be CIHighlightShadowAdjust, which works on each channel
+    /// in linear light around a small blur. Shadows pulled down took the
+    /// green and blue out of deep skin (77, 48, 36 became 65, 22, 0),
+    /// Highlights pulled down did a tenth of what Shadows did, and an
+    /// exported cube was up to 25 of 255 away from the picture, because a
+    /// blur has no meaning on a lattice of colours. As a curve on lightness
+    /// they hold hue, do the same at every size and bake exactly.
+    static func shadowHighlightFilter(shadows: Double, highlights: Double,
+                                      protectSkin: Bool = TrueColour.isOn) -> CIFilter? {
+        let s = min(max(shadows, -1), 1), h = min(max(highlights, -1), 1)
+        if abs(s) < 1e-4 && abs(h) < 1e-4 { return nil }
+        let key = ShadowKey(s: Int((s * 10_000).rounded()), h: Int((h * 10_000).rounded()),
+                            skin: protectSkin)
+        lock.lock()
+        if let data = shadowCache[key] { lock.unlock(); return cubeFilter(data, toneSize) }
+        lock.unlock()
+
+        let data = buildCurveCube(saturation: 1, protectSkin: protectSkin) {
+            shadowHighlightCurve($0, shadows: s, highlights: h)
+        }
+        lock.lock()
+        if shadowCache.count >= 32 { shadowCache.removeAll() }
+        shadowCache[key] = data
+        lock.unlock()
+        return cubeFilter(data, toneSize)
+    }
+
+    /// The curve on gamma-encoded values. Black, white and (for Highlights)
+    /// everything below mid grey stay where they are, and the curve never
+    /// turns back on itself at any setting.
+    ///
+    /// Shadows up follows what the slider always did to greys, to within
+    /// 1 of 255: a lift that peaks a third of the way up. Shadows down
+    /// deepens the bottom without flattening it. Highlights moves the top
+    /// half, most at three quarters, by the same amount up or down.
+    static func shadowHighlightCurve(_ e: Double, shadows s: Double, highlights h: Double) -> Double {
+        let x = min(max(e, 0), 1)
+        var y = x
+        if s > 0 {
+            y = x + 1.83 * s * x * (1 - x) * (1 - x)
+        } else if s < 0 {
+            let up = 1 - x
+            y = x * (1 + 0.9 * s * up * up * up)
+        }
+        y = min(max(y, 0), 1)
+        if h != 0, y > 0.5 {
+            let bump = sin(Double.pi * (y - 0.5) / 0.5)
+            y += 0.125 * h * bump * bump
+        }
+        return min(max(y, 0), 1)
+    }
+
+    private struct ShadowKey: Hashable { let s: Int, h: Int, skin: Bool }
+    private static var shadowCache: [ShadowKey: Data] = [:]
 
     /// Lightness-only tone: Oklab L through the curve, a and b scaled by
     /// saturation and otherwise kept, so hue and chroma hold. A colour that

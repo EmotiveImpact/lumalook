@@ -232,12 +232,32 @@ final class LookPipeline: @unchecked Sendable {
 
     /// Optical character of real glass, built from Core Image primitives.
     /// All spatial — never part of cube bakes (like grain/bloom/vignette).
+    // MARK: - Sizes that follow the picture
+
+    /// The long edge the big picture on the look screen is graded at
+    /// (`gradedStill(maxDimension: 1400)`). Every blur, glow and grain size
+    /// below is written for a picture this big.
+    static let referenceEdge: CGFloat = 1400
+
+    /// How much bigger or smaller this picture is than the reference. Glow,
+    /// blur and grain used to be a fixed number of pixels, so the same
+    /// setting was about twice as strong on a 220 pixel look tile as on the
+    /// big picture, and nearly gone in a full-size export (Bloom at 50 moved
+    /// a tile by 14 of 255, the big picture by 3 and a 4032 pixel export by
+    /// 1). Sized against the picture, a tile is a small copy of the big
+    /// picture and the export is a large one.
+    static func sizeScale(_ extent: CGRect) -> CGFloat {
+        guard !extent.isInfinite, extent.width > 0, extent.height > 0 else { return 1 }
+        return max(extent.width, extent.height) / referenceEdge
+    }
+
     func applyLens(_ kind: LensKind, amount: Double, to image: CIImage) -> CIImage {
         let a = CGFloat(min(max(amount, 0), 1))
         guard a > 0.01 else { return image }
         let extent = image.extent
         guard extent.width > 4, extent.height > 4, !extent.isInfinite else { return image }
         let center = CGPoint(x: extent.midX, y: extent.midY)
+        let scale = Self.sizeScale(extent)
 
         switch kind {
         case .none:
@@ -259,7 +279,7 @@ final class LookPipeline: @unchecked Sendable {
                 ])
             let streak = highlights.clampedToExtent()
                 .applyingFilter("CIMotionBlur", parameters: [
-                    kCIInputRadiusKey: 14 + extent.width * 0.045 * a,
+                    kCIInputRadiusKey: 14 * scale + extent.width * 0.045 * a,
                     kCIInputAngleKey: 0,
                 ])
                 .applyingFilter("CIColorMatrix", parameters: [
@@ -303,7 +323,7 @@ final class LookPipeline: @unchecked Sendable {
         case .diffusion:
             // Pro-mist: soft glow screened over the frame + a gentle lift.
             let glow = image.clampedToExtent()
-                .applyingGaussianBlur(sigma: 8 + 22 * a)
+                .applyingGaussianBlur(sigma: (8 + 22 * a) * scale)
                 .applyingFilter("CIColorMatrix", parameters: [
                     "inputRVector": CIVector(x: 0.75 * a, y: 0, z: 0, w: 0),
                     "inputGVector": CIVector(x: 0, y: 0.75 * a, z: 0, w: 0),
@@ -361,7 +381,7 @@ final class LookPipeline: @unchecked Sendable {
             let soft = popped.clampedToExtent()
                 .applyingFilter("CIMaskedVariableBlur", parameters: [
                     "inputMask": radial.cropped(to: extent),
-                    kCIInputRadiusKey: 9 * a,
+                    kCIInputRadiusKey: 9 * a * scale,
                 ])
                 .cropped(to: extent)
             return soft.applyingFilter("CIVignette", parameters: [
@@ -392,7 +412,7 @@ final class LookPipeline: @unchecked Sendable {
             return image.clampedToExtent()
                 .applyingFilter("CIMaskedVariableBlur", parameters: [
                     "inputMask": mask,
-                    kCIInputRadiusKey: 14 * a,
+                    kCIInputRadiusKey: 14 * a * scale,
                 ])
                 .cropped(to: extent)
         }
@@ -494,7 +514,7 @@ final class LookPipeline: @unchecked Sendable {
             let bloom = CIFilter.bloom()
             bloom.inputImage = output.clampedToExtent()
             bloom.intensity = recipe.bloom
-            bloom.radius = 8
+            bloom.radius = Float(8 * Self.sizeScale(image.extent))
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -551,7 +571,7 @@ final class LookPipeline: @unchecked Sendable {
             let bloom = CIFilter.bloom()
             bloom.inputImage = output.clampedToExtent()
             bloom.intensity = Float(settings.bloom / 100.0)
-            bloom.radius = 10
+            bloom.radius = Float(10 * Self.sizeScale(image.extent))
             output = bloom.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -563,27 +583,26 @@ final class LookPipeline: @unchecked Sendable {
             output = vignette.outputImage ?? output
         }
 
-        // Highlights / shadows: shadow lift-crush via highlightShadowAdjust,
-        // highlight energy via a gentle tone-curve shoulder.
-        if settings.shadows != 0 || settings.highlights < 0 {
-            let hs = CIFilter.highlightShadowAdjust()
-            hs.inputImage = output
-            hs.shadowAmount = Float(settings.shadows / 100.0)
-            // Negative highlights = recovery (industry convention).
-            hs.highlightAmount = Float(1.0 + min(0, settings.highlights) / 100.0 * 0.7)
-            hs.radius = 1.5
-            output = hs.outputImage ?? output
+        // Shadows and Highlights: one curve on lightness (TrueColour), so
+        // deep skin keeps its colour when shadows are pulled down, the two
+        // sliders are as strong as each other, and an exported cube carries
+        // them exactly. They used to be CIHighlightShadowAdjust.
+        if settings.shadows != 0 || settings.highlights != 0,
+           let curve = TrueColour.shadowHighlightFilter(shadows: settings.shadows / 100.0,
+                                                        highlights: settings.highlights / 100.0) {
+            curve.setValue(output, forKey: kCIInputImageKey)
+            output = curve.outputImage ?? output
         }
 
-        if settings.highlights > 0 || settings.fade > 0 {
+        // Fade: lifted blacks, the matte-film look.
+        if settings.fade > 0 {
             let curve = CIFilter.toneCurve()
             curve.inputImage = output
             let lift = CGFloat(settings.fade / 100.0 * 0.12)
-            let shoulder = CGFloat(0.8 + settings.highlights / 100.0 * 0.13)
             curve.point0 = CGPoint(x: 0, y: lift)
             curve.point1 = CGPoint(x: 0.25, y: 0.25 + lift * 0.5)
             curve.point2 = CGPoint(x: 0.5, y: 0.5)
-            curve.point3 = CGPoint(x: 0.8, y: min(0.98, shoulder))
+            curve.point3 = CGPoint(x: 0.8, y: 0.8)
             curve.point4 = CGPoint(x: 1, y: 1)
             output = curve.outputImage ?? output
         }
@@ -592,6 +611,8 @@ final class LookPipeline: @unchecked Sendable {
             let sharpen = CIFilter.sharpenLuminance()
             sharpen.inputImage = output
             sharpen.sharpness = Float(settings.sharpness / 100.0 * 0.9)
+            // 1.69 is the filter's own radius, kept for the big picture.
+            sharpen.radius = Float(max(0.5, 1.69 * Self.sizeScale(image.extent)))
             output = sharpen.outputImage?.cropped(to: image.extent) ?? output
         }
 
@@ -620,7 +641,16 @@ final class LookPipeline: @unchecked Sendable {
         threshold.gVector = CIVector(x: 0, y: gain, z: 0, w: 0)
         threshold.bVector = CIVector(x: 0, y: 0, z: gain, w: 0)
         threshold.biasVector = CIVector(x: -1.35, y: -1.35, z: -1.35, w: 0)
-        guard let highlights = threshold.outputImage else { return image }
+        // Everything below the threshold comes out of that matrix NEGATIVE.
+        // Unclamped, the glow below took red out of the whole frame instead
+        // of adding it around the highlights: Halation at 50 turned mid grey
+        // into teal (0, 91, 120) and deep skin into black. The mask is
+        // highlights only, so it stops at zero.
+        guard let highlights = threshold.outputImage?
+            .applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+            ]) else { return image }
 
         // 2. Wide soft blur, scaled with image size so it looks the same in
         //    thumbnails and 4K exports.
@@ -650,18 +680,25 @@ final class LookPipeline: @unchecked Sendable {
     func applyGrain(strength: Double, to image: CIImage) -> CIImage {
         guard let noise = CIFilter.randomGenerator().outputImage else { return image }
 
+        // A grain is 1.6 pixels across on the big picture (slightly coarser
+        // than 1:1, so it reads as grain, not sensor noise) and keeps that
+        // share of the frame at every size. It cannot be finer than a pixel:
+        // on a small tile each pixel holds several grains, which average
+        // out, so there the grain fades instead of staying pixel-sharp.
+        let cell = 1.6 * Self.sizeScale(image.extent)
+        let size = max(1, cell)
+
         // Monochrome the noise and centre it on mid-grey for overlay blend.
         let mono = CIFilter.colorMatrix()
-        // Slightly coarser than 1:1 pixels so it reads as grain, not sensor noise.
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: 1.6, y: 1.6))
-        let amp = CGFloat(0.28 * strength)
+        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: size, y: size))
+        let amp = CGFloat(0.28 * strength) * min(1, cell)
         mono.rVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.gVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.bVector = CIVector(x: amp, y: 0, z: 0, w: 0)
         mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
         mono.biasVector = CIVector(x: 0.5 - amp / 2, y: 0.5 - amp / 2, z: 0.5 - amp / 2, w: 1)
         guard let grainField = mono.outputImage?
-            .applyingGaussianBlur(sigma: 0.4)
+            .applyingGaussianBlur(sigma: 0.25 * size)
             .cropped(to: image.extent) else { return image }
 
         let overlay = CIFilter.overlayBlendMode()
