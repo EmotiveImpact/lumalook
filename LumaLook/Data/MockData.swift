@@ -48,6 +48,29 @@ enum MockData {
               isPremium: true)
     ]
 
+    /// What a Skin first preset stands on: no built-in look at all. A preset
+    /// is a whole grade, picked like a look, so it takes the place of the
+    /// look before it instead of sitting on top of it. Nothing lists this
+    /// one (it is not in `looks`), it is never sold, and its recipe changes
+    /// nothing, so a grade saved under its name draws from its settings alone.
+    static let plainLook = LookPreset(name: "Skin first", category: "Skin",
+                                      systemImage: "person.crop.circle",
+                                      colours: [Color(hex: 0xC98A5E), Color(hex: 0xB87A4E)])
+
+    /// A built-in look by the name a saved grade carries.
+    static func look(named name: String) -> LookPreset? {
+        name == plainLook.name ? plainLook : looks.first { $0.name == name }
+    }
+
+    /// The built-in look a saved grade stands on. A grade wearing a Skin
+    /// first preset stands on none, whatever look it was saved over: the
+    /// picture leaves that look out (`LookPipeline.apply`), and so does the
+    /// grade once it is opened, or reshaping the preset's curve by hand
+    /// would bring the old look back from underneath.
+    static func base(named name: String, under settings: LookSettings) -> LookPreset? {
+        SkinFirstPreset.worn(by: settings) != nil ? plainLook : look(named: name)
+    }
+
     /// The look a fresh install opens with: the first free one people would
     /// actually want on their footage. Never premium, so the very first export
     /// a new user makes cannot hit a paywall they did not choose.

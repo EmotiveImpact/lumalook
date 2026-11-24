@@ -14,7 +14,10 @@
 //
 // Later sections ask the same of the film tools and tone sliders (5), of the
 // exported cube and the three picture sizes (6), of the White balance
-// picker (7), of Strength over log footage (8), and of Auto (9).
+// picker (7), of Strength over log footage (8), of Auto (9), of Exposure and
+// the white balance under Strength (10), of a preset standing on no look
+// (11), of black and white looks opening at full Strength (12), and of grain
+// that moves on video and holds still on a photo (13).
 //
 //   mkdir -p /tmp/grade && cp tools/skin-test/check_grade.swift /tmp/grade/main.swift
 //   swiftc -O -o /tmp/grade/check /tmp/grade/main.swift \
@@ -294,6 +297,7 @@ struct ShippedLook: Decodable {
     var id: String
     var code: String
     var name: String
+    var pack: String?
     var recipe: Recipe?
     var cube: String?
 
@@ -315,8 +319,7 @@ func film(_ code: String) -> ParsedLUT? {
     try? pipeline.loadLUT(at: filmDir.appendingPathComponent("FS_\(code).cube"))
 }
 
-/// The look a new install opens with, which a preset is worn over until the
-/// person picks another built-in look (MockData.defaultLook).
+/// The look a new install opens with (MockData.defaultLook).
 let goldenHour = shipped.first { $0.code == "KD2" }?.lookRecipe ?? LookRecipe()
 
 if mode == "check" {
@@ -979,6 +982,270 @@ if mode == "check" {
           "a flat grey and an empty picture are left alone")
 }
 
+// MARK: - 10. Exposure, and the white balance under Strength
+
+if mode == "check" {
+    section("10. Exposure leaves black and white alone, and Strength leaves the white balance alone")
+    func lin(_ e: Double) -> Double { e <= 0.04045 ? e / 12.92 : pow((e + 0.055) / 1.055, 2.4) }
+    func enc(_ v: Double) -> Double { v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055 }
+    /// Half way between two colours, in the light Core Image dissolves in.
+    func half(_ a: RGB, _ b: RGB) -> RGB {
+        (enc((lin(a.0) + lin(b.0)) / 2), enc((lin(a.1) + lin(b.1)) / 2), enc((lin(a.2) + lin(b.2)) / 2))
+    }
+    func widest(_ a: [RGB], _ b: [RGB]) -> Double { zip(a, b).map { gap($0, $1) }.max() ?? 0 }
+    func fromGrey(_ c: RGB) -> Double { max(abs(c.0 - c.1), abs(c.2 - c.1)) * 255 }
+    func hue(_ c: RGB) -> Double { let x = labAB(c); return atan2(x.1, x.0) * 180 / .pi }
+    func chroma(_ c: RGB) -> Double { let x = labAB(c); return (x.0 * x.0 + x.1 * x.1).squareRoot() }
+
+    // Exposure used to be an added brightness: at +50 black came out at 43
+    // of 255, a grey veil, and at -50 white came out at 213.
+    let black: RGB = (0, 0, 0), white: RGB = (1, 1, 1), mid: RGB = (0.5, 0.5, 0.5)
+    let deepSkin: RGB = (0.30, 0.19, 0.14)
+    let tones = [black, mid, white, deepSkin]
+    let up = graded(tones, state(full { $0.exposure = 50 }))
+    let down = graded(tones, state(full { $0.exposure = -50 }))
+    check(gap(up[0], black) < 1.5 && gap(up[2], white) < 1.5 && gap(down[0], black) < 1.5 && gap(down[2], white) < 1.5,
+          "Exposure at +50 and at -50 leaves black on black and white on white (it put black at 43, and white at 213)",
+          "at +50 black \(tri(up[0])) and white \(tri(up[2])); at -50 black \(tri(down[0])) and white \(tri(down[2]))")
+    check(abs(up[1].0 * 255 - 170) < 3 && abs(down[1].0 * 255 - 85) < 3 && fromGrey(up[1]) < 1.5 && fromGrey(down[1]) < 1.5,
+          "Exposure at +50 and at -50 moves mid grey to 170 and 85, and keeps it grey",
+          "came out \(tri(up[1])) and \(tri(down[1]))")
+    check(up[3].0 > deepSkin.0 + 0.08 && abs(hue(up[3]) - hue(deepSkin)) < 5 && abs(chroma(up[3]) - chroma(deepSkin)) < 3
+              && down[3].0 < deepSkin.0 - 0.05 && abs(hue(down[3]) - hue(deepSkin)) < 5,
+          "Exposure brightens and darkens deep skin without changing its colour",
+          "77,48,36 came out \(tri(up[3])) at +50 and \(tri(down[3])) at -50")
+
+    // Strength fades the look. The white balance the person set is a
+    // correction to the picture, so it stays in full: faded with the look,
+    // a point picked at the 75 a look opens with kept a quarter of its cast.
+    let tapped: RGB = (0.48, 0.50, 0.53)
+    let wb = pipeline.neutralising((r: tapped.0, g: tapped.1, b: tapped.2))
+    func withBalance(strength: Double, on base: LookSettings = LookSettings()) -> LookSettings {
+        var s = base
+        s.intensity = strength
+        s.warmth += wb.warmth
+        s.tint += wb.tint
+        return s
+    }
+    var left: [String] = []
+    var worstLeft = 0.0
+    for strength in [0.0, 50.0, 75.0, 100.0] {
+        let out = graded([tapped], state(withBalance(strength: strength)))[0]
+        worstLeft = max(worstLeft, fromGrey(out))
+        left.append("\(Int(strength)): \(f1(fromGrey(out)))")
+    }
+    check(worstLeft < 2.0 && fromGrey(tapped) > 6,
+          "with no look on, a point picked for white balance comes out grey at Strength 0, 50, 75 and 100",
+          "of 255 from grey at Strength " + left.joined(separator: ", ") + "; it started \(f1(fromGrey(tapped))) away")
+
+    // A look on: half Strength is half way between the white-balanced
+    // picture and the look.
+    let colours: [RGB] = [tapped, (0.30, 0.30, 0.33), (0.62, 0.52, 0.48), deepSkin, (0.80, 0.80, 0.84)]
+    let underLook = graded(colours, state(withBalance(strength: 100)))
+    let fullLook = graded(colours, state(recipe: goldenHour, withBalance(strength: 100)))
+    let halfLook = graded(colours, state(recipe: goldenHour, withBalance(strength: 50)))
+    let want = zip(underLook, fullLook).map { half($0, $1) }
+    check(widest(halfLook, want) < 1.5,
+          "under Golden Hour, Strength 50 is half way from the white-balanced picture to the look",
+          "widest gap \(f1(widest(halfLook, want))) of 255")
+
+    // A Skin first preset's own warmth is part of its look and fades with
+    // it; a white balance picked on top of the preset does not.
+    var presetLeft = 0.0
+    for preset in SkinFirstPreset.allCases {
+        var s = preset.settings
+        s.intensity = 0
+        presetLeft = max(presetLeft, widest(graded(colours, state(s)), colours))
+    }
+    check(presetLeft < 1.0, "a Skin first preset's own warmth fades with it: at Strength 0 nothing of the preset is left",
+          "widest change \(f1(presetLeft)) of 255")
+    let kept = graded([tapped], state(withBalance(strength: 0, on: SkinFirstPreset.melaninGlow.settings)))[0]
+    check(fromGrey(kept) < 2.0, "a white balance picked on top of a preset stays when the preset is faded out",
+          "\(f1(fromGrey(kept))) of 255 from grey")
+}
+
+// MARK: - 11. A Skin first preset stands on its own
+
+if mode == "check" {
+    section("11. A Skin first preset is the same picture whatever look was picked before it")
+    func widest(_ a: [RGB], _ b: [RGB]) -> Double { zip(a, b).map { gap($0, $1) }.max() ?? 0 }
+    let colours: [RGB] = [(0.05, 0.05, 0.05), (0.5, 0.5, 0.5), (0.85, 0.85, 0.85), (0.30, 0.19, 0.14),
+                          (0.62, 0.45, 0.36), (0.86, 0.70, 0.60), (0.20, 0.30, 0.55), (0.25, 0.50, 0.28)]
+    let builtIn = shipped.compactMap { look in look.lookRecipe.map { (look.code + " " + look.name, $0) } }
+
+    // The looks do change these colours, or the comparison below says nothing.
+    var leastMoved = 1e9
+    for (_, recipe) in builtIn {
+        leastMoved = min(leastMoved, widest(graded(colours, state(recipe: recipe, full())), colours))
+    }
+    check(builtIn.count >= 10 && leastMoved > 1.0, "every built-in look moves the test colours on its own",
+          "\(builtIn.count) looks; the gentlest moves them \(f1(leastMoved)) of 255")
+
+    // A preset used to sit on top of the built-in look picked before it:
+    // Deep & True over Golden Hour, over London Rain and over Documentary
+    // Grit were three different pictures, with nothing on screen to say why.
+    var worst = 0.0, worstOver = ""
+    for preset in SkinFirstPreset.allCases {
+        let alone = graded(colours, state(preset.settings))
+        for (name, recipe) in builtIn {
+            let over = widest(graded(colours, state(recipe: recipe, preset.settings)), alone)
+            if over > worst { worst = over; worstOver = "\(preset.name) after \(name)" }
+        }
+    }
+    check(worst < 0.5, "each of the three presets comes out the same after every built-in look as on its own",
+          "widest gap \(f1(worst)) of 255" + (worstOver.isEmpty ? "" : " (\(worstOver))"))
+
+    // Strength, a film tool and a white balance picked on top do not hide
+    // the preset, so they do not bring the old look back either.
+    var adjusted = SkinFirstPreset.melaninGlow.settings
+    adjusted.intensity = 60
+    adjusted.warmth += 9
+    adjusted.tint -= 4
+    adjusted.fade = 12
+    let adjustedAlone = graded(colours, state(adjusted))
+    var worstAdjusted = 0.0
+    for (_, recipe) in builtIn {
+        worstAdjusted = max(worstAdjusted, widest(graded(colours, state(recipe: recipe, adjusted)), adjustedAlone))
+    }
+    check(SkinFirstPreset.worn(by: adjusted) == .melaninGlow && worstAdjusted < 0.5,
+          "the same with Strength, Fade and the white balance changed on top of the preset",
+          "widest gap \(f1(worstAdjusted)) of 255")
+
+    // The rule is for presets only: sliders alone on a look still sit on it.
+    let sliders = full { $0.exposure = 8; $0.contrast = 14; $0.warmth = 8; $0.shadows = 12 }
+    let onLook = widest(graded(colours, state(recipe: goldenHour, sliders)), graded(colours, state(sliders)))
+    check(SkinFirstPreset.worn(by: sliders) == nil && onLook > 2.0,
+          "a look with only sliders moved is still that look underneath",
+          "Golden Hour moves the picture \(f1(onLook)) of 255 under the sliders")
+}
+
+// MARK: - 12. Black and white looks open at full Strength
+
+if mode == "check" {
+    section("12. Black and white looks open at Strength 100, and colour looks at 75")
+    func chroma(_ c: RGB) -> Double { let x = labAB(c); return (x.0 * x.0 + x.1 * x.1).squareRoot() }
+
+    // Which looks are black and white is read from the look itself. The
+    // names and packs below are only here to check that reading.
+    func namedMono(_ look: ShippedLook) -> Bool {
+        ["film-mono-archive", "bw-set-01"].contains(look.pack ?? "")
+            || ["Mono", "Acros", "Silver Shade", "Documentary Grit"].contains { look.name.contains($0) }
+    }
+    var monoCount = 0, unread = 0
+    var wrong: [String] = []
+    for look in shipped {
+        let mono: Bool
+        if let recipe = look.lookRecipe {
+            mono = recipe.isMonochrome
+        } else if let lut = film(look.code) {
+            mono = TrueColour.isMonochrome(lut)
+        } else {
+            unread += 1
+            continue
+        }
+        if mono { monoCount += 1 }
+        if mono != namedMono(look) { wrong.append("\(look.code) \(look.name)") }
+    }
+    check(unread == 0 && wrong.isEmpty && monoCount == 41,
+          "all 41 black and white looks the app ships are read as black and white, and none of the colour looks",
+          "\(monoCount) of \(shipped.count) read as black and white"
+              + (wrong.isEmpty ? "" : "; wrong: " + wrong.joined(separator: ", "))
+              + (unread == 0 ? "" : "; \(unread) could not be read"))
+    check(LookSettings.openingStrength(monochrome: true) == 100
+              && LookSettings.openingStrength(monochrome: false) == LookSettings().intensity
+              && LookSettings().intensity == 75,
+          "a black and white look opens at 100, a colour look at the 75 it always did")
+
+    // What that is for: at 75 a quarter of the picture's colour stayed.
+    let colours: [RGB] = [(0.30, 0.19, 0.14), (0.62, 0.45, 0.36), (0.20, 0.30, 0.55), (0.25, 0.50, 0.28), (0.70, 0.22, 0.20)]
+    func leftAt(_ strength: Double, recipe: LookRecipe = LookRecipe(), lut: ParsedLUT? = nil) -> Double {
+        graded(colours, state(recipe: recipe, lut: lut, full { $0.intensity = strength })).map(chroma).max() ?? 0
+    }
+    let before = colours.map(chroma).max() ?? 0
+    if let grit = shipped.first(where: { $0.code == "BW32" })?.lookRecipe, let classic = film("HP400") {
+        let opened = LookSettings.openingStrength(monochrome: true)
+        check(leftAt(opened, recipe: grit) < 1.0 && leftAt(opened, lut: classic) < 1.0,
+              "at the Strength they open with, Documentary Grit and Classic Mono leave no colour in the picture",
+              "most colour left: \(f1(leftAt(opened, recipe: grit))) and \(f1(leftAt(opened, lut: classic))) CIELAB units, from \(f1(before))")
+        check(leftAt(75, recipe: grit) > 5 && leftAt(75, lut: classic) > 5,
+              "at 75, where they used to open, the colour was still there",
+              "most colour left: \(f1(leftAt(75, recipe: grit))) and \(f1(leftAt(75, lut: classic))) CIELAB units")
+    } else {
+        check(false, "Documentary Grit and Classic Mono could be read for the Strength check")
+    }
+}
+
+// MARK: - 13. Grain on video
+
+if mode == "check" {
+    section("13. Grain moves from frame to frame on video, and holds still on a photo")
+    /// The red channel of the middle of a picture, 0 to 255.
+    func reds(_ image: CIImage) -> [Double] {
+        let w = Int(middleWindow.width), h = Int(middleWindow.height)
+        var buf = [Float](repeating: 0, count: w * h * 4)
+        buf.withUnsafeMutableBytes { raw in
+            pipeline.context.render(image, toBitmap: raw.baseAddress!, rowBytes: w * 16,
+                                    bounds: middleWindow, format: .RGBAf, colorSpace: srgb)
+        }
+        return stride(from: 0, to: buf.count, by: 4).map { Double(buf[$0]) * 255 }
+    }
+    func mean(_ a: [Double]) -> Double { a.reduce(0, +) / Double(a.count) }
+    func sd(_ a: [Double]) -> Double {
+        let m = mean(a)
+        return (a.reduce(0) { $0 + ($1 - m) * ($1 - m) } / Double(a.count)).squareRoot()
+    }
+    /// 1 when two frames carry the same grain, 0 when they share nothing.
+    func alike(_ a: [Double], _ b: [Double]) -> Double {
+        let ma = mean(a), mb = mean(b)
+        var top = 0.0
+        for i in a.indices { top += (a[i] - ma) * (b[i] - mb) }
+        let bottom = sd(a) * sd(b) * Double(a.count)
+        return bottom > 0 ? top / bottom : 0
+    }
+    let grainy = state(full { $0.grain = 50 })
+    func frame(_ time: Double?) -> [Double] {
+        reds(pipeline.apply(state: grainy, to: grey(0.5), includeSplit: false, at: time))
+    }
+
+    // A photo: one pattern, so its tile, the big picture and the saved file agree.
+    let still = frame(nil)
+    check(sd(still) > 2 && alike(still, frame(nil)) > 0.999,
+          "a photo's grain is one pattern: drawn twice, it is the same grain",
+          "alike \(String(format: "%.3f", alike(still, frame(nil)))), spread \(f1(sd(still))) of 255")
+
+    // A video: the same moment always has the same grain, so a paused frame
+    // holds still and the saved file matches the preview.
+    let moment = frame(2.5)
+    check(alike(moment, frame(2.5)) > 0.999, "the same moment of a video always has the same grain",
+          "alike \(String(format: "%.3f", alike(moment, frame(2.5))))")
+
+    // And the next frame has its own. It used to be the photo's pattern on
+    // every frame, which sat on a moving picture like dust on the glass.
+    var mostAlike = 0.0, lowestSpread = 1e9, highestSpread = 0.0, furthestMean = 0.0
+    var count = 0
+    for fps in [24.0, 25.0, 30.0, 60.0] {
+        var last = frame(0)
+        for n in 1...6 {
+            let next = frame(Double(n) / fps)
+            mostAlike = max(mostAlike, abs(alike(last, next)), abs(alike(still, next)))
+            lowestSpread = min(lowestSpread, sd(next))
+            highestSpread = max(highestSpread, sd(next))
+            furthestMean = max(furthestMean, abs(mean(next) - mean(still)))
+            last = next
+            count += 1
+        }
+    }
+    check(mostAlike < 0.05,
+          "at 24, 25, 30 and 60 frames a second, each frame's grain shares nothing with the frame before or with the photo's",
+          "\(count) frames; the most alike two were \(String(format: "%.3f", mostAlike)) (1 is the same grain)")
+    check(highestSpread - lowestSpread < 0.5 && abs(lowestSpread - sd(still)) < 0.5 && furthestMean < 0.3,
+          "moving grain is as strong on every frame as on a photo, and brightens nothing",
+          "spread \(f1(lowestSpread)) to \(f1(highestSpread)) of 255 (a photo: \(f1(sd(still)))); the mean moves at most \(f1(furthestMean))")
+    check(LookPipeline.grainShift(at: nil) == nil && LookPipeline.grainShift(at: .nan) == nil
+              && LookPipeline.grainShift(at: .infinity) == nil,
+          "a frame with no time, or a time that is not a number, gets the photo's grain")
+}
+
 // MARK: - Pictures
 
 /// Writes two test portraits through the presets and two film looks, so a
@@ -1013,7 +1280,7 @@ func writePictures() {
         for preset in SkinFirstPreset.allCases {
             var s = preset.settings
             s.intensity = 100
-            save("preset-\(preset.rawValue)", state(recipe: goldenHour, s))
+            save("preset-\(preset.rawValue)", state(s))
         }
         for code in ["HP400", "PR100"] {
             guard let lut = film(code) else { continue }

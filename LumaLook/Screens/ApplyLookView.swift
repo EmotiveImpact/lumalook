@@ -580,8 +580,8 @@ struct ApplyLookView: View {
     }
 
     /// Skin First presets carry settings, not a library entry, so `LookThumbs`
-    /// never sees them. Render them here through the same pipeline against the
-    /// current recipe — which is exactly what applying one would produce.
+    /// never sees them. Render them here through the same pipeline with no
+    /// look under them, which is exactly what applying one gives.
     /// Detached, like every other thumbnail render, so the drawer never stalls;
     /// only rendered while that shelf is actually on screen.
     private func renderSkinThumbs() async {
@@ -590,7 +590,7 @@ struct ApplyLookView: View {
         let extent = frame.extent
         // Never hand an infinite (clamped) extent to the pipeline's spatial ops.
         guard !extent.isInfinite, extent.width > 1, extent.height > 1 else { return }
-        let recipe = app.selectedLook.recipe
+        let recipe = MockData.plainLook.recipe
         let conversion = app.lookState.conversionSlot
         let jobs = SkinFirstPreset.allCases.map { ($0.rawValue, $0.settings) }
         let rendered = await Task.detached(priority: .userInitiated) { () -> [String: CGImage] in
@@ -856,7 +856,7 @@ struct ApplyLookView: View {
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 if app.settings.intensity == 0 {
-                    app.settings.intensity = stashedLookIntensity ?? 75
+                    app.settings.intensity = stashedLookIntensity ?? app.openingStrength
                     stashedLookIntensity = nil
                 } else {
                     stashedLookIntensity = app.settings.intensity
@@ -894,6 +894,13 @@ struct ApplyLookView: View {
         return Button {
             tappedLookID = look.id
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                // A look picked while Original is latched has to show: the
+                // strength from before the latch comes back first, as in
+                // the editor's look drawer.
+                if app.settings.intensity == 0, let stashed = stashedLookIntensity {
+                    app.settings.intensity = stashed
+                }
+                stashedLookIntensity = nil
                 app.select(look: look)
             }
             LumaHaptics.shared.tap()
@@ -965,8 +972,7 @@ struct ApplyLookView: View {
         let selected = app.selectedLUT == nil && SkinFirstPreset.worn(by: app.settings) == preset
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                app.selectedLUT = nil
-                app.settings = preset.settings
+                app.wear(preset)
             }
             LumaHaptics.shared.tap()
         } label: {

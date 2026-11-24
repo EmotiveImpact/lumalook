@@ -14,6 +14,12 @@ struct LookRecipe: Hashable, Codable {
     var shadowLift: Float = 0       // gamma-ish adjustment via CIGammaAdjust, 1 = unchanged offset 0
 }
 
+extension LookRecipe {
+    /// Black and white: the recipe takes the colour out (the same 15% line
+    /// `TrueColour.isMonochrome` draws for a film look's cube).
+    var isMonochrome: Bool { saturation < 0.15 }
+}
+
 struct LookPreset: Identifiable, Hashable {
     let id = UUID()
     let name: String
@@ -237,6 +243,14 @@ extension LookSettings {
     /// value on the look screen, and they stay the person's own.
     private var colourSliders: [Double] {
         [exposure, contrast, highlights, shadows, saturation, warmth, tint, fade]
+    }
+
+    /// The Strength a look opens at: 75, and 100 for a black and white look.
+    /// Strength fades the look back to the picture, so a black and white
+    /// look at 75 kept a quarter of the picture's colour and never looked
+    /// black and white until Strength was pushed up by hand.
+    static func openingStrength(monochrome: Bool) -> Double {
+        monochrome ? 100 : LookSettings().intensity
     }
 
     /// A curve, colour wheels, HSL bands or a split tone: the parts of a

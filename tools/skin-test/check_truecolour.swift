@@ -184,9 +184,10 @@ let started = Date()
 
 // MARK: - 1. The tone curve
 
-section("1. The tone curve, at every position of the Contrast and Exposure sliders")
+section("1. The tone curve, at every contrast and brightness a look or the Contrast slider can ask for")
 do {
-    // The sliders reach contrast 0.45...1.45 and brightness -0.33...0.33.
+    // Contrast reaches 0.45...1.45. Brightness is tried to -0.33...0.33, far
+    // past what a look uses; the Exposure slider has its own curve (section 12).
     var reverses = 0, outOfRange = 0, settings = 0
     var worstClip = 0.0, worstClipAt = ""
     var lookRangeClips = 0
@@ -683,6 +684,19 @@ do {
           "a muted colour look is not mistaken for black-and-white: skin gets its colour back",
           "\(rep.rawBroken) skin colours restored")
 
+    // The app reads which looks are black and white from the cube itself,
+    // and opens those at full Strength: at the 75 a colour look opens with,
+    // a quarter of the picture's colour stayed in a black and white look.
+    let toned = makeLUT(64) { c in let y = luma(c); return (clamp01(y * 1.05), y, clamp01(y * 0.92)) }
+    let small = makeLUT(13) { c in let y = luma(c); return (y, y, y) }
+    check(TrueColour.isMonochrome(mono) && TrueColour.isMonochrome(toned) && TrueColour.isMonochrome(small),
+          "a black and white look is read as black and white: plain, lightly toned, and 13 points a side")
+    let plain = makeLUT(64) { $0 }
+    check(!TrueColour.isMonochrome(muted) && !TrueColour.isMonochrome(gentle) && !TrueColour.isMonochrome(plain),
+          "a colour look is not: muted to half its colour, gentle, or changing nothing")
+    let cut = ParsedLUT(size: 64, rgbaFloatData: Data(count: 100))
+    check(!TrueColour.isMonochrome(cut), "a cube file that is cut short is not read at all")
+
     let worstLook = hostile[0].1
     let ours = makeLUT(64, baked: true) { c in
         (clamp01(pow(c.0, 1.5) * 0.8), clamp01(pow(c.1, 1.2)), clamp01(pow(c.2, 1.2) * 1.05)) }
@@ -1172,6 +1186,84 @@ do {
     check(TrueColour.readBalance(rgba: [], width: 0, height: 0) == .unreadable
           && TrueColour.readBalance(rgba: [1, 2, 3], width: 4, height: 4) == .unreadable,
           "a picture that is empty or cut short is left alone")
+}
+
+// MARK: - 12. The Exposure slider
+
+section("12. The Exposure slider brightens and darkens without moving black or white")
+do {
+    // The slider runs from -100 to 100: mid grey moves by a third either way.
+    var ends = true, mid = true, reverses = 0, clipped = 0
+    for step in -100...100 {
+        let x = Double(step) / 300
+        if abs(TrueColour.expose(0, by: x)) > 1e-12 || abs(TrueColour.expose(1, by: x) - 1) > 1e-12 { ends = false }
+        if abs(TrueColour.expose(0.5, by: x) - (0.5 + x)) > 1e-9 { mid = false }
+        var last = -1.0
+        for i in 0...1000 {
+            let y = TrueColour.expose(Double(i) / 1000, by: x)
+            if !(y.isFinite && y > last) { reverses += 1 }
+            last = y
+            if i > 0 && i < 1000 && (y <= 0 || y >= 1) { clipped += 1 }
+        }
+    }
+    check(ends, "black stays black and white stays white at every position of the slider")
+    check(mid, "mid grey moves exactly as far as it did when Exposure was an added brightness")
+    check(reverses == 0 && clipped == 0, "no tone is clipped, and a brighter tone always comes out brighter",
+          "201 positions x 1001 tones")
+
+    var notUndone = 0.0
+    for step in [-100, -50, -20, 20, 50, 100] {
+        let x = Double(step) / 300
+        for i in 0...100 {
+            let e = Double(i) / 100
+            notUndone = max(notUndone, abs(TrueColour.expose(TrueColour.expose(e, by: x), by: -x) - e))
+        }
+    }
+    check(notUndone < 1e-9, "the same amount down undoes the same amount up")
+
+    // The cube the slider is applied with, with skin protection on and off.
+    func exposureCube(_ x: Double, skin: Bool) -> Cube? {
+        guard let filter = TrueColour.toneFilter(contrast: 1, saturation: 1, brightness: 0,
+                                                 exposure: Float(x), protectSkin: skin),
+              let data = filter.value(forKey: "inputCubeData") as? Data,
+              data.count == 33 * 33 * 33 * 16 else { return nil }
+        return Cube(data, 33)
+    }
+    func farFromGrey(_ c: RGB) -> Double { max(abs(c.0 - c.1), abs(c.2 - c.1)) * 255 }
+    for skin in [true, false] {
+        let name = skin ? "True Colour on" : "True Colour off"
+        guard let up = exposureCube(50.0 / 300, skin: skin), let down = exposureCube(-50.0 / 300, skin: skin) else {
+            check(false, "\(name): Exposure makes a cube")
+            continue
+        }
+        let black = max(up.at(0, 0, 0).0, down.at(0, 0, 0).0) * 255
+        let white = (1 - min(up.at(32, 32, 32).0, down.at(32, 32, 32).0)) * 255
+        check(black < 0.5 && white < 0.5, "\(name): Exposure at 50 and at -50 leaves black on black and white on white",
+              "black moved \(f1(black)) of 255, white \(f1(white)); the added brightness it replaces put black at 43 and white at 213")
+        let grey = up.at(16, 16, 16), dim = down.at(16, 16, 16)
+        check(abs(grey.0 - (0.5 + 50.0 / 300)) * 255 < 1.0 && abs(dim.0 - (0.5 - 50.0 / 300)) * 255 < 1.0
+              && farFromGrey(grey) < 0.5 && farFromGrey(dim) < 0.5,
+              "\(name): mid grey lands where it always did, and stays grey",
+              "at 50 it is \(f1(grey.0 * 255)) of 255, at -50 \(f1(dim.0 * 255))")
+        check(up.allFiniteInRange && down.allFiniteInRange, "\(name): every colour stays a colour a screen can show")
+    }
+
+    // Deep skin gets brighter without changing colour (True Colour on).
+    if let up = exposureCube(50.0 / 300, skin: true) {
+        var worstHue = 0.0, least = 1e9
+        for (_, tone) in monk {
+            for stops in [0.0, 1.0, 2.0] {
+                let c = darker(tone, stops: stops)
+                let a = oklab(c), b = oklab(up.sample(c))
+                if chroma(a) > 0.02 && b.0 < 0.97 { worstHue = max(worstHue, abs(hueDiff(hue(a), hue(b)))) }
+                least = min(least, b.0 - a.0)
+            }
+        }
+        check(worstHue < 2.0 && least > 0, "skin of every depth gets brighter and keeps its hue",
+              "hue moved by at most \(f1(worstHue)) degrees")
+    }
+    check(TrueColour.toneFilter(contrast: 1, saturation: 1, brightness: 0, exposure: 0) == nil,
+          "Exposure at rest costs nothing (no filter is made)")
 }
 
 // MARK: - Result

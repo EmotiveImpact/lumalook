@@ -1014,7 +1014,7 @@ struct CameraLiveLookView: View {
     }
 
     private func prepareReveal(of look: CameraLook, token: Int) {
-        let job = app.cameraLookJob(for: look, intensity: app.settings.intensity)
+        let job = app.cameraLookJob(for: look, intensity: app.strengthOnWearing(look))
         camera.requestRawFrame(maxSide: 1080) { cg in
             guard let cg, swipe?.token == token else { return }
             CameraLookThumbs.grade(CIImage(cgImage: cg), job: job, maxDimension: 1080) { image in

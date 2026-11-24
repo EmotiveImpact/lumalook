@@ -393,6 +393,25 @@ extension AppModel {
         return .library(LibraryLook(builtIn: selectedLook))
     }
 
+    /// The Strength a camera look would come up at if it were worn now
+    /// (`AppModel.pick`): the swipe's reveal is drawn with it, so the picture
+    /// does not jump when the swipe lands on a black and white look.
+    func strengthOnWearing(_ look: CameraLook) -> Double {
+        switch look {
+        case .library(let libraryLook):
+            return strengthOnPicking(libraryLook)
+        case .pack:
+            guard strengthFollowsLook, let packLook = look.packLook else { return settings.intensity }
+            let monochrome: Bool
+            if let url = CameraLook.cubeURL(for: packLook) {
+                monochrome = (try? LookPipeline.shared.loadLUT(at: url)).map(TrueColour.isMonochrome) ?? false
+            } else {
+                monochrome = PackLookPreview.cubeRecipe(packLook.recipe).isMonochrome
+            }
+            return LookSettings.openingStrength(monochrome: monochrome)
+        }
+    }
+
     /// What a look is graded with for a tile or the swipe's reveal.
     func cameraLookJob(for look: CameraLook, intensity: Double = 100) -> CameraLookThumbs.Job {
         var full = LookSettings()

@@ -646,7 +646,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         // past the edge.
         var graded = pipeline.apply(state: activeState,
                                     to: canvas.cropped(to: renderRect),
-                                    includeSplit: false)
+                                    includeSplit: false, at: seconds)
             .cropped(to: renderRect)
 
         // --- Adjustment layers: full-frame grades over the base video, below
@@ -655,7 +655,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
         where seconds >= adj.start - 0.001 && seconds < adj.end + 0.001 {
             graded = pipeline.apply(state: adj.state,
                                     to: graded.cropped(to: renderRect),
-                                    includeSplit: false)
+                                    includeSplit: false, at: seconds)
                 .cropped(to: renderRect)
         }
 
@@ -813,7 +813,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
             if !isVector {
                 overlay = pipeline.apply(state: activeState,
                                          to: overlay,
-                                         includeSplit: false)
+                                         includeSplit: false, at: seconds)
                     .cropped(to: overlay.extent)
             }
 
@@ -921,7 +921,7 @@ final class LumaVideoCompositor: NSObject, AVVideoCompositing {
                         ?? instruction.lookState
                     auxImage = pipeline.apply(state: auxState,
                                               to: auxImage.cropped(to: renderRect),
-                                              includeSplit: false)
+                                              includeSplit: false, at: seconds)
                         .cropped(to: renderRect)
                     let progress = CGFloat((seconds - (span.center - span.half)) / (span.half * 2))
                     let incoming = firstHalf ? auxImage : graded

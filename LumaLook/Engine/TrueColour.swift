@@ -83,20 +83,24 @@ enum TrueColour {
 
     // MARK: Tone
 
-    /// Saturation, contrast and brightness as one colour cube, or nil when
-    /// they do nothing. `contrast` 1 and `brightness` 0 are neutral, as in
-    /// CIColorControls, so recipes and sliders keep their numbers.
+    /// Saturation, contrast, brightness and exposure as one colour cube, or
+    /// nil when they do nothing. `contrast` 1 and `brightness` 0 are neutral,
+    /// as in CIColorControls, so recipes keep their numbers. `exposure` is
+    /// the Exposure slider (see `expose`); recipes do not use it.
     static func toneFilter(contrast: Float, saturation: Float, brightness: Float,
+                           exposure: Float = 0,
                            protectSkin: Bool = TrueColour.isOn) -> CIFilter? {
-        let c = Double(contrast), s = Double(saturation), b = Double(brightness)
-        if abs(c - 1) < 1e-4 && abs(s - 1) < 1e-4 && abs(b) < 1e-4 { return nil }
+        let c = Double(contrast), s = Double(saturation), b = Double(brightness), x = Double(exposure)
+        if abs(c - 1) < 1e-4 && abs(s - 1) < 1e-4 && abs(b) < 1e-4 && abs(x) < 1e-4 { return nil }
         let key = ToneKey(c: Int((c * 10_000).rounded()), s: Int((s * 10_000).rounded()),
-                          b: Int((b * 10_000).rounded()), skin: protectSkin)
+                          b: Int((b * 10_000).rounded()), x: Int((x * 10_000).rounded()),
+                          skin: protectSkin)
         lock.lock()
         if let data = toneCache[key] { lock.unlock(); return cubeFilter(data, toneSize) }
         lock.unlock()
 
-        let data = buildTone(contrast: c, saturation: s, brightness: b, protectSkin: protectSkin)
+        let data = buildTone(contrast: c, saturation: s, brightness: b, exposure: x,
+                             protectSkin: protectSkin)
         lock.lock()
         if toneCache.count >= 32 { toneCache.removeAll() }
         toneCache[key] = data
@@ -128,15 +132,34 @@ enum TrueColour {
         return y + k * (y - t) * (y - t)
     }
 
-    private struct ToneKey: Hashable { let c: Int, s: Int, b: Int, skin: Bool }
+    /// The Exposure slider, on gamma-encoded values: brighter or darker
+    /// with black left on black and white left on white. `x` is how far mid
+    /// grey moves, which is what the slider's number has always meant, so a
+    /// setting is as strong in the middle of the picture as it was.
+    ///
+    /// Exposure used to be `brightness`: the same amount added to every
+    /// tone. At +50 that put black at 43 of 255, a grey veil over the whole
+    /// picture, and at -50 it turned white into a light grey. This curve
+    /// has a slope of g at black and 1/g at white, so it never turns back
+    /// and never clips.
+    static func expose(_ e: Double, by x: Double) -> Double {
+        let v = min(max(e, 0), 1)
+        let x = min(max(x, -0.45), 0.45)
+        guard abs(x) > 1e-9 else { return v }
+        let g = (0.5 + x) / (0.5 - x)
+        return g * v / (1 + (g - 1) * v)
+    }
+
+    private struct ToneKey: Hashable { let c: Int, s: Int, b: Int, x: Int, skin: Bool }
     private static let toneSize = 33
     private static let lock = NSLock()
     private static var toneCache: [ToneKey: Data] = [:]
 
     private static func buildTone(contrast c: Double, saturation s: Double,
-                                  brightness b: Double, protectSkin: Bool) -> Data {
+                                  brightness b: Double, exposure x: Double,
+                                  protectSkin: Bool) -> Data {
         buildCurveCube(saturation: s, protectSkin: protectSkin) {
-            curve($0, contrast: c, brightness: b)
+            expose(curve($0, contrast: c, brightness: b), by: x)
         }
     }
 
@@ -492,11 +515,32 @@ enum TrueColour {
         }
     }
 
+    /// Whether a film look is black and white, or toned close to it (the
+    /// rule below). The guard treats such a look differently, and the app
+    /// opens it at full Strength (`LookSettings.openingStrength`): at the 75
+    /// a colour look opens with, a quarter of the picture's colour stayed.
+    static func isMonochrome(_ lut: ParsedLUT) -> Bool {
+        let n = lut.size
+        guard n >= 2, lut.rgbaFloatData.count >= n * n * n * 16 else { return false }
+        return lut.rgbaFloatData.withUnsafeBytes { raw in
+            isMonochrome(n) { i in
+                (raw.loadUnaligned(fromByteOffset: i * 4, as: Float.self),
+                 raw.loadUnaligned(fromByteOffset: i * 4 + 4, as: Float.self),
+                 raw.loadUnaligned(fromByteOffset: i * 4 + 8, as: Float.self))
+            }
+        }
+    }
+
+    private static func isMonochrome(_ values: [Float], _ n: Int) -> Bool {
+        isMonochrome(n) { i in (values[i], values[i + 1], values[i + 2]) }
+    }
+
     /// Black and white, or toned close to it: colourful inputs keep under
     /// 15% of their chroma (median over a sample of the cube). The film cubes
     /// split cleanly: mono and toned mono sit at 0 to 8%, the most muted
     /// colour look (MS15) at 28%, everything else above 50%.
-    private static func isMonochrome(_ values: [Float], _ n: Int) -> Bool {
+    /// `colour` reads the cube's colour whose red value is at index `i`.
+    private static func isMonochrome(_ n: Int, _ colour: (Int) -> (Float, Float, Float)) -> Bool {
         var ratios: [Double] = []
         let step = max(1, n / 9)
         for bi in stride(from: 0, to: n, by: step) {
@@ -506,8 +550,8 @@ enum TrueColour {
                                 Double(bi) / Double(n - 1))
                     let Cx = (x.1 * x.1 + x.2 * x.2).squareRoot()
                     guard Cx > 20 else { continue }
-                    let i = ((bi * n + gi) * n + ri) * 4
-                    let y = lab(Double(values[i]), Double(values[i + 1]), Double(values[i + 2]))
+                    let out = colour(((bi * n + gi) * n + ri) * 4)
+                    let y = lab(Double(out.0), Double(out.1), Double(out.2))
                     ratios.append((y.1 * y.1 + y.2 * y.2).squareRoot() / Cx)
                 }
             }
