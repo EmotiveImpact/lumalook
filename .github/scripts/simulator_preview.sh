@@ -181,7 +181,7 @@ shot 16-locked-look 12 "${P}ROUTE=beforeAfter" "${P}SEED_STILL=$MEDIA/hero_party
 # Home again, last, so no first-boot system banner covers it: the reel held
 # on Neon Nights, the same woman as the editor shots (the website uses it).
 shot 02d-home-neon 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=Neon" "${P}APPEARANCE=default"
-# Home scrolled to the template rail: the top row has become the top bar.
+# Home scrolled down (to the Templates rail, or Looks for you while Templates is off): the top row has become the top bar.
 shot 02e-home-scrolled 10 "${P}ROUTE=none" "${P}TAB=Home" "${P}SEED_REELHOLD=1" "${P}SEED_HOMESCROLL=1"
 # Seeds five photo projects that stay in the app data, so it runs after
 # every other shot that would otherwise show them.

@@ -70,7 +70,9 @@ struct HomeView: View {
         if isFirstRun {
             return min(540, max(440, (screen * 0.54).rounded()))
         }
-        return min(660, max(540, (screen * 0.68).rounded()))
+        // About 545 pt on an iPhone 17 Pro, so the quick tiles and the next
+        // heading sit on the first screen.
+        return min(600, max(490, (screen * 0.62).rounded()))
     }
 
     var body: some View {
@@ -241,7 +243,10 @@ struct HomeView: View {
         let looks = Array((mode == .recents ? recents : forYouLooks).prefix(Self.looksShown))
         HomeLooksHeader(mode: $looksMode, showsSwitch: showsSwitch) { openLooks() }
             .padding(.horizontal, 20)
-            .padding(.top, 30)
+            // Right under the quick tiles when Templates is off (Edem found
+            // the old gap too big); the usual section gap otherwise.
+            .padding(.top, looksHeaderGap)
+            .id(LumaFeatures.templates ? "home.looks" : HomeView.beatAnchor)
         Spacer(minLength: 0).frame(height: 12)
         HomeLookGrid(looks: looks,
                      photos: lookPhotos,
@@ -251,6 +256,12 @@ struct HomeView: View {
                      onPick: { tryOnLook($0) },
                      onStar: { app.library.toggleFavourite($0) })
             .padding(.horizontal, 12)
+    }
+
+    /// Space above "Looks for you": tight when it follows the quick tiles.
+    private var looksHeaderGap: CGFloat {
+        let followsTiles = !works.isEmpty && beatTemplates.isEmpty
+        return followsTiles ? 12 : 30
     }
 
     @ViewBuilder
@@ -312,6 +323,8 @@ struct HomeView: View {
     /// their own rail), otherwise the plain ones as a grid. The Templates
     /// quick tile lands on either.
     private var beatTemplates: [VideoTemplate] {
+        // Templates switched off: no row, and the quick tiles drop the tile.
+        guard LumaFeatures.templates else { return [] }
         guard LumaFeatures.cutToTheBeat else { return TemplateLibrary.shown }
         let beat = TemplateLibrary.all.filter { $0.isBeatCut }
         if !beat.isEmpty { return beat }
@@ -626,6 +639,41 @@ private final class HomeScrollProgress: ObservableObject {
         if stepped == 1 || stepped == 0 { print("[LUMA] HOMEBAR collapse=\(stepped) offset=\(offset)") }
         #endif
         collapse = stepped
+        pull.follow(offset)
+    }
+
+    /// How far the page is pulled down past its top. Kept in its own object
+    /// so that only the reel's picture redraws while you pull.
+    let pull = HomePullAmount()
+}
+
+/// The distance the page is pulled down past its top (0 at rest).
+private final class HomePullAmount: ObservableObject {
+    @Published private(set) var amount: CGFloat = 0
+
+    func follow(_ offset: CGFloat) {
+        let next = (max(0, offset) * 2).rounded() / 2
+        guard next != amount else { return }
+        amount = next
+    }
+}
+
+/// Pull down at the top of Home and the reel's picture grows to fill the
+/// space, its top edge held at the top of the screen, so no empty band
+/// opens above it. It scales from its bottom edge, which moves down with
+/// the page.
+private struct HomeReelStretch<Content: View>: View {
+    @ObservedObject var pull: HomePullAmount
+    let height: CGFloat
+    @ViewBuilder let content: Content
+
+    private var scale: CGFloat {
+        guard height > 0 else { return 1 }
+        return 1 + pull.amount / height
+    }
+
+    var body: some View {
+        content.scaleEffect(scale, anchor: .bottom)
     }
 }
 
@@ -1237,7 +1285,9 @@ private struct HomeQuickTiles: View {
         HStack(spacing: 8) {
             tile(icon: "film", title: "Edit a clip", action: onEdit)
             tile(icon: "photo", title: "Edit a photo", action: onPhoto)
-            tile(icon: "square.on.square", title: "Templates", action: onTemplates)
+            if LumaFeatures.templates {
+                tile(icon: "square.on.square", title: "Templates", action: onTemplates)
+            }
             LUTImportButton(onImported: nil, label: {
                 HomeQuickTileLabel(icon: "cube", title: "Import LUT")
             })
@@ -1434,14 +1484,22 @@ private struct ViewfinderReel: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            photos
-            scrim
+            // Clipped before it stretches, so a pull grows the picture
+            // upwards into the space above the page.
+            HomeReelStretch(pull: scroll.pull, height: height) {
+                ZStack {
+                    photos
+                    scrim
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .clipped()
+            }
             copy
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
         .overlay(alignment: .top) { bars }
-        .clipped()
         .task(id: "\(reduceMotion)-\(pick ?? "")") { await cycle() }
         .onAppear { seedPick() }
         .accessibilityElement(children: .contain)
