@@ -1,0 +1,43 @@
+# Clean up artifacts: deletes every artifact this repository's workflow runs
+# have kept, to free Actions storage straight away.
+#
+# Run it by hand: Actions > Clean up artifacts > Run workflow. It never runs
+# on its own. New artifacts are kept for 7 days anyway, so this is only for
+# clearing a backlog.
+name: Clean up artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: clean-up-artifacts
+  cancel-in-progress: false
+
+jobs:
+  delete:
+    name: Delete every artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: List and delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | "\(.id)\t\(.size_in_bytes)\t\(.name)"' > artifacts.tsv
+          count=0; bytes=0
+          while IFS=$'\t' read -r id size name; do
+            [ -z "$id" ] && continue
+            if gh api -X DELETE "repos/$REPO/actions/artifacts/$id" --silent; then
+              count=$((count + 1)); bytes=$((bytes + size))
+            else
+              echo "::warning::Could not delete $name ($id)"
+            fi
+          done < artifacts.tsv
+          gb=$(awk -v b="$bytes" 'BEGIN { printf "%.2f", b / 1e9 }')
+          echo "Deleted $count artifacts, $gb GB."
+          echo "Deleted **$count** artifacts, **$gb GB**." >> "$GITHUB_STEP_SUMMARY"
