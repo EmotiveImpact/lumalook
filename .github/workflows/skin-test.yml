@@ -129,7 +129,7 @@ jobs:
           name: grade-pictures
           path: ${{ runner.temp }}/grade-pictures
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       # Pictures to look at, not a pass or fail: one test portrait through
       # the tools on the look screen, made by this commit's engine and by
@@ -166,7 +166,7 @@ jobs:
           name: sheet-pictures
           path: ${{ runner.temp }}/sheet-pictures
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       # Pictures to look at, not a pass or fail: every test portrait as shot,
       # after the Auto that was taken out and after the Auto that replaces
@@ -189,7 +189,7 @@ jobs:
           name: auto-pictures
           path: ${{ runner.temp }}/auto-pictures
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Bake every look through the app's True Colour engine
         run: |
@@ -236,7 +236,7 @@ jobs:
             tools/skin-test/out/candidates
           if-no-files-found: error
           overwrite: true
-          retention-days: 14
+          retention-days: 7
 
       - name: Commit the results back to the branch
         run: |

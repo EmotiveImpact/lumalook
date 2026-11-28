@@ -14,17 +14,14 @@
 # link instead of making a new one.
 name: Preview
 
+# It no longer runs on every push. Start it by hand (Actions > Preview > Run
+# workflow), or put the "preview" label on a pull request: adding the label
+# runs it once, and while the label stays on, each new push to that pull
+# request runs it again. Its artifacts are kept for 7 days.
 on:
-  push:
-    branches: [master]
-    paths-ignore: ['website/**', 'vercel.json']
   pull_request:
-    paths-ignore: ['website/**', 'vercel.json']
+    types: [labeled, opened, synchronize, reopened]
   workflow_dispatch:
-
-concurrency:
-  group: preview-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
   contents: read
@@ -32,6 +29,16 @@ permissions:
 jobs:
   preview:
     name: Simulator preview
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+      (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'preview'))
+    # A newer run for the same pull request or branch stops the older one.
+    # This sits on the job, not the workflow, so a skipped run (another label
+    # added) never cancels a preview that is already running.
+    concurrency:
+      group: preview-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -87,12 +94,14 @@ jobs:
           name: lumalook-preview
           path: preview
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Keep the simulator build
         uses: actions/upload-artifact@v5
         with:
           name: lumalook-simulator-app
           path: ${{ runner.temp }}/appetize/LumaLook-simulator.zip
+          retention-days: 7
 
       - name: Put it on Appetize (when a token is set)
         env:
